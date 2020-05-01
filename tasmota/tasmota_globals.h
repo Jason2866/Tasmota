@@ -50,6 +50,17 @@ extern "C" void resetPins();
 #include "tasmota_configurations.h"            // Preconfigured configurations
 
 /*********************************************************************************************\
+ * Theo transition defines - DO NOT TOUCH
+\*********************************************************************************************/
+
+//#define LEGACY_GPIO_ARRAY                      // Uncomment to use legacy GPIO array instead of new PIN array
+
+//#define FINAL_ESP32                            // Uncomment for ESP32 16-bits PIN array
+#ifdef FINAL_ESP32
+#undef LEGACY_GPIO_ARRAY
+#endif
+
+/*********************************************************************************************\
  * Mandatory defines satisfying disabled defines
 \*********************************************************************************************/
 
@@ -321,6 +332,16 @@ const char kWebColors[] PROGMEM =
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #endif
+
+#ifdef ESP8266
+#define AGPIO(x) (x)
+#else  // ESP32
+#ifndef FINAL_ESP32
+#define AGPIO(x) (x)
+#else  // FINAL_ESP32
+#define AGPIO(x) (x<<5)
+#endif  // FINAL_ESP32
+#endif  // ESP8266 - ESP32
 
 #ifdef USE_DEVICE_GROUPS
 #define SendDeviceGroupMessage(DEVICE_INDEX, REQUEST_TYPE, ...) _SendDeviceGroupMessage(DEVICE_INDEX, REQUEST_TYPE, __VA_ARGS__, 0)

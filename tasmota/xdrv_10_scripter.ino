@@ -1573,7 +1573,8 @@ chknext:
         }
         if (!strncmp(vname,"pn[",3)) {
           GetNumericResult(vname+3,OPER_EQU,&fvar,0);
-          fvar=pin[(uint8_t)fvar];
+//          fvar=pin_gpio[(uint8_t)fvar];
+          fvar=Pin(fvar);
           // skip ] bracket
           len++;
           goto exit;
@@ -1581,14 +1582,24 @@ chknext:
         if (!strncmp(vname,"pd[",3)) {
           GetNumericResult(vname+3,OPER_EQU,&fvar,0);
           uint8_t gpiopin=fvar;
+#ifdef LEGACY_GPIO_ARRAY
           for (uint8_t i=0;i<GPIO_SENSOR_END;i++) {
-            if (pin[i]==gpiopin) {
+//            if (pin_gpio[i]==gpiopin) {
+            if (Pin(i)==gpiopin) {
               fvar=i;
               // skip ] bracket
               len++;
               goto exit;
             }
           }
+#else
+          if ((gpiopin < ARRAY_SIZE(gpio_pin)) && (gpio_pin[gpiopin] > 0)) {
+            fvar = gpio_pin[gpiopin];
+            // skip ] bracket
+            len++;
+            goto exit;
+          }
+#endif
           fvar=999;
           goto exit;
         }
