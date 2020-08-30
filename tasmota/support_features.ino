@@ -598,7 +598,7 @@ void GetFeatures(void)
 #ifdef USE_DYP
   feature6 |= 0x00400000;  // xsns_76_dyp.ino
 #endif
-if defined(USE_I2C) && defined(USE_VL53L1X)
+#if defined(USE_I2C) && defined(USE_VL53L1X)
   feature6 |= 0x00800000;  // xsns_77_vl53l1x.ino
 #endif
 
