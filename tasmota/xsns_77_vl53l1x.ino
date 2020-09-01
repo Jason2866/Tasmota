@@ -24,33 +24,34 @@
  *
  * Source:
  *
- * I2C Address: 0x52
+ * I2C Address: 0x29
 \*********************************************************************************************/
 
 #define XSNS_77     77
 #define XI2C_53     53  // See I2CDEVICES.md
 
-#include <Wire.h>
 #include "VL53L1X.h"
-VL53L1X sensor;
+VL53L1X vl53l1x = VL53L1X(); // create object copy
 
-uint8_t vl53l1x_ready = 0;
-uint16_t vl53l1x_distance = 0;
+#define VL53L1X_ADDRESS 0x29
+
+struct {
+  bool ready = false;
+  uint16_t distance = 0;
+} vl53l1x_sensors;
+
 /********************************************************************************************/
 
 void Vl53l1Detect(void) {
-  if (!I2cSetDevice(0x29)) { return; }
+  if (!I2cSetDevice(VL53L1X_ADDRESS)) { return; }
+  if (!vl53l1x.init()) { return; }
 
-  if (!sensor.init()) { return; }
-
-  I2cSetActiveFound(sensor.getAddress(), "VL53L1X");
-
-  sensor.setTimeout(500);
-
-  sensor.setDistanceMode(VL53L1X::Long);
-  sensor.setMeasurementTimingBudget(140000);
-  sensor.startContinuous(50);
-  vl53l1x_ready = 1;
+  I2cSetActiveFound(vl53l1x.getAddress(), "VL53L1X");
+  vl53l1x.setTimeout(500);
+  vl53l1x.setDistanceMode(VL53L1X::Long); // could be Short, Medium, Long
+  vl53l1x.setMeasurementTimingBudget(140000);
+  vl53l1x.startContinuous(50);
+  vl53l1x_sensors.ready = true;
 }
 
 #ifdef USE_WEBSERVER
@@ -59,37 +60,31 @@ const char HTTP_SNS_VL53L1X[] PROGMEM =
 #endif  // USE_WEBSERVER
 
 void Vl53l1Every_250MSecond(void) {
-  // every 200 ms
-  uint16_t dist = sensor.read();
-  if ((0 == dist) || (dist > 4000)) {
+  // every 250 ms
+  uint16_t dist = vl53l1x.read();
+  if (!dist || dist > 4000) {
     dist = 9999;
   }
-  vl53l1x_distance = dist;
+  vl53l1x_sensors.distance = dist;
 }
 
-/* No Distance support for Domoticz
 #ifdef USE_DOMOTICZ
 void Vl53l1Every_Second(void) {
-  DomoticzSensor(DZ_ILLUMINANCE, vl53l1x_distance);
+  DomoticzSensor(DZ_ILLUMINANCE, vl53l1x_sensors.distance);
 }
 #endif  // USE_DOMOTICZ
-*/
 
 void Vl53l1Show(boolean json) {
   if (json) {
-    ResponseAppend_P(PSTR(",\"VL53L1X\":{\"" D_JSON_DISTANCE "\":%d}"), vl53l1x_distance);
-
-/* No Distance support for Domoticz
 #ifdef USE_DOMOTICZ
     if (0 == tele_period) {
-      DomoticzSensor(DZ_ILLUMINANCE, vl53l1x_distance);
+      DomoticzSensor(DZ_ILLUMINANCE, vl53l1x_sensors.distance);
     }
 #endif  // USE_DOMOTICZ
-*/
-
+    ResponseAppend_P(PSTR(",\"VL53L1X\":{\"" D_JSON_DISTANCE "\":%d}"), vl53l1x_sensors.distance);
 #ifdef USE_WEBSERVER
   } else {
-    WSContentSend_PD(HTTP_SNS_VL53L1X, vl53l1x_distance);
+    WSContentSend_PD(HTTP_SNS_VL53L1X, vl53l1x_sensors.distance);
 #endif
   }
 }
@@ -101,22 +96,21 @@ void Vl53l1Show(boolean json) {
 bool Xsns77(byte function)
 {
   if (!I2cEnabled(XI2C_53)) { return false; }
-
   bool result = false;
 
   if (FUNC_INIT == function) {
     Vl53l1Detect();
   }
-  else if (vl53l1x_ready) {
+  else if (vl53l1x_sensors.ready) {
     switch (function) {
       case FUNC_EVERY_250_MSECOND:
         Vl53l1Every_250MSecond();
         break;
-/* #ifdef USE_DOMOTICZ
+#ifdef USE_DOMOTICZ
      case FUNC_EVERY_SECOND:
         Vl53l1Every_Second();
         break;
-#endif  // USE_DOMOTICZ */
+#endif  // USE_DOMOTICZ
       case FUNC_JSON_APPEND:
         Vl53l1Show(1);
         break;
