@@ -46,8 +46,6 @@ uint8_t *efm8bb1_update = nullptr;
 
 enum UploadTypes { UPL_TASMOTA, UPL_SETTINGS, UPL_EFM8BB1, UPL_TASMOTACLIENT, UPL_EFR32 };
 
-static const char * HEADER_KEYS[] = { "User-Agent", };
-
 #ifdef USE_UNISHOX_COMPRESSION
 #ifdef USE_JAVASCRIPT_ES6
 // insert D_HTML_LANGUAGE later
@@ -639,12 +637,12 @@ const char HTTP_HEAD_STYLE_ZIGBEE_COMPRESSED[] PROGMEM = "\x3A\x0E\xA3\xDA\x3B\x
                              "\x33\x90\x81\x0F\x5F\x04\x2D\x53\xFA\x3C\x2A\x2B\x8F\x33\xAC\xE6\x10\x22\x70\x54"
                              "\x08\xFC\x0C\x82\x0F\x0A\x67\x30\x81\x23\x81\x23\xDA\x08\x34\x4C\xEF\xE7\x74\xEB"
                              "\x3A\xC7\x04\x75\x1C\x98\x43\x0D\x87\x78\xF0\x13\x31\x47\x99\xC8\x43\x0D\x87\xB8";
-                             
+
 // Raw: .bt{box-sizing:border-box;position:relative;display:inline-block;width:20px;height:12px;border:2px solid;border-radius:3px;margin-left:-3px}.bt::after,.bt::before{content:"";display:block;box-sizing:border-box;position:absolute;height:6px;background:currentColor;top:1px}.bt::before{right:-4px;border-radius:3px;width:4px}.bt::after{width:var(--bl,14px);left:1px}
 // Successfully compressed from 363 to 240 bytes (-33.9%)
 #define  HTTP_HEAD_STYLE_ZIGBEE       Decompress(HTTP_HEAD_STYLE_ZIGBEE_COMPRESSED,HTTP_HEAD_STYLE_ZIGBEE_SIZE).c_str()
 #else // USE_UNISHOX_COMPRESSION
-const char HTTP_HEAD_STYLE_ZIGBEE[] PROGMEM = 
+const char HTTP_HEAD_STYLE_ZIGBEE[] PROGMEM =
   ".bt{box-sizing:border-box;position:relative;display:inline-block;width:20px;height:12px;border:2px solid;border-radius:3px;margin-left:-3px}"
   ".bt::after,.bt::before{content:\"\";display:block;box-sizing:border-box;position:absolute;height:6px;background:currentColor;top:1px}"
   ".bt::before{right:-4px;border-radius:3px;width:4px}"
@@ -871,6 +869,7 @@ void StartWebserver(int type, IPAddress ipweb)
       Webserver->on("/u1", HandleUpgradeFirmwareStart);  // OTA
       Webserver->on("/u2", HTTP_POST, HandleUploadDone, HandleUploadLoop);
       Webserver->on("/u2", HTTP_OPTIONS, HandlePreflightRequest);
+      Webserver->on("/u3", HandleUploadDone);
       Webserver->on("/cs", HTTP_GET, HandleConsole);
       Webserver->on("/cs", HTTP_OPTIONS, HandlePreflightRequest);
       Webserver->on("/cm", HandleHttpCommand);
@@ -890,10 +889,6 @@ void StartWebserver(int type, IPAddress ipweb)
 #endif  // Not FIRMWARE_MINIMAL
     }
     Web.reset_web_log_flag = false;
-
-    // Collect User-Agent for Alexa Hue Emulation
-    // This is used in xdrv_20_hue.ino in function findEchoGeneration()
-    Webserver->collectHeaders(HEADER_KEYS, sizeof(HEADER_KEYS)/sizeof(char*));
 
     Webserver->begin(); // Web server start
   }
@@ -2630,6 +2625,16 @@ void HandleUploadDone(void)
 {
   if (!HttpCheckPriviledgedAccess()) { return; }
 
+#if defined(USE_ZIGBEE) && defined(USE_ZIGBEE_EZSP)
+  if (!Web.upload_error) {
+    // GUI xmodem
+    if (ZigbeeUploadOtaReady()) {
+      HandleZigbeeXfer();
+      return;
+    }
+  }
+#endif
+
   AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_HTTP D_UPLOAD_DONE));
 
   char error[100];
@@ -2645,8 +2650,8 @@ void HandleUploadDone(void)
   if (!Web.upload_error) {
     uint32_t javascript_settimeout = HTTP_OTA_RESTART_RECONNECT_TIME;
 #if defined(USE_ZIGBEE) && defined(USE_ZIGBEE_EZSP)
-    if (ZigbeeUploadOtaReady()) {
-      javascript_settimeout = 30000;                                  // Refesh main web ui after transfer upgrade
+    if (ZigbeeUploadFinish()) {
+      javascript_settimeout = 10000;                                  // Refesh main web ui after transfer upgrade
     }
 #endif
     WSContentSend_P(HTTP_SCRIPT_RELOAD_TIME, javascript_settimeout);  // Refesh main web ui after OTA upgrade
@@ -2671,15 +2676,9 @@ void HandleUploadDone(void)
   } else {
     WSContentSend_P(PSTR("%06x'>" D_SUCCESSFUL "</font></b><br>"), WebColor(COL_TEXT_SUCCESS));
     restart_flag = 2;  // Always restart to re-enable disabled features during update
-#if defined(USE_ZIGBEE) && defined(USE_ZIGBEE_EZSP)
-    if (ZigbeeUploadOtaReady()) {
-      WSContentSend_P(PSTR("<br><div style='text-align:center;'>" D_TRANSFER_STARTED " ...</div><br>"));
-      restart_flag = 0;  // Hold restart as firmware still needs to be written to MCU EFR32
-    }
-#endif  // USE_ZIGBEE and USE_ZIGBEE_EZSP
 #ifdef USE_TASMOTA_CLIENT
     if (TasmotaClient_GetFlagFlashing()) {
-      WSContentSend_P(PSTR("<br><div style='text-align:center;'>" D_TRANSFER_STARTED " ...</div><br>"));
+      WSContentSend_P(PSTR("<br><div style='text-align:center;'><b>" D_TRANSFER_STARTED " ...</b></div>"));
       restart_flag = 0;  // Hold restart as code still needs to be transferred to Atmega
     }
 #endif  // USE_TASMOTA_CLIENT
@@ -2713,6 +2712,7 @@ void HandleUploadLoop(void)
 
   HTTPUpload& upload = Webserver->upload();
 
+  // ***** Step1: Start upload file
   if (UPLOAD_FILE_START == upload.status) {
     restart_flag = 60;
     if (0 == upload.filename.c_str()[0]) {
@@ -2753,7 +2753,10 @@ void HandleUploadLoop(void)
       }
     }
     Web.upload_progress_dot_count = 0;
-  } else if (!Web.upload_error && (UPLOAD_FILE_WRITE == upload.status)) {
+  }
+
+  // ***** Step2: Write upload file
+  else if (!Web.upload_error && (UPLOAD_FILE_WRITE == upload.status)) {
     if (0 == upload.totalSize) {
       if (UPL_SETTINGS == Web.upload_file_type) {
         Web.config_block_count = 0;
@@ -2782,9 +2785,10 @@ void HandleUploadLoop(void)
         } else
 #endif  // USE_RF_FLASH
 #ifdef USE_TASMOTA_CLIENT
-        if ((WEMOS == my_module_type) && (upload.buf[0] == ':')) {  // Check if this is a ARDUINO CLIENT hex file
+        if (TasmotaClient_Available() && (upload.buf[0] == ':')) {  // Check if this is a ARDUINO CLIENT hex file
           Update.end();              // End esp8266 update session
           Web.upload_file_type = UPL_TASMOTACLIENT;
+
           Web.upload_error = TasmotaClient_UpdateInit();  // 0
           if (Web.upload_error != 0) { return; }
         } else
@@ -2803,6 +2807,7 @@ void HandleUploadLoop(void)
 //            upload.buf[2] = 3;  // Force DOUT - ESP8285
           }
         }
+        AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_UPLOAD "File type %d"), Web.upload_file_type);
       }
     }
     if (UPL_SETTINGS == Web.upload_file_type) {
@@ -2874,7 +2879,10 @@ void HandleUploadLoop(void)
         if (!(Web.upload_progress_dot_count % 80)) { Serial.println(); }
       }
     }
-  } else if(!Web.upload_error && (UPLOAD_FILE_END == upload.status)) {
+  }
+
+  // ***** Step3: Finish upload file
+  else if(!Web.upload_error && (UPLOAD_FILE_END == upload.status)) {
     if (_serialoutput && (Web.upload_progress_dot_count % 80)) {
       Serial.println();
     }
@@ -2950,9 +2958,12 @@ void HandleUploadLoop(void)
       }
     }
     if (!Web.upload_error) {
-      AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_UPLOAD D_SUCCESSFUL " %u bytes. " D_RESTARTING), upload.totalSize);
+      AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_UPLOAD D_SUCCESSFUL " %u bytes"), upload.totalSize);
     }
-  } else if (UPLOAD_FILE_ABORTED == upload.status) {
+  }
+
+  // ***** Step4: Abort upload file
+  else if (UPLOAD_FILE_ABORTED == upload.status) {
     restart_flag = 0;
     MqttRetryCounter(0);
 #ifdef USE_COUNTER

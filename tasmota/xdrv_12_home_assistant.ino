@@ -95,7 +95,7 @@ const char HASS_DISCOVER_LIGHT_WHITE[] PROGMEM =
   ",\"whit_val_cmd_t\":\"%s\","                   // cmnd/led2/White
   "\"whit_val_stat_t\":\"%s\","                   // stat/led2/RESULT
   "\"whit_val_scl\":100,"
-  "\"whit_val_tpl\":\"{{value_json.Channel[3]}}\"";
+  "\"whit_val_tpl\":\"{{value_json." D_CMND_WHITE "}}\"";
 
 const char HASS_DISCOVER_LIGHT_CT[] PROGMEM =
   ",\"clr_temp_cmd_t\":\"%s\","                   // cmnd/led2/CT
@@ -336,7 +336,7 @@ void HAssAnnounceRelayLight(void)
               GetTopic_P(effect_command_topic, CMND, mqtt_topic, D_CMND_SCHEME);
               TryResponseAppend_P(HASS_DISCOVER_LIGHT_SCHEME, effect_command_topic, state_topic);
             }
-            if (LST_RGBW == Light.subtype) { wt_light = true; }
+            if (LST_RGBW <= Light.subtype) { wt_light = true; }
             if (LST_RGBCW == Light.subtype) { ct_light = true; }
           }
 
@@ -348,7 +348,7 @@ void HAssAnnounceRelayLight(void)
               TryResponseAppend_P(HASS_DISCOVER_LIGHT_CT, color_temp_command_topic, state_topic);
               ct_light = false;
           }
-          if ((!ind_light && wt_light) || (LST_RGBW == Light.subtype &&
+          if ((!ind_light && wt_light) || (LST_RGBW <= Light.subtype &&
               !PwmMulti && LightControl)) {
               char *white_temp_command_topic = stemp1;
 
@@ -849,7 +849,7 @@ void HAssDiscovery(void)
     Settings.flag3.hass_tele_on_power = 1;  // SetOption59 - Send tele/%topic%/STATE in addition to stat/%topic%/RESULT - send tele/STATE message as stat/RESULT
                                             // the purpose of that is so that if HA is restarted, state in HA will be correct within one teleperiod otherwise state
                                             // will not be correct until the device state is changed this is why in the patterns for switch and light, we tell HA to trigger on STATE, not RESULT.
-    Settings.light_scheme = 0;              // To just control color it needs to be Scheme 0
+    //Settings.light_scheme = 0;            // To just control color it needs to be Scheme 0 (on hold due to new light configuration)
   }
 
   if (Settings.flag.hass_discovery || (1 == hass_mode))
@@ -940,7 +940,7 @@ void HassLwtSubscribe(bool hasslwt)
 {
   char htopic[TOPSZ];
   snprintf_P(htopic, sizeof(htopic), PSTR(HOME_ASSISTANT_LWT_TOPIC));
-  if (hasslwt) {
+  if (hasslwt && Settings.flag.hass_discovery) {
     MqttSubscribe(htopic);
   } else { MqttUnsubscribe(htopic); }
 }
@@ -984,9 +984,7 @@ bool Xdrv12(uint8_t function)
       hass_mode = 0;      // Discovery only if Settings.flag.hass_discovery is set
       hass_init_step = 2; // Delayed discovery
       break;
-      // if (!Settings.flag.hass_discovery) {
-      //   AddLog_P2(LOG_LEVEL_INFO, PSTR("MQT: homeassistant/49A3BC/Discovery = {\"dev\":{\"ids\":[\"49A3BC\"]},\"cmd_t\":\"cmnd/test1/\",\"Discovery\":0}"));
-      // }
+
     case FUNC_MQTT_SUBSCRIBE:
       HassLwtSubscribe(hasslwt);
       break;
