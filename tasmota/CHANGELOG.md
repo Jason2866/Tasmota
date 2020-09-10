@@ -4,7 +4,10 @@
 
 ### 8.5.0.1 20200907
 
-- New released
+- Fix energy total counters (#9263, #9266)
+- Fix crash in ``ZbRestore``
+- Add new shutter modes (#9244)
+- Add ``#define USE_MQTT_AWS_IOT_LIGHT`` for password based AWS IoT authentication
 
 ### 8.5.0 20200907
 
