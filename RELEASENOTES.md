@@ -47,7 +47,7 @@ The following binary downloads have been compiled with ESP8266/Arduino library c
 - **tasmota-zbbridge.bin** = The dedicated Sonoff Zigbee Bridge version.
 - **tasmota-minimal.bin** = The Minimal version allows intermediate OTA uploads to support larger versions and does NOT change any persistent parameter. This version **should NOT be used for initial installation**.
 
-Binaries for ESP8266 based devices can be downloaded from http://ota.tasmota.com/tasmota/release. Binaries for ESP32 based devices can be downloaded from http://ota.tasmota.com/tasmota32/release. The base links can be used for OTA upgrades like ``OtaUrl http://ota.tasmota.com/tasmota/release/tasmota.bin``
+The attached binaries can also be downloaded from http://ota.tasmota.com/tasmota/release for ESP8266 or http://ota.tasmota.com/tasmota32/release for ESP32. The links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmota.com/tasmota/release/tasmota.bin``
 
 [List](MODULES.md) of embedded modules.
 
@@ -59,5 +59,10 @@ Binaries for ESP8266 based devices can be downloaded from http://ota.tasmota.com
 
 - Fix energy total counters (#9263, #9266)
 - Fix crash in ``ZbRestore``
-- Add new shutter modes (#9244)
+- Fix reset BMP sensors when executing command ``SaveData`` and define USE_DEEPSLEEP enabled (#9300)
+- Add command ``SetOption110 1`` to disable Zigbee auto-config when pairing new devices
+- Add command ``SetOption111 1`` to enable frequency output for buzzer GPIO (#8994)
 - Add ``#define USE_MQTT_AWS_IOT_LIGHT`` for password based AWS IoT authentication
+- Add new shutter modes (#9244)
+- Add Zigbee auto-config when pairing
+- Add support for MLX90640 IR array temperature sensor by Christian Baars
