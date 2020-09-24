@@ -844,7 +844,7 @@ static const Zigbee_Instruction zb_prog[] PROGMEM = {
     ZI_SEND(ZBS_SET_PANID_CNFLCT)       ZI_WAIT_RECV(500, ZBR_SET_OK)
     ZI_SEND(ZBS_SET_ZDO_REQ)            ZI_WAIT_RECV(500, ZBR_SET_OK)
     ZI_SEND(ZBS_SET_NETWORKS)           ZI_WAIT_RECV(500, ZBR_SET_OK)
-    ZI_SEND(ZBS_SET_PACKET_BUF)         ZI_WAIT_RECV(500, ZBR_SET_OK2)
+    ZI_SEND(ZBS_SET_PACKET_BUF)         ZI_WAIT_RECV(500, ZBR_SET_OK)
 
     // read configuration
     // TODO - not sure it's useful
