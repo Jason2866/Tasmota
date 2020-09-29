@@ -2,7 +2,7 @@ name: Build_firmware
 
 on:
   push:
-    branches: [ $default-branch ]
+    branches: development
 
 jobs:
   tasmota_pull:
