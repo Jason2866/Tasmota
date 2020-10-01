@@ -246,7 +246,7 @@ jobs:
         platformio update
     - name: Run PlatformIO
       run: platformio run -e tasmota-DE
-     - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v2
       with:
         name: firmware
         path: ./build_output/firmware
@@ -573,4 +573,3 @@ jobs:
       with:
         name: firmware
         path: ./build_output/firmware
-  
