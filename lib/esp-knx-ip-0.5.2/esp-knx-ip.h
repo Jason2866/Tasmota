@@ -270,7 +270,8 @@ typedef struct __cemi_msg
   uint8_t additional_info_len;
   union
   {
-    cemi_addi_t additional_info[];
+//    cemi_addi_t additional_info[];   // Errors in GCC 10.1
+    cemi_addi_t additional_info[10];   // Changed to arbitrary number to fix compilation
     cemi_service_t service_information;
   } data;
 } cemi_msg_t;
@@ -398,7 +399,7 @@ typedef struct __callback_assignment
 } callback_assignment_t;
 
 // FastPrecisePowf from tasmota/support_float.ino
-extern float FastPrecisePowf(const float x, const float y);
+//extern float FastPrecisePowf(const float x, const float y);
 
 class ESPKNXIP {
   public:
@@ -567,7 +568,7 @@ class ESPKNXIP {
     callback_assignment_id_t __callback_register_assignment(address_t address, callback_id_t id);
     void __callback_delete_assignment(callback_assignment_id_t id);
 
-    static inline float pow(float a, float b) { return FastPrecisePowf(a, b); }
+    //static inline float pow(float a, float b) { return FastPrecisePowf(a, b); }
 
     ESP8266WebServer *server;
     address_t physaddr;

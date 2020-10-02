@@ -21,9 +21,9 @@ While fallback or downgrading is common practice it was never supported due to S
 
 ## Supported Core versions
 
-This release will be supported from ESP8266/Arduino library Core version **2.7.1** due to reported security and stability issues on previous Core version. This will also support gzipped binaries.
+This release will be supported from ESP8266/Arduino library Core version **2.7.4.1** due to reported security and stability issues on previous Core version. This will also support gzipped binaries.
 
-Although it might still compile on previous Core versions all support will be removed in the near future.
+Support of Core versions before 2.7.1 has been removed.
 
 ## Support of TLS
 
@@ -35,7 +35,7 @@ For initial configuration this release supports Webserver based **WifiManager** 
 
 ## Provided Binary Downloads
 
-The following binary downloads have been compiled with ESP8266/Arduino library core version **2.7.1**.
+The following binary downloads have been compiled with ESP8266/Arduino library core version **2.7.4.1**.
 
 - **tasmota.bin** = The Tasmota version with most drivers. **RECOMMENDED RELEASE BINARY**
 - **tasmota-BG.bin** to **tasmota-TW.bin** = The Tasmota version in different languages.
@@ -44,7 +44,10 @@ The following binary downloads have been compiled with ESP8266/Arduino library c
 - **tasmota-sensors.bin** = The Sensors version adds more useful sensors.
 - **tasmota-ir** = The InfraRed Receiver and transmitter version allowing all available protocols provided by library IRremoteESP8266 but without most other features.
 - **tasmota-display.bin** = The Display version without Energy Monitoring but adds display support.
+- **tasmota-zbbridge.bin** = The dedicated Sonoff Zigbee Bridge version.
 - **tasmota-minimal.bin** = The Minimal version allows intermediate OTA uploads to support larger versions and does NOT change any persistent parameter. This version **should NOT be used for initial installation**.
+
+The attached binaries can also be downloaded from http://ota.tasmota.com/tasmota/release for ESP8266 or http://ota.tasmota.com/tasmota32/release for ESP32. The links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmota.com/tasmota/release/tasmota.bin``
 
 [List](MODULES.md) of embedded modules.
 
@@ -52,17 +55,23 @@ The following binary downloads have been compiled with ESP8266/Arduino library c
 
 ## Changelog
 
-### Version 8.3.1.2
+### Version 8.5.1 Hannah
 
-- Change IRremoteESP8266 library updated to v2.7.7
-- Change Adafruit_SGP30 library from v1.0.3 to v1.2.0 (#8519)
-- Change Energy JSON Total field from ``"Total":[33.736,11.717,16.978]`` to ``"Total":33.736,"TotalTariff":[11.717,16.978]``
-- Change Energy JSON ExportActive field from ``"ExportActive":[33.736,11.717,16.978]`` to ``"ExportActive":33.736,"ExportTariff":[11.717,16.978]``
-- Add command ``Rule0`` to change global rule parameters
-- Add command ``Time 4`` to display timestamp using milliseconds (#8537)
-- Add commands ``LedPwmOn 0..255``, ``LedPwmOff 0..255`` and ``LedPwmMode1 0/1`` to control led brightness by George (#8491)
-- Add more functionality to ``Switchmode`` 11 and 12 (#8450)
-- Add wildcard pattern ``?`` for JSON matching in rules
-- Add support for VEML6075 UVA/UVB/UVINDEX Sensor by device111 (#8432)
-- Add support for VEML7700 Ambient light intensity Sensor by device111 (#8432)
-- Add Three Phase Export Active Energy to SDM630 driver
+- Fix energy total counters (#9263, #9266)
+- Fix crash in ``ZbRestore``
+- Fix reset BMP sensors when executing command ``SaveData`` and define USE_DEEPSLEEP enabled (#9300)
+- Fix ``status 0`` message when using define USE_MQTT_TLS due to small log buffer (#9305)
+- Fix ``status 13`` exception 9 when more than one shutter is configured
+- Fix ``status 13`` json message
+- Fix Shelly 2.5 higher temperature regression from 8.2.0.1 (#7991)
+- Change replace ArduinoJson with JSMN for JSON parsing
+- Change ``WakeUp`` uses 256 steps instead of 100 (#9241)
+- Add command ``SetOption110 1`` to disable Zigbee auto-config when pairing new devices
+- Add command ``SetOption111 1`` to enable frequency output for buzzer GPIO (#8994)
+- Add command ``SetOption112 1`` to enable friendly name in zigbee topic (use with SetOption89)
+- Add ``#define USE_MQTT_AWS_IOT_LIGHT`` for password based AWS IoT authentication
+- Add ``#define MQTT_LWT_OFFLINE`` and ``#define MQTT_LWT_ONLINE`` to user_config.h (#9395)
+- Add new shutter modes (#9244)
+- Add Zigbee auto-config when pairing
+- Add support for MLX90640 IR array temperature sensor by Christian Baars
+- Add support for VL53L1X time of flight sensor by Johann Obermeier
