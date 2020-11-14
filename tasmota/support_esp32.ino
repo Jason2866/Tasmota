@@ -247,8 +247,7 @@ void DisableBrownout(void) {
 
 String ESP32GetResetReason(uint32_t cpu_no) {
 	// tools\sdk\include\esp32\rom\rtc.h
-  RESET_REASON reset_reason = rtc_get_reset_reason(cpu_no);
-  switch (reset_reason) {
+  switch (rtc_get_reset_reason(cpu_no)) {
     case POWERON_RESET          : return "Vbat power on reset";                              // 1
     case SW_RESET               : return "Software reset digital core";                      // 3
     case OWDT_RESET             : return "Legacy watch dog reset digital core";              // 4
