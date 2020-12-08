@@ -642,9 +642,14 @@ struct {
   uint16_t      shd_warmup_brightness;     // F5C
   uint8_t       shd_warmup_time;           // F5E
 
-  uint8_t       free_f5e[84];              // F5E - Decrement if adding new Setting variables just above and below
+  uint8_t       free_f5e[72];              // F5E - Decrement if adding new Setting variables just above and below
 
   // Only 32 bit boundary variables below
+
+  uint64_t      rf_protocol_mask;          // FA8
+
+  uint32_t      free_fb0[1];               // FB0
+
   SysBitfield5  flag5;                     // FB4
   uint16_t      pulse_counter_debounce_low;   // FB8
   uint16_t      pulse_counter_debounce_high;  // FBA
@@ -678,17 +683,18 @@ typedef struct {
   uint16_t      valid;                     // 290  (RTC memory offset 100)
   uint8_t       oswatch_blocked_loop;      // 292
   uint8_t       ota_loader;                // 293
-  unsigned long energy_kWhtoday;              // 294
-  unsigned long energy_kWhtotal;              // 298
+  unsigned long energy_kWhtoday;           // 294
+  unsigned long energy_kWhtotal;           // 298
   volatile unsigned long pulse_counter[MAX_COUNTERS];  // 29C - See #9521 why volatile
   power_t       power;                     // 2AC
   EnergyUsage   energy_usage;              // 2B0
   unsigned long nextwakeup;                // 2C8
-  uint8_t       free_004[4];               // 2CC
+  uint32_t      baudrate;                  // 2CC
   uint32_t      ultradeepsleep;            // 2D0
   uint16_t      deepsleep_slip;            // 2D4
 
-  uint8_t       free_022[22];              // 2D6
+  uint8_t       free_2d6[22];              // 2D6
+
                                            // 2EC - 2FF free locations
 } TRtcSettings;
 TRtcSettings RtcSettings;
