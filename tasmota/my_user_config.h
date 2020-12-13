@@ -827,6 +827,7 @@
 //#define USE_BLE_ESP32                             // Add support for ESP32 as a BLE-bridge (+9k2? mem, +292k? flash)
 //#define USE_IBEACON                              // Add support for bluetooth LE passive scan of ibeacon devices (uses HM17 module)
 //#define USE_IBEACON_ESP32
+//  #define USE_EQ3_ESP32                               // Add support for EQ3 TRV radiator valves - requires USE_BLE_ESP32
 //#define USE_WEBCAM                               // Add support for webcam
 
 #endif  // ESP32
