@@ -21,6 +21,81 @@
   --------------------------------------------------------------------------------------------
   0.0.0.0 20201213  created - initial version
 */
+
+
+/*
+
+Commands:
+e.g.
+trv 001A22092EE0 settemp 22.5
+
+
+trv reset
+trv devlist - reprot seen devices.  Active scanning required, not passive, as it looks for names
+trv scan - same as devlist
+trv <mac> state - report general state (see below for MQTT)
+trv <mac> raw <hex to send> - send a raw command
+trv <mac> on - set temp to 30 -> display ON on EQ3
+trv <mac> off - set temp to 4.5 -> display OFF on EQ3
+trv <mac> boost - set boost
+trv <mac> unboost - turn off boost
+trv <mac> lock - manual lock of physical buttons
+trv <mac> unlock - manual unlock of physical buttons
+trv <mac> auto - set EQ3 to auto mode
+trv <mac> manual - set EQ3 to manual mode
+trv <mac> eco - set EQ3 to eco mode?
+trv <mac> day - set EQ3 to day temp
+trv <mac> night - set EQ3 to night temp
+trv <mac> settemp 20.5 - set EQ3 to temp
+trv <mac> settime - set time to Tasmota time (untested)
+trv <mac> settime <hex as per esp32_mqtt_eq3> - set time
+trv <mac> offset 1.5 - set offset temp
+trv <mac> setdaynight 22 17.5 - set day and night mode temps
+trv <mac> setwindowtempdur 12.5 30 - set window open temp and duration in mins
+
+trv <mac> reqprofile <0-6> - request a profile for a day fo the week.
+trv <mac> setprofile <0-6> 20.5-07:30,17-17:00,22.5-22:00,17-24:00 (up to 7 temp-HH:MM) - set a profile for a day fo the week.
+
+Responses:
+normal:
+tele/tasmota_E89E98/EQ3 = {
+  "trv":"00:1a:22:09:2e:e0",
+  "blestate":DONENOTIFIED, - state of the command - FAILxxx | DONExxxx
+  "raw":"02010900042C", - raw response in hex
+  "temp":22.0, - temp currently set (NOT measured temp)
+  "posn":0, - position of the valve (0-100);
+  "mode":"manual", 
+  "boost":"inactive",
+  "dst":"set", - daylight savings time?
+  "window":"closed",
+  "state":"unlocked",
+  "battery":"GOOD"
+}
+
+holiday:
+as above, but adds ,"holidayend":"YY-MM-DD HH:MM"
+
+when trv <mac> reqprofile is used:
+tele/tasmota_E89E98/EQ3 = {"trv":"00:1a:22:09:2e:e0","blestate":DONENOTIFIED,"raw":"02010900042C",
+  "profiledayN":"20.5-07:30,17.0-17:00,22.5-22:00,17.0-24:00"}
+where N is the day (0-6).
+
+when trv <mac> setprofile is used:
+tele/tasmota_E89E98/EQ3 = {"trv":"00:1a:22:09:2e:e0","blestate":DONENOTIFIED,"raw":"02010900042C","profiledayset":N}
+where N is the day (0-6).
+
+on error:
+tele/tasmota_E89E98/EQ3 = {"trv":"00:1a:22:09:2e:e0","blestate":"FAIL<xxxx>","retriesremain":<1-3>}
+when retries exhausted:
+tele/tasmota_E89E98/EQ3 = {"trv":"00:1a:22:09:2e:e0","blestate":"FAIL<xxxx>"}
+
+The driver will try a command three times.
+
+*/
+
+
+
+
 //#define VSCODE_DEV
 
 #ifdef VSCODE_DEV
