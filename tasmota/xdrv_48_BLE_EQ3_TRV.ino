@@ -149,7 +149,7 @@ int EQ3ParseOp(BLE_ESP32::generic_sensor_t *op, bool success, int retries){
   *(p++) = '\"';
 
   if (success) {
-    sprintf(p, ",\"blestate\":%s", BLE_ESP32::getStateString(op->state));
+    sprintf(p, ",\"blestate\":\"%s\"", BLE_ESP32::getStateString(op->state));
     p += strlen(p);
 
     char raw[40];
@@ -213,7 +213,7 @@ int EQ3ParseOp(BLE_ESP32::generic_sensor_t *op, bool success, int retries){
       p += strlen(p); 
     }
     if ((op->notifylen >= 3) && (op->dataNotify[0] == 2) && (op->dataNotify[1] == 2)){
-      sprintf(p, ",\"profiledayset\":\"%d\"", op->dataNotify[2]);
+      sprintf(p, ",\"profiledayset\":%d", op->dataNotify[2]);
       p += strlen(p); 
     }
     if ((op->notifylen >= 16) && (op->dataNotify[0] == 0x21)){
@@ -250,12 +250,12 @@ int EQ3ParseOp(BLE_ESP32::generic_sensor_t *op, bool success, int retries){
     res = 1;
   } else {
     if (retries){
-      sprintf(p, ",\"blestate\":%s", BLE_ESP32::getStateString(op->state));
+      sprintf(p, ",\"blestate\":\"%s\"", BLE_ESP32::getStateString(op->state));
       p += strlen(p);
       sprintf(p, ",\"retriesremain\":%d", retries);
       p += strlen(p);
     } else {
-      sprintf(p, ",\"blestate\":%s", BLE_ESP32::getStateString(op->state));
+      sprintf(p, ",\"blestate\":\"%s\"", BLE_ESP32::getStateString(op->state));
       p += strlen(p);
     }
   }
@@ -572,7 +572,7 @@ int EQ3Send(const uint8_t* addr, const char *cmd, char* param, char* param2){
       float ftemp = 20;
       sscanf(param, "%f", &ftemp);
       ftemp *= 2;
-      uint8_t ctemp = (uint8_t) ftemp;
+      int8_t ctemp = (int8_t) ftemp;
       ctemp += 7;
       d[0] = 0x13; d[1] = ctemp; dlen = 2;
       break; 
