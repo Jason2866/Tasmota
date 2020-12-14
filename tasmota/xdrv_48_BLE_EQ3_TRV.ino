@@ -21,7 +21,7 @@
   --------------------------------------------------------------------------------------------
   0.0.0.0 20201213  created - initial version
 */
-#define VSCODE_DEV
+//#define VSCODE_DEV
 
 #ifdef VSCODE_DEV
 #define ESP32
