@@ -759,29 +759,29 @@ void CmndTrv(void) {
 //      char addrstrrx[20];
 //      BLE_ESP32::dump(addrstrrx, 20, addrev, 6);
 #endif
-      for (i = 0; i < EQ3_NUM_DEVICESLOTS; i++){
+//      for (i = 0; i < EQ3_NUM_DEVICESLOTS; i++){
 #ifdef EQ3_DEBUG
 //        char addrstr[20];
 //        BLE_ESP32::dump(addrstr, 20, EQ3Devices[i].addr, 6);
 //        AddLog_P(LOG_LEVEL_INFO,PSTR("EQ3 compare addr: %s %s"), addrstrrx, addrstr);
 #endif
-        if (!memcmp(addrev, EQ3Devices[i].addr, 6)){
-          found = true;
-          break;
-        }
-      }
+      //   if (!memcmp(addrev, EQ3Devices[i].addr, 6)){
+      //     found = true;
+      //     break;
+      //   }
+      // }
 #ifdef EQ3_DEBUG
 //      AddLog_P(LOG_LEVEL_INFO,PSTR("EQ3 cmd parsed addr: %s"), addr.toString().c_str());
 #endif
 
-      if (!found){
-        ResponseCmndChar("notfound");
-        return;
-      }
-      if (!EQ3Devices[i].timeoutTime) {
-        ResponseCmndChar("forgotten");
-        return;
-      }
+      // if (!found){
+      //   ResponseCmndChar("notfound");
+      //   return;
+      // }
+      // if (!EQ3Devices[i].timeoutTime) {
+      //   ResponseCmndChar("forgotten");
+      //   return;
+      // }
 
       // get next part of cmd
       const char *cmd = strtok(nullptr, " ");
