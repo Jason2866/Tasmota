@@ -1916,7 +1916,7 @@ void ZigbeeMapRefresh(void) {
     ZigbeeMapAllDevices();
   }
   Webserver->sendHeader("Location","/zbm");        // Add a header to respond with a new location for the browser to go to the home page again
-  Webserver->send(302);              
+  Webserver->send(302);
 }
 
 // Display a graphical representation of the Zigbee map using vis.js network
