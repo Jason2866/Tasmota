@@ -30,7 +30,7 @@ Support of Core versions before 2.7.1 has been removed.
 
 ## Support of TLS
 
-To save resources when TLS is enabled mDNS needs to be disabled. In addition to TLS using fingerprints now also user supplied CA certs and AWS IoT is supported. Read [full documentation](https://tasmota.github.io/docs/AWS-IoT)
+In addition to TLS using fingerprints now also user supplied CA certs and AWS IoT is supported. Read [full documentation](https://tasmota.github.io/docs/AWS-IoT)
 
 ## Initial configuration tools
 
@@ -60,6 +60,7 @@ The attached binaries can also be downloaded from http://ota.tasmota.com/tasmota
 ### Added
 - Command ``SetOption115 1`` to enable ESP32 MiBle
 - Command ``SetOption116 1`` to disable auto-query of zigbee light devices (avoids network storms with large groups)
+- Command ``SetOption117 1`` for light fading to be fixed duration instead of fixed slew rate (#10109)
 - Command ``RfProtocol`` to control RcSwitch receive protocols by BBBits (#10063)
 - Commands ``TuyaRGB``, ``TuyaEnum`` and ``TuyaEnumList`` (#9769)
 - Zigbee command ``ZbInfo`` and prepare support for EEPROM
@@ -68,6 +69,7 @@ The attached binaries can also be downloaded from http://ota.tasmota.com/tasmota
 - Zigbee alarm persistence (#9785)
 - Zigbee persistence of device/sensor data in EEPROM (only ZBBridge)
 - Zigbee better support for Tuya Protocol (#10074)
+- Zigbee visual map of network
 - TyuaMcu update 2/3 by Federico Leoni (#10004)
 - Support for additional EZO sensors by Christopher Tremblay
 - Support for AS608 optical and R503 capacitive fingerprint sensor
@@ -79,6 +81,7 @@ The attached binaries can also be downloaded from http://ota.tasmota.com/tasmota
 - Fallback NTP server from x.pool.ntp.org if no ntpservers are configured
 - Optional CCloader support for CC25xx Zigbee or CC26xx BLE by Christian Baars (#9970)
 - Letsencrypt R3 in addition to X3 CA (#10086)
+- ESP32 SPIFFS support
 
 ### Breaking Changed
 - KNX DPT9 (16-bit float) to DPT14 (32-bit float) by Adrian Scillato (#9811, #9888)
@@ -88,7 +91,6 @@ The attached binaries can also be downloaded from http://ota.tasmota.com/tasmota
 - IRremoteESP8266 library from v2.7.12 to v2.7.13
 - Shelly Dimmer 1 and 2 stm32 firmware from v51.4 to v51.5
 - mDNS has been disabled from all pre-compiled binaries to allow new features
-- Platformio compiler option `no target align` enabled (#9749)
 - Sonoff L1 color up scaling and color margin detection (#9545)
 - MQTT Wifi connection timeout from 5000 to 200 mSec (#9886)
 - Force bigger Thunk Stack if 4K RSA even without EC ciphers (#10075)
@@ -105,6 +107,8 @@ The attached binaries can also be downloaded from http://ota.tasmota.com/tasmota
 - Backlog timing wraparound (#9995)
 - First LED in addressable string does not fade when using scheme (#10088)
 - Improved Opentherm error handling (#10055)
+- Shutter motordelay stop issue (#10033)
+- ESP32 CC2530 heap corruption (#10121)
 
 ### Removed
 - Version compatibility check
