@@ -53,7 +53,7 @@
 //#define MODULE                 SONOFF_BASIC      // [Module] Select default module from tasmota_template.h
 #ifdef ESP8266
 #define FALLBACK_MODULE        SONOFF_BASIC      // [Module2] Select default module on fast reboot where USER_MODULE is user template
-//#define USER_TEMPLATE "{\"NAME\":\"Generic\",\"GPIO\":[255,255,255,255,255,255,255,255,255,255,255,255,255],\"FLAG\":15,\"BASE\":18}"  // [Template] Set JSON template
+//#define USER_TEMPLATE "{\"NAME\":\"Generic\",\"GPIO\":[1,1,1,1,1,1,1,1,1,1,1,1,1,1],\"FLAG\":0,\"BASE\":18}"  // [Template] Set JSON template
 #endif  // ESP8266
 #ifdef ESP32
 #define FALLBACK_MODULE        WEMOS             // [Module2] Select default module on fast reboot where USER_MODULE is user template
@@ -751,6 +751,8 @@
 //#define USE_TX23_WIND_SENSOR                     // Add support for La Crosse TX23 anemometer (+2k7/1k code)
 
 //#define USE_WINDMETER                            // Add support for analog anemometer (+2k2 code)
+
+//#define USE_FTC532                               // Add support for FTC532 8-button touch controller (+0k6 code)
 
 //#define USE_RC_SWITCH                            // Add support for RF transceiver using library RcSwitch (+2k7 code, 460 iram)
 

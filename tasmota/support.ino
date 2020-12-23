@@ -17,9 +17,6 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-IPAddress syslog_host_addr;      // Syslog host IP address
-uint32_t syslog_host_hash = 0;   // Syslog host name hash
-
 extern "C" {
 extern struct rst_info resetInfo;
 }
@@ -1901,6 +1898,9 @@ void SetSyslog(uint32_t loglevel)
 
 void Syslog(void)
 {
+  static IPAddress syslog_host_addr;      // Syslog host IP address
+  static uint32_t syslog_host_hash = 0;   // Syslog host name hash
+
   // Destroys TasmotaGlobal.log_data
 
   uint32_t current_hash = GetHash(SettingsText(SET_SYSLOG_HOST), strlen(SettingsText(SET_SYSLOG_HOST)));
@@ -1909,14 +1909,14 @@ void Syslog(void)
     WiFi.hostByName(SettingsText(SET_SYSLOG_HOST), syslog_host_addr);  // If sleep enabled this might result in exception so try to do it once using hash
   }
   if (PortUdp.beginPacket(syslog_host_addr, Settings.syslog_port)) {
-    char syslog_preamble[64];            // Hostname + Id
+    char syslog_preamble[64];              // Hostname + Id
     snprintf_P(syslog_preamble, sizeof(syslog_preamble), PSTR("%s ESP-"), NetworkHostname());
     memmove(TasmotaGlobal.log_data + strlen(syslog_preamble), TasmotaGlobal.log_data, sizeof(TasmotaGlobal.log_data) - strlen(syslog_preamble));
     TasmotaGlobal.log_data[sizeof(TasmotaGlobal.log_data) -1] = '\0';
     memcpy(TasmotaGlobal.log_data, syslog_preamble, strlen(syslog_preamble));
     PortUdp_write(TasmotaGlobal.log_data, strlen(TasmotaGlobal.log_data));
     PortUdp.endPacket();
-    delay(1);                            // Add time for UDP handling (#5512)
+    delay(1);                              // Add time for UDP handling (#5512)
   } else {
     TasmotaGlobal.syslog_level = 0;
     TasmotaGlobal.syslog_timer = SYSLOG_TIMER;
@@ -1924,54 +1924,75 @@ void Syslog(void)
   }
 }
 
-void SyslogAsync(void) {
-  static uint32_t counter = 1;
+void SyslogAsync(bool refresh) {
+  static uint32_t index = 1;
 
-  if (!TasmotaGlobal.syslog_level ||
-      (counter == TasmotaGlobal.web_log_index) ||
-      TasmotaGlobal.global_state.network_down) { return; }
+  if (!TasmotaGlobal.syslog_level) { return; }
+  if (refresh && !NeedLogRefresh(TasmotaGlobal.syslog_level, index)) { return; }
 
-  do {
-    char* tmp;
-    size_t len;
-    uint32_t loglevel = GetLog(counter, &tmp, &len);
-    if ((len > 13) &&
-        (loglevel <= TasmotaGlobal.syslog_level) &&
-        (TasmotaGlobal.masterlog_level <= TasmotaGlobal.syslog_level)) {
-      strlcpy(TasmotaGlobal.log_data, tmp +13, len -13);  // Skip mxtime
+  char* line;
+  size_t len;
+  while (GetLog(TasmotaGlobal.syslog_level, &index, &line, &len)) {
+    // 00:00:00.110 Project tasmota Wemos5 Version 9.2.0.1(theo)-2_7_4_9(2020-12-20T17:09:26)
+    //              Project tasmota Wemos5 Version 9.2.0.1(theo)-2_7_4_9(2020-12-20T17:09:26)
+    uint32_t mxtime = strchr(line, ' ') - line +1;  // Remove mxtime
+    if (mxtime > 0) {
+      strlcpy(TasmotaGlobal.log_data, line +mxtime, len -mxtime);
       Syslog();
     }
-    counter++;
-    counter &= 0xFF;
-    if (!counter) { counter++; }         // Skip 0 as it is not allowed
-  } while (counter != TasmotaGlobal.web_log_index);
+  }
 }
 
-uint32_t GetLog(uint32_t idx, char** entry_pp, size_t* len_p) {
-  char* entry_p = nullptr;
-  size_t len = 0;
-  uint32_t loglevel = 0;
-  if (idx) {
-    char* it = TasmotaGlobal.web_log;
+bool NeedLogRefresh(uint32_t req_loglevel, uint32_t index) {
+  // Skip initial buffer fill
+  if (strlen(TasmotaGlobal.log_buffer) < LOG_BUFFER_SIZE - LOGSZ) { return false; }
+
+  char* line;
+  size_t len;
+  if (!GetLog(req_loglevel, &index, &line, &len)) { return false; }
+  return ((line - TasmotaGlobal.log_buffer) < LOG_BUFFER_SIZE / 4);
+}
+
+bool GetLog(uint32_t req_loglevel, uint32_t* index_p, char** entry_pp, size_t* len_p) {
+  uint32_t index = *index_p;
+
+  if (!req_loglevel || (index == TasmotaGlobal.log_buffer_pointer)) { return false; }
+
+  if (!index) {                            // Dump all
+    index = TasmotaGlobal.log_buffer_pointer +1;
+    if (index > 255) { index = 1; }
+  }
+
+  do {
+    size_t len = 0;
+    uint32_t loglevel = 0;
+    char* entry_p = TasmotaGlobal.log_buffer;
     do {
-      uint32_t cur_idx = *it;
-      it++;
-      size_t tmp = strchrspn(it, '\1');
-      tmp++;                             // Skip terminating '\1'
-      if (cur_idx == idx) {              // Found the requested entry
-        loglevel = *it - '0';
-        it++;                            // Skip loglevel
+      uint32_t cur_idx = *entry_p;
+      entry_p++;
+      size_t tmp = strchrspn(entry_p, '\1');
+      tmp++;                               // Skip terminating '\1'
+      if (cur_idx == index) {              // Found the requested entry
+        loglevel = *entry_p - '0';
+        entry_p++;                         // Skip loglevel
         len = tmp -1;
-        entry_p = it;
         break;
       }
-      it += tmp;
-    } while (it < TasmotaGlobal.web_log + WEB_LOG_SIZE && *it != '\0');
-  }
-  *entry_pp = entry_p;
-  *len_p = len;
-
-  return loglevel;
+      entry_p += tmp;
+    } while (entry_p < TasmotaGlobal.log_buffer + LOG_BUFFER_SIZE && *entry_p != '\0');
+    index++;
+    if (index > 255) { index = 1; }        // Skip 0 as it is not allowed
+    *index_p = index;
+    if ((len > 0) &&
+        (loglevel <= req_loglevel) &&
+        (TasmotaGlobal.masterlog_level <= req_loglevel)) {
+      *entry_pp = entry_p;
+      *len_p = len;
+      return true;
+    }
+    delay(0);
+  } while (index != TasmotaGlobal.log_buffer_pointer);
+  return false;
 }
 
 void AddLog(uint32_t loglevel) {
@@ -1988,33 +2009,35 @@ void AddLog(uint32_t loglevel) {
   uint32_t highest_loglevel = Settings.weblog_level;
   if (Settings.mqttlog_level > highest_loglevel) { highest_loglevel = Settings.mqttlog_level; }
   if (TasmotaGlobal.syslog_level > highest_loglevel) { highest_loglevel = TasmotaGlobal.syslog_level; }
-  if ((loglevel <= highest_loglevel) &&  // Log only when needed
+  if (TasmotaGlobal.templog_level > highest_loglevel) { highest_loglevel = TasmotaGlobal.templog_level; }
+
+  if ((loglevel <= highest_loglevel) &&    // Log only when needed
       (TasmotaGlobal.masterlog_level <= highest_loglevel)) {
     // Delimited, zero-terminated buffer of log lines.
     // Each entry has this format: [index][loglevel][log data]['\1']
-    TasmotaGlobal.web_log_index &= 0xFF;
-    if (!TasmotaGlobal.web_log_index) {
-      TasmotaGlobal.web_log_index++;     // Index 0 is not allowed as it is the end of char string
+    TasmotaGlobal.log_buffer_pointer &= 0xFF;
+    if (!TasmotaGlobal.log_buffer_pointer) {
+      TasmotaGlobal.log_buffer_pointer++;  // Index 0 is not allowed as it is the end of char string
     }
-    while (TasmotaGlobal.web_log_index == TasmotaGlobal.web_log[0] ||  // If log already holds the next index, remove it
-           strlen(TasmotaGlobal.web_log) + strlen(TasmotaGlobal.log_data) + strlen(mxtime) + 4 > WEB_LOG_SIZE)  // 4 = web_log_index + '\1' + '\0'
+    while (TasmotaGlobal.log_buffer_pointer == TasmotaGlobal.log_buffer[0] ||  // If log already holds the next index, remove it
+           strlen(TasmotaGlobal.log_buffer) + strlen(TasmotaGlobal.log_data) + strlen(mxtime) + 4 > LOG_BUFFER_SIZE)  // 4 = log_buffer_pointer + '\1' + '\0'
     {
-      char* it = TasmotaGlobal.web_log;
-      it++;                              // Skip web_log_index
-      it += strchrspn(it, '\1');         // Skip log line
-      it++;                              // Skip delimiting "\1"
-      memmove(TasmotaGlobal.web_log, it, WEB_LOG_SIZE -(it-TasmotaGlobal.web_log));  // Move buffer forward to remove oldest log line
+      char* it = TasmotaGlobal.log_buffer;
+      it++;                                // Skip log_buffer_pointer
+      it += strchrspn(it, '\1');           // Skip log line
+      it++;                                // Skip delimiting "\1"
+      memmove(TasmotaGlobal.log_buffer, it, LOG_BUFFER_SIZE -(it-TasmotaGlobal.log_buffer));  // Move buffer forward to remove oldest log line
     }
-    snprintf_P(TasmotaGlobal.web_log, sizeof(TasmotaGlobal.web_log), PSTR("%s%c%c%s%s\1"),
-      TasmotaGlobal.web_log, TasmotaGlobal.web_log_index++, '0'+loglevel, mxtime, TasmotaGlobal.log_data);
-    TasmotaGlobal.web_log_index &= 0xFF;
-    if (!TasmotaGlobal.web_log_index) {
-      TasmotaGlobal.web_log_index++;     // Index 0 is not allowed as it is the end of char string
+    snprintf_P(TasmotaGlobal.log_buffer, sizeof(TasmotaGlobal.log_buffer), PSTR("%s%c%c%s%s\1"),
+      TasmotaGlobal.log_buffer, TasmotaGlobal.log_buffer_pointer++, '0'+loglevel, mxtime, TasmotaGlobal.log_data);
+    TasmotaGlobal.log_buffer_pointer &= 0xFF;
+    if (!TasmotaGlobal.log_buffer_pointer) {
+      TasmotaGlobal.log_buffer_pointer++;  // Index 0 is not allowed as it is the end of char string
     }
   }
-  TasmotaGlobal.prepped_loglevel = 0;
+//  TasmotaGlobal.prepped_loglevel = 0;
 }
-
+/*
 void PrepLog_P(uint32_t loglevel, PGM_P formatP, ...)
 {
   va_list arg;
@@ -2024,13 +2047,14 @@ void PrepLog_P(uint32_t loglevel, PGM_P formatP, ...)
 
   TasmotaGlobal.prepped_loglevel = loglevel;
 }
-
+*/
 void AddLog_P(uint32_t loglevel, PGM_P formatP, ...)
 {
+/*
   if (TasmotaGlobal.prepped_loglevel) {
     AddLog(TasmotaGlobal.prepped_loglevel);
   }
-
+*/
   va_list arg;
   va_start(arg, formatP);
   vsnprintf_P(TasmotaGlobal.log_data, sizeof(TasmotaGlobal.log_data), formatP, arg);
@@ -2100,9 +2124,8 @@ void AddLogBufferSize(uint32_t loglevel, uint8_t *buffer, uint32_t count, uint32
 
 Unishox compressor;
 
-String Decompress(const char * compressed, size_t uncompressed_size) {
-  String content("");
-
+// New variant where you provide the String object yourself
+int32_t DecompressNoAlloc(const char * compressed, size_t uncompressed_size, String & content) {
   uncompressed_size += 2;    // take a security margin
 
   // We use a nasty trick here. To avoid allocating twice the buffer,
@@ -2117,6 +2140,12 @@ String Decompress(const char * compressed, size_t uncompressed_size) {
     buffer[len] = 0;    // terminate string with NULL
     content = buffer;         // copy in place
   }
+  return len;
+}
+
+String Decompress(const char * compressed, size_t uncompressed_size) {
+  String content("");
+  DecompressNoAlloc(compressed, uncompressed_size, content);
   return content;
 }
 
