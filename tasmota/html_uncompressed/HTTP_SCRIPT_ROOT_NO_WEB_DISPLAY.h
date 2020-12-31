@@ -1,5 +1,5 @@
 const char HTTP_SCRIPT_ROOT[] PROGMEM =
-  "{let ft;"
+  "var ft;"
   "function la(p){"
     "a=p||'';"
     "clearTimeout(ft);clearTimeout(lt);"
@@ -21,4 +21,4 @@ const char HTTP_SCRIPT_ROOT[] PROGMEM =
     "x.open('GET','.?m=1'+a,true);"       // ?m related to Webserver->hasArg("m")
     "x.send();"
     "ft=setTimeout(la,20000);"               // 20s failure timeout
-  "}}";
+  "}";

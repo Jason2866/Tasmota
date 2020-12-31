@@ -1,5 +1,5 @@
 const char HTTP_SCRIPT_ROOT[] PROGMEM =
-  "let rfsh=1,ft;"
+  "var rfsh=1,ft;"
   "function la(p){"
     "a=p||'';"
     "clearTimeout(ft);clearTimeout(lt);"
