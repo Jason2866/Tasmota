@@ -1,7 +1,7 @@
 /*
   xdrv_23_zigbee.ino - zigbee support for Tasmota
 
-  Copyright (C) 2020  Theo Arends and Stephan Hadinger
+  Copyright (C) 2021  Theo Arends and Stephan Hadinger
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -2072,7 +2072,7 @@ void ZigbeeShow(bool json)
     WSContentSend_P(msg[ZB_WEB_LINE_END]);  // Terminate current multi column table and open new table
     if (zigbee.permit_end_time) {
       // PermitJoin in progress
-      
+
       WSContentSend_P(msg[ZB_WEB_PERMITJOIN_ACTIVE], D_ZIGBEE_PERMITJOIN_ACTIVE);
     }
 #endif
