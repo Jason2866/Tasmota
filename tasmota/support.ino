@@ -147,7 +147,7 @@ class TasAutoMutex {
 TasAutoMutex::TasAutoMutex(void **mutex, const char *name, int maxWait, bool take) {
   if (mutex) {
     if (!(*mutex)){
-      TasAutoMutex::init(mutex);  
+      TasAutoMutex::init(mutex);
     }
     this->mutex = (SemaphoreHandle_t)*mutex;
     this->maxWait = maxWait;
@@ -1321,7 +1321,7 @@ void DumpConvertTable(void) {
       ResponseAppend_P(PSTR(","));
     }
     jsflg = true;
-    if ((ResponseAppend_P(PSTR("\"%d\":\"%d\""), i, data) > (LOGSZ - TOPSZ)) || (i == ARRAY_SIZE(kGpioConvert) -1)) {
+    if ((ResponseAppend_P(PSTR("\"%d\":\"%d\""), i, data) > (MAX_LOGSZ - TOPSZ)) || (i == ARRAY_SIZE(kGpioConvert) -1)) {
       ResponseJsonEndEnd();
       MqttPublishPrefixTopic_P(RESULT_OR_STAT, XdrvMailbox.command);
       jsflg = false;
@@ -1336,7 +1336,7 @@ void DumpConvertTable(void) {
       ResponseAppend_P(PSTR(","));
     }
     jsflg = true;
-    if ((ResponseAppend_P(PSTR("\"%d\":\"%d\""), i, data) > (LOGSZ - TOPSZ)) || (i == ARRAY_SIZE(kAdcNiceList) -1)) {
+    if ((ResponseAppend_P(PSTR("\"%d\":\"%d\""), i, data) > (MAX_LOGSZ - TOPSZ)) || (i == ARRAY_SIZE(kAdcNiceList) -1)) {
       ResponseJsonEndEnd();
       MqttPublishPrefixTopic_P(RESULT_OR_STAT, XdrvMailbox.command);
       jsflg = false;
@@ -2065,7 +2065,7 @@ bool NeedLogRefresh(uint32_t req_loglevel, uint32_t index) {
 #endif  // ESP32
 
   // Skip initial buffer fill
-  if (strlen(TasmotaGlobal.log_buffer) < LOG_BUFFER_SIZE - LOGSZ) { return false; }
+  if (strlen(TasmotaGlobal.log_buffer) < LOG_BUFFER_SIZE - MAX_LOGSZ) { return false; }
 
   char* line;
   size_t len;
@@ -2172,24 +2172,43 @@ void AddLogData(uint32_t loglevel, const char* log_data) {
 
 void AddLog_P(uint32_t loglevel, PGM_P formatP, ...)
 {
-  char log_data[LOGSZ];
+  char log_data[LOGSZ +4];
 
   va_list arg;
   va_start(arg, formatP);
-  vsnprintf_P(log_data, sizeof(log_data), formatP, arg);
+  uint32_t len = vsnprintf_P(log_data, LOGSZ +1, formatP, arg);
   va_end(arg);
+  if (len > LOGSZ) { strcat(log_data, "..."); }  // Actual data is more
+
+#ifdef DEBUG_TASMOTA_CORE
+  // Profile max_len
+  static uint32_t max_len = 0;
+  if (len > max_len) {
+    max_len = len;
+    Serial.printf("PRF: AddLog_P %d\n", max_len);
+  }
+#endif
 
   AddLogData(loglevel, log_data);
 }
 
 void AddLog_Debug(PGM_P formatP, ...)
 {
-  char log_data[LOGSZ];
+  char log_data[MAX_LOGSZ];
 
   va_list arg;
   va_start(arg, formatP);
-  vsnprintf_P(log_data, sizeof(log_data), formatP, arg);
+  uint32_t len = vsnprintf_P(log_data, sizeof(log_data), formatP, arg);
   va_end(arg);
+
+#ifdef DEBUG_TASMOTA_CORE
+  // Profile max_len
+  static uint32_t max_len = 0;
+  if (len > max_len) {
+    max_len = len;
+    Serial.printf("PRF: AddLog_Debug %d\n", max_len);
+  }
+#endif
 
   AddLogData(LOG_LEVEL_DEBUG, log_data);
 }
@@ -2211,13 +2230,13 @@ void AddLogMissed(const char *sensor, uint32_t misses)
 }
 
 void AddLogBufferSize(uint32_t loglevel, uint8_t *buffer, uint32_t count, uint32_t size) {
-  char log_data[LOGSZ];
+  char log_data[4 + (count * size * 3)];
 
   snprintf_P(log_data, sizeof(log_data), PSTR("DMP:"));
   for (uint32_t i = 0; i < count; i++) {
-    if (1 ==  size) {  // uint8_t
+    if (1 == size) {  // uint8_t
       snprintf_P(log_data, sizeof(log_data), PSTR("%s %02X"), log_data, *(buffer));
-    } else {           // uint16_t
+    } else {          // uint16_t
       snprintf_P(log_data, sizeof(log_data), PSTR("%s %02X%02X"), log_data, *(buffer +1), *(buffer));
     }
     buffer += size;
