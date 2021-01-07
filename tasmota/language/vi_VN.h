@@ -740,6 +740,7 @@
 #define D_SENSOR_ADC_RANGE     "ADC Range"
 #define D_SENSOR_ADC_CT_POWER  "ADC CT Power"
 #define D_SENSOR_ADC_JOYSTICK  "ADC Joystick"
+#define D_SENSOR_ADC_PH        "ADC pH"
 #define D_GPIO_WEBCAM_PWDN     "CAM_PWDN"
 #define D_GPIO_WEBCAM_RESET    "CAM_RESET"
 #define D_GPIO_WEBCAM_XCLK     "CAM_XCLK"
@@ -864,7 +865,7 @@
 #define D_CONFIGURE_SCRIPT     "Chỉnh sửa kịch bản"
 #define D_SCRIPT               "chỉnh sửa kịch bản"
 #define D_SDCARD_UPLOAD        "tải lên tệp"
-#define D_SDCARD_DIR           "thư mục thẻ nhớ sd"
+#define D_UFSDIR               "thư mục thẻ nhớ ufs"
 #define D_UPL_DONE             "Hoàn thành"
 #define D_SCRIPT_CHARS_LEFT    "ký tự đã dùng"
 #define D_SCRIPT_CHARS_NO_MORE "không còn ký tự trống"
@@ -872,6 +873,11 @@
 #define D_SCRIPT_ENABLE        "kích hoạt kịch bản"
 #define D_SCRIPT_UPLOAD        "Tải lên"
 #define D_SCRIPT_UPLOAD_FILES  "Tệp tải lên"
+
+//xdrv_50_filesystem.ino
+#define D_MANAGE_FILE_SYSTEM   "Manage File system"
+#define D_FS_SIZE              "Size"
+#define D_FS_FREE              "Free"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "khuếch đại:"

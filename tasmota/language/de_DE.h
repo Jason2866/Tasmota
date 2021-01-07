@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v9.2.0.1
+ * Updated until v9.2.0.3
 \*********************************************************************/
 
 //#define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -740,6 +740,7 @@
 #define D_SENSOR_ADC_RANGE     "ADC Range"
 #define D_SENSOR_ADC_CT_POWER  "ADC CT Power"
 #define D_SENSOR_ADC_JOYSTICK  "ADC Joystick"
+#define D_SENSOR_ADC_PH        "ADC pH"
 #define D_GPIO_WEBCAM_PWDN     "CAM_PWDN"
 #define D_GPIO_WEBCAM_RESET    "CAM_RESET"
 #define D_GPIO_WEBCAM_XCLK     "CAM_XCLK"
@@ -864,7 +865,7 @@
 #define D_CONFIGURE_SCRIPT     "Skript konfigurieren"
 #define D_SCRIPT               "Skript bearbeiten"
 #define D_SDCARD_UPLOAD        "Datei speichern"
-#define D_SDCARD_DIR           "SD Card Verzeichnis"
+#define D_UFSDIR               "UFS Verzeichnis"
 #define D_UPL_DONE             "Fertig"
 #define D_SCRIPT_CHARS_LEFT    "Zeichen übrig"
 #define D_SCRIPT_CHARS_NO_MORE "kein Speicher mehr"
@@ -872,6 +873,11 @@
 #define D_SCRIPT_ENABLE        "Skript aktivieren"
 #define D_SCRIPT_UPLOAD        "Upload"
 #define D_SCRIPT_UPLOAD_FILES  "Upload Dateien"
+
+//xdrv_50_filesystem.ino
+#define D_MANAGE_FILE_SYSTEM   "Verwalte Dateisystem"
+#define D_FS_SIZE              "Größe"
+#define D_FS_FREE              "Frei"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "Umgebung:"

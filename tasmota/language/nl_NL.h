@@ -740,6 +740,7 @@
 #define D_SENSOR_ADC_RANGE     "ADC Range"
 #define D_SENSOR_ADC_CT_POWER  "ADC CT Power"
 #define D_SENSOR_ADC_JOYSTICK  "ADC Joystick"
+#define D_SENSOR_ADC_PH        "ADC pH"
 #define D_GPIO_WEBCAM_PWDN     "CAM_PWDN"
 #define D_GPIO_WEBCAM_RESET    "CAM_RESET"
 #define D_GPIO_WEBCAM_XCLK     "CAM_XCLK"
@@ -864,7 +865,7 @@
 #define D_CONFIGURE_SCRIPT     "Edit script"
 #define D_SCRIPT               "edit script"
 #define D_SDCARD_UPLOAD        "file upload"
-#define D_SDCARD_DIR           "sd card directory"
+#define D_UFSDIR               "ufs directory"
 #define D_UPL_DONE             "Done"
 #define D_SCRIPT_CHARS_LEFT    "chars left"
 #define D_SCRIPT_CHARS_NO_MORE "no more chars"
@@ -872,6 +873,11 @@
 #define D_SCRIPT_ENABLE        "script enable"
 #define D_SCRIPT_UPLOAD        "Upload"
 #define D_SCRIPT_UPLOAD_FILES  "Upload files"
+
+//xdrv_50_filesystem.ino
+#define D_MANAGE_FILE_SYSTEM   "Bestandsbeheer"
+#define D_FS_SIZE              "Grootte"
+#define D_FS_FREE              "Vrij"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "gain:"

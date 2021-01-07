@@ -1,5 +1,5 @@
 /*
-  xdrv_98_filesystem.ino - unified file system for Tasmota
+  xdrv_50_filesystem.ino - unified file system for Tasmota
 
   Copyright (C) 2020  Gerhard Mutz and Theo Arends
 
@@ -19,9 +19,10 @@
 
 #ifdef USE_UFILESYS
 /*********************************************************************************************\
-This driver adds universal file system support for ESP8266 (sd card or littlfs on  > 1 M devices
-with special linker file e.g. eagle.flash.4m2m.ld) (makes no sense on 1M devices without sd card)
-and ESP32 (sd card or little fs or sfatfile system).
+This driver adds universal file system support for
+- ESP8266 (sd card or littlefs on  > 1 M devices with special linker file e.g. eagle.flash.4m2m.ld)
+  (makes no sense on 1M devices without sd card)
+- ESP32 (sd card or littlefs or sfatfile system).
 
 The sd card chip select is the standard SDCARD_CS or when not found SDCARD_CS_PIN and initializes
 the FS System Pointer ufsp which can be used by all standard file system calls.
@@ -41,7 +42,7 @@ ufsfree   free size in kB
 The driver enabled by #define USE_UFILESYS
 \*********************************************************************************************/
 
-#define XDRV_98           98
+#define XDRV_50           50
 
 #ifndef SDCARD_CS_PIN
 #define SDCARD_CS_PIN     4
@@ -70,6 +71,8 @@ The driver enabled by #define USE_UFILESYS
 
 // global file system pointer
 FS *ufsp;
+// flash file system pointer on esp32
+FS *ffsp;
 char ufs_path[48];
 File ufs_upload_file;
 
@@ -81,8 +84,9 @@ uint8_t ufs_type;
 #define UFS_TFAT 2
 #define UFS_TLFS 3
 
-void UFSInit(void) {
+void UfsInit(void) {
   ufs_type = 0;
+  ffsp = 0;
   // check for fs options,
   // 1. check for SD card
   // 2. check for littlefs or FAT
@@ -104,6 +108,16 @@ void UFSInit(void) {
       ufsp = &SD;
 #endif  // ESP32
       ufs_type = UFS_TSDC;
+      // now detect ffs
+      ffsp = &LITTLEFS;
+      if (!LITTLEFS.begin()) {
+        // ffat is second
+        ffsp = &FFat;
+        if (!FFat.begin(true)) {
+          ffsp = 0;
+          return;
+        }
+      }
       return;
     }
   }
@@ -126,11 +140,68 @@ void UFSInit(void) {
       return;
     }
     ufs_type = UFS_TFAT;
+    ffsp = ufsp;
     return;
   }
 #endif // ESP32
   ufs_type = UFS_TLFS;
+  ffsp = ufsp;
   return;
+}
+
+bool TfsFileExists(const char *fname){
+  if (!ufs_type) { return false; }
+
+  bool yes = ffsp->exists(fname);
+  if (!yes) {
+    AddLog_P(LOG_LEVEL_INFO, PSTR("TFS: File not found"));
+  }
+  return yes;
+}
+
+bool TfsSaveFile(const char *fname, const uint8_t *buf, uint32_t len) {
+  if (!ufs_type) { return false; }
+
+  File file = ffsp->open(fname, "w");
+  if (!file) {
+    AddLog_P(LOG_LEVEL_INFO, PSTR("TFS: Save failed"));
+    return false;
+  }
+
+  file.write(buf, len);
+  file.close();
+  return true;
+}
+
+bool TfsInitFile(const char *fname, uint32_t len, uint8_t init_value) {
+  if (!ufs_type) { return false; }
+
+  File file = ffsp->open(fname, "w");
+  if (!file) {
+    AddLog_P(LOG_LEVEL_INFO, PSTR("TFS: Erase failed"));
+    return false;
+  }
+
+  for (uint32_t i = 0; i < len; i++) {
+    file.write(&init_value, 1);
+  }
+  file.close();
+  return true;
+}
+
+bool TfsLoadFile(const char *fname, uint8_t *buf, uint32_t len) {
+  if (!ufs_type) { return false; }
+  if (!TfsFileExists(fname)) { return false; }
+
+  File file = ffsp->open(fname, "r");
+  if (!file) {
+    AddLog_P(LOG_LEVEL_INFO, PSTR("TFS: File not found"));
+    return false;
+  }
+
+  file.read(buf, len);
+  file.close();
+  return true;
 }
 
 uint32_t ufs_fsinfo(uint32_t sel) {
@@ -267,18 +338,19 @@ void UFS_free(void) {
 
 const char UFS_WEB_DIR[] PROGMEM =
   "<p><form action='" "ufsd" "' method='get'><button>" "%s" "</button></form></p>";
-const char UFS_FILE_UPLOAD[] PROGMEM = D_SDCARD_DIR;
+
 const char UFS_FORM_FILE_UPLOAD[] PROGMEM =
   "<div id='f1' name='f1' style='display:block;'>"
-  "<fieldset><legend><b>&nbsp;%s"  "&nbsp;</b></legend>";
+  "<fieldset><legend><b>&nbsp;" D_MANAGE_FILE_SYSTEM "&nbsp;</b></legend>";
+const char UFS_FORM_FILE_UPGc[] PROGMEM =
+  "<div style='text-align:left;color:#%06x;'>" D_FS_SIZE " %s kB - " D_FS_FREE " %s kB</div>";
 const char UFS_FORM_FILE_UPG[] PROGMEM =
   "<form method='post' action='ufsu' enctype='multipart/form-data'>"
-  "<br/><input type='file' name='ufsu'><br/>"
-  "<br/><button type='submit' onclick='eb(\"f1\").style.display=\"none\";eb(\"f2\").style.display=\"block\";this.form.submit();'>" D_START " %s</button></form>";
-const char UFS_FORM_FILE_UPGc[] PROGMEM =
-  "<div style='text-align:left;color:green;'>total size: %s kB - free: %s kB</div>";
+  "<br><input type='file' name='ufsu'><br>"
+  "<br><button type='submit' onclick='eb(\"f1\").style.display=\"none\";eb(\"f2\").style.display=\"block\";this.form.submit();'>" D_START " %s</button></form>"
+  "<br>";
 const char UFS_FORM_SDC_DIRa[] PROGMEM =
-  "<div style='text-align:left'>";
+  "<div style='text-align:left;overflow:auto;height:250px;'>";
 const char UFS_FORM_SDC_DIRc[] PROGMEM =
   "</div>";
 const char UFS_FORM_FILE_UPGb[] PROGMEM =
@@ -288,7 +360,7 @@ const char UFS_FORM_FILE_UPGb[] PROGMEM =
 const char UFS_FORM_SDC_DIRd[] PROGMEM =
   "<pre><a href='%s' file='%s'>%s</a></pre>";
 const char UFS_FORM_SDC_DIRb[] PROGMEM =
-  "<pre><a href='%s' file='%s'>%s</a>     %s : %8d</pre>";
+  "<pre><a href='%s' file='%s'>%s</a> %s %8d</pre>";
 const char UFS_FORM_SDC_HREF[] PROGMEM =
   "http://%s/ufsd?download=%s/%s";
 
@@ -307,15 +379,18 @@ void UFSdirectory(void) {
     }
   }
 
-  WSContentStart_P(UFS_FILE_UPLOAD);
+  WSContentStart_P(PSTR(D_MANAGE_FILE_SYSTEM));
   WSContentSendStyle();
-  WSContentSend_P(UFS_FORM_FILE_UPLOAD,D_SDCARD_DIR);
-  WSContentSend_P(UFS_FORM_FILE_UPG, D_SCRIPT_UPLOAD);
+  WSContentSend_P(UFS_FORM_FILE_UPLOAD);
+
   char ts[16];
   char fs[16];
   UFS_form1000(ufs_fsinfo(0), ts, '.');
   UFS_form1000(ufs_fsinfo(1), fs, '.');
-  WSContentSend_P(UFS_FORM_FILE_UPGc, ts, fs);
+  WSContentSend_P(UFS_FORM_FILE_UPGc, WebColor(COL_TEXT), ts, fs);
+
+  WSContentSend_P(UFS_FORM_FILE_UPG, D_SCRIPT_UPLOAD);
+
   WSContentSend_P(UFS_FORM_SDC_DIRa);
   if (ufs_type) {
     UFS_ListDir(ufs_path, depth);
@@ -363,9 +438,9 @@ void UFS_ListDir(char *path, uint8_t depth) {
       if (lcp) {
         ep = lcp + 1;
       }
-      time_t tm = entry.getLastWrite();
-      char tstr[24];
-      strftime(tstr, 22, "%d-%m-%Y - %H:%M:%S ", localtime(&tm));  // Theo note to me. Isn't strftime expensive? SHould use ISO Date/Time
+
+      uint32_t tm = entry.getLastWrite();
+      String tstr = GetDT(tm);
 
       char *pp = path;
       if (!*(pp + 1)) { pp++; }
@@ -390,7 +465,7 @@ void UFS_ListDir(char *path, uint8_t depth) {
           path[plen] = 0;
         } else {
           snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREF, WiFi.localIP().toString().c_str(), pp, ep);
-          WSContentSend_P(UFS_FORM_SDC_DIRb, npath, ep, name, tstr, entry.size());
+          WSContentSend_P(UFS_FORM_SDC_DIRb, npath, ep, name, tstr.c_str(), entry.size());
         }
       }
       entry.close();
@@ -485,41 +560,29 @@ void UFS_Upload(void) {
   }
 }
 
-void UFSFileUploadSuccess(void) {
-  WSContentStart_P(PSTR(D_INFORMATION));
-  WSContentSendStyle();
-  WSContentSend_P(PSTR("<div style='text-align:center;'><b>" D_UPLOAD " <font color='#"));
-  WSContentSend_P(PSTR("%06x'>" D_SUCCESSFUL "</font></b><br/>"), WebColor(COL_TEXT_SUCCESS));
-  WSContentSend_P(PSTR("</div><br/>"));
-  WSContentSend_P(PSTR("<p><form action='%s' method='get'><button>%s</button></form></p>"), "/ufsd", D_UPL_DONE);
-  WSContentStop();
-}
-
-#define D_UFSDIR "UFS directory"
-
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv98(uint8_t function) {
+bool Xdrv50(uint8_t function) {
   bool result = false;
 
   switch (function) {
     case FUNC_PRE_INIT:
-      UFSInit();
+      UfsInit();
       break;
     case FUNC_COMMAND:
       result = DecodeCommand(kUFSCommands, kUFSCommand);
       break;
 #ifdef USE_WEBSERVER
-    case FUNC_WEB_ADD_BUTTON:
+    case FUNC_WEB_ADD_MANAGEMENT_BUTTON:
       if (ufs_type) {
-        WSContentSend_PD(UFS_WEB_DIR,D_UFSDIR);
+        WSContentSend_PD(UFS_WEB_DIR, D_MANAGE_FILE_SYSTEM);
       }
       break;
     case FUNC_WEB_ADD_HANDLER:
       Webserver->on("/ufsd", UFSdirectory);
-      Webserver->on("/ufsu", HTTP_GET, UFSFileUploadSuccess);
+      Webserver->on("/ufsu", HTTP_GET, UFSdirectory);
       Webserver->on("/ufsu", HTTP_POST,[]() {
         Webserver->sendHeader("Location","/ufsu");
         Webserver->send(303);
