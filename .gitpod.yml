@@ -1,5 +1,5 @@
 tasks:
-  - command: platformio run -e tasmota
+  - command: pio upgrade && platformio run -e tasmota
 
 image:
   file: .gitpod.Dockerfile
