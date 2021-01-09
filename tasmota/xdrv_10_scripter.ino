@@ -523,7 +523,7 @@ char *GetNumericArgument(char *lp,uint8_t lastop,float *fp, JsonParserObject *jo
 char *GetStringArgument(char *lp,uint8_t lastop,char *cp, JsonParserObject *jo);
 char *ForceStringVar(char *lp,char *dstr);
 void send_download(void);
-uint8_t ufs_reject(char *name);
+uint8_t UfsReject(char *name);
 
 void ScriptEverySecond(void) {
 
@@ -1913,6 +1913,10 @@ chknext:
           fvar = RtcTime.day_of_month;
           goto exit;
         }
+        if (!strncmp(vname, "dvnm", 4)) {
+          if (sp) strlcpy(sp, SettingsText(SET_DEVICENAME), glob_script_mem.max_ssize);
+          goto strexit;
+        }
         break;
       case 'e':
         if (!strncmp(vname, "epoch", 5)) {
@@ -2116,7 +2120,7 @@ chknext:
               while (true) {
                 File entry = glob_script_mem.files[find].openNextFile();
                 if (entry) {
-                  if (!ufs_reject((char*)entry.name())) {
+                  if (!UfsReject((char*)entry.name())) {
                     char *ep = (char*)entry.name();
                     if (*ep=='/') ep++;
                     char *lcp = strrchr(ep,'/');
@@ -2244,7 +2248,7 @@ chknext:
 
         if (!strncmp(vname, "fsi(", 4)) {
           lp = GetNumericArgument(lp + 4, OPER_EQU, &fvar, 0);
-          fvar = ufs_fsinfo(fvar, 0);
+          fvar = UfsInfo(fvar, 0);
           lp++;
           len = 0;
           goto exit;
@@ -2367,6 +2371,7 @@ chknext:
           goto strexit;
         }
         break;
+
       case 'g':
         if (!strncmp(vname, "gtmp", 4)) {
           fvar = TasmotaGlobal.temperature_celsius;
