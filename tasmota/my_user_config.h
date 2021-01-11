@@ -746,10 +746,28 @@
   #define USE_ZIGBEE_TXRADIO_DBM  20             // Tx Radio power in dBm (only for EZSP, EFR32 can go up to 20 dBm)
 
   #define USE_ZIGBEE_COALESCE_ATTR_TIMER 350     // timer to coalesce attribute values (in ms)
+  #define USE_ZIGBEE_DEBOUNCE_COMMANDS   200     // if commands are received from the same device/endpoint with same ZCL transaction number, discard packet in this time window (ms)
   #define USE_ZIGBEE_MODELID      "Tasmota Z2T"  // reported "ModelId"      (cluster 0000 / attribute 0005)
   #define USE_ZIGBEE_MANUFACTURER "Tasmota"      // reported "Manufacturer" (cluster 0000 / attribute 0004)
   #define USE_ZBBRIDGE_TLS                       // TLS support for zbbridge
   #define USE_ZIGBEE_ZBBRIDGE_EEPROM 0x50        // I2C id for the ZBBridge EEPROM
+
+  // Auto-binding constants, see `Z_autoAttributeReporting`
+  // Below are the threshold for attribute reporting
+  #define USE_ZIGBEE_AUTOBIND_BATTVOLTAGE   0.1     // V
+  #define USE_ZIGBEE_AUTOBIND_BATTPERCENT   1       // %
+  #define USE_ZIGBEE_AUTOBIND_TEMPERATURE   0.5     // °C
+  #define USE_ZIGBEE_AUTOBIND_HEATDEMAND    10      // %
+  #define USE_ZIGBEE_AUTOBIND_PRESSURE      1       // hPA
+  #define USE_ZIGBEE_AUTOBIND_ILLUMINANCE   5       // lux
+  #define USE_ZIGBEE_AUTOBIND_HUMIDITY      1.0     // %
+  // Below are the Max Thresholds for reporting time (in seconds)
+  #define USE_ZIGBEE_MAXTIME_BATT           4*60*60   // 4h
+  #define USE_ZIGBEE_MAXTIME_TRV            60*10     // 10m
+  #define USE_ZIGBEE_MAXTIME_SENSOR         60*60     // 1h
+  #define USE_ZIGBEE_MAXTIME_LIGHT          60*60     // 1h
+
+
 
 // -- Other sensors/drivers -----------------------
 

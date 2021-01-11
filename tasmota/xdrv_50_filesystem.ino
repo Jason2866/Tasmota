@@ -88,9 +88,6 @@ uint8_t ffs_type;
 
 /*********************************************************************************************/
 
-
-
-
 // init flash file system
 void UfsInitOnce(void) {
   ufs_type = 0;
@@ -184,7 +181,7 @@ void UfsCheckSDCardInit(void) {
 #endif // USE_SDCARD
 
 uint32_t UfsInfo(uint32_t sel, uint32_t type) {
-  uint32_t result = 0;
+  uint64_t result = 0;
   FS *ifsp = ufsp;
   uint8_t itype = ufs_type;
   if (type) {
@@ -425,7 +422,7 @@ const char UFS_FORM_FILE_UPGc1[] PROGMEM =
     " &nbsp;&nbsp;<a href='http://%s/ufsd?dir=%d'>%s</a>";
 
 const char UFS_FORM_FILE_UPGc2[] PROGMEM =
-    "</div>";
+  "</div>";
 
 const char UFS_FORM_FILE_UPG[] PROGMEM =
   "<form method='post' action='ufsu' enctype='multipart/form-data'>"
@@ -443,15 +440,24 @@ const char UFS_FORM_FILE_UPGb[] PROGMEM =
 const char UFS_FORM_SDC_DIRd[] PROGMEM =
   "<pre><a href='%s' file='%s'>%s</a></pre>";
 const char UFS_FORM_SDC_DIRb[] PROGMEM =
-  "<pre><a href='%s' file='%s'>%s</a> %s %8d</pre>";
+  "<pre><a href='%s' file='%s'>%s</a> %s %8d %s</pre>";
 const char UFS_FORM_SDC_HREF[] PROGMEM =
   "http://%s/ufsd?download=%s/%s";
+#ifdef GUI_TRASH_FILE
+const char UFS_FORM_SDC_HREFdel[] PROGMEM =
+  //"<a href=http://%s/ufsd?delete=%s/%s>&#128465;</a>";
+  "<a href=http://%s/ufsd?delete=%s/%s>&#128293;</a>"; // 🔥
+#endif // GUI_TRASH_FILE
+
 
 void UfsDirectory(void) {
+  if (!HttpCheckPriviledgedAccess()) { return; }
+
+  AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_HTTP D_MANAGE_FILE_SYSTEM));
+
   uint8_t depth = 0;
 
   strcpy(ufs_path, "/");
-  if (!HttpCheckPriviledgedAccess()) { return; }
 
   if (Webserver->hasArg("download")) {
     String stmp = Webserver->arg("download");
@@ -472,6 +478,12 @@ void UfsDirectory(void) {
         dfsp = ffsp;
       }
     }
+  }
+
+  if (Webserver->hasArg("delete")) {
+    String stmp = Webserver->arg("delete");
+    char *cp = (char*)stmp.c_str();
+    dfsp->remove(cp);
   }
 
   WSContentStart_P(PSTR(D_MANAGE_FILE_SYSTEM));
@@ -500,6 +512,8 @@ void UfsDirectory(void) {
   WSContentSend_P(UFS_FORM_FILE_UPGb);
   WSContentSpaceButton(BUTTON_CONFIGURATION);
   WSContentStop();
+
+  Web.upload_file_type = UPL_UFSFILE;
 }
 
 void UfsListDir(char *path, uint8_t depth) {
@@ -564,8 +578,15 @@ void UfsListDir(char *path, uint8_t depth) {
           UfsListDir(path, depth + 4);
           path[plen] = 0;
         } else {
+#ifdef GUI_TRASH_FILE
+          char delpath[128];
+          snprintf_P(delpath, sizeof(delpath), UFS_FORM_SDC_HREFdel, WiFi.localIP().toString().c_str(), pp, ep);
+#else
+          char delpath[2];
+          delpath[0]=0;
+#endif // GUI_TRASH_FILE
           snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREF, WiFi.localIP().toString().c_str(), pp, ep);
-          WSContentSend_P(UFS_FORM_SDC_DIRb, npath, ep, name, tstr.c_str(), entry.size());
+          WSContentSend_P(UFS_FORM_SDC_DIRb, npath, ep, name, tstr.c_str(), entry.size(), delpath);
         }
       }
       entry.close();
@@ -635,50 +656,25 @@ uint8_t UfsDownloadFile(char *file) {
   return 0;
 }
 
-void UfsUpload(void) {
-  bool _serialoutput = (LOG_LEVEL_DEBUG <= TasmotaGlobal.seriallog_level);
+bool UfsUploadFileOpen(const char* upload_filename) {
+  char npath[48];
+  snprintf_P(npath, sizeof(npath), PSTR("%s/%s"), ufs_path, upload_filename);
+  dfsp->remove(npath);
+  ufs_upload_file = dfsp->open(npath, UFS_FILE_WRITE);
+  return (ufs_upload_file);
+}
 
-  HTTPUpload& upload = Webserver->upload();
-  if (upload.status == UPLOAD_FILE_START) {
-    Web.upload_error = 0;
-    char npath[48];
-    snprintf_P(npath, sizeof(npath), PSTR("%s/%s"), ufs_path, upload.filename.c_str());
-    AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_UPLOAD D_FILE " %s ..."), npath);
-    dfsp->remove(npath);
-    ufs_upload_file = dfsp->open(npath, UFS_FILE_WRITE);
-    if (!ufs_upload_file) {
-      Web.upload_error = 1;
-    }
-    Web.upload_progress_dot_count = 0;
-  }
-  else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (ufs_upload_file) {
-      ufs_upload_file.write(upload.buf, upload.currentSize);
-      if (_serialoutput) {
-        Serial.printf(".");
-        Web.upload_progress_dot_count++;
-        if (!(Web.upload_progress_dot_count % 80)) { Serial.println(); }
-      }
-    } else {
-      Web.upload_error = 2;
-    }
-  }
-  else if (upload.status == UPLOAD_FILE_END) {
-    if (_serialoutput && (Web.upload_progress_dot_count % 80)) {
-      Serial.println();
-    }
-    if (ufs_upload_file) {
-      ufs_upload_file.close();
-    } else {
-      Web.upload_error = 3;
-    }
+bool UfsUploadFileWrite(uint8_t *upload_buf, size_t current_size) {
+  if (ufs_upload_file) {
+    ufs_upload_file.write(upload_buf, current_size);
   } else {
-    Web.upload_error = 4;
-    WSSend(500, CT_PLAIN, F("500: Couldn't create file"));
+    return false;
   }
-  if (Web.upload_error) {
-    AddLog_P(LOG_LEVEL_INFO, PSTR("HTP: Upload error %d"), Web.upload_error);
-  }
+  return true;
+}
+
+void UfsUploadFileClose(void) {
+  ufs_upload_file.close();
 }
 
 #endif  // USE_WEBSERVER
@@ -708,7 +704,7 @@ bool Xdrv50(uint8_t function) {
     case FUNC_WEB_ADD_HANDLER:
       Webserver->on("/ufsd", UfsDirectory);
       Webserver->on("/ufsu", HTTP_GET, UfsDirectory);
-      Webserver->on("/ufsu", HTTP_POST,[](){Webserver->sendHeader("Location","/ufsu");Webserver->send(303);}, UfsUpload);
+      Webserver->on("/ufsu", HTTP_POST,[](){Webserver->sendHeader("Location","/ufsu");Webserver->send(303);}, HandleUploadLoop);
       break;
 #endif // USE_WEBSERVER
   }
