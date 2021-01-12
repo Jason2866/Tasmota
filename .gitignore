@@ -9,7 +9,7 @@
 .clang_complete
 .gcc-flags.json
 .cache
-data/dummy.txt
+data
 tasmota/user_config_override.h
 build
 build_output
