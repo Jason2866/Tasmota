@@ -8,7 +8,7 @@
 # or by doing 'pio run -t downloadfs' (with optional '-e <environment>') from the commandline. 
 # output will be saved, by default, in the "unpacked_fs" of the project.
 # this folder can be changed by writing 'custom_unpack_dir = some_other_dir' in the corresponding platformio.ini 
-# environment.
+# environment. 
 import re
 import sys
 from os.path import isfile, join
@@ -26,15 +26,15 @@ mcu = board.get("build.mcu", "esp32")
 # needed for later
 AutodetectUploadPort(env)
 
-class FSType(Enum):
+class FSType(Enum): 
     SPIFFS="spiffs"
     LITTLEFS="littlefs"
-    FATFS="fatfs"
+    FATFS="fatfs"   
 
 class FSInfo:
     def __init__(self, fs_type, start, length, page_size, block_size): 
         self.fs_type = fs_type
-        self.start = start
+        self.start = start 
         self.length = length
         self.page_size = page_size
         self.block_size = block_size
@@ -302,7 +302,7 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
         return (False, "")
 
 def display_fs(extracted_dir):
-    # extract command already nicely lists all extracted files.
+    # extract command already nicely lists all extracted files. 
     # no need to display that ourselves. just display a summary
     file_count = sum([len(files) for r, d, files in os.walk(extracted_dir)])
     print("Extracted " + str(file_count) + " file(s) from filesystem.")
