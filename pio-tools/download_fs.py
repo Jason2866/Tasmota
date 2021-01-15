@@ -23,6 +23,10 @@ Import("env")
 platform = env.PioPlatform()
 board = env.BoardConfig()
 mcu = board.get("build.mcu", "esp32")
+# Hack for using mklittlefs instead of mkspiffs -> needed since littlefs is not supported with this for ESP32
+#print("Replace MKSPIFFSTOOL with mklittlefs")
+env.Replace( MKSPIFFSTOOL=platform.get_package_dir("tool-mklittlefs") + '/mklittlefs' )
+
 # needed for later
 AutodetectUploadPort(env)
 
