@@ -160,15 +160,14 @@ void WiFiSetSleepMode(void)
     WiFi.setSleepMode(WIFI_MODEM_SLEEP);        // Disable sleep (Esp8288/Arduino core and sdk default)
   }
 */
-  if (TasmotaGlobal.sleep && Settings.flag3.sleep_normal) {  // SetOption60 - Enable normal sleep instead of dynamic sleep
-    WiFi.setSleepMode(WIFI_LIGHT_SLEEP);        // Allow light sleep during idle times
-  } else {
-#ifdef ESP8266
-    if (0 == TasmotaGlobal.sleep) {
+  if (0 == TasmotaGlobal.sleep) {
+    if (!TasmotaGlobal.wifi_stay_asleep) {
       WiFi.setSleepMode(WIFI_NONE_SLEEP);       // Disable sleep
-    } else
-#endif
-    {
+    }
+  } else {
+    if (Settings.flag3.sleep_normal) {          // SetOption60 - Enable normal sleep instead of dynamic sleep
+      WiFi.setSleepMode(WIFI_LIGHT_SLEEP);      // Allow light sleep during idle times
+    } else {
       WiFi.setSleepMode(WIFI_MODEM_SLEEP);      // Sleep (Esp8288/Arduino core and sdk default)
     }
   }
@@ -820,6 +819,8 @@ uint32_t WifiGetNtp(void) {
         // Leap-Indicator: unknown (clock unsynchronized)
         // See: https://github.com/letscontrolit/ESPEasy/issues/2886#issuecomment-586656384
         AddLog_P(LOG_LEVEL_DEBUG, PSTR("NTP: IP %s unsynched"), time_server_ip.toString().c_str());
+        ntp_server_id++;
+        if (ntp_server_id > 2) { ntp_server_id = 0; }   // Next server next time
         return 0;
       }
 
@@ -830,6 +831,8 @@ uint32_t WifiGetNtp(void) {
       secs_since_1900 |= (uint32_t)packet_buffer[42] << 8;
       secs_since_1900 |= (uint32_t)packet_buffer[43];
       if (0 == secs_since_1900) {                   // No time stamp received
+        ntp_server_id++;
+        if (ntp_server_id > 2) { ntp_server_id = 0; }   // Next server next time
         return 0;
       }
       return secs_since_1900 - 2208988800UL;
