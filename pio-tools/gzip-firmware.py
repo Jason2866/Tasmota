@@ -3,6 +3,12 @@ import os
 import shutil
 import gzip
 
+platform = env.PioPlatform()
+board = env.BoardConfig()
+mcu = board.get("build.mcu", "esp32")
+# gzip only for ESP8266
+if env["PIOPLATFORM"] != "espressif32":
+    
 OUTPUT_DIR = "build_output{}".format(os.path.sep)
 
 def bin_gzip(source, target, env):
