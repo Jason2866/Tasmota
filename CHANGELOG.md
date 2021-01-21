@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - Support for SM2135 current selection using GPIO ``SM2135 DAT`` index (#10634)
 - Basic support for ESP32 M5stack core2 16MB binary tasmota32-core2.bin (#10635)
 - Support for Sugar Valley NeoPool Controller by Norbert Richter (#10637)
+- Rule trigger string comparisons for EndsWith ``$>``, StartsWith ``$<`` and Contains ``$|`` (#10538)
 
 ### Breaking Changed
 - ESP32 switch from default SPIFFS to default LittleFS file system loosing current (zigbee) files
@@ -27,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - Force initial default state ``SetOption57 1`` to scan wifi network every 44 minutes for strongest signal (#10395)
 - Command ``Sleep 0`` removes any sleep from wifi modem except when ESP32 BLE is active
 - PubSubClient MQTT_SOCKET_TIMEOUT from 15 to 4 seconds
+- Domoticz fixed 2 decimals resolution by user selectable ``TempRes``, ``HumRes`` and ``PressRes`` resolutions
 
 ## [9.2.0.2] 20210105
 ### Added
