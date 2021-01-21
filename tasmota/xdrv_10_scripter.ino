@@ -196,12 +196,6 @@ void alt_eeprom_readBytes(uint32_t adr, uint32_t len, uint8_t *buf) {
 
 #include "FS.h"
 
-#define FS_FILE_WRITE "w"
-#define FS_FILE_READ "r"
-#define FS_FILE_APPEND "a"
-
-
-
 #if USE_SCRIPT_FATFS==-1
 #ifdef ESP32
 //#include "FS.h"
@@ -306,7 +300,7 @@ extern FS *ufsp;
 #ifdef USE_DISPLAY
 #ifdef USE_TOUCH_BUTTONS
 #include <renderer.h>
-extern VButton *buttons[MAXBUTTONS];
+extern VButton *buttons[MAX_TOUCH_BUTTONS];
 #endif
 #endif
 
@@ -477,13 +471,6 @@ bool event_handeled = false;
 IPAddress last_udp_ip;
 WiFiUDP Script_PortUdp;
 
-#ifndef USE_DEVICE_GROUPS
-char * IPAddressToString(const IPAddress& ip_address) {
-  static char ipbuffer[16];
-  sprintf_P(ipbuffer, PSTR("%u.%u.%u.%u"), ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
-  return ipbuffer;
-}
-#endif //USE_DEVICE_GROUPS
 #endif //USE_SCRIPT_GLOBVARS
 
 int16_t last_findex;
@@ -1983,6 +1970,9 @@ chknext:
             case 11:
               fvar = Energy.daily;
               break;
+            case 12:
+              fvar = (float)Settings.energy_kWhyesterday/100000.0;
+              break;
 
             default:
               fvar = 99999;
@@ -2525,7 +2515,7 @@ chknext:
         }
 #ifdef USE_SCRIPT_GLOBVARS
         if (!strncmp(vname, "luip", 4)) {
-          if (sp) strlcpy(sp, IPAddressToString(last_udp_ip), glob_script_mem.max_ssize);
+          if (sp) strlcpy(sp, last_udp_ip.toString().c_str(), glob_script_mem.max_ssize);
           goto strexit;
         }
 #endif //USE_SCRIPT_GLOBVARS
@@ -2790,6 +2780,12 @@ chknext:
           fvar = GetStack();
           goto exit;
         }
+#ifdef ESP32
+        if (!strncmp(vname, "stkwm", 5)) {
+          fvar = uxTaskGetStackHighWaterMark(NULL);
+          goto exit;
+        }
+#endif // ESP32
         if (!strncmp(vname, "slen", 4)) {
           fvar = strlen(glob_script_mem.script_ram);
           goto exit;
@@ -3048,7 +3044,7 @@ chknext:
         if (!strncmp(vname, "tbut[", 5)) {
           GetNumericArgument(vname + 5, OPER_EQU, &fvar, 0);
           uint8_t index = fvar;
-          if (index<1 || index>MAXBUTTONS) index = 1;
+          if (index<1 || index>MAX_TOUCH_BUTTONS) index = 1;
           index--;
           if (buttons[index]) {
             fvar = buttons[index]->vpower.on_off;
@@ -3061,6 +3057,30 @@ chknext:
 
 #endif //USE_TOUCH_BUTTONS
 #endif //USE_DISPLAY
+#if 1
+        if (!strncmp(vname, "test(", 5)) {
+          lp = GetNumericArgument(lp + 5, OPER_EQU, &fvar, 0);
+          uint32_t cycles;
+          uint64_t accu=0;
+          char sbuffer[32];
+          // PSTR performance test
+          // this is best case since everything will be in cache
+          // PSTR at least 3 times slower here, will be much slower if cache missed
+          for (uint16 cnt=0; cnt<1000; cnt++) {
+            cycles=ESP.getCycleCount();
+            if (fvar>0) {
+              snprintf_P(sbuffer, sizeof(sbuffer), PSTR("1234"));
+            } else {
+              snprintf(sbuffer, sizeof(sbuffer), "1234");
+            }
+            accu += ESP.getCycleCount()-cycles;
+          }
+          lp++;
+          len = 0;
+          fvar = accu / 1000;
+          goto exit;
+        }
+#endif
         break;
       case 'u':
         if (!strncmp(vname, "uptime", 6)) {
@@ -4552,7 +4572,7 @@ int16_t Run_script_sub(const char *type, int8_t tlen, JsonParserObject *jo) {
                   ctype += tlen;
                   char nxttok = '(';
                   char *argptr = ctype+tlen;
-                  
+
                   lp += tlen;
                   do {
                     if (*ctype==nxttok && *lp==nxttok) {
@@ -7181,7 +7201,7 @@ bool RulesProcessEvent(char *json_event) {
 #ifdef USE_SCRIPT_TASK
 
 #ifndef STASK_STACK
-#define STASK_STACK 8192
+#define STASK_STACK 8192-2048
 #endif
 
 #if 1
@@ -7465,7 +7485,7 @@ bool Xdrv10(uint8_t function)
 
 #endif
 
-#endif // UFILESYSTEM
+#endif // USE_UFILESYS
 
 
 // indicates scripter enabled (use rules[][] as single array)
