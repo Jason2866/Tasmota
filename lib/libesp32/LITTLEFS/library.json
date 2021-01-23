@@ -18,5 +18,5 @@
   "platforms": "espressif32",
   "build": {
     "libCompatMode": 2
-  }  
+  }
 }
