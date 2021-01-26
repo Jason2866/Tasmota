@@ -47,7 +47,7 @@ const char kTasmotaCommands[] PROGMEM = "|"  // No prefix
 void (* const TasmotaCommand[])(void) PROGMEM = {
   &CmndBacklog, &CmndDelay, &CmndPower, &CmndStatus, &CmndState, &CmndSleep, &CmndUpgrade, &CmndUpgrade, &CmndOtaUrl,
   &CmndSeriallog, &CmndRestart, &CmndPowerOnState, &CmndPulsetime, &CmndBlinktime, &CmndBlinkcount, &CmndSavedata,
-  &CmndSetoptionSO, &CmndSetoption, &CmndTemperatureResolution, &CmndHumidityResolution, &CmndPressureResolution, &CmndPowerResolution,
+  &CmndSetoption, &CmndSetoption, &CmndTemperatureResolution, &CmndHumidityResolution, &CmndPressureResolution, &CmndPowerResolution,
   &CmndVoltageResolution, &CmndFrequencyResolution, &CmndCurrentResolution, &CmndEnergyResolution, &CmndWeightResolution,
   &CmndModule, &CmndModules, &CmndGpio, &CmndGpios, &CmndTemplate, &CmndPwm, &CmndPwmfrequency, &CmndPwmrange,
   &CmndButtonDebounce, &CmndSwitchDebounce, &CmndSyslog, &CmndLoghost, &CmndLogport, &CmndSerialSend, &CmndBaudrate, &CmndSerialConfig,
@@ -83,9 +83,7 @@ void ResponseCmndNumber(int value)
 
 void ResponseCmndFloat(float value, uint32_t decimals)
 {
-  char stemp1[TOPSZ];
-  dtostrfd(value, decimals, stemp1);
-  Response_P(S_JSON_COMMAND_XVALUE, XdrvMailbox.command, stemp1);  // Return float value without quotes
+  Response_P(PSTR("{\"%s\":%*_f}"), XdrvMailbox.command, decimals, &value);  // Return float value without quotes
 }
 
 void ResponseCmndIdxNumber(int value)
@@ -844,19 +842,17 @@ void CmndSavedata(void)
   ResponseCmndChar((Settings.save_data > 1) ? stemp1 : GetStateText(Settings.save_data));
 }
 
-void CmndSetoptionSO(void)
-{
+void CmndSetoption(void) {
   snprintf_P(XdrvMailbox.command, CMDSZ, PSTR(D_CMND_SETOPTION));  // Rename result shortcut command SO to SetOption
   CmndSetoptionBase(1);
 }
 
-void CmndSetoption(void)
-{
-  CmndSetoptionBase(1);
-}
-
-void CmndSetoptionBase(bool indexed)
-{
+void CmndSetoptionBase(bool indexed) {
+  // Allow a command to access a single SetOption by it's command name
+  // indexed = 0 : No index will be returned attached to the command
+  //               {"ClockDirection":"OFF"}
+  // indexed = 1 : The SetOption index will be returned with the command
+  //               {"SetOption16":"OFF"}
   if (XdrvMailbox.index < 146) {
     uint32_t ptype;
     uint32_t pindex;
