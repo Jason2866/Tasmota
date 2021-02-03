@@ -1447,60 +1447,6 @@ void CmndNeopoolFiltrationMode(void)
           NeopoolResponseError();
           return;
         }
-<<<<<<< HEAD
-      }
-      break;
-
-    case NEOPOOL_CMND_TIME:  // (<time>)
-      {
-        char dt[20];
-        TIME_T tmpTime;
-
-        if (1 == params_cnt) {
-          uint32_t new_time = Rtc.local_time;
-          if (1==value[1]) {
-            new_time = Rtc.utc_time;
-          }
-          if (value[1]>1) {
-            new_time = value[1];
-          }
-          data[0] = (uint16_t)(new_time & 0xFFFF);
-          data[1] = (uint16_t)((new_time>>16) & 0xFFFF);
-#ifdef DEBUG_TASMOTA_SENSOR
-<<<<<<< HEAD
-          AddLog(LOG_LEVEL_DEBUG, PSTR("NEO: set time to %ld (%04X%04X)"), new_time, t_low, t_high);
-=======
-          AddLog_P(LOG_LEVEL_DEBUG, PSTR("NEO: set time to %ld (%04X%04X)"), new_time, data[0], data[1]);
->>>>>>> 52d42512... Optimze time cmnd
-#endif  // DEBUG_TASMOTA_SENSOR
-          serviced = (NEOPOOL_OK == NeoPoolWriteRegister(MBF_PAR_TIME_LOW, data, 2));
-          if (serviced) {
-            uint16_t set=0;
-            serviced = (NEOPOOL_OK == NeoPoolWriteRegister(MBF_ACTION_COPY_TO_RTC, &set, 1));
-          }
-        }
-        else if (0 == params_cnt) {
-          serviced = (NEOPOOL_OK == NeoPoolReadRegister(MBF_PAR_TIME_LOW, data, 2));
-#ifdef DEBUG_TASMOTA_SENSOR
-<<<<<<< HEAD
-          AddLog(LOG_LEVEL_DEBUG, PSTR("NEO: time read 0x%04X%04X %ld"), t_high, t_low, (uint32_t)t_low + ((uint32_t)t_high << 16));
-=======
-          AddLog_P(LOG_LEVEL_DEBUG, PSTR("NEO: time read 0x%04X%04X %ld"), data[1], data[0], (uint32_t)data[0] + ((uint32_t)data[1] << 16));
->>>>>>> 52d42512... Optimze time cmnd
-#endif  // DEBUG_TASMOTA_SENSOR
-        }
-        else {
-          serviced = false;
-        }
-        if (serviced) {
-          BreakTime((uint32_t)data[0] + ((uint32_t)data[1] << 16), tmpTime);
-          snprintf_P(dt, sizeof(dt), PSTR("%04d" D_YEAR_MONTH_SEPARATOR "%02d" D_MONTH_DAY_SEPARATOR "%02d" D_DATE_TIME_SEPARATOR "%02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"),
-            tmpTime.year +1970, tmpTime.month, tmpTime.day_of_month, tmpTime.hour, tmpTime.minute, tmpTime.second);
-          Response_P(PSTR("{\"" D_CMND_SENSOR "%d\":{\"" D_JSON_TIME "\":\"%s\"}}"), XSNS_83, dt);
-        }
-      }
-      break;
-=======
     }
     else {
       NeopoolCmndError();
@@ -1572,7 +1518,6 @@ void CmndNeopoolLight(void)
     if (NEOPOOL_OK != NeoPoolReadRegister(MBF_RELAY_STATE, &data, 1)) {
       NeopoolResponseError();
       return;
->>>>>>> Tasmota/development
     }
     data >>= (relay - 1);
     ResponseCmndStateText(data & 1);
