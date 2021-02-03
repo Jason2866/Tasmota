@@ -486,6 +486,8 @@ void SettingsSave(uint8_t rotate) {
  * stop_flash_rotate 1 = Allow only eeprom flash slot use (SetOption12 1)
  */
 #ifndef FIRMWARE_MINIMAL
+  XsnsCall(FUNC_SAVE_SETTINGS);
+  XdrvCall(FUNC_SAVE_SETTINGS);
   UpdateBackwardCompatibility();
   if ((GetSettingsCrc32() != settings_crc32) || rotate) {
     if (1 == rotate) {                                 // Use eeprom flash slot only and disable flash rotate from now on (upgrade)
@@ -776,7 +778,7 @@ void SettingsDefaultSet2(void) {
 #ifdef ESP32
   Settings.eth_type = ETH_TYPE;
   Settings.eth_clk_mode = ETH_CLKMODE;
-  Settings.eth_address = ETH_ADDR;
+  Settings.eth_address = ETH_ADDRESS;
 #endif  // ESP32
 
   // Wifi
@@ -1307,7 +1309,7 @@ void SettingsDelta(void) {
     if (Settings.version < 0x08030105) {
       Settings.eth_type = ETH_TYPE;
       Settings.eth_clk_mode = ETH_CLKMODE;
-      Settings.eth_address = ETH_ADDR;
+      Settings.eth_address = ETH_ADDRESS;
     }
 #endif  // ESP32
     if (Settings.version < 0x08030106) {

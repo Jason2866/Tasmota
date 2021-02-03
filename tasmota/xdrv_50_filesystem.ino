@@ -85,10 +85,6 @@ uint8_t ufs_type;
 uint8_t ffs_type;
 bool download_busy;
 
-
-
-
-
 /*********************************************************************************************/
 
 // Init flash file system
@@ -562,7 +558,7 @@ void UfsListDir(char *path, uint8_t depth) {
 
         sprintf(cp, format, ep);
         if (entry.isDirectory()) {
-          snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREF, (uint32_t)WiFi.localIP(), pp, ep);
+          ext_snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREF, (uint32_t)WiFi.localIP(), pp, ep);
           WSContentSend_P(UFS_FORM_SDC_DIRd, npath, ep, name);
           uint8_t plen = strlen(path);
           if (plen > 1) {
@@ -574,12 +570,12 @@ void UfsListDir(char *path, uint8_t depth) {
         } else {
 #ifdef GUI_TRASH_FILE
           char delpath[128];
-          snprintf_P(delpath, sizeof(delpath), UFS_FORM_SDC_HREFdel, (uint32_t)WiFi.localIP(), pp, ep);
+          ext_snprintf_P(delpath, sizeof(delpath), UFS_FORM_SDC_HREFdel, (uint32_t)WiFi.localIP(), pp, ep);
 #else
           char delpath[2];
           delpath[0]=0;
 #endif // GUI_TRASH_FILE
-          snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREF, (uint32_t)WiFi.localIP(), pp, ep);
+          ext_snprintf_P(npath, sizeof(npath), UFS_FORM_SDC_HREF, (uint32_t)WiFi.localIP(), pp, ep);
           WSContentSend_P(UFS_FORM_SDC_DIRb, npath, ep, name, tstr.c_str(), entry.size(), delpath);
         }
       }
@@ -629,7 +625,7 @@ uint8_t UfsDownloadFile(char *file) {
   }
   snprintf_P(attachment, sizeof(attachment), PSTR("attachment; filename=%s"), cp);
   Webserver->sendHeader(F("Content-Disposition"), attachment);
-  WSSend(200, CT_STREAM, "");
+  WSSend(200, CT_APP_STREAM, "");
 
   uint8_t buff[512];
   uint32_t bread;
@@ -700,7 +696,7 @@ void donload_task(void *path) {
   }
   snprintf_P(attachment, sizeof(attachment), PSTR("attachment; filename=%s"), cp);
   Webserver->sendHeader(F("Content-Disposition"), attachment);
-  WSSend(200, CT_STREAM, "");
+  WSSend(200, CT_APP_STREAM, "");
 
   uint8_t *buff = (uint8_t*)malloc(DOWNLOAD_SIZE);
   if (buff) {
@@ -766,9 +762,12 @@ bool Xdrv50(uint8_t function) {
       }
       break;
     case FUNC_WEB_ADD_HANDLER:
-      Webserver->on(F("/ufsd"), UfsDirectory);
-      Webserver->on(F("/ufsu"), HTTP_GET, UfsDirectory);
-      Webserver->on(F("/ufsu"), HTTP_POST,[](){Webserver->sendHeader(F("Location"),F("/ufsu"));Webserver->send(303);}, HandleUploadLoop);
+//      Webserver->on(F("/ufsd"), UfsDirectory);
+//      Webserver->on(F("/ufsu"), HTTP_GET, UfsDirectory);
+//      Webserver->on(F("/ufsu"), HTTP_POST,[](){Webserver->sendHeader(F("Location"),F("/ufsu"));Webserver->send(303);}, HandleUploadLoop);
+      Webserver->on("/ufsd", UfsDirectory);
+      Webserver->on("/ufsu", HTTP_GET, UfsDirectory);
+      Webserver->on("/ufsu", HTTP_POST,[](){Webserver->sendHeader(F("Location"),F("/ufsu"));Webserver->send(303);}, HandleUploadLoop);
       break;
 #endif // USE_WEBSERVER
   }
