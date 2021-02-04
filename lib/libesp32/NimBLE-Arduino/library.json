@@ -4,5 +4,6 @@
     "description": "Bluetooth low energy (BLE) library for arduino-esp32 based on NimBLE",
     "version": "1.0.2",
     "frameworks": "arduino",
-    "platforms": "espressif32"
+    "platforms": "espressif32",
+    "mcu": "esp32"
 }
