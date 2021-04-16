@@ -13,9 +13,6 @@
   "connectivity": [
     "wifi"
   ],
-  "debug": {
-    "openocd_target": "esp32c3.cfg"
-  },
   "frameworks": [
     "arduino"
   ],
