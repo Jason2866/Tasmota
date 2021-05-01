@@ -21,9 +21,6 @@
 
 #ifdef ESP32
 #include <esp8266toEsp32.h>
-// Modul
-#undef MODULE
-#define MODULE WEMOS // [Module] Select default model
 #endif  // ESP32
 
 #ifdef ESP8266
