@@ -20,6 +20,12 @@
  *  limitations under the License.
  *
  */
+#if __has_include("esp_idf_version.h")
+#include "esp_idf_version.h"
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
+#warning("IDF is 4 or later")
+#include "soc/hwcrypto_periph.h"
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
@@ -27,9 +33,6 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <sys/param.h>
-#if ESP_IDF_VERSION_MAJOR > 3      // IDF 4+
-  #include "soc/hwcrypto_periph.h"
-#endif
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_attr.h"
