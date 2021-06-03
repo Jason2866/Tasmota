@@ -27,7 +27,9 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <sys/param.h>
-//#include "soc/hwcrypto_periph.h"
+#if ESP_IDF_VERSION_MAJOR > 3      // IDF 4+
+  #include "soc/hwcrypto_periph.h"
+#endif
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_attr.h"
