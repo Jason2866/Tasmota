@@ -27,6 +27,7 @@
 #warning("IDF is 4 or later")
 #include "soc/hwcrypto_periph.h"
 #endif
+#endif
 
 #include "soc/hwcrypto_reg.h"
 #include "driver/periph_ctrl.h"

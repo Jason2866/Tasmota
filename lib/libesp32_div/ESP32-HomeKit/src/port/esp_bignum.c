@@ -26,6 +26,8 @@
 #warning("IDF is 4 or later")
 #include "soc/hwcrypto_periph.h"
 #endif
+#endif
+
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
