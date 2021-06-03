@@ -21,9 +21,13 @@
  *
  */
 
-#if ESP_IDF_VERSION_MAJOR > 3      // IDF 4+
-  #include "soc/hwcrypto_periph.h"
+#if __has_include("esp_idf_version.h")
+#include "esp_idf_version.h"
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
+#warning("IDF is 4 or later")
+#include "soc/hwcrypto_periph.h"
 #endif
+
 #include "soc/hwcrypto_reg.h"
 #include "driver/periph_ctrl.h"
 #include <mbedtls/bignum.h>
