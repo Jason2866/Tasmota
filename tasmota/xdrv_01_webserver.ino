@@ -47,7 +47,8 @@
 #endif                                                   //   If the first is true, but this is false, the device will restart but the user will see
                                                          //   a window telling that the WiFi Configuration was Ok and that the window can be closed.
 
-const uint16_t CHUNKED_BUFFER_SIZE = (MESSZ / 2) - 100;  // Chunk buffer size (should be smaller than half mqtt_data size = MESSZ)
+//const uint16_t CHUNKED_BUFFER_SIZE = (MESSZ / 2) - 100;  // Chunk buffer size (should be smaller than half mqtt_data size = MESSZ)
+const uint16_t CHUNKED_BUFFER_SIZE = 800;                // Chunk buffer size
 
 const uint16_t HTTP_REFRESH_TIME = 2345;                 // milliseconds
 const uint16_t HTTP_RESTART_RECONNECT_TIME = 10000;      // milliseconds - Allow time for restart and wifi reconnect
@@ -404,7 +405,7 @@ struct WEB {
   uint8_t wifiTest = WIFI_NOT_TESTING;
   uint8_t wifi_test_counter = 0;
   uint16_t save_data_counter = 0;
-  uint8_t old_wificonfig = WIFI_MANAGER;
+  uint8_t old_wificonfig = MAX_WIFI_OPTION; // means "nothing yet saved here"
 } Web;
 
 // Helper function to avoid code duplication (saves 4k Flash)
@@ -689,7 +690,7 @@ void _WSContentSend(const char* content, size_t size) {  // Lowest level sendCon
 #ifdef USE_DEBUG_DRIVER
   ShowFreeMem(PSTR("WSContentSend"));
 #endif
-  DEBUG_CORE_LOG(PSTR("WEB: Chunk size %d/%d"), size, sizeof(TasmotaGlobal.mqtt_data));
+  DEBUG_CORE_LOG(PSTR("WEB: Chunk size %d"), size);
 }
 
 void _WSContentSend(const String& content) {       // Low level sendContent for all core versions
@@ -703,25 +704,23 @@ void WSContentFlush(void) {
   }
 }
 
-void _WSContentSendBuffer(void) {
-  int len = strlen(TasmotaGlobal.mqtt_data);
+void _WSContentSendBuffer(const char* content) {
+  if (content == nullptr) { return; }              // Avoid crash
 
+  int len = strlen(content);
   if (0 == len) {                                  // No content
     return;
   }
-  else if (len == sizeof(TasmotaGlobal.mqtt_data)) {
-    AddLog(LOG_LEVEL_INFO, PSTR("HTP: Content too large"));
-  }
   else if (len < CHUNKED_BUFFER_SIZE) {            // Append chunk buffer with small content
-    Web.chunk_buffer += TasmotaGlobal.mqtt_data;
+    Web.chunk_buffer += content;
     len = Web.chunk_buffer.length();
   }
 
   if (len >= CHUNKED_BUFFER_SIZE) {                // Either content or chunk buffer is oversize
     WSContentFlush();                              // Send chunk buffer before possible content oversize
   }
-  if (strlen(TasmotaGlobal.mqtt_data) >= CHUNKED_BUFFER_SIZE) {  // Content is oversize
-    _WSContentSend(TasmotaGlobal.mqtt_data);                     // Send content
+  if (strlen(content) >= CHUNKED_BUFFER_SIZE) {    // Content is oversize
+    _WSContentSend(content);                       // Send content
   }
 }
 
@@ -730,48 +729,36 @@ void WSContentSend(const char* content, size_t size) {
   _WSContentSend(content, size);
 }
 
-void WSContentSend_P(const char* formatP, ...)     // Content send snprintf_P char data
-{
+void WSContentSend_P(const char* formatP, ...) {   // Content send snprintf_P char data
   // This uses char strings. Be aware of sending %% if % is needed
   va_list arg;
   va_start(arg, formatP);
-  int len = ext_vsnprintf_P(TasmotaGlobal.mqtt_data, sizeof(TasmotaGlobal.mqtt_data), formatP, arg);
+  char* content = ext_vsnprintf_malloc_P(formatP, arg);
   va_end(arg);
 
-#ifdef DEBUG_TASMOTA_CORE
-  if (len > (sizeof(TasmotaGlobal.mqtt_data) -1)) {
-    TasmotaGlobal.mqtt_data[33] = '\0';
-    DEBUG_CORE_LOG(PSTR("ERROR: WSContentSend_P size %d > mqtt_data size %d. Start of data [%s...]"), len, sizeof(TasmotaGlobal.mqtt_data), TasmotaGlobal.mqtt_data);
-  }
-#endif
-
-  _WSContentSendBuffer();
+  _WSContentSendBuffer(content);
+  free(content);
 }
 
-void WSContentSend_PD(const char* formatP, ...)    // Content send snprintf_P char data checked for decimal separator
-{
+void WSContentSend_PD(const char* formatP, ...) {  // Content send snprintf_P char data checked for decimal separator
   // This uses char strings. Be aware of sending %% if % is needed
   va_list arg;
   va_start(arg, formatP);
-  int len = ext_vsnprintf_P(TasmotaGlobal.mqtt_data, sizeof(TasmotaGlobal.mqtt_data), formatP, arg);
+  char* content = ext_vsnprintf_malloc_P(formatP, arg);
   va_end(arg);
 
-#ifdef DEBUG_TASMOTA_CORE
-  if (len > (sizeof(TasmotaGlobal.mqtt_data) -1)) {
-    TasmotaGlobal.mqtt_data[33] = '\0';
-    DEBUG_CORE_LOG(PSTR("ERROR: WSContentSend_PD size %d > mqtt_data size %d. Start of data [%s...]"), len, sizeof(TasmotaGlobal.mqtt_data), TasmotaGlobal.mqtt_data);
-  }
-#endif
-
   if (D_DECIMAL_SEPARATOR[0] != '.') {
+    if (content == nullptr) { return; }            // Avoid crash
+    size_t len = strlen(content);
     for (uint32_t i = 0; i < len; i++) {
-      if ('.' == TasmotaGlobal.mqtt_data[i]) {
-        TasmotaGlobal.mqtt_data[i] = D_DECIMAL_SEPARATOR[0];
+      if ('.' == content[i]) {
+        content[i] = D_DECIMAL_SEPARATOR[0];
       }
     }
   }
 
-  _WSContentSendBuffer();
+  _WSContentSendBuffer(content);
+  free(content);
 }
 
 void WSContentStart_P(const char* title, bool auth)
@@ -813,17 +800,11 @@ void WSContentSendStyle_P(const char* formatP, ...)
     // This uses char strings. Be aware of sending %% if % is needed
     va_list arg;
     va_start(arg, formatP);
-    int len = ext_vsnprintf_P(TasmotaGlobal.mqtt_data, sizeof(TasmotaGlobal.mqtt_data), formatP, arg);
+    char* content = ext_vsnprintf_malloc_P(formatP, arg);
     va_end(arg);
 
-#ifdef DEBUG_TASMOTA_CORE
-  if (len > (sizeof(TasmotaGlobal.mqtt_data) -1)) {
-    TasmotaGlobal.mqtt_data[33] = '\0';
-    DEBUG_CORE_LOG(PSTR("ERROR: WSContentSendStyle_P size %d > mqtt_data size %d. Start of data [%s...]"), len, sizeof(TasmotaGlobal.mqtt_data), TasmotaGlobal.mqtt_data);
-  }
-#endif
-
-    _WSContentSendBuffer();
+    _WSContentSendBuffer(content);
+    free(content);
   }
   WSContentSend_P(HTTP_HEAD_STYLE3, WebColor(COL_TEXT),
 #ifdef FIRMWARE_MINIMAL
@@ -1801,9 +1782,13 @@ void HandleWifiConfiguration(void) {
       TasmotaGlobal.save_data_counter = 0;               // Stop auto saving data - Updating Settings
       Settings.save_data = 0;
 
-      Web.old_wificonfig = TasmotaGlobal.wifi_state_flag;
-      Settings.sta_config = WIFI_MANAGER;
-      TasmotaGlobal.wifi_state_flag = Settings.sta_config;
+      if (MAX_WIFI_OPTION == Web.old_wificonfig) {
+        Web.old_wificonfig = Settings.sta_config;
+        //AddLog(LOG_LEVEL_INFO,PSTR("WFM: save wificonfig %d and set to 2 (settings=%d)"), Web.old_wificonfig, Settings.sta_config);
+      } else {
+        //AddLog(LOG_LEVEL_INFO,PSTR("WFM: wificonfig already saved %d, set to 2 (settings=%d)"), Web.old_wificonfig, Settings.sta_config);
+      }
+      TasmotaGlobal.wifi_state_flag = Settings.sta_config = WIFI_MANAGER;;
 
       TasmotaGlobal.sleep = 0;                           // Disable sleep
       TasmotaGlobal.restart_flag = 0;                    // No restart
@@ -2099,12 +2084,11 @@ void HandleOtherConfiguration(void) {
   WSContentSendStyle();
 
   TemplateJson();
-  char stemp[strlen(TasmotaGlobal.mqtt_data) +1];
-  strlcpy(stemp, TasmotaGlobal.mqtt_data, sizeof(stemp));  // Get JSON template
-  WSContentSend_P(HTTP_FORM_OTHER, stemp, (USER_MODULE == Settings.module) ? PSTR(" checked disabled") : "",
+  WSContentSend_P(HTTP_FORM_OTHER, TasmotaGlobal.mqtt_data, (USER_MODULE == Settings.module) ? PSTR(" checked disabled") : "",
     (Settings.flag.mqtt_enabled) ? PSTR(" checked") : "",   // SetOption3 - Enable MQTT
     SettingsText(SET_FRIENDLYNAME1), SettingsText(SET_DEVICENAME));
 
+  char stemp[32];
   uint32_t maxfn = (TasmotaGlobal.devices_present > MAX_FRIENDLYNAMES) ? MAX_FRIENDLYNAMES : (!TasmotaGlobal.devices_present) ? 1 : TasmotaGlobal.devices_present;
 #ifdef USE_SONOFF_IFAN
   if (IsModuleIfan()) { maxfn = 1; }
@@ -3282,8 +3266,12 @@ bool Xdrv01(uint8_t function)
           Web.wifiTest = WIFI_TEST_FINISHED_SUCCESSFUL;
           AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_WIFI D_CMND_SSID "1 %s: " D_CONNECTED " - " D_IP_ADDRESS " %_I"), SettingsText(SET_STASSID1), (uint32_t)WiFi.localIP());
 //          TasmotaGlobal.blinks = 255;                    // Signal wifi connection with blinks
-          Settings.sta_config = Web.old_wificonfig;
-          TasmotaGlobal.wifi_state_flag = Settings.sta_config;
+          if (MAX_WIFI_OPTION != Web.old_wificonfig) {
+            TasmotaGlobal.wifi_state_flag = Settings.sta_config = Web.old_wificonfig;
+            //AddLog(LOG_LEVEL_INFO,PSTR("WFM: Restore wificonfig %d"), Web.old_wificonfig);
+          } else {
+            //AddLog(LOG_LEVEL_INFO,PSTR("WFM: Keep wificonfig %d"), Settings.sta_config);
+          }
           TasmotaGlobal.save_data_counter = Web.save_data_counter;
           Settings.save_data = Web.save_data_counter;
           SettingsSaveAll();
