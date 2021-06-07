@@ -1301,7 +1301,11 @@ void DisplayDTVarsTeleperiod(void) {
   if (jlen < DTV_JSON_SIZE) {
     char *json = (char*)malloc(jlen + 2);
     if (json) {
+#ifdef MQTT_DATA_STRING
+      strlcpy(json, TasmotaGlobal.mqtt_data.c_str(), jlen + 1);
+#else
       strlcpy(json, TasmotaGlobal.mqtt_data, jlen + 1);
+#endif
       get_dt_vars(json);
       free(json);
     }
@@ -1320,7 +1324,11 @@ void get_dt_mqtt(void) {
     ResponseJsonStart();
     ResponseJsonEnd();
   }
+#ifdef MQTT_DATA_STRING
+  get_dt_vars(TasmotaGlobal.mqtt_data.c_str());
+#else
   get_dt_vars(TasmotaGlobal.mqtt_data);
+#endif
 }
 
 void get_dt_vars(char *json) {
@@ -1626,7 +1634,7 @@ void DisplayJsonValue(const char* topic, const char* device, const char* mkey, c
   DisplayLogBufferAdd(buffer);
 }
 
-void DisplayAnalyzeJson(char *topic, char *json)
+void DisplayAnalyzeJson(char *topic, const char *json)
 {
 // //tele/pow2/STATE    {"Time":"2017-09-20T11:53:03", "Uptime":10, "Vcc":3.123, "POWER":"ON", "Wifi":{"AP":2, "SSId":"indebuurt2", "RSSI":68, "APMac":"00:22:6B:FE:8E:20"}}
 // //tele/pow2/ENERGY   {"Time":"2017-09-20T11:53:03", "Total":6.522, "Yesterday":0.150, "Today":0.073, "Period":0.5, "Power":12.1, "Factor":0.56, "Voltage":210.1, "Current":0.102}
@@ -1737,8 +1745,13 @@ void DisplayLocalSensor(void)
 {
   if ((Settings.display_mode &0x02) && (0 == TasmotaGlobal.tele_period)) {
     char no_topic[1] = { 0 };
+#ifdef MQTT_DATA_STRING
+//    DisplayAnalyzeJson(TasmotaGlobal.mqtt_topic, TasmotaGlobal.mqtt_data.c_str());  // Add local topic
+    DisplayAnalyzeJson(no_topic, TasmotaGlobal.mqtt_data.c_str());    // Discard any topic
+#else
 //    DisplayAnalyzeJson(TasmotaGlobal.mqtt_topic, TasmotaGlobal.mqtt_data);  // Add local topic
     DisplayAnalyzeJson(no_topic, TasmotaGlobal.mqtt_data);    // Discard any topic
+#endif
   }
 }
 
