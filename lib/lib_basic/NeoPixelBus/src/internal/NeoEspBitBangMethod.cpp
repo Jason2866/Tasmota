@@ -24,10 +24,12 @@ License along with NeoPixel.  If not, see
 <http://www.gnu.org/licenses/>.
 -------------------------------------------------------------------------*/
 
-// ESP32C3 I2S is not supported yet due to significant changes to interface
-#if defined(ARDUINO_ARCH_ESP8266) || defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
+#if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)
 
 #include <Arduino.h>
+
+// ESP32C3 I2S is not supported yet 
+#if !defined(CONFIG_IDF_TARGET_ESP32C3)
 
 static inline uint32_t getCycleCount(void)
 {
@@ -152,4 +154,5 @@ void IRAM_ATTR NeoEspBitBangBase_send_pixels_inv(uint8_t* pixels, uint8_t* end, 
     }
 }
 
-#endif
+#endif // !defined(CONFIG_IDF_TARGET_ESP32C3)
+#endif //  defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)
