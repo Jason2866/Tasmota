@@ -17,6 +17,7 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+
 #ifdef ESP32
 #ifdef USE_DS18x20
 /*********************************************************************************************\

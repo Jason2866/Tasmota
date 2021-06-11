@@ -168,6 +168,29 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
+  // Berry: tasmota.memory(timer:int) -> bool
+  //
+  int32_t l_memory(struct bvm *vm);
+  int32_t l_memory(struct bvm *vm) {
+    int32_t top = be_top(vm); // Get the number of arguments
+    if (top == 1) {  // no argument (instance only)
+      be_newobject(vm, "map");
+      map_insert_int(vm, "flash", ESP.getFlashChipSize() / 1024);
+      map_insert_int(vm, "program", ESP_getSketchSize() / 1024);
+      map_insert_int(vm, "program_free", ESP.getFreeSketchSpace() / 1024);
+      map_insert_int(vm, "heap_free", ESP_getFreeHeap() / 1024);
+      int32_t freeMaxMem = 100 - (int32_t)(ESP_getMaxAllocHeap() * 100 / ESP_getFreeHeap());
+      map_insert_int(vm, "frag", freeMaxMem);
+      if (psramFound()) {
+        map_insert_int(vm, "psram", ESP.getPsramSize() / 1024);
+        map_insert_int(vm, "psram_free", ESP.getFreePsram() / 1024);
+      }
+      be_pop(vm, 1);
+      be_return(vm);
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
   int32_t l_time_dump(bvm *vm) {
     int32_t top = be_top(vm); // Get the number of arguments
     if (top == 2 && be_isint(vm, 2)) {
@@ -431,6 +454,8 @@ void berry_log(const char * berry_buf) {
   berry.log.addString(berry_buf, pre_delimiter, "\n");
   AddLog(LOG_LEVEL_INFO, PSTR("%s"), berry_buf);
 }
+
+const uint16_t LOGSZ = 128;                 // Max number of characters in log line
 
 extern "C" {
   void berry_log_C(const char * berry_buf, ...) {
