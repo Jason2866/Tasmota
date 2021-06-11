@@ -53,7 +53,7 @@
 #define VSPI_HOST   SPI2_HOST  /* No SPI3_host on C3 */
 #endif
 
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32
 #define SPI_HOST    SPI1_HOST
 #define HSPI_HOST   SPI2_HOST
 #define VSPI_HOST   SPI3_HOST
