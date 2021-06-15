@@ -175,7 +175,7 @@
  * Provide an image which includes uDisplay and LVGL driver
 \*********************************************************************************************\
 
-#ifdef FIRMWARE_TASMOTA_LVGL
+#ifdef FIRMWARE_LVGL
 
 #undef CODE_IMAGE_STR
 #define CODE_IMAGE_STR "lvgl"
