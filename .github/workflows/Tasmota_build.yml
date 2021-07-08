@@ -1389,7 +1389,13 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-    - uses: actions/checkout@v1
+    - name: Delete all files and folders
+      run: |
+        rm -rf *
+        git config --local user.name "Platformio BUILD"
+        git checkout firmware
+    - name: Display files from branch ckeckout
+      run: ls -R
     - uses: actions/download-artifact@v2
       with:
         name: firmware
@@ -1430,10 +1436,8 @@ jobs:
         [ ! -f ./FIRMWARE.md ] || mv -f ./FIRMWARE.md ./README.md
     - name: Commit files  # transfer the new binaries back into the repository
       run: |
-        git config --local user.name "Platformio BUILD"
         git rm -r --cached .
-        git add ./README.md
-        git add -f ./firmware/*.*
+        git add -f *.*
         git commit -m "Tasmota ESP Binaries http://tasmota.com"
     - name: Push changes  # push the firmware files to branch firmware
       uses: ad-m/github-push-action@master
