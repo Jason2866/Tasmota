@@ -1392,7 +1392,7 @@ jobs:
     - name: Delete all files and folders
       run: |
         rm -rf *
-        git config --local user.name "Platformio BUILD"
+        git config user.name "Platformio BUILD"
         git checkout firmware
     - name: Display files from branch ckeckout
       run: ls -R
