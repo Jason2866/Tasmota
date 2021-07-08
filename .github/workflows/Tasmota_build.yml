@@ -1389,12 +1389,13 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
+    - uses: actions/checkout@v1
     - name: Delete all files and folders
       run: |
         rm -rf *
-        git config user.name "Platformio BUILD"
+        git config --local user.name "Platformio BUILD"
         git checkout firmware
-    - name: Display files from branch ckeckout
+    - name: Display files from branch firmware
       run: ls -R
     - uses: actions/download-artifact@v2
       with:
