@@ -1398,7 +1398,7 @@ jobs:
     - name: Display files from branch firmware
       run: ls -R
     - name: Remove old firmware files
-      run: rm -rf firmware/*
+      run: rm -rf ./firmware/*
     - uses: actions/download-artifact@v2
       with:
         name: firmware
@@ -1440,7 +1440,7 @@ jobs:
     - name: Commit files  # transfer the new binaries back into the repository
       run: |
         # git rm -r --cached .
-        git add -f *.*
+        git add -f ./*.*
         git commit -m "Tasmota ESP Binaries http://tasmota.com"
     - name: Push changes  # push the firmware files to branch firmware
       uses: ad-m/github-push-action@master
