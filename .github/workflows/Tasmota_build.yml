@@ -1397,6 +1397,8 @@ jobs:
         git checkout firmware
     - name: Display files from branch firmware
       run: ls -R
+    - name: Remove old firmware files
+      run: rm -rf firmware/*
     - uses: actions/download-artifact@v2
       with:
         name: firmware
@@ -1437,7 +1439,7 @@ jobs:
         [ ! -f ./FIRMWARE.md ] || mv -f ./FIRMWARE.md ./README.md
     - name: Commit files  # transfer the new binaries back into the repository
       run: |
-        git rm -r --cached .
+        # git rm -r --cached .
         git add -f *.*
         git commit -m "Tasmota ESP Binaries http://tasmota.com"
     - name: Push changes  # push the firmware files to branch firmware
