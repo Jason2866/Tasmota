@@ -1445,7 +1445,7 @@ jobs:
       run: |
         ls -R ./tmp-folder
         mkdir -p ./release-firmware/
-        cp ./tmp-folder/firmware/* ./release-firmware/
+        cp -rf ./tmp-folder/firmware/* ./release-firmware/
         rm -rf ./tmp-folder
     - name: Display files to commit
       run: ls -R ./*
