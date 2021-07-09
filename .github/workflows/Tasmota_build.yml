@@ -1440,10 +1440,13 @@ jobs:
     - uses: actions/checkout@v2
       with:
         ref: release-firmware
-        path: release-firmware
+        path: tmp-folder
     - name: Display files from branch release-firmware
       run: |
-        ls -R ./release-firmware
+        ls -R ./tmp-folder
+        mkdir -p ./release-firmware/
+        cp ./tmp-folder/firmware/* ./release-firmware/
+        rm -rf ./tmp-folder
     - name: Display files to commit
       run: ls -R ./*
     - name: Commit files  # transfer the new binaries back into the repository
