@@ -1444,8 +1444,6 @@ jobs:
     - name: Display files from branch release-firmware
       run: |
         ls -R ./release-firmware
-    - name: Remove old firmware files
-      run: rm -rf ./firmware/*
     - name: Display files to commit
       run: ls -R ./*
     - name: Commit files  # transfer the new binaries back into the repository
