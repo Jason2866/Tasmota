@@ -35,8 +35,4 @@ platformio_tasmota_cenv.ini
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 *.bak
-<<<<<<< HEAD
 *.code-workspace
-=======
-*.code-workspace
->>>>>>> 5c436289bb3b0b214f0ccfbcfc3b1e91c0e1fa66
