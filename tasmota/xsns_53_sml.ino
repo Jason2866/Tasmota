@@ -1438,10 +1438,11 @@ void SML_Decode(uint8_t index) {
       continue;
     }
 
-    // =d must be calculated anyhow because of dindex
+    // =d must handle dindex
     if (*mp == '=' && *(mp + 1) == 'd') {
-      mp++;
-      goto calc_m;
+      if (index != mindex) {
+        dindex++;
+      }
     }
 
     if (index!=mindex) goto nextsect;
