@@ -19,9 +19,15 @@
 */
 // #define ESP_Mail_DEFAULT_FLASH_FS SPIFFS
 
-#include <LittleFS.h>
-#define ESP_Mail_DEFAULT_FLASH_FS LittleFS
+#ifdef ESP8266
+ #include <LittleFS.h>
+ #define ESP_Mail_DEFAULT_FLASH_FS LittleFS
+#endif
 
+#ifdef ESP32
+ #include <LittleFS.h>
+  #define ESP_Mail_DEFAULT_FLASH_FS LITTLEFS
+#endif
 
 /**
  * To use SD card file systems with different hardware interface
