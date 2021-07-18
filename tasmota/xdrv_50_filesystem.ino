@@ -246,7 +246,7 @@ uint32_t UfsInfo(uint32_t sel, uint32_t type) {
 
 #if USE_LONG_FILE_NAMES>0
 #undef REJCMPL
-#define REJCMPL 6 
+#define REJCMPL 6
 #else
 #undef REJCMPL
 #define REJCMPL 8
