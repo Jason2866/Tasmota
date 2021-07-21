@@ -7,7 +7,16 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Command ``SetSensor1..127 0|1`` to globally disable individual sensor driver
 - Support for CAN bus and Freedom Won Battery Management System by Marius Bezuidenhout (#12651)
+- Berry ESP32 support for I2S audio mp3 playback
+
+### Changed
+- ESP32 core library from v1.0.7.1 to v1.0.7.3
 - Disable PSRAM on unsupported hardware
+- Replace spaces by hyphens in final hostname (#12710)
+
+### Fixed
+- Discovery fails when using ``%hostname%`` in a topic (#12710)
+- ESP32-Solo OTA upgrade
 
 ## [9.5.0.2] 20210714
 ### Added
