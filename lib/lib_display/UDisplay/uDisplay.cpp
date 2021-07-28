@@ -225,7 +225,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             rot_t[3] = next_hex(&lp1);
             break;
           case 'A':
-            if (interface == _UDSP_I2C || bpp < 16) {
+            if (interface == _UDSP_I2C || bpp == 1) {
               saw_1 = next_hex(&lp1);
               i2c_page_start = next_hex(&lp1);
               i2c_page_end = next_hex(&lp1);
@@ -380,6 +380,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
 
 
 Renderer *uDisplay::Init(void) {
+  extern bool UsePSRAM(void);
 
   // for any bpp below native 16 bits, we allocate a local framebuffer to copy into
   if (ep_mode || bpp < 16) {
@@ -387,7 +388,7 @@ Renderer *uDisplay::Init(void) {
 #ifdef ESP8266
     framebuffer = (uint8_t*)calloc((gxs * gys * bpp) / 8, 1);
 #else
-    if (psramFound()) {
+    if (UsePSRAM()) {
       framebuffer = (uint8_t*)heap_caps_malloc((gxs * gys * bpp) / 8, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     } else {
       framebuffer = (uint8_t*)calloc((gxs * gys * bpp) / 8, 1);

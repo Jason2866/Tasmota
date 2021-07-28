@@ -87,6 +87,22 @@ extern "C" {
     }
     be_raise(vm, kTypeError, nullptr);
   }
+  
+  // Berry: `tasmota.publish_result(payload:string, subtopic:string) -> nil``
+  //
+  int32_t l_publish_result(struct bvm *vm);
+  int32_t l_publish_result(struct bvm *vm) {
+    int32_t top = be_top(vm); // Get the number of arguments
+    if (top >= 3 && be_isstring(vm, 2) && be_isstring(vm, 3)) {  // 2 mandatory string arguments
+      const char * payload = be_tostring(vm, 2);
+      const char * subtopic = be_tostring(vm, 3);
+      Response_P(PSTR("%s"), payload);
+      be_pop(vm, top);
+      MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_TELE, subtopic);
+      be_return_nil(vm); // Return
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
 
   // Berry: `tasmota.cmd(command:string) -> string`
   //
@@ -97,7 +113,11 @@ extern "C" {
       const char * command = be_tostring(vm, 2);
       be_pop(vm, 2);    // clear the stack before calling, because of re-entrant call to Berry in a Rule
       ExecuteCommand(command, SRC_BERRY);
+#ifdef MQTT_DATA_STRING
+      be_pushstring(vm, TasmotaGlobal.mqtt_data.c_str());
+#else
       be_pushstring(vm, TasmotaGlobal.mqtt_data);
+#endif
       be_return(vm); // Return
     }
     be_raise(vm, kTypeError, nullptr);
@@ -158,6 +178,76 @@ extern "C" {
       map_insert_int(vm, "local", Rtc.local_time);
       map_insert_int(vm, "restart", Rtc.restart_time);
       map_insert_int(vm, "timezone", Rtc.time_timezone);
+      be_pop(vm, 1);
+      be_return(vm);
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
+  // Berry: tasmota.memory() -> map
+  //
+  int32_t l_memory(struct bvm *vm);
+  int32_t l_memory(struct bvm *vm) {
+    int32_t top = be_top(vm); // Get the number of arguments
+    if (top == 1) {  // no argument (instance only)
+      be_newobject(vm, "map");
+      map_insert_int(vm, "flash", ESP.getFlashChipSize() / 1024);
+      map_insert_int(vm, "program", ESP_getSketchSize() / 1024);
+      map_insert_int(vm, "program_free", ESP.getFreeSketchSpace() / 1024);
+      map_insert_int(vm, "heap_free", ESP_getFreeHeap() / 1024);
+      int32_t freeMaxMem = 100 - (int32_t)(ESP_getMaxAllocHeap() * 100 / ESP_getFreeHeap());
+      map_insert_int(vm, "frag", freeMaxMem);
+      if (UsePSRAM()) {
+        map_insert_int(vm, "psram", ESP.getPsramSize() / 1024);
+        map_insert_int(vm, "psram_free", ESP.getFreePsram() / 1024);
+      }
+      be_pop(vm, 1);
+      be_return(vm);
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
+  // Berry: tasmota.wifi() -> map
+  //
+  int32_t l_wifi(struct bvm *vm);
+  int32_t l_wifi(struct bvm *vm) {
+    int32_t top = be_top(vm); // Get the number of arguments
+    if (top == 1) {  // no argument (instance only)
+      be_newobject(vm, "map");
+      if (Settings->flag4.network_wifi) {
+        int32_t rssi = WiFi.RSSI();
+        map_insert_int(vm, "rssi", rssi);
+        map_insert_int(vm, "quality", WifiGetRssiAsQuality(rssi));
+#if LWIP_IPV6
+        String ipv6_addr = WifiGetIPv6();
+        if (ipv6_addr != "") {
+          map_insert_str(vm, "ip6", ipv6_addr.c_str());
+        }
+#endif
+        if (static_cast<uint32_t>(WiFi.localIP()) != 0) {
+          map_insert_str(vm, "mac", WiFi.macAddress().c_str());
+          map_insert_str(vm, "ip", WiFi.localIP().toString().c_str());
+        }
+      }
+      be_pop(vm, 1);
+      be_return(vm);
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
+  // Berry: tasmota.eth() -> map
+  //
+  int32_t l_eth(struct bvm *vm);
+  int32_t l_eth(struct bvm *vm) {
+    int32_t top = be_top(vm); // Get the number of arguments
+    if (top == 1) {  // no argument (instance only)
+      be_newobject(vm, "map");
+#ifdef USE_ETHERNET
+      if (static_cast<uint32_t>(EthernetLocalIP()) != 0) {
+        map_insert_str(vm, "mac", EthernetMacAddress().c_str());
+        map_insert_str(vm, "ip", EthernetLocalIP().toString().c_str());
+      }
+#endif
       be_pop(vm, 1);
       be_return(vm);
     }
@@ -382,7 +472,7 @@ extern "C" {
         log_level = be_toint(vm, 3);
         if (log_level > LOG_LEVEL_DEBUG_MORE) { log_level = LOG_LEVEL_DEBUG_MORE; }
       }
-      AddLog_P(log_level, PSTR("%s"), msg);
+      AddLog(log_level, PSTR("%s"), msg);
       be_return(vm); // Return
     }
     be_return_nil(vm); // Return nil when something goes wrong
@@ -425,8 +515,10 @@ void berry_log(const char * berry_buf) {
   }
   // AddLog(LOG_LEVEL_INFO, PSTR("[Add to log] %s"), berry_buf);
   berry.log.addString(berry_buf, pre_delimiter, "\n");
-  AddLog_P(LOG_LEVEL_INFO, PSTR("%s"), berry_buf);
+  AddLog(LOG_LEVEL_INFO, PSTR("%s"), berry_buf);
 }
+
+const uint16_t LOGSZ = 128;                 // Max number of characters in log line
 
 extern "C" {
   void berry_log_C(const char * berry_buf, ...) {
@@ -453,24 +545,6 @@ void berry_log_P(const char * berry_buf, ...) {
   va_end(arg);
   if (len+3 > LOGSZ) { strcat(log_data, "..."); }  // Actual data is more
   berry_log(log_data);
-}
-
-
-/*********************************************************************************************\
- * Helper function for `Driver` class
- * 
- * get_tasmota() -> tasmota instance from globals
- *   allows to use solidified methods refering to the global object `tasmota`
- * 
-\*********************************************************************************************/
-extern "C" {
-
-  int32_t d_getTasmotaGlob(struct bvm *vm);
-  int32_t d_getTasmotaGlob(struct bvm *vm) {
-    be_getglobal(berry.vm, PSTR("tasmota"));
-    be_return(vm); // Return
-  }
-
 }
 
 #endif  // USE_BERRY

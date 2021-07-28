@@ -198,6 +198,8 @@
 #define D_WEIGHT "Gewig"
 #define D_WARMLIGHT "Warm"
 #define D_WEB_SERVER "Webbediener"
+#define D_SOC "Laai kondisie"
+#define D_SOH "Laai vermoeë"
 
 // tasmota.ino
 #define D_WARNING_MINIMAL_VERSION "WAARSKUWING Hierdie weergawe ondersteun nie aanhoudende instellings nie"
@@ -831,6 +833,7 @@
 #define D_SENSOR_ZEROCROSS     "ZC Pulse"
 #define D_SENSOR_HALLEFFECT    "HallEffect"
 #define D_SENSOR_EPD_DATA      "EPD Data"
+#define D_SENSOR_MCP2515_CS    "MCP2515 CS"
 
 // Units
 #define D_UNIT_AMPERE "A"
@@ -939,6 +942,7 @@
 #define D_NEW_FILE             "newfile.txt"
 #define D_CREATE_NEW_FILE      "Create and edit new file"
 #define D_EDIT_FILE            "Edit File"
+#define D_CONFIRM_FILE_DEL     "Confirm file deletion"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "versterking:"

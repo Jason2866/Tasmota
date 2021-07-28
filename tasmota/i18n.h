@@ -200,6 +200,7 @@
 #define D_JSON_VOLUME "Volume"
 #define D_JSON_WEIGHT "Weight"
 #define D_JSON_WIFI "Wifi"
+#define D_JSON_WIFI_MODE "Mode"
 #define D_JSON_WRONG "Wrong"
 #define D_JSON_WRONG_PARAMETERS "Wrong parameters"
 #define D_JSON_YESTERDAY "Yesterday"
@@ -256,6 +257,7 @@
 #define D_CMND_PULSETIME "PulseTime"
 #define D_CMND_BLINKTIME "BlinkTime"
 #define D_CMND_BLINKCOUNT "BlinkCount"
+#define D_CMND_SETSENSOR "SetSensor"
 #define D_CMND_SENSOR "Sensor"
 #define D_CMND_DRIVER "Driver"
 #define D_CMND_SAVEDATA "SaveData"
@@ -354,6 +356,8 @@
 #define D_CMND_GLOBAL_TEMP "GlobalTemp"
 #define D_CMND_GLOBAL_HUM "GlobalHum"
 
+#define D_SO_WIFINOSLEEP "WifiNoSleep"
+
 #ifdef ESP32
 #define D_CMND_TOUCH_CAL "TouchCal"
 #define D_CMND_TOUCH_THRES "TouchThres"
@@ -377,6 +381,7 @@
 #define D_CMND_MQTTPASSWORD "MqttPassword"
 #define D_CMND_MQTTKEEPALIVE "MqttKeepAlive"
 #define D_CMND_MQTTTIMEOUT "MqttTimeout"
+#define D_CMND_MQTTWIFITIMEOUT "MqttWifiTimeout"
 #define D_CMND_TLSKEY "TLSKey"
 #define D_CMND_FULLTOPIC "FullTopic"
 #define D_CMND_PREFIX "Prefix"
@@ -855,6 +860,8 @@ const char HTTP_SNS_COLOR_GREEN[]   PROGMEM = "{s}%s "  D_COLOR_GREEN         "{
 const char HTTP_SNS_COLOR_BLUE[]    PROGMEM = "{s}%s "  D_COLOR_BLUE          "{m}%u "                            "{e}";
 const char HTTP_SNS_MILLILITERS[]   PROGMEM = "{s}%s "  D_VOLUME              "{m}%s " D_UNIT_MILLILITERS         "{e}";
 const char HTTP_SNS_GAS[]           PROGMEM = "{s}%s "  D_GAS                 "{m}%d " D_UNIT_PERCENT          "LEL{e}";
+const char HTTP_SNS_SOC[]           PROGMEM = "{s}%s "  D_SOC                 "{m}%d " D_UNIT_PERCENT             "{e}";
+const char HTTP_SNS_SOH[]           PROGMEM = "{s}%s "  D_SOH                 "{m}%d " D_UNIT_PERCENT             "{e}";
 #endif  // USE_WEBSERVER
 
 #endif  // _I18N_H_

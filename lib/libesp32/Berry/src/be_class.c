@@ -53,18 +53,25 @@ int be_class_attribute(bvm *vm, bclass *c, bstring *attr)
             }
         }
     }
-    return BE_NIL;
+    return BE_NONE;
 }
 
-void be_member_bind(bvm *vm, bclass *c, bstring *name)
+void be_member_bind(bvm *vm, bclass *c, bstring *name, bbool var)
 {
     bvalue *attr;
     set_fixed(name);
     check_members(vm, c);
     attr = be_map_insertstr(vm, c->members, name, NULL);
     restore_fixed(name);
-    attr->v.i = c->nvar++;
-    attr->type = MT_VARIABLE;
+    if (var) {
+        /* this is an instance variable so we set it as MT_VARIABLE */
+        attr->v.i = c->nvar++;
+        attr->type = MT_VARIABLE;
+    } else {
+        /* this is a static class constant, leave it as BE_NIL */
+        attr->v.i = 0;
+        attr->type = BE_NIL;
+    }
 }
 
 void be_method_bind(bvm *vm, bclass *c, bstring *name, bproto *p)
@@ -135,6 +142,23 @@ static binstance* instance_member(bvm *vm,
     return NULL;
 }
 
+static bclass* class_member(bvm *vm,
+    bclass *obj, bstring *name, bvalue *dst)
+{
+    for (; obj; obj = obj->super) {
+        bmap *members = obj->members;
+        if (members) {
+            bvalue *v = be_map_findstr(vm, members, name);
+            if (v) {
+                *dst = *v;
+                return obj;
+            }
+        }
+    }
+    var_setnil(dst);
+    return NULL;
+}
+
 void be_class_upvalue_init(bvm *vm, bclass *c)
 {
     bmap *mbr = c->members;
@@ -165,6 +189,7 @@ static binstance* newobjself(bvm *vm, bclass *c)
         while (v < end) { var_setnil(v); ++v; }
         obj->_class = c;
         obj->super = NULL;
+        obj->sub = NULL;
     }
     return obj;
 }
@@ -178,19 +203,21 @@ static binstance* newobject(bvm *vm, bclass *c)
     be_incrtop(vm); /* protect new objects from GC */
     for (c = c->super; c; c = c->super) {
         prev->super = newobjself(vm, c);
+        prev->super->sub = prev;
         prev = prev->super;
     }
     be_stackpop(vm, 1);
     return obj;
 }
 
-bbool be_class_newobj(bvm *vm, bclass *c, bvalue *reg, int argc)
+bbool be_class_newobj(bvm *vm, bclass *c, bvalue *reg, int argc, int mode)
 {
     bvalue init;
     size_t pos = reg - vm->reg;
     binstance *obj = newobject(vm, c);
-    reg = vm->reg + pos; /* the stack may have changed  */
+    reg = vm->reg + pos - mode; /* the stack may have changed  */
     var_setinstance(reg, obj);
+    var_setinstance(reg + mode, obj);
     /* find constructor */
     obj = instance_member(vm, obj, str_literal(vm, "init"), &init);
     if (obj && var_type(&init) != MT_VARIABLE) {
@@ -213,7 +240,24 @@ int be_instance_member(bvm *vm, binstance *obj, bstring *name, bvalue *dst)
     if (obj && type == MT_VARIABLE) {
         *dst = obj->members[dst->v.i];
     }
-    return type;
+    if (obj) {
+        return type;
+    } else {
+        return BE_NONE;
+    }
+}
+
+int be_class_member(bvm *vm, bclass *obj, bstring *name, bvalue *dst)
+{
+    int type;
+    be_assert(name != NULL);
+    obj = class_member(vm, obj, name, dst);
+    type = var_type(dst);
+    if (obj) {
+        return type;
+    } else {
+        return BE_NONE;
+    }
 }
 
 bbool be_instance_setmember(bvm *vm, binstance *o, bstring *name, bvalue *src)
@@ -240,6 +284,18 @@ bbool be_instance_setmember(bvm *vm, binstance *o, bstring *name, bvalue *src)
             vm->top -= 4;
             return var_tobool(top);
         }
+    }
+    return bfalse;
+}
+
+bbool be_class_setmember(bvm *vm, bclass *o, bstring *name, bvalue *src)
+{
+    bvalue v;
+    be_assert(name != NULL);
+    bclass * obj = class_member(vm, o, name, &v);
+    if (obj && !var_istype(&v, MT_VARIABLE)) {
+        be_map_insertstr(vm, obj->members, name, src);
+        return btrue;
     }
     return bfalse;
 }

@@ -228,7 +228,8 @@ static bbool obj2bool(bvm *vm, bvalue *var)
     binstance *obj = var_toobj(var);
     bstring *tobool = str_literal(vm, "tobool");
     /* get operator method */
-    if (be_instance_member(vm, obj, tobool, vm->top)) {
+    int type = be_instance_member(vm, obj, tobool, vm->top);
+    if (type != BE_NONE && type != BE_NIL) {
         vm->top[1] = *var; /* move self to argv[0] */
         be_dofunc(vm, vm->top, 1); /* call method 'tobool' */
         /* check the return value */
@@ -273,7 +274,7 @@ static int obj_attribute(bvm *vm, bvalue *o, bvalue *c, bvalue *dst)
     bstring *attr = var_tostr(c);
     binstance *obj = var_toobj(o);
     int type = be_instance_member(vm, obj, attr, dst);
-    if (basetype(type) == BE_NIL) { /* if no method found, try virtual */
+    if (type == BE_NONE) { /* if no method found, try virtual */
         /* get method 'member' */
         int type2 = be_instance_member(vm, obj, str_literal(vm, "member"), vm->top);
         if (basetype(type2) == BE_FUNCTION) {
@@ -287,10 +288,23 @@ static int obj_attribute(bvm *vm, bvalue *o, bvalue *c, bvalue *dst)
             type = var_type(dst);
         }
     }
-    if (basetype(type) == BE_NIL) {
+    if (type == BE_NONE) {
         vm_error(vm, "attribute_error",
             "the '%s' object has no attribute '%s'",
             str(be_instance_name(obj)), str(attr));
+    }
+    return type;
+}
+
+static int class_attribute(bvm *vm, bvalue *o, bvalue *c, bvalue *dst)
+{
+    bstring *attr = var_tostr(c);
+    bclass *obj = var_toobj(o);
+    int type = be_class_member(vm, obj, attr, dst);
+    if (type == BE_NONE || type == BE_INDEX) {
+        vm_error(vm, "attribute_error",
+            "the '%s' class has no static attribute '%s'",
+            str(obj->name), str(attr));
     }
     return type;
 }
@@ -421,6 +435,7 @@ BERRY_API bvm* be_vm_new(void)
     be_globalvar_init(vm);
     be_gc_setpause(vm, 1);
     be_loadlibs(vm);
+    vm->compopt = 0;
 #if BE_USE_OBSERVABILITY_HOOK
     vm->obshook = NULL;
 #endif
@@ -484,6 +499,38 @@ newframe: /* a new call frame */
             bvalue *v = RA();
             int idx = IGET_Bx(ins);
             *v = *be_global_var(vm, idx);
+            dispatch();
+        }
+        opcase(GETNGBL): {  /* get Global by name */
+            bvalue *v = RA();
+            bvalue *b = RKB();
+            if (var_isstr(b)) {
+                bstring *name = var_tostr(b);
+                int idx = be_global_find(vm, name);
+                if (idx > -1) {
+                    *v = *be_global_var(vm, idx);
+                } else {
+                    vm_error(vm, "attribute_error", "'%s' undeclared", str(name));
+                }
+            } else {
+                vm_error(vm, "internal_error", "global name must be a string");
+            }
+            dispatch();
+        }
+        opcase(SETNGBL): {  /* set Global by name */
+            bvalue *v = RA();
+            bvalue *b = RKB();
+            if (var_isstr(b)) {
+                bstring *name = var_tostr(b);
+                int idx = be_global_find(vm, name);
+                if (idx > -1) {
+                    *be_global_var(vm, idx) = *v;
+                } else {
+                    vm_error(vm, "attribute_error", "'%s' undeclared", str(name));
+                }
+            } else {
+                vm_error(vm, "internal_error", "global name must be a string");
+            }
             dispatch();
         }
         opcase(SETGBL): {
@@ -741,6 +788,9 @@ newframe: /* a new call frame */
             if (var_isinstance(b) && var_isstr(c)) {
                 obj_attribute(vm, b, c, a);
                 reg = vm->reg;
+            } else if (var_isclass(b) && var_isstr(c)) {
+                class_attribute(vm, b, c, a);
+                reg = vm->reg;
             } else if (var_ismodule(b) && var_isstr(c)) {
                 bstring *attr = var_tostr(c);
                 bmodule *module = var_toobj(b);
@@ -779,6 +829,11 @@ newframe: /* a new call frame */
                 int type = obj_attribute(vm, b, c, a);
                 reg = vm->reg;
                 if (basetype(type) == BE_FUNCTION) {
+                    /* check if the object is a superinstance, if so get the lowest possible subclass */
+                    while (obj->sub) {
+                        obj = obj->sub;
+                    }
+                    var_setobj(&self, var_type(&self), obj);  /* replace superinstance by lowest subinstance */
                     a[1] = self;
                 } else {
                     vm_error(vm, "attribute_error",
@@ -825,6 +880,16 @@ newframe: /* a new call frame */
                     vm_error(vm, "attribute_error",
                         "class '%s' cannot assign to attribute '%s'",
                         str(be_instance_name(obj)), str(attr));
+                }
+                dispatch();
+            }
+            if (var_isclass(a) && var_isstr(b)) {
+                bclass *obj = var_toobj(a);
+                bstring *attr = var_tostr(b);
+                if (!be_class_setmember(vm, obj, attr, c)) {
+                    vm_error(vm, "attribute_error",
+                        "class '%s' cannot assign to static attribute '%s'",
+                        str(be_class_name(obj)), str(attr));
                 }
                 dispatch();
             }
@@ -990,8 +1055,9 @@ newframe: /* a new call frame */
                 ++var, --argc, mode = 1;
                 goto recall;
             case BE_CLASS:
-                if (be_class_newobj(vm, var_toobj(var), var, ++argc)) {
-                    reg = vm->reg;
+                if (be_class_newobj(vm, var_toobj(var), var, ++argc, mode)) {
+                    reg = vm->reg + mode;
+                    mode = 0;
                     var = RA() + 1; /* to next register */
                     goto recall; /* call constructor */
                 }
@@ -1109,7 +1175,7 @@ static void do_ntvfunc(bvm *vm, bvalue *reg, int argc)
 
 static void do_class(bvm *vm, bvalue *reg, int argc)
 {
-    if (be_class_newobj(vm, var_toobj(reg), reg, ++argc)) {
+    if (be_class_newobj(vm, var_toobj(reg), reg, ++argc, 0)) {
         be_incrtop(vm);
         be_dofunc(vm, reg + 1, argc);
         be_stackpop(vm, 1);

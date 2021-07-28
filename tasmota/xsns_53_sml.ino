@@ -1518,7 +1518,6 @@ void SML_Decode(uint8_t index) {
         dvalid[vindex] = 1;
         // get sfac
       } else if (*mp=='d') {
-        calc_m:
         // calc deltas d ind 10 (eg every 10 secs)
         if (dindex < MAX_DVARS) {
           // only n indexes
@@ -1864,7 +1863,7 @@ void SML_Decode(uint8_t index) {
               if (lowByte(crc)!=smltbuf[mindex][pos]) goto nextsect;
               if (highByte(crc)!=smltbuf[mindex][pos+1]) goto nextsect;
               dval=mbus_dval;
-              //AddLog_P(LOG_LEVEL_INFO, PSTR(">> %s"),mp);
+              //AddLog(LOG_LEVEL_INFO, PSTR(">> %s"),mp);
               mp++;
             } else {
               if (meter_desc_p[mindex].type=='p') {
@@ -1887,7 +1886,7 @@ void SML_Decode(uint8_t index) {
           meter_vars[vindex]=dval;
 #endif
 
-          //AddLog_P(LOG_LEVEL_INFO, PSTR(">> %s"),mp);
+          //AddLog(LOG_LEVEL_INFO, PSTR(">> %s"),mp);
           // get scaling factor
           double fac = CharToDouble((char*)mp);
           meter_vars[vindex] /= fac;
@@ -2211,13 +2210,13 @@ char dstbuf[SML_SRCBSIZE*2];
     Replace_Cmd_Vars(lp,1,dstbuf,sizeof(dstbuf));
     lp+=SML_getlinelen(lp)+1;
     uint32_t slen=strlen(dstbuf);
-    //AddLog_P(LOG_LEVEL_INFO, PSTR("%d - %s"),slen,dstbuf);
+    //AddLog(LOG_LEVEL_INFO, PSTR("%d - %s"),slen,dstbuf);
     mlen+=slen+1;
     if (*lp=='#') break;
     if (*lp=='>') break;
     if (*lp==0) break;
   }
-  //AddLog_P(LOG_LEVEL_INFO, PSTR("len=%d"),mlen);
+  //AddLog(LOG_LEVEL_INFO, PSTR("len=%d"),mlen);
   return mlen+32;
 }
 #else
@@ -2229,7 +2228,7 @@ uint32_t SML_getscriptsize(char *lp) {
       break;
     }
   }
-  //AddLog_P(LOG_LEVEL_INFO, PSTR("len=%d"),mlen);
+  //AddLog(LOG_LEVEL_INFO, PSTR("len=%d"),mlen);
   return mlen;
 }
 #endif
@@ -2273,7 +2272,7 @@ void SML_Init(void) {
 
   }
 
-  if (bitRead(Settings.rule_enabled, 0)) {
+  if (bitRead(Settings->rule_enabled, 0)) {
 
   uint8_t meter_script=Run_Scripter(">M",-2,0);
   if (meter_script==99) {
@@ -2414,7 +2413,7 @@ dddef_exit:
         char dstbuf[SML_SRCBSIZE*2];
         Replace_Cmd_Vars(lp, 1, dstbuf,sizeof(dstbuf));
         lp += SML_getlinelen(lp);
-        //AddLog_P(LOG_LEVEL_INFO, PSTR("%s"),dstbuf);
+        //AddLog(LOG_LEVEL_INFO, PSTR("%s"),dstbuf);
         char *lp1 = dstbuf;
         if (*lp1 == '-' || isdigit(*lp1)) {
           //toLogEOL(">>",lp);
@@ -2498,7 +2497,7 @@ init10:
   uint8_t cindex=0;
   // preloud counters
   for (byte i = 0; i < MAX_COUNTERS; i++) {
-      RtcSettings.pulse_counter[i]=Settings.pulse_counter[i];
+      RtcSettings.pulse_counter[i]=Settings->pulse_counter[i];
       sml_counters[i].sml_cnt_last_ts=millis();
   }
   uint32_t uart_index=2;
@@ -2791,10 +2790,10 @@ void SML_Check_Send(void) {
   char *cp;
   for (uint32_t cnt=sml_desc_cnt; cnt<meters_used; cnt++) {
     if (script_meter_desc[cnt].trxpin>=0 && script_meter_desc[cnt].txmem) {
-      //AddLog_P(LOG_LEVEL_INFO, PSTR("100 ms>> %d - %s - %d"),sml_desc_cnt,script_meter_desc[cnt].txmem,script_meter_desc[cnt].tsecs);
+      //AddLog(LOG_LEVEL_INFO, PSTR("100 ms>> %d - %s - %d"),sml_desc_cnt,script_meter_desc[cnt].txmem,script_meter_desc[cnt].tsecs);
       if ((sml_100ms_cnt>=script_meter_desc[cnt].tsecs)) {
         sml_100ms_cnt=0;
-        //AddLog_P(LOG_LEVEL_INFO, PSTR("100 ms>> 2"),cp);
+        //AddLog(LOG_LEVEL_INFO, PSTR("100 ms>> 2"),cp);
         if (script_meter_desc[cnt].max_index>1) {
           script_meter_desc[cnt].index++;
           if (script_meter_desc[cnt].index>=script_meter_desc[cnt].max_index) {
@@ -2808,7 +2807,7 @@ void SML_Check_Send(void) {
           //SML_Send_Seq(cnt,cp);
           sml_desc_cnt++;
         }
-        //AddLog_P(LOG_LEVEL_INFO, PSTR(">> %s"),cp);
+        //AddLog(LOG_LEVEL_INFO, PSTR(">> %s"),cp);
         SML_Send_Seq(cnt,cp);
         if (sml_desc_cnt>=meters_used) {
           sml_desc_cnt=0;
@@ -2991,7 +2990,7 @@ void InjektCounterValue(uint8_t meter,uint32_t counter) {
 
 void SML_CounterSaveState(void) {
   for (byte i = 0; i < MAX_COUNTERS; i++) {
-      Settings.pulse_counter[i] = RtcSettings.pulse_counter[i];
+      Settings->pulse_counter[i] = RtcSettings.pulse_counter[i];
   }
 }
 
@@ -3019,7 +3018,7 @@ bool Xsns53(byte function) {
     //    break;
 #ifdef USE_SCRIPT
       case FUNC_EVERY_100_MSECOND:
-        if (bitRead(Settings.rule_enabled, 0)) {
+        if (bitRead(Settings->rule_enabled, 0)) {
           SML_Check_Send();
         }
         break;

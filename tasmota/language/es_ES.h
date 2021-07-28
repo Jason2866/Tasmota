@@ -1,5 +1,5 @@
 /*
-  es-ES.h - localization for Spanish - Spain for Tasmota (International Spanish valid for all latinamerica)
+  es-ES.h - Tasmota localization for Spanish (International Spanish valid for all latinamerica)
 
   Copyright (C) 2021  Adrian Scillato
 
@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v9.4.0.1
+ * Updated until v9.5.0.3
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -194,10 +194,12 @@
 #define D_UV_POWER "UV Power"
 #define D_VERSION "Versión"
 #define D_VOLTAGE "Tensión"
-#define D_VOLUME "Volume"
+#define D_VOLUME "Volumen"
 #define D_WEIGHT "Peso"
 #define D_WARMLIGHT "Cálida"
 #define D_WEB_SERVER "Servidor Web"
+#define D_SOC "Estado de Carga"
+#define D_SOH "Estado de Salud"
 
 // tasmota.ino
 #define D_WARNING_MINIMAL_VERSION "Cuidado, esta versión no guarda los cambios"
@@ -831,6 +833,7 @@
 #define D_SENSOR_ZEROCROSS     "Cruce por cero"
 #define D_SENSOR_HALLEFFECT    "HallEffect"
 #define D_SENSOR_EPD_DATA      "EPD Data"
+#define D_SENSOR_MCP2515_CS    "MCP2515 CS"
 
 // Units
 #define D_UNIT_AMPERE "A"
@@ -939,6 +942,7 @@
 #define D_NEW_FILE             "nuevo.txt"
 #define D_CREATE_NEW_FILE      "Crear y editar un archivo nuevo"
 #define D_EDIT_FILE            "Editar Archivo"
+#define D_CONFIRM_FILE_DEL     "Confirmar la eliminación del archivo"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "Ganancia:"
