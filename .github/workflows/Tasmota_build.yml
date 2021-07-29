@@ -2,7 +2,7 @@ name: Build_firmware with Windows 2019
 
 on:
   push:
-#    branches: development
+    branches: development
 
 jobs:
   tasmota_pull:
