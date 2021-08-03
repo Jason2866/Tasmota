@@ -37,7 +37,6 @@ extern "C"
 #include "Arduino.h"
 #include "osapi.h"
 #include "ets_sys.h"
-ö
 #include "i2s_reg.h"
 #ifdef ARDUINO_ESP8266_MAJOR    //this define was added in ESP8266 Arduino Core version v3.0.1
   #include "core_esp8266_i2s.h" //for Arduino core >= 3.0.1
