@@ -3,7 +3,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [9.5.0.3]
+## [9.5.0.5]
+### Added
+- Inital support for Wi-Fi extender (#12784)
+- Neopool commands ``NPPHRes``, ``NPCLRes`` and ``NPIonRes`` (#12813)
+
+### Changed
+- Make Sonoff L1 MusicSync persistent (#12008)
+
+### Fixed
+- Neopool communication error (#12813)
+
+## [9.5.0.4] 20210801
+### Added
+- Support for second DNS server
+- Optional IP filter to command ``TCPStart`` (#12806)
+
+### Changed
+- ESP8266Audio library from v1.5.0 to v1.9.2
+
+## [9.5.0.3] 20210729
 ### Added
 - Command ``SetSensor1..127 0|1`` to globally disable individual sensor driver
 - Support for CAN bus and Freedom Won Battery Management System by Marius Bezuidenhout (#12651)
@@ -17,16 +36,18 @@ All notable changes to this project will be documented in this file.
 - Disable PSRAM on unsupported hardware
 - Replace spaces by hyphens in final hostname (#12710)
 - Message ``Upload buffer miscompare`` into ``Not enough space``
+- ESP32 remove GPIO initialization to INPUT from not used GPIOs to allow JTAG support
 
 ### Fixed
 - Discovery fails when using ``%hostname%`` in a topic (#12710)
 - ESP32-Solo OTA upgrade
+- ESP32 buzzer in PWM mode exception (#12717)
 
 ## [9.5.0.2] 20210714
 ### Added
 - Initial support for Tasmota Mesh (TasMesh) providing node/broker communication using ESP-NOW (#11939)
 - MQTT minimum password length restriction in GUI (#12553)
-- Command ``SetOption127 1`` to force Wifi in no-sleep mode even if ``Sleep 0`` is not enabled
+- Command ``SetOption127 1`` to force Wi-Fi in no-sleep mode even if ``Sleep 0`` is not enabled
 - Support for Technoline WS2300-15 Anemometer (#12573)
 - Support for Telaire T6700 Series CO2 sensor by Alexander Savchenko (#12618)
 

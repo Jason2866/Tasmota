@@ -25,6 +25,7 @@
 // #include "AudioFileSourceSPIFFS.h"
 // #include "AudioFileSourceID3.h"
 #include "AudioOutputI2S.h"
+#include "AudioGeneratorWAV.h"
 #include "AudioGeneratorMP3.h"
 #include "AudioFileSourceFS.h"
 
@@ -60,7 +61,9 @@ extern "C" {
       }
       // AudioOutputI2S(int port=0, int output_mode=EXTERNAL_I2S, int dma_buf_count = 8, int use_apll=APLL_DISABLE);
       AudioOutputI2S * audio = new AudioOutputI2S(port, mode, dma_buf_count);
-      audio->SetPinout(bclkPin, wclkPin, doutPin);    // return value has no useful information for us
+      if (0 == mode) {
+        audio->SetPinout(bclkPin, wclkPin, doutPin);    // return value has no useful information for us
+      }
       be_pushcomptr(vm, (void*) audio);
       be_setmember(vm, 1, ".p");
       be_return_nil(vm);
@@ -81,6 +84,83 @@ extern "C" {
     }
 
     be_return_nil(vm);
+  }
+
+  int i2s_output_i2s_stop(bvm *vm) {
+    int argc = be_top(vm);
+    be_getmember(vm, 1, ".p");
+    AudioOutputI2S * audio = (AudioOutputI2S *) be_tocomptr(vm, -1);
+    if (audio) {
+      audio->stop();
+    }
+    be_return_nil(vm);
+  }
+
+  //
+  // AudioGeneratorWAV()
+  //
+  int i2s_generator_wav_init(bvm *vm) {
+    AudioGeneratorWAV * wav = new AudioGeneratorWAV();
+    be_pushcomptr(vm, (void*) wav);
+    be_setmember(vm, 1, ".p");
+    be_return_nil(vm);
+  }
+
+  AudioGeneratorWAV * i2s_generator_wav_get(bvm *vm) {
+    be_getmember(vm, 1, ".p");
+    AudioGeneratorWAV * wav = (AudioGeneratorWAV *) be_tocomptr(vm, -1);
+    return wav;
+  }
+
+  int i2s_generator_wav_deinit(bvm *vm) {
+    int argc = be_top(vm);
+    AudioGeneratorWAV * wav = i2s_generator_wav_get(vm);
+    if (wav) {
+      delete wav;
+      // clear
+      be_pushcomptr(vm, (void*) NULL);
+      be_setmember(vm, 1, ".p");
+    }
+
+    be_return_nil(vm);
+  }
+
+  int i2s_generator_wav_begin(bvm *vm) {
+    int argc = be_top(vm);
+    if (argc > 2) {
+      AudioGeneratorWAV * wav = i2s_generator_wav_get(vm);
+      be_getmember(vm, 2, ".p");
+      AudioFileSource * source = (AudioFileSource*) be_tocomptr(vm, -1);
+      be_getmember(vm, 3, ".p");
+      AudioOutput * output = (AudioOutput*) be_tocomptr(vm, -1);
+      be_pop(vm, 2);
+
+      bool ret = wav->begin(source, output);
+      be_pushbool(vm, ret);
+      be_return(vm);
+    }
+    be_return_nil(vm);
+  }
+
+  int i2s_generator_wav_loop(bvm *vm) {
+    AudioGeneratorWAV * wav = i2s_generator_wav_get(vm);
+    bool ret = wav->loop();
+    be_pushbool(vm, ret);
+    be_return(vm);
+  }
+
+  int i2s_generator_wav_stop(bvm *vm) {
+    AudioGeneratorWAV * wav = i2s_generator_wav_get(vm);
+    bool ret = wav->stop();
+    be_pushbool(vm, ret);
+    be_return(vm);
+  }
+
+  int i2s_generator_wav_isrunning(bvm *vm) {
+    AudioGeneratorWAV * wav = i2s_generator_wav_get(vm);
+    bool ret = wav->isRunning();
+    be_pushbool(vm, ret);
+    be_return(vm);
   }
 
   //
