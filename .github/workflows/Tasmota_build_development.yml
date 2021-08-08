@@ -1,4 +1,4 @@
-name: Build_firmware_development
+name: Build_firmware
 
 on:
   workflow_dispatch:  # Manually start a workflow
