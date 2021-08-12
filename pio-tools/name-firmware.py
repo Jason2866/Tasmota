@@ -2,6 +2,7 @@ Import('env')
 Import('projenv')
 import os
 import shutil
+from os.path import join, basename
 
 OUTPUT_DIR = "build_output{}".format(os.path.sep)
 
@@ -39,13 +40,14 @@ def bin_map_copy(source, target, env):
     pio_env = env["PIOENV"]
     proj_dir = env["PROJECT_DIR"]
     map_name = str(proj_dir).split(os.path.sep)[-1]
-    map_new_loc = proj_build_dir + os.path.sep + pio_env + os.path.sep + map_name + ".map"
+    #map_new_loc = proj_build_dir + os.path.sep + pio_env + os.path.sep + map_name + ".map"
+    map_new_loc = join("$BUILD_DIR", basename(env.subst("${PROJECT_DIR}.map")))
     #print("proj_build_dir: {}".format(proj_build_dir))
     #print("pioenv: {}".format(pio_env))
     #print("build_dir: {}".format(build_dir))
     #print("map_name: {}".format(map_name))
     #print("proj_dir: {}".format(proj_dir))
-    #print("map_new_loc: {}".format(map_new_loc))
+    print("map_new_loc: {}".format(map_new_loc))
 
     # move Tasmota.map to map/<variant>.map
     if os.path.isfile(map_new_loc):
