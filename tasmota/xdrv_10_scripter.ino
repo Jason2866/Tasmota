@@ -3170,6 +3170,27 @@ chknext:
           goto exit;
         }
 #endif //USE_SML_M
+
+#ifdef ESP32
+#include <sdkconfig.h>
+#include <lwipopts.h>
+
+        if (!strncmp(vname, "socs(", 5)) {
+          lp = GetNumericArgument(lp + 5, OPER_EQU, &fvar, gv);
+          if (fvar == 0) {
+          //  fvar = LWIP_MAX_SOCKETS;
+          //  fvar = CONFIG_HAP_HTTP_MAX_OPEN_SOCKETS;
+            fvar = CONFIG_LWIP_MAX_SOCKETS;
+
+          } else {
+            //fvar = max_open_sockets;
+
+          }
+          lp++;
+          len = 0;
+          goto exit;
+        }
+#endif
         break;
       case 't':
         if (!strncmp(vname, "time", 4)) {
