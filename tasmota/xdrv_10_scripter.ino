@@ -69,8 +69,6 @@ keywords if then else endif, or, and are better readable for beginners (others m
 #define MAX_SARRAY_NUM 32
 #endif
 
-#include <renderer.h>
-extern Renderer *renderer;
 
 uint32_t EncodeLightId(uint8_t relay_id);
 uint32_t DecodeLightId(uint32_t hue_id);
@@ -6548,6 +6546,8 @@ char buff[512];
 
   if (sflg) {
 #ifdef USE_DISPLAY_DUMP
+#include <renderer.h>
+extern Renderer *renderer;
     // screen copy
     #define fileHeaderSize 14
     #define infoHeaderSize 40
