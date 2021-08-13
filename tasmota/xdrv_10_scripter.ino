@@ -229,7 +229,7 @@ extern FS *ufsp;
 
 #endif // USE_UFILESYS
 
-extern "C" void homekit_main(char *, uint32_t);
+extern "C" int32_t homekit_main(char *, uint32_t);
 
 #ifdef SUPPORT_MQTT_EVENT
   #include <LinkedList.h>                 // Import LinkedList library
@@ -2557,8 +2557,9 @@ chknext:
             // erase nvs
             lp = GetNumericArgument(lp + 4, OPER_EQU, &fvar, gv);
 
-            homekit_main(0, fvar);
-            if (fvar >= 98) {
+            int32_t sel = fvar;
+            fvar = homekit_main(0, sel);
+            if (sel >= 98) {
               glob_script_mem.homekit_running == false;
             }
 
@@ -3168,27 +3169,6 @@ chknext:
           goto exit;
         }
 #endif //USE_SML_M
-
-#ifdef ESP32
-#include <sdkconfig.h>
-#include <lwipopts.h>
-
-        if (!strncmp(vname, "socs(", 5)) {
-          lp = GetNumericArgument(lp + 5, OPER_EQU, &fvar, gv);
-          if (fvar == 0) {
-          //  fvar = LWIP_MAX_SOCKETS;
-          //  fvar = CONFIG_HAP_HTTP_MAX_OPEN_SOCKETS;
-            fvar = CONFIG_LWIP_MAX_SOCKETS;
-
-          } else {
-            //fvar = max_open_sockets;
-
-          }
-          lp++;
-          len = 0;
-          goto exit;
-        }
-#endif
         break;
       case 't':
         if (!strncmp(vname, "time", 4)) {

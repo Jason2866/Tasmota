@@ -38,7 +38,7 @@
 #include <freertos/queue.h>
 #include <esp_log.h>
 #include <driver/gpio.h>
-
+#include <lwip/sockets.h>
 
 #include <hap.h>
 
@@ -703,9 +703,9 @@ nextline:
 
 #define HK_PASSCODE "111-11-111"
 int hap_loop_stop(void);
+int32_t homekit_pars(uint32_t sel);
 
-
-void homekit_main(char *desc, uint32_t flag ) {
+int32_t homekit_main(char *desc, uint32_t flag ) {
   if (desc) {
     char *cp = desc;
     cp += 2;
@@ -724,7 +724,7 @@ void homekit_main(char *desc, uint32_t flag ) {
     }
     if (*cp != '\n') {
       printf("init error\n");
-      return;
+      return -1;
     }
     cp++;
     hk_desc = cp;
@@ -736,18 +736,75 @@ void homekit_main(char *desc, uint32_t flag ) {
       hap_loop_stop();
       // is just the folder in wrapper
       hap_platfrom_keystore_erase_partition(hap_platform_keystore_get_nvs_partition_name());
+    } else if (flag < 3) {
+      return homekit_pars(flag);
     } else {
       hap_loop_stop();
     }
-    return;
+
+    return 0;
   }
 
-  if (!hk_desc) return;
+  if (!hk_desc) return -2;
 
   /* Create the application thread */
   xTaskCreate(smart_outlet_thread_entry, SMART_OUTLET_TASK_NAME, SMART_OUTLET_TASK_STACKSIZE, NULL, SMART_OUTLET_TASK_PRIORITY, NULL);
 
+  return 0;
 }
+
+
+int32_t homekit_pars(uint32_t sel) {
+
+  if (sel == 0) {
+    return CONFIG_LWIP_MAX_SOCKETS;
+  } else {
+    struct sockaddr name;
+    socklen_t len = 15;
+    uint8_t open_socs = 0;
+    for (uint32_t cnt = 0; cnt < CONFIG_LWIP_MAX_SOCKETS; cnt++) {
+      if (!getsockname(0, &name, &len)) {
+        open_socs++;
+      }
+    }
+    return open_socs;
+  }
+}
+
+/*
+
+#include <sdkconfig.h>
+//#include <lwip/sockets.h>
+#include <lwipopts.h>
+
+        if (!strncmp(vname, "socs(", 5)) {
+          lp = GetNumericArgument(lp + 5, OPER_EQU, &fvar, gv);
+          if (fvar == 0) {
+          //  fvar = LWIP_MAX_SOCKETS;
+          //  fvar = CONFIG_HAP_HTTP_MAX_OPEN_SOCKETS;
+            fvar = CONFIG_LWIP_MAX_SOCKETS;
+
+          } else {
+            //fvar = max_open_sockets;
+          //  lwip_socket_dbg_get_socket(0);
+          //  struct lwip_socket *sock = 0;
+          //  socket_address sa;
+          //  socklen_t len = sizeof(sa.sin);
+          //  getsockname(0,&sa.sa, &len);
+
+            //struct sockaddr_in name;
+            //socklen_t namelen = 15;
+            //lwip_getsockopt (0, int level, int optname, void *optval, socklen_t *optlen)
+           //  lwip_getpeername (0, 0, &namelen);
+
+          //  sock = &sockets[0];
+
+          }
+          lp++;
+          len = 0;
+          goto exit;
+        }
+*/
 
 #endif // ESP32
 #endif // USE_HOMEKIT
