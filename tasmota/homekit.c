@@ -753,58 +753,28 @@ int32_t homekit_main(char *desc, uint32_t flag ) {
   return 0;
 }
 
+#include <lwip/sockets.h>
 
 int32_t homekit_pars(uint32_t sel) {
 
   if (sel == 0) {
-    return CONFIG_LWIP_MAX_SOCKETS;
+  //  return CONFIG_LWIP_MAX_SOCKETS;
+    return MEMP_NUM_NETCONN;
+  } else if (sel == 1) {
+    return LWIP_SOCKET_OFFSET;
   } else {
     struct sockaddr name;
-    socklen_t len = 15;
+    socklen_t len = sizeof(name);
     uint8_t open_socs = 0;
     for (uint32_t cnt = 0; cnt < CONFIG_LWIP_MAX_SOCKETS; cnt++) {
-      if (!getsockname(0, &name, &len)) {
+      //if (!getsockname(cnt, &name, &len)) {
+      if (!getpeername(LWIP_SOCKET_OFFSET + cnt, &name, &len)) {
         open_socs++;
       }
     }
     return open_socs;
   }
 }
-
-/*
-
-#include <sdkconfig.h>
-//#include <lwip/sockets.h>
-#include <lwipopts.h>
-
-        if (!strncmp(vname, "socs(", 5)) {
-          lp = GetNumericArgument(lp + 5, OPER_EQU, &fvar, gv);
-          if (fvar == 0) {
-          //  fvar = LWIP_MAX_SOCKETS;
-          //  fvar = CONFIG_HAP_HTTP_MAX_OPEN_SOCKETS;
-            fvar = CONFIG_LWIP_MAX_SOCKETS;
-
-          } else {
-            //fvar = max_open_sockets;
-          //  lwip_socket_dbg_get_socket(0);
-          //  struct lwip_socket *sock = 0;
-          //  socket_address sa;
-          //  socklen_t len = sizeof(sa.sin);
-          //  getsockname(0,&sa.sa, &len);
-
-            //struct sockaddr_in name;
-            //socklen_t namelen = 15;
-            //lwip_getsockopt (0, int level, int optname, void *optval, socklen_t *optlen)
-           //  lwip_getpeername (0, 0, &namelen);
-
-          //  sock = &sockets[0];
-
-          }
-          lp++;
-          len = 0;
-          goto exit;
-        }
-*/
 
 #endif // ESP32
 #endif // USE_HOMEKIT
