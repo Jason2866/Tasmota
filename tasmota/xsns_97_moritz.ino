@@ -1325,7 +1325,7 @@ void Moritz_Check_HTML_Setvars(void) {
       get_MLabel(ind,&ml);
       strncpy(ml.label,cp,MMLSIZ);
       put_MLabel(ind,&ml);
-      AddLog_P(LOG_LEVEL_INFO, PSTR("Moritz set label of ind=%d to %s"),ind,cp);
+      AddLog(LOG_LEVEL_INFO, PSTR("Moritz set label of ind=%d to %s"),ind,cp);
 
     } else if (!strncmp(cp,"tmp",3)) {
       // set temperature
@@ -1341,7 +1341,7 @@ void Moritz_Check_HTML_Setvars(void) {
       uint32_t dst=(ml.id[0]<<16)|(ml.id[1]<<8)|ml.id[2];
       SendModeTmp(dst,1,temp);
 
-      AddLog_P(LOG_LEVEL_INFO, PSTR("Moritz set temp of ind=%d to %s"),dst,ts1);
+      AddLog(LOG_LEVEL_INFO, PSTR("Moritz set temp of ind=%d to %s"),dst,ts1);
     } else if (!strncmp(cp,"enb",3)) {
       // enable sensor
       cp+=3;
@@ -1351,7 +1351,7 @@ void Moritz_Check_HTML_Setvars(void) {
       get_MLabel(ind,&ml);
       ml.mdata.enabled=strtol(cp,&cp,10);
       put_MLabel(ind,&ml);
-      AddLog_P(LOG_LEVEL_INFO, PSTR("Moritz set enabled of ind=%d to %d"),ind,ml.mdata.enabled);
+      AddLog(LOG_LEVEL_INFO, PSTR("Moritz set enabled of ind=%d to %d"),ind,ml.mdata.enabled);
     } else {
 
     }
