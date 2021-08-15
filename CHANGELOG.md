@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 - Inital support for Wi-Fi extender (#12784)
 - Neopool commands ``NPPHRes``, ``NPCLRes`` and ``NPIonRes`` (#12813)
 - Support for (Yeelight) Mi Desk Pro using binary tasmota32solo1.bin
+- Initial support for influxdb using ``#define USE_INFLUXDB`` and several ``Ifx`` commands
+- Command ``SetOption128 1`` disabling web referer check default blocking HTTP web commands (#12828)
 
 ### Changed
 - NeoPixelBus library from v2.6.3 to v2.6.7
@@ -21,6 +23,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Neopool communication error (#12813)
+- Negative power values for ADE7953 based devices like Shelly EM (#12874)
 
 ## [9.5.0.4] 20210801
 ### Added

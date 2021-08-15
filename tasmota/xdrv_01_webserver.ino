@@ -542,6 +542,11 @@ void StartWebserver(int type, IPAddress ipweb)
   if (!Web.state) {
     if (!Webserver) {
       Webserver = new ESP8266WebServer((HTTP_MANAGER == type || HTTP_MANAGER_RESET_ONLY == type) ? 80 : WEB_PORT);
+
+      const char* headerkeys[] = { "Referer" };
+      size_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
+      Webserver->collectHeaders(headerkeys, headerkeyssize);
+
       // call `Webserver->on()` on each entry
       for (uint32_t i=0; i<nitems(WebServerDispatch); i++) {
         const WebServerDispatch_t & line = WebServerDispatch[i];
@@ -650,7 +655,22 @@ bool HttpCheckPriviledgedAccess(bool autorequestauth = true)
     Webserver->requestAuthentication();
     return false;
   }
-  return true;
+
+  if (!Settings->flag5.disable_referer_chk && !WifiIsInManagerMode()) {
+    String referer = Webserver->header(F("Referer"));  // http://demo/? or http://192.168.2.153/?
+    if (referer.length()) {
+      referer.toUpperCase();
+      String hostname = NetworkHostname();
+      hostname.toUpperCase();
+      if ((referer.indexOf(hostname) == 7) || (referer.indexOf(NetworkAddress().toString()) == 7)) {
+        return true;
+      }
+    }
+    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HTTP "Referer denied"));
+    return false;
+  } else {
+    return true;
+  }
 }
 
 #ifdef USE_CORS
@@ -2115,11 +2135,7 @@ void HandleOtherConfiguration(void) {
   WSContentSendStyle();
 
   TemplateJson();
-#ifdef MQTT_DATA_STRING
-  WSContentSend_P(HTTP_FORM_OTHER, TasmotaGlobal.mqtt_data.c_str(), (USER_MODULE == Settings->module) ? PSTR(" checked disabled") : "",
-#else
-  WSContentSend_P(HTTP_FORM_OTHER, TasmotaGlobal.mqtt_data, (USER_MODULE == Settings->module) ? PSTR(" checked disabled") : "",
-#endif
+  WSContentSend_P(HTTP_FORM_OTHER, ResponseData(), (USER_MODULE == Settings->module) ? PSTR(" checked disabled") : "",
     (Settings->flag.mqtt_enabled) ? PSTR(" checked") : "",   // SetOption3 - Enable MQTT
     SettingsText(SET_FRIENDLYNAME1), SettingsText(SET_DEVICENAME));
 

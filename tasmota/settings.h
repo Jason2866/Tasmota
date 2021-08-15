@@ -157,7 +157,7 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
     uint32_t zigbee_hide_bridge_topic : 1; // bit 11 (v9.3.1.1)  - SetOption125 - (Zigbee) Hide bridge topic from zigbee topic (use with SetOption89) (1)
     uint32_t ds18x20_mean : 1;             // bit 12 (v9.3.1.2)  - SetOption126 - (DS18x20) Enable arithmetic mean over teleperiod for JSON temperature (1)
     uint32_t wifi_no_sleep : 1;            // bit 13 (v9.5.0.2)  - SetOption127 - (Wifi) Keep wifi in no-sleep mode, prevents some occasional unresponsiveness
-    uint32_t spare14 : 1;                  // bit 14
+    uint32_t disable_referer_chk : 1;      // bit 14 (v9.5.0.5)  - SetOption128 - (Web) Allow access without referer check
     uint32_t spare15 : 1;                  // bit 15
     uint32_t spare16 : 1;                  // bit 16
     uint32_t spare17 : 1;                  // bit 17
@@ -247,9 +247,9 @@ typedef union {
     uint32_t telegram_echo_enable : 1;     // bit 2  (v9.4.0.3) - CMND_TMSTATE 4/5 - Enable Telegram echo
     uint32_t range_extender : 1;           // bit 3  (v9.5.0.5) - CMND_RGXSTATE - Enable range extender
     uint32_t range_extender_napt : 1;      // bit 4  (v9.5.0.5) - CMND_RGXNAPT - Enable range extender NAPT
-    uint32_t sonoff_l1_music_sync : 1;     // bit 5  (v9.5.0.5) - CMND_MUSICSYNC - Enable sync to music
-    uint32_t spare06 : 1;                  // bit 6
-    uint32_t spare07 : 1;                  // bit 7
+    uint32_t sonoff_l1_music_sync : 1;     // bit 5  (v9.5.0.5) - CMND_L1MUSICSYNC - Enable sync to music
+    uint32_t influxdb_default : 1;         // bit 6  (v9.5.0.5) - Set influxdb initial defaults if 0
+    uint32_t influxdb_state : 1;           // bit 7  (v9.5.0.5) - CMND_IFX - Enable influxdb support
     uint32_t spare08 : 1;                  // bit 8
     uint32_t spare09 : 1;                  // bit 9
     uint32_t spare10 : 1;                  // bit 10
@@ -583,11 +583,9 @@ typedef struct {
   uint8_t       switchmode[MAX_SWITCHES_SET];  // 4A9
 
   uint8_t       free_4c5[5];               // 4C5
-
   uint8_t       ex_interlock[4];           // 4CA MAX_INTERLOCKS = MAX_RELAYS / 2 (Legacy)
 
-  uint8_t       free_4ce[2];               // 4CE
-
+  uint16_t      influxdb_port;             // 4CE
   power_t       interlock[MAX_INTERLOCKS_SET];  // 4D0 MAX_INTERLOCKS = MAX_RELAYS / 2
 
   uint8_t       free_508[36];              // 508
@@ -643,7 +641,6 @@ typedef struct {
   uint16_t      baudrate;                  // 778
   uint16_t      sbaudrate;                 // 77A
   EnergyUsage   energy_usage;              // 77C
-
   uint32_t      sensors[2][4];             // 794  Disable individual (0) sensor drivers / (1) GUI sensor output
   uint32_t      energy_kWhtotal_time;      // 7B4
   unsigned long weight_item;               // 7B8  Weight of one item in gram * 10
@@ -654,9 +651,7 @@ typedef struct {
   unsigned long energy_frequency_calibration;  // 7C8  Also used by HX711 to save last weight
   uint16_t      web_refresh;               // 7CC
   char          script_pram[5][10];        // 7CE
-
   char          rules[MAX_RULE_SETS][MAX_RULE_SIZE];  // 800  Uses 512 bytes in v5.12.0m, 3 x 512 bytes in v5.14.0b
-
   TuyaFnidDpidMap tuya_fnid_map[MAX_TUYA_FUNCTIONS];  // E00  32 bytes
   uint16_t      ina226_r_shunt[4];         // E20
   uint16_t      ina226_i_fs[4];            // E28
@@ -692,9 +687,7 @@ typedef struct {
   uint8_t       webserver;                 // ECD
   uint8_t       weblog_level;              // ECE
   uint8_t       mqtt_fingerprint[2][20];   // ECF
-
-  uint8_t       ex_adc_param_type;         // EF7  Free since 9.0.0.1
-
+  uint8_t       influxdb_version;          // EF7
   SOBitfield4   flag4;                     // EF8
   uint16_t      mqtt_port;                 // EFC
   uint8_t       serial_config;             // EFE
