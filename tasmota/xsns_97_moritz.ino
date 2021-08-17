@@ -36,7 +36,7 @@
 //#define MORITZ_BASE_ADDRESS 0x123456
 
 // serial debug mode
-//#define MORITZ_SDEBUG
+#define MORITZ_SDEBUG
 
 #ifdef USE_24C256
 #define USE_EEPROM
@@ -629,11 +629,13 @@ void rf_moritz_init(void) {
 //  hal_CC_GDO_init(CC_INSTANCE,INIT_MODE_IN_CS_IN);
 //  hal_enable_CC_GDOin_int(CC_INSTANCE,false); // disable INT - we'll poll...
 
-  CC1100_DEASSERT;                           // Toggle chip select signal
+
+// Toggle chip select signal
+  digitalWrite(moritz_cfg.moritz_cs,1);
   my_delay_us(30);
-  CC1100_ASSERT;
+  digitalWrite( moritz_cfg.moritz_cs,0);
   my_delay_us(30);
-  CC1100_DEASSERT;
+  digitalWrite( moritz_cfg.moritz_cs,1);
   my_delay_us(45);
 
   ccStrobe( CC1100_SRES );                   // Send SRES command
@@ -813,8 +815,8 @@ void rf_moritz_task(void) {
   if (!moritz_cfg.moritz_on) return;
 
   // see if a CRC OK pkt has been arrived
-  uint8_t crc_ok=cc1100_readReg( CC1100_PKTSTATUS ); // crc ok
-  if (crc_ok&4) {
+  uint8_t crc_ok = cc1100_readReg( CC1100_PKTSTATUS ); // crc ok
+  if (crc_ok & 4) {
 
     //errata #1 does not affect us, because we wait until packet is completely received
     enc[0] = cc1100_readReg( CC1100_RXFIFO ) & 0x7f; // read len
@@ -999,6 +1001,10 @@ void rf_moritz_task(void) {
       }
     }
     return;
+} else {
+  #ifdef MORITZ_SDEBUG
+  //    Serial.printf("crc fail: %d\n",crc_ok);
+  #endif
 }
 
     if (cc1100_readReg( CC1100_MARCSTATE ) == 17) {
@@ -1539,6 +1545,7 @@ int32_t mo_getvars(uint32_t index, uint32_t type,char *retval) {
 #define HW_SPI_CLK 14
 #endif
 
+
 void CC1101_Detect() {
 
   // init spi, must use hardware spi
@@ -1550,15 +1557,15 @@ void CC1101_Detect() {
     }
   }
 
-  if (Pin(GPIO_CC1101_CS)>=0) {
-    moritz_cfg.moritz_cs=Pin(GPIO_CC1101_CS);
+  if (Pin(GPIO_CC1101_CS) >= 0) {
+    moritz_cfg.moritz_cs = Pin(GPIO_CC1101_CS);
   } else {
     return;
   }
 
   //AddLog_P2(LOG_LEVEL_INFO, PSTR("Moritz: cs=%d"), moritz_cs);
   pinMode(moritz_cfg.moritz_cs, OUTPUT);
-  digitalWrite(moritz_cfg.moritz_cs,1);
+  digitalWrite(moritz_cfg.moritz_cs, 1);
 
 #ifndef ESP32
   SPI.begin();
@@ -1566,7 +1573,7 @@ void CC1101_Detect() {
   SPI.begin(Pin(GPIO_SPI_CLK),Pin(GPIO_SPI_MISO),Pin(GPIO_SPI_MOSI), -1);
 #endif
 
-  moritz_spiSettings = SPISettings(5000000, MSBFIRST, SPI_MODE3);
+  moritz_spiSettings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
   rf_moritz_init();
   moritz_cfg.moritz_ready = 1;
   moritz_cfg.show_all = 1;
@@ -1721,6 +1728,7 @@ void Moritz_Sort_List(uint32_t pflag) {
 void CC1101_loop(void) {
   if (moritz_cfg.moritz_ready) {
     if (millis()-last_moritz_task>8) {
+    //  rf_moritz_init(); // >>><>>
       rf_moritz_task();
       last_moritz_task=millis();
       if (credit_10ms < MAX_CREDIT) // 10ms/1s == 1% -> allowed talk-time without CD
