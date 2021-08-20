@@ -32,8 +32,8 @@
 #define XSNS_97 97
 
 // this id is used by maxcube
-#define MORITZ_BASE_ADDRESS 0x567890
-//#define MORITZ_BASE_ADDRESS 0x123456
+//#define MORITZ_BASE_ADDRESS 0x567890
+#define MORITZ_BASE_ADDRESS 0x123456
 
 // serial debug mode
 #define MORITZ_SDEBUG
@@ -290,8 +290,8 @@ typedef enum {
 
 #undef CC1100_DEASSERT
 #undef CC1100_ASSERT
-#define CC1100_DEASSERT  	digitalWrite(moritz_cfg.moritz_cs,1);SPI.endTransaction();
-#define CC1100_ASSERT    	SPI.beginTransaction(moritz_spiSettings);digitalWrite( moritz_cfg.moritz_cs,0)
+#define CC1100_DEASSERT  	digitalWrite(moritz_cfg.moritz_cs,1);delayMicroseconds(50);SPI.endTransaction();
+#define CC1100_ASSERT    	SPI.beginTransaction(moritz_spiSettings);;delayMicroseconds(50);digitalWrite( moritz_cfg.moritz_cs,0)
 
 //#define CC1100_SET_OUT		CC1100_OUT_PORT |= _BV(CC1100_OUT_PIN)
 //#define CC1100_CLEAR_OUT	CC1100_OUT_PORT &= ~_BV(CC1100_OUT_PIN)
@@ -366,10 +366,15 @@ void moritz_handleAutoAck(uint8_t* enc);
  *
  * One message with 12 payload bytes takes (4 byte preamble + 4 byte sync + 12 byte payload) / 1kbit/s = 160 ms.
  */
+
 const uint8_t PROGMEM MORITZ_CFG[60] = {
 //     0x00, 0x08,
      0x00, 0x07, //IOCFG2: GDO2_CFG=7: Asserts when a packet has been received with CRC OK. De-asserts when the first byte is read from the RX FIFO
-     0x02, 0x46, //IOCFG0
+     //0x02, 0x46, //IOCFG0
+
+     0x02, 0x3f, //IOCFG0
+
+
      0x04, 0xC6, //SYNC1
      0x05, 0x26, //SYNC0
      0x0B, 0x06, //FSCTRL1
@@ -625,21 +630,37 @@ void set_txrestore() {
   }
 }
 
+void moritz_reset(void) {
+  // Toggle chip select signal
+    CC1100_DEASSERT;
+    my_delay_us(30);
+    CC1100_ASSERT;
+    my_delay_us(100);  //30
+    CC1100_DEASSERT;
+    my_delay_us(200);  //45
+
+    ccStrobe( CC1100_SRES );                   // Send SRES command
+    my_delay_us(500);
+}
+
 void rf_moritz_init(void) {
 //  hal_CC_GDO_init(CC_INSTANCE,INIT_MODE_IN_CS_IN);
 //  hal_enable_CC_GDOin_int(CC_INSTANCE,false); // disable INT - we'll poll...
 
+  moritz_reset();
 
 // Toggle chip select signal
-  digitalWrite(moritz_cfg.moritz_cs,1);
+/*
+  CC1100_DEASSERT;
   my_delay_us(30);
-  digitalWrite( moritz_cfg.moritz_cs,0);
+  CC1100_ASSERT;
   my_delay_us(30);
-  digitalWrite( moritz_cfg.moritz_cs,1);
+  CC1100_DEASSERT;
   my_delay_us(45);
 
   ccStrobe( CC1100_SRES );                   // Send SRES command
-  my_delay_us(100);
+  my_delay_us(500);
+  */
 
   // load configuration
   for (uint8_t i = 0; i<60; i += 2) {
@@ -1012,7 +1033,7 @@ void rf_moritz_task(void) {
       ccStrobe( CC1100_SIDLE );
       ccStrobe( CC1100_SRX   );
     }
-  }
+}
 
 void moritz_send(char *in) {
   /* we are not affected by CC1101 errata #6, because MDMCFG2.SYNC_MODE != 0 */
@@ -1329,7 +1350,11 @@ void Moritz_Check_HTML_Setvars(void) {
       cp++;
       struct MORITZ ml;
       get_MLabel(ind,&ml);
+#ifdef USE_EEPROM
       strncpy(ml.label,cp,MMLSIZ);
+#else
+
+#endif
       put_MLabel(ind,&ml);
       AddLog(LOG_LEVEL_INFO, PSTR("Moritz set label of ind=%d to %s"),ind,cp);
 
@@ -1573,7 +1598,8 @@ void CC1101_Detect() {
   SPI.begin(Pin(GPIO_SPI_CLK),Pin(GPIO_SPI_MISO),Pin(GPIO_SPI_MOSI), -1);
 #endif
 
-  moritz_spiSettings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
+  //moritz_spiSettings = SPISettings(5000000, MSBFIRST, SPI_MODE0);
+  moritz_spiSettings = SPISettings(500000, MSBFIRST, SPI_MODE0);
   rf_moritz_init();
   moritz_cfg.moritz_ready = 1;
   moritz_cfg.show_all = 1;
@@ -1607,6 +1633,12 @@ void CC1101_Detect() {
   }
 #endif
 
+#endif
+
+  AddLog(LOG_LEVEL_INFO, PSTR("Moritz initialized"));
+
+#ifdef MORITZ_SDEBUG
+  Serial.printf("Moritz initialized\n");
 #endif
 }
 
@@ -1721,11 +1753,24 @@ void Moritz_Sort_List(uint32_t pflag) {
     }
   }
 }
+#else
+void get_MLabel(uint8_t index, struct MORITZ *ml) {
+}
+void put_MLabel(uint8_t index, struct MORITZ *ml) {
+}
+void set_MLabel(struct MORITZ *ml) {
+}
+int32_t find_MLabel(struct MORITZ *ml) {
+  return 0;
+}
+void Moritz_Sort_List(uint32_t pflag) {
+}
 #endif
 
 
 // 8 ms ticks
 void CC1101_loop(void) {
+  //rf_moritz_task();
   if (moritz_cfg.moritz_ready) {
     if (millis()-last_moritz_task>8) {
     //  rf_moritz_init(); // >>><>>
@@ -1773,6 +1818,17 @@ bool XSNS_97_cmd(void) {
         moritz_cfg.pair_enable = *cp&1;
       }
       Response_P(S_JSON_MORITZ,"pm",moritz_cfg.pair_enable);
+      return true;
+    } else if (*cp=='r') {
+      // reset
+      moritz_reset();
+      cc1100_writeReg( 2, 0x3B );
+      Response_P(S_JSON_MORITZ,"reset",0);
+      return true;
+    } else if (*cp=='i') {
+      // init
+      rf_moritz_init();
+      Response_P(S_JSON_MORITZ,"init",0);
       return true;
     } else if (*cp=='a') {
       // add
@@ -1890,11 +1946,12 @@ bool Xsns97(byte function) {
   bool result = false;
 
   switch (function) {
-      case FUNC_MODULE_INIT:
+      case FUNC_PRE_INIT:
         moritz_cfg.moritz_cs=CC100_CS;
+        CC1101_Detect();
         break;
       case FUNC_INIT:
-        CC1101_Detect();
+      //  CC1101_Detect();
         break;
       case FUNC_LOOP:
         CC1101_loop();
