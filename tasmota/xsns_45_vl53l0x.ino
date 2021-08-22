@@ -24,24 +24,24 @@
  *
  * I2C Addres: 0x29
  *********************************************************************************************
- *
+ *  
  * Note: When using multiple VL53L0X, it is required to also wire the XSHUT pin of all those sensors
  * in order to let Tasmota change by software the I2C address of those and give them an unique address
  * for operation. The sensor don't save its address, so this procedure of changing its address is needed
  * to be performed every restart. The Addresses used for this are 120 (0x78) to 127 (0x7F). In the I2c
  * Standard (https://i2cdevices.org/addresses) those addresses are used by the PCA9685, so take into
  * account they won't work together.
- *
+ * 
  * The default value of VL53L0X_MAX_SENSORS is set in the file tasmota.h
  * Changing that is backwards incompatible - Max supported devices by this driver are 8
- *
+ * 
  **********************************************************************************************
  *
  * How to install this sensor: https://www.st.com/resource/en/datasheet/vl53l0x.pdf
- *
+ * 
  * If you are going to use long I2C wires read this:
  * https://hackaday.com/2017/02/08/taking-the-leap-off-board-an-introduction-to-i2c-over-long-wires/
- *
+ * 
 \*********************************************************************************************/
 
 #define XSNS_45            45
@@ -94,11 +94,11 @@ void Vl53l0Detect(void) {
   }
 
   for (uint32_t i = 0; i < VL53L0X_MAX_SENSORS; i++) {
-    if (PinUsed(GPIO_VL53L0X_XSHUT1, i) || (!xshut)) {
-        if (xshut) { pinMode(Pin(GPIO_VL53L0X_XSHUT1, i), INPUT); delay(1); }
-        if (!I2cSetDevice(0x29) && !I2cSetDevice((uint8_t)(120+i))) { return; } // Detection for unconfigured OR configured sensor
-        if (sensor[i].init()) {
-            if (xshut) { sensor[i].setAddress((uint8_t)(120+i)); }
+    if (PinUsed(GPIO_VL53L0X_XSHUT1, i) || (!xshut)) {   
+        if (xshut) { pinMode(Pin(GPIO_VL53L0X_XSHUT1, i), INPUT); delay(1); }       
+        if (!I2cSetDevice(0x29) && !I2cSetDevice((uint8_t)(120+i))) { return; } // Detection for unconfigured OR configured sensor    
+        if (sensor[i].init()) {         
+            if (xshut) { sensor[i].setAddress((uint8_t)(120+i)); }         
             uint8_t addr = sensor[i].getAddress();
             if (xshut) {
                 I2cSetActive(addr);
@@ -192,7 +192,7 @@ void Vl53l0Every_Second(void) {
 
 void Vl53l0Show(boolean json) {
   for (uint32_t i = 0; i < VL53L0X_MAX_SENSORS; i++) {
-    if (PinUsed(GPIO_VL53L0X_XSHUT1, i) || (!xshut)) {
+    if (PinUsed(GPIO_VL53L0X_XSHUT1, i) || (!xshut)) {    
         if (json) {
             if (Vl53l0x[i].distance == 9999) {
                 if (xshut) {

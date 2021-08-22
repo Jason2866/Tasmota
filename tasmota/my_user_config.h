@@ -390,6 +390,16 @@
 // -- OTA -----------------------------------------
 //#define USE_ARDUINO_OTA                          // Add optional support for Arduino OTA (+13k code)
 
+// -- Influxdb ------------------------------------
+//#define USE_INFLUXDB                             // Enable influxdb support (+5k code)
+//  #define INFLUXDB_STATE     0                   // [Ifx] Influxdb initially Off (0) or On (1)
+//  #define INFLUXDB_VERSION   1                   // Version of Influxdb 1 or 2
+//  #define INFLUXDB_HOST      "influxdb"          // [IfxHost] Influxdb hostname or IP address
+//  #define INFLUXDB_PORT      8086                // [IfxPort] Influxdb port number
+//  #define INFLUXDB_ORG       ""                  // [IfxUser, IfxOrg] Influxdb v1 username or v2 organisation
+//  #define INFLUXDB_TOKEN     ""                  // [IfxPassword, IfxToken] Influxdb v1 password or v2 token
+//  #define INFLUXDB_BUCKET    "db"                // [IfxDatabase, IfxBucket] Influxdb v1 database or v2 bucket
+
 // -- MQTT ----------------------------------------
 #define MQTT_LWT_OFFLINE       "Offline"         // MQTT LWT offline topic message
 #define MQTT_LWT_ONLINE        "Online"          // MQTT LWT online topic message
@@ -768,6 +778,7 @@
 //#define USE_IEM3000                              // Add support for Schneider Electric iEM3000-Modbus series energy monitor (+0k8 code)
   #define IEM3000_SPEED          19200           // iEM3000-Modbus RS485 serial speed (default: 19200 baud)
   #define IEM3000_ADDR           1               // iEM3000-Modbus modbus address (default: 0x01)
+//  #define IEM3000_IEM3155                        // Compatibility fix for Iem3155 (changes Power and Energy total readout)
 //#define USE_WE517                                // Add support for Orno WE517-Modbus energy monitor (+1k code)
 
 // -- Low level interface devices -----------------

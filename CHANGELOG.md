@@ -3,17 +3,42 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [9.5.0.5]
+## [9.5.0.7]
+### Added
+- Turn HTTP API (command ``SetOption128 1``) default on for backward compatibility
+- Support for IEM3155 Wattmeter (#12950)
+
+## [9.5.0.6] 20210820
+### Added
+- Version bump to monitor possible HTTP issues releated to ``SetOption128``
+
+### Changed
+- Berry now compiling in ``strict`` mode to catch more bugs
+
+### Fixed
+- Fixed PWM5 on ESP32C3
+
+## [9.5.0.5] 20210815
 ### Added
 - Inital support for Wi-Fi extender (#12784)
 - Neopool commands ``NPPHRes``, ``NPCLRes`` and ``NPIonRes`` (#12813)
 - Support for (Yeelight) Mi Desk Pro using binary tasmota32solo1.bin
+- Initial support for influxdb using ``#define USE_INFLUXDB`` and several ``Ifx`` commands
+- Command ``SetOption128 1`` disabling web referer check default blocking HTTP web commands (#12828)
 
 ### Changed
+- NeoPixelBus library from v2.6.3 to v2.6.7
 - Make Sonoff L1 MusicSync persistent (#12008)
+- Relax NTP poll if no ntpserver can be resolved by DNS
+- Move firmware binaries to https://github.com/arendst/Tasmota-firmware/tree/main/release-firmware
+- Default disable CORS for enhanced security and provide user compile option ``#define USE_CORS`` (#12827)
+- Prometheus: All metrics are prefixed with ``tasmota_`` (#12842)
+    Memory metrics have been cleaned up to work consistently between ESP8266 and ESP32
+    The device name is reported as an info metric
 
 ### Fixed
 - Neopool communication error (#12813)
+- Negative power values for ADE7953 based devices like Shelly EM (#12874)
 
 ## [9.5.0.4] 20210801
 ### Added

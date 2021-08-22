@@ -801,6 +801,11 @@ bool RuleSetProcess(uint8_t rule_set, String &event_saved)
 
 bool RulesProcessEvent(const char *json_event)
 {
+#ifdef USE_BERRY
+  // events are passed to Berry before Rules engine
+  callBerryRule(json_event);
+#endif
+
   if (Rules.busy) { return false; }
 
   Rules.busy = true;
@@ -858,7 +863,11 @@ void RulesInit(void)
 
 void RulesEvery50ms(void)
 {
+#ifdef USE_BERRY
+  if (!Rules.busy) {  // Emitting Rules events is always enabled with Berry
+#else
   if (Settings->rule_enabled && !Rules.busy) {  // Any rule enabled
+#endif
     char json_event[120];
 
     if (-1 == Rules.new_power) { Rules.new_power = TasmotaGlobal.power; }
@@ -987,11 +996,7 @@ void RulesEvery100ms(void) {
     if (ResponseLength()) {
       ResponseJsonStart();                                           // {"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}
       ResponseJsonEnd();
-#ifdef MQTT_DATA_STRING
-      RulesProcessEvent(TasmotaGlobal.mqtt_data.c_str());
-#else
-      RulesProcessEvent(TasmotaGlobal.mqtt_data);
-#endif
+      RulesProcessEvent(ResponseData());
     }
   }
 }

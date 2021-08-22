@@ -316,7 +316,7 @@ float CharToFloat(const char *str)
   char *pt = strbuf;
   if (*pt == '\0') { return 0.0; }
 
-  while ((*pt != '\0') && isblank(*pt)) { pt++; }  // Trim leading spaces
+  while ((*pt != '\0') && isspace(*pt)) { pt++; }  // Trim leading spaces
 
   signed char sign = 1;
   if (*pt == '-') { sign = -1; }
@@ -523,12 +523,19 @@ bool StrCaseStr_P(const char* source, const char* search) {
   return (strstr(case_source, case_search) != nullptr);
 }
 
-char* Trim(char* p)
-{
+bool IsNumeric(const char* value) {
+  // Test for characters '-.0123456789'
+  char *digit = (char*)value;
+  while (isdigit(*digit) || *digit == '.' || *digit == '-') { digit++; }
+  return (*digit == '\0');
+}
+
+char* Trim(char* p) {
+  // Remove leading and trailing tab, \n, \v, \f, \r and space
   if (*p != '\0') {
-    while ((*p != '\0') && isblank(*p)) { p++; }  // Trim leading spaces
+    while ((*p != '\0') && isspace(*p)) { p++; }  // Trim leading spaces
     char* q = p + strlen(p) -1;
-    while ((q >= p) && isblank(*q)) { q--; }   // Trim trailing spaces
+    while ((q >= p) && isspace(*q)) { q--; }   // Trim trailing spaces
     q++;
     *q = '\0';
   }
@@ -964,7 +971,7 @@ const uint8_t sNumbers[] PROGMEM = { 0,0,0,0,0,0,0,
                                      4,4,
                                      255 };
 
-int GetStateNumber(char *state_text)
+int GetStateNumber(const char *state_text)
 {
   char command[CMDSZ];
   int state_number = GetCommandCode(command, sizeof(command), state_text, kOptions);
@@ -1185,6 +1192,14 @@ char* ResponseGetTime(uint32_t format, char* time_str)
   return time_str;
 }
 
+char* ResponseData(void) {
+#ifdef MQTT_DATA_STRING
+  return (char*)TasmotaGlobal.mqtt_data.c_str();
+#else
+  return TasmotaGlobal.mqtt_data;
+#endif
+}
+
 uint32_t ResponseSize(void) {
 #ifdef MQTT_DATA_STRING
   return MAX_LOGSZ;                            // Arbitratry max length satisfying full log entry
@@ -1327,29 +1342,15 @@ int ResponseJsonEndEnd(void)
 }
 
 bool ResponseContains_P(const char* needle) {
+/*
 #ifdef MQTT_DATA_STRING
   return (strstr_P(TasmotaGlobal.mqtt_data.c_str(), needle) != nullptr);
 #else
   return (strstr_P(TasmotaGlobal.mqtt_data, needle) != nullptr);
 #endif
-}
-
-/*
-uint32_t ResponseContains_P(const char* needle) {
-  const char *tmp;
-#ifdef MQTT_DATA_STRING
-  tmp = TasmotaGlobal.mqtt_data.c_str();
-#else
-  tmp = TasmotaGlobal.mqtt_data;
-#endif
-  uint32_t count = 0;
-  while (tmp = strstr_P(tmp, needle)) {
-    count++;
-    tmp++;
-  }
-  return count;
-}
 */
+  return (strstr_P(ResponseData(), needle) != nullptr);
+}
 
 /*********************************************************************************************\
  * GPIO Module and Template management
