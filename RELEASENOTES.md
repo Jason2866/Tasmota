@@ -119,6 +119,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - Support for CAN bus and Freedom Won Battery Management System by Marius Bezuidenhout [#12651](https://github.com/arendst/Tasmota/issues/12651)
 - Optional IP filter to command ``TCPStart`` [#12806](https://github.com/arendst/Tasmota/issues/12806)
 - Inital support for Wi-Fi extender [#12784](https://github.com/arendst/Tasmota/issues/12784)
+- Support for IEM3155 Wattmeter [#12940](https://github.com/arendst/Tasmota/issues/12940)
 
 ### Changed
 - Move firmware binaries to https://github.com/arendst/Tasmota-firmware/tree/main/release-firmware
@@ -164,4 +165,5 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - Discovery fails when using ``%hostname%`` in a topic [#12710](https://github.com/arendst/Tasmota/issues/12710)
 - ESP32 buzzer in PWM mode exception (#12717)[#12717](https://github.com/arendst/Tasmota/issues/12717)
 - Neopool communication error [#12813](https://github.com/arendst/Tasmota/issues/12813)
+- WDT reset on shutters with stepper motors during deceleration [#12849](https://github.com/arendst/Tasmota/issues/12849)
 - Negative power values for ADE7953 based devices like Shelly EM [#12874](https://github.com/arendst/Tasmota/issues/12874)

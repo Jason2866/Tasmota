@@ -778,6 +778,7 @@
 //#define USE_IEM3000                              // Add support for Schneider Electric iEM3000-Modbus series energy monitor (+0k8 code)
   #define IEM3000_SPEED          19200           // iEM3000-Modbus RS485 serial speed (default: 19200 baud)
   #define IEM3000_ADDR           1               // iEM3000-Modbus modbus address (default: 0x01)
+//  #define IEM3000_IEM3155                        // Compatibility fix for Iem3155 (changes Power and Energy total readout)
 //#define USE_WE517                                // Add support for Orno WE517-Modbus energy monitor (+1k code)
 
 // -- Low level interface devices -----------------
@@ -855,6 +856,8 @@
 
 
   // Auto-binding constants, see `Z_autoAttributeReporting`
+  #define USE_ZIGBEE_AUTOBIND_MAX_ENDPOINTS 8       // max number of endpoint receiving auto-bind requests
+  #define USE_ZIGBEE_AUTOBIND_MAX_CLUSTER   0x10    // max endpoint number (excluded receiving auto-bind requests)
   // Below are the threshold for attribute reporting
   #define USE_ZIGBEE_AUTOBIND_BATTVOLTAGE   0.2     // V
   #define USE_ZIGBEE_AUTOBIND_BATTPERCENT   5       // %
