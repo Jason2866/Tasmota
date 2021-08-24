@@ -1305,11 +1305,11 @@ struct MORITZ *mp;
 
 #ifdef USE_WEBSERVER
 const char HTTP_MORITZ_CSS[] PROGMEM =
-"<head><style>rc{color:red;}gc{color:green;}yc{color:yellow;}</style></head>"
-"<table border='3' frame='void' style='width:700px;background-color:#00BFFF;'>"
+"{s}<head><style>rc{color:red;}gc{color:green;}yc{color:yellow;}</style></head>"
+"<table border='3' frame='void' style='width:800px;background-color:#00BFFF;'>"
 "<tr align='center';><th>TYPE</th><th align='left'>Moritz ID</th><th>RFE</th><th>BLOW</th><th>RSSI</th><th>MODE</th><th>enabled<br>target temp</th><th>state<br>actual temp</th></tr>";
 const char HTTP_MORITZ_TEND[] PROGMEM =
-"</table>";
+"</table>{m}{e}";
 
 const char HTTP_MORITZ_COMMON[] PROGMEM =
 "<tr align='center' style ='background-color: #%s'>"
