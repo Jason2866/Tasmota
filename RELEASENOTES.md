@@ -120,7 +120,9 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - Support for CAN bus and Freedom Won Battery Management System by Marius Bezuidenhout [#12651](https://github.com/arendst/Tasmota/issues/12651)
 - Optional IP filter to command ``TCPStart`` [#12806](https://github.com/arendst/Tasmota/issues/12806)
 - Inital support for Wi-Fi extender [#12784](https://github.com/arendst/Tasmota/issues/12784)
+- Command ``Subscribe2 ...`` to subscribe to a MQTT topic without appended "/#" [#12858](https://github.com/arendst/Tasmota/issues/12858)
 - Support for IEM3155 Wattmeter [#12940](https://github.com/arendst/Tasmota/issues/12940)
+- Support for Hydreon RG-15 Solid State Rain sensor [#12974](https://github.com/arendst/Tasmota/issues/12974)
 
 ### Changed
 - Move firmware binaries to https://github.com/arendst/Tasmota-firmware/tree/main/release-firmware
@@ -169,5 +171,6 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - Neopool communication error [#12813](https://github.com/arendst/Tasmota/issues/12813)
 - WDT reset on shutters with stepper motors during deceleration [#12849](https://github.com/arendst/Tasmota/issues/12849)
 - Negative power values for ADE7953 based devices like Shelly EM [#12874](https://github.com/arendst/Tasmota/issues/12874)
+- Unable to disable MusicSync mode on Sonoff L1 Lite regression from 9.3.0 [#12930](https://github.com/arendst/Tasmota/issues/12930)
 - Wiegand support for keypad zero key in single key mode using ``SetOption124 1`` [#12960](https://github.com/arendst/Tasmota/issues/12960)
 - Hass and Tasmota discovery prefix topic notifications [#12972](https://github.com/arendst/Tasmota/issues/12972)
