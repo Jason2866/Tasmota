@@ -204,6 +204,8 @@ struct GRAPH {
   uint8_t yticks;
   uint8_t last_val;
   uint8_t color_index;
+  uint16_t bg_color;
+  uint16_t fg_color;
   GFLAGS flags;
 };
 
@@ -2345,12 +2347,12 @@ void ClrGraph(uint16_t num) {
   // clr inside, but only 1.graph if overlapped
   if (gp->flags.overlay) return;
 
-  renderer->fillRect(gp->xp+1,gp->yp+1,gp->xs-2,gp->ys-2,bg_color);
+  renderer->fillRect(gp->xp+1,gp->yp+1,gp->xs-2,gp->ys-2,gp->bg_color);
 
   if (xticks) {
     float cxp=gp->xp,xd=(float)gp->xs/(float)xticks;
     for (count=0; count<xticks; count++) {
-      renderer->writeFastVLine(cxp,gp->yp+gp->ys-TICKLEN,TICKLEN,fg_color);
+      renderer->writeFastVLine(cxp,gp->yp+gp->ys-TICKLEN,TICKLEN,gp->fg_color);
       cxp+=xd;
     }
   }
@@ -2360,27 +2362,27 @@ void ClrGraph(uint16_t num) {
       float cxp=0;
       float czp=gp->yp+(gp->ymax/gp->range);
       while (cxp<gp->xs) {
-        renderer->writeFastHLine(gp->xp+cxp,czp,2,fg_color);
+        renderer->writeFastHLine(gp->xp+cxp,czp,2,gp->fg_color);
         cxp+=6.0;
       }
       // align ticks to zero line
       float cyp=0,yd=gp->ys/yticks;
       for (count=0; count<yticks; count++) {
         if ((czp-cyp)>gp->yp) {
-          renderer->writeFastHLine(gp->xp,czp-cyp,TICKLEN,fg_color);
-          renderer->writeFastHLine(gp->xp+gp->xs-TICKLEN,czp-cyp,TICKLEN,fg_color);
+          renderer->writeFastHLine(gp->xp,czp-cyp,TICKLEN,gp->fg_color);
+          renderer->writeFastHLine(gp->xp+gp->xs-TICKLEN,czp-cyp,TICKLEN,gp->fg_color);
         }
         if ((czp+cyp)<(gp->yp+gp->ys)) {
           renderer->writeFastHLine(gp->xp,czp+cyp,TICKLEN,fg_color);
-          renderer->writeFastHLine(gp->xp+gp->xs-TICKLEN,czp+cyp,TICKLEN,fg_color);
+          renderer->writeFastHLine(gp->xp+gp->xs-TICKLEN,czp+cyp,TICKLEN,gp->fg_color);
         }
         cyp+=yd;
       }
     } else {
       float cyp=gp->yp,yd=gp->ys/yticks;
       for (count=0; count<yticks; count++) {
-        renderer->writeFastHLine(gp->xp,cyp,TICKLEN,fg_color);
-        renderer->writeFastHLine(gp->xp+gp->xs-TICKLEN,cyp,TICKLEN,fg_color);
+        renderer->writeFastHLine(gp->xp,cyp,TICKLEN,gp->fg_color);
+        renderer->writeFastHLine(gp->xp+gp->xs-TICKLEN,cyp,TICKLEN,gp->fg_color);
         cyp+=yd;
       }
     }
@@ -2409,6 +2411,9 @@ void DefineGraph(uint16_t num,uint16_t xp,uint16_t yp,int16_t xs,uint16_t ys,int
       return;
     }
   }
+
+  gp->bg_color=bg_color;
+  gp->fg_color=fg_color;
 
   // 6 bits per axis
   gp->xticks=(num>>4)&0x3f;
@@ -2463,7 +2468,7 @@ void DefineGraph(uint16_t num,uint16_t xp,uint16_t yp,int16_t xs,uint16_t ys,int
   }
 
   // draw rectangle
-  renderer->drawRect(xp,yp,xs,ys,fg_color);
+  renderer->drawRect(xp,yp,xs,ys,gp->fg_color);
   // clr inside
   ClrGraph(index);
 
@@ -2578,7 +2583,7 @@ void RedrawGraph(uint8_t num, uint8_t flags) {
   if (!renderer) return;
 
   gp->flags.draw=1;
-  uint16_t linecol=fg_color;
+  uint16_t linecol=gp->fg_color;
 
   if (color_type==COLOR_COLOR) {
     linecol = GetColorFromIndex(gp->color_index);
@@ -2586,7 +2591,7 @@ void RedrawGraph(uint8_t num, uint8_t flags) {
 
   if (!gp->flags.overlay) {
     // draw rectangle
-    renderer->drawRect(gp->xp,gp->yp,gp->xs,gp->ys,fg_color);
+    renderer->drawRect(gp->xp,gp->yp,gp->xs,gp->ys,gp->fg_color);
     // clr inside
     ClrGraph(index);
   }
@@ -2601,7 +2606,7 @@ void AddGraph(uint8_t num,uint8_t val) {
   struct GRAPH *gp=graph[num];
   if (!renderer) return;
 
-  uint16_t linecol=fg_color;
+  uint16_t linecol=gp->fg_color;
   if (color_type==COLOR_COLOR) {
     linecol = GetColorFromIndex(gp->color_index);
   }
@@ -2623,7 +2628,7 @@ void AddGraph(uint8_t num,uint8_t val) {
       // clr area and redraw graph
       if (!gp->flags.overlay) {
         // draw rectangle
-        renderer->drawRect(gp->xp,gp->yp,gp->xs,gp->ys,fg_color);
+        renderer->drawRect(gp->xp,gp->yp,gp->xs,gp->ys,gp->fg_color);
         // clr inner and draw ticks
         ClrGraph(num);
       }
