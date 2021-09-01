@@ -98,13 +98,13 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 
 [Complete list](BUILDS.md) of available feature and sensors.
 
-## Changelog v9.5.0.7
+## Changelog v9.5.0.8
 ### Added
 - Release of [Tasmota WebInstaller](https://arendst.github.io/Tasmota-firmware/)
+- Command ``SetOption2 1`` to enable display of global temperature/humidity/pressure info to JSON sensor message
 - Command ``SetOption127 1`` to force Wi-Fi in no-sleep mode even if ``Sleep 0`` is not enabled
 - Command ``SetOption128 0|1`` web referer check disabling HTTP API commands if set to 0. Default set to 1 for backward compatibility [#12828](https://github.com/arendst/Tasmota/issues/12828)
 - Command ``SetSensor1..127 0|1`` to globally disable individual sensor driver
-- Commands ``SwitchMode 17`` PushHoldMultiDelay and ``SwitchMode 18`` PushHoldMultiDelayInverted adding delayed single press event [#12973](https://github.com/arendst/Tasmota/issues/12973)
 - Neopool commands ``NPPHRes``, ``NPCLRes`` and ``NPIonRes`` [#12813](https://github.com/arendst/Tasmota/issues/12813)
 - Support for second DNS server
 - Support for (Yeelight) Mi Desk Pro using binary tasmota32solo1.bin
@@ -113,6 +113,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - Berry ESP32 partition manager [#12465](https://github.com/arendst/Tasmota/issues/12465)
 - Berry ESP32 support for I2S audio mp3 playback
 - Berry ESP32 support for vararg
+- Berry ESP32 support for Curve 25519 EC crypto
 - Support for AM2320 Temperature and Humidity Sensor by Lars Wessels [#12485](https://github.com/arendst/Tasmota/issues/12485)
 - Rule event support as JSON payload [#12496](https://github.com/arendst/Tasmota/issues/12496)
 - MQTT minimum password length restriction in GUI [#12553](https://github.com/arendst/Tasmota/issues/12553)
@@ -129,7 +130,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 ### Changed
 - Move firmware binaries to https://github.com/arendst/Tasmota-firmware/tree/main/release-firmware
 - ESP32 core library from v1.0.6 to v1.0.7.3
-- IRremoteESP8266 library from v2.7.18 to v2.7.19
+- IRremoteESP8266 library from v2.7.18 to v2.7.20
 - NeoPixelBus library from v2.6.3 to v2.6.7
 - Message ``Upload buffer miscompare`` into ``Not enough space``
 - ESP32 Ethernet Phy Type information to IDF v3+
@@ -156,6 +157,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - ESP32 core v2.0.0 setting hostname
 - ESP32-C3 settings layout for configuration backup and restore
 - ESP32-Solo OTA upgrade
+- Sonoff L1 (lite) smoother color transitions
 - DDS238-2 wrong reactive power value [#12283](https://github.com/arendst/Tasmota/issues/12283)
 - ESP32 Webcam add boundary marker before sending mjpeg image [#12376](https://github.com/arendst/Tasmota/issues/12376)
 - NO VALID JSON regression from may 4th [#12440](https://github.com/arendst/Tasmota/issues/12440)
@@ -171,6 +173,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - Discovery fails when using ``%hostname%`` in a topic [#12710](https://github.com/arendst/Tasmota/issues/12710)
 - ESP32 buzzer in PWM mode exception (#12717)[#12717](https://github.com/arendst/Tasmota/issues/12717)
 - Neopool communication error [#12813](https://github.com/arendst/Tasmota/issues/12813)
+- Shelly Dimmer 2 Energy usage [#12815](https://github.com/arendst/Tasmota/issues/12815)
 - WDT reset on shutters with stepper motors during deceleration [#12849](https://github.com/arendst/Tasmota/issues/12849)
 - Negative power values for ADE7953 based devices like Shelly EM [#12874](https://github.com/arendst/Tasmota/issues/12874)
 - Unable to disable MusicSync mode on Sonoff L1 Lite regression from 9.3.0 [#12930](https://github.com/arendst/Tasmota/issues/12930)
