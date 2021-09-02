@@ -207,6 +207,10 @@ void alt_eeprom_readBytes(uint32_t adr, uint32_t len, uint8_t *buf) {
 #endif // LITTLEFS_SCRIPT_SIZE
 
 
+#ifdef TESLA_POWERWALL
+#include "powerwall.h"
+#endif
+
 // offsets epoch readings by 1.1.2019 00:00:00 to fit into float with second resolution
 #ifndef EPOCH_OFFSET
 #define EPOCH_OFFSET 1546300800
@@ -7746,10 +7750,21 @@ int32_t http_req(char *host, char *request) {
 #include <WiFiClientSecure.h>
 #endif //ESP8266
 
+#ifdef TESLA_POWERWALL
+Powerwall powerwall = Powerwall();
+String authCookie   = "";
+#endif
+
 // get tesla powerwall info page json string
 uint32_t call2https(const char *host, const char *path) {
   if (TasmotaGlobal.global_state.wifi_down) return 1;
   uint32_t status = 0;
+
+#ifdef TESLA_POWERWALL
+  authCookie = powerwall.getAuthCookie();
+  return 0;
+#endif
+
 #ifdef ESP32
   WiFiClientSecure *httpsClient;
   httpsClient = new WiFiClientSecure;
