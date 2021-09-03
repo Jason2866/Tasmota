@@ -1642,6 +1642,16 @@ char *isvar(char *lp, uint8_t *vtype, struct T_INDEX *tind, float *fp, char *sp,
 
     if (gv && gv->jo) {
       // look for json input
+
+#if 0
+      char sbuf[SCRIPT_MAXSSIZE];
+      sbuf[0]=0;
+      char tmp[128];
+      Replace_Cmd_Vars(lp, 1, tmp, sizeof(tmp));
+      uint32_t res = JsonParsePath(gv->jo, tmp, '#', NULL, sbuf, sizeof(sbuf)); // software_version
+      AddLog(LOG_LEVEL_INFO, PSTR("json string: %s %s"),tmp,  sbuf);
+#endif
+
       JsonParserObject *jpo = gv->jo;
       char jvname[64];
       strcpy(jvname, vname);
@@ -2405,6 +2415,7 @@ chknext:
           rstring[0] = 0;
           int8_t index = fvar;
           char *wd = ResponseData();
+
           strlcpy(rstring, wd, glob_script_mem.max_ssize);
           if (index) {
             if (strlen(wd) && index) {
@@ -7696,6 +7707,10 @@ uint32_t scripter_create_task(uint32_t num, uint32_t time, uint32_t core, uint32
 #endif // ESP32
 
 
+//const char *wd_jstr = "{\"software_version\": \"VV-111-133\", \"age\":\"12\", \"sensordatavalues\":[{\"value_type\":\"SDS_P1\",\"value\":\"6.32\"},{\"value_type\":\"SDS_P2\",\"value\":\"2.70\"},{\"value_type\":\"temperature\",\"value\":\"25.00\"},{\"value_type\":\"humidity\",\"value\":\"58.10\"},{\"value_type\":\"samples\",\"value\":\"4902366\"},{\"value_type\":\"min_micro\",\"value\":\"29\"},{\"value_type\":\"max_micro\",\"value\":\"234874\"},{\"value_type\":\"interval\",\"value\":\"145000\"},{\"value_type\":\"signal\",\"value\":\"-55\"}]}";
+
+//const char *wd_jstr = "{\"Status\":{\"Module\":0,\"DeviceName\":\"esp32\",\"FriendlyName\":[\"esp32\"],\"Topic\":\"sonoff\",\"ButtonTopic\":\"0\",\"Power\":0,\"PowerOnState\":3,\"LedState\":1,\"LedMask\":\"FFFF\",\"SaveData\":1,\"SaveState\":1,\"SwitchTopic\":\"0\",\"SwitchMode\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],\"ButtonRetain\":0,\"SwitchRetain\":0,\"SensorRetain\":0,\"PowerRetain\":0,\"InfoRetain\":0,\"StateRetain\":0}}";
+
 int32_t http_req(char *host, char *request) {
   WiFiClient http_client;
   HTTPClient http;
@@ -7730,7 +7745,11 @@ int32_t http_req(char *host, char *request) {
 #else
   strlcpy(TasmotaGlobal.mqtt_data, http.getString().c_str(), ResponseSize());
 #endif
+
   //AddLog(LOG_LEVEL_INFO, PSTR("HTTP RESULT %s"), ResponseData());
+
+//  AddLog(LOG_LEVEL_INFO, PSTR("JSON %s"), wd_jstr);
+//  TasmotaGlobal.mqtt_data = wd_jstr;
   Run_Scripter(">E", 2, ResponseData());
 
   glob_script_mem.glob_error = 0;
