@@ -7725,6 +7725,10 @@ int32_t http_req(char *host, char *request) {
     request++;
   }
 
+#ifdef HTTP_DEBUG
+  AddLog(LOG_LEVEL_INFO, PSTR("HTTP heap %d"), ESP_getFreeHeap());
+#endif
+
   if (!mode) {
     // GET
     strcat(hbuff, request);
@@ -7739,6 +7743,10 @@ int32_t http_req(char *host, char *request) {
     httpCode = http.POST(request);
   }
 
+#ifdef HTTP_DEBUG
+  AddLog(LOG_LEVEL_INFO, PSTR("HTTP RESULT %s"), http.getString().c_str());
+#endif
+
 #ifdef USE_WEBSEND_RESPONSE
 #ifdef MQTT_DATA_STRING
   TasmotaGlobal.mqtt_data = http.getString();
@@ -7746,7 +7754,9 @@ int32_t http_req(char *host, char *request) {
   strlcpy(TasmotaGlobal.mqtt_data, http.getString().c_str(), ResponseSize());
 #endif
 
-  //AddLog(LOG_LEVEL_INFO, PSTR("HTTP RESULT %s"), ResponseData());
+#ifdef HTTP_DEBUG
+  AddLog(LOG_LEVEL_INFO, PSTR("HTTP MQTT BUFFER %s"), ResponseData());
+#endif
 
 //  AddLog(LOG_LEVEL_INFO, PSTR("JSON %s"), wd_jstr);
 //  TasmotaGlobal.mqtt_data = wd_jstr;
