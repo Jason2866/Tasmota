@@ -61,6 +61,7 @@
 #define USE_ADC
 #define USE_SPI
   #define USE_DISPLAY                            // Add SPI Display Support (+2k code)
+  #define SHOW_SPLASH
   #ifndef USE_UNIVERSAL_DISPLAY
     #define USE_DISPLAY_ILI9341                  // [DisplayModel 4] Enable ILI9341 Tft 480x320 display (+19k code)
   #endif
@@ -93,14 +94,16 @@
   #define USE_MPU_ACCEL
 #define USE_SPI
   #define USE_DISPLAY
+  #define SHOW_SPLASH
 #ifdef USE_UNIVERSAL_DISPLAY
   #define USE_LVGL
+  #define USE_LVGL_FREETYPE
 //  #define USE_DISPLAY_LVGL_ONLY
 #else
   #define USE_DISPLAY_ILI9341                  // [DisplayModel 4] Enable ILI9341 Tft 480x320 display (+19k code)
   #define USE_DISPLAY_MODES1TO5
-  #define USE_TOUCH_BUTTONS
 #endif
+    #define USE_TOUCH_BUTTONS
     #define JPEG_PICTS
     #define USE_FT5206
 
@@ -172,6 +175,7 @@
 #define USE_SPI
 #define USE_LVGL
 #define USE_DISPLAY
+#define SHOW_SPLASH
 #define USE_XPT2046
 #define USE_FT5206
 #define USE_MPU_ACCEL
@@ -189,9 +193,6 @@
 #undef USE_DISPLAY_SEVENSEG
 
 #define USE_ENHANCED_GUI_WIFI_SCAN
-
-#define USE_BERRY                                // Enable Berry scripting language
-//#define USE_BERRY_PSRAM                        // Allocate Berry memory in PSRAM if PSRAM is connected - this might be slightly slower but leaves main memory intact
 
 #define USE_SDCARD
 
