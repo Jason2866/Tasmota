@@ -1,3 +1,4 @@
+
 /*
   tasmota_configurations_ESP32.h - ESP32 only Configurations for Tasmota
 
@@ -34,10 +35,25 @@
 
 #define USE_WEBCAM
 #define ENABLE_RTSPSERVER
-#define USE_SDCARD
 #define USE_SPI
+#define USE_SDCARD
+
+#undef USE_I2C
+#undef USE_HOME_ASSISTANT
+#undef USE_COUNTER
+#undef USE_IR_REMOTE
+#undef USE_LIGHT
+#undef USE_AC_ZERO_CROSS_DIMMER
+#undef USE_PWM_DIMMER
+#undef USE_TUYA_MCU
+#undef USE_EMULATION_HUE
+#undef USE_EMULATION_WEMO
+#undef USE_ARILUX_RF
+#undef USE_DS18x20
+#undef USE_WS2812
+#undef USE_ENERGY_SENSOR
 #undef USE_BERRY                                 // Disable Berry scripting language
-#undef  USE_MI_ESP32                             // (ESP32 only) Disable support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
+#undef USE_MI_ESP32                             // (ESP32 only) Disable support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
 #endif  // FIRMWARE_WEBCAM
 
 /*********************************************************************************************\
@@ -84,12 +100,12 @@
 #undef FALLBACK_MODULE
 #define FALLBACK_MODULE        M5STACK_CORE2     // [Module2] Select default module on fast reboot where USER_MODULE is user template
 
-#define USE_M5STACK_CORE2                        // Add support for M5Stack Core2
-  #define USE_I2S_SAY_TIME
-  #define USE_I2S_WEBRADIO
+#define USE_I2S_SAY_TIME
+#define USE_I2S_WEBRADIO
 #define USE_SDCARD
 
 #define USE_I2C
+  #define USE_BM8563
   #define USE_BMA423
   #define USE_MPU_ACCEL
 #define USE_SPI
@@ -113,6 +129,8 @@
 #ifndef USE_RULES
   #define USE_SCRIPT                             // Add support for script (+17k code)
 // Script related defines
+  #define USE_M5STACK_CORE2                      // Add scripter needed specific Core2 code
+  #undef  USE_BM8563
   #define MAXVARS 75
   #define MAXSVARS 15
   #define MAXFILT 10
