@@ -1,6 +1,7 @@
 be_define_const_str(PZEM0XX_TX, "PZEM0XX_TX", 944775704u, 0, 10, &be_const_str__begin_transmission);
 be_define_const_str(_begin_transmission, "_begin_transmission", 2779461176u, 0, 19, NULL);
-be_define_const_str(MHZ_TXD, "MHZ_TXD", 3310158233u, 0, 7, &be_const_str_list);
+be_define_const_str(MHZ_TXD, "MHZ_TXD", 3310158233u, 0, 7, &be_const_str_last_modified);
+be_define_const_str(last_modified, "last_modified", 772177145u, 0, 13, &be_const_str_list);
 be_define_const_str(list, "list", 217798785u, 0, 4, &be_const_str_lv_draw_mask_line_param_cfg);
 be_define_const_str(lv_draw_mask_line_param_cfg, "lv_draw_mask_line_param_cfg", 2154874825u, 0, 27, &be_const_str_screenshot);
 be_define_const_str(screenshot, "screenshot", 3894592561u, 0, 10, NULL);
@@ -324,8 +325,7 @@ be_define_const_str(SM2135_CLK, "SM2135_CLK", 2383410011u, 0, 10, &be_const_str_
 be_define_const_str(SYMBOL_SHUFFLE, "SYMBOL_SHUFFLE", 1123310147u, 0, 14, &be_const_str_strftime);
 be_define_const_str(strftime, "strftime", 187738851u, 0, 8, NULL);
 be_define_const_str(lv_draw_line_dsc, "lv_draw_line_dsc", 2422805236u, 0, 16, NULL);
-be_define_const_str(lv_dropdown, "lv_dropdown", 2797165301u, 0, 11, &be_const_str_vcall);
-be_define_const_str(vcall, "vcall", 2639337069u, 0, 5, NULL);
+be_define_const_str(lv_dropdown, "lv_dropdown", 2797165301u, 0, 11, NULL);
 be_define_const_str(SERIAL_6E1, "SERIAL_6E1", 334249486u, 0, 10, &be_const_str_SYMBOL_LIST);
 be_define_const_str(SYMBOL_LIST, "SYMBOL_LIST", 70793990u, 0, 11, NULL);
 be_define_const_str(SI7021, "SI7021", 864377911u, 0, 6, &be_const_str_content_button);

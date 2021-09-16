@@ -1,6 +1,7 @@
 extern const bcstring be_const_str_PZEM0XX_TX;
 extern const bcstring be_const_str__begin_transmission;
 extern const bcstring be_const_str_MHZ_TXD;
+extern const bcstring be_const_str_last_modified;
 extern const bcstring be_const_str_list;
 extern const bcstring be_const_str_lv_draw_mask_line_param_cfg;
 extern const bcstring be_const_str_screenshot;
@@ -325,7 +326,6 @@ extern const bcstring be_const_str_SYMBOL_SHUFFLE;
 extern const bcstring be_const_str_strftime;
 extern const bcstring be_const_str_lv_draw_line_dsc;
 extern const bcstring be_const_str_lv_dropdown;
-extern const bcstring be_const_str_vcall;
 extern const bcstring be_const_str_SERIAL_6E1;
 extern const bcstring be_const_str_SYMBOL_LIST;
 extern const bcstring be_const_str_SI7021;
