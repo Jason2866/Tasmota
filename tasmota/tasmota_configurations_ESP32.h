@@ -1,4 +1,3 @@
-
 /*
   tasmota_configurations_ESP32.h - ESP32 only Configurations for Tasmota
 
@@ -145,7 +144,6 @@
   #define USE_GOOGLE_CHARTS
 #endif  // USE_RULES
 #endif  // FIRMWARE_M5STACK_CORE2
-
 
 /*********************************************************************************************\
  * [tasmota32-bluetooth.bin]
