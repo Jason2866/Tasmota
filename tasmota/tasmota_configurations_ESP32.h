@@ -100,12 +100,12 @@
 #undef FALLBACK_MODULE
 #define FALLBACK_MODULE        M5STACK_CORE2     // [Module2] Select default module on fast reboot where USER_MODULE is user template
 
-#define USE_I2S_SAY_TIME
-#define USE_I2S_WEBRADIO
+#define USE_M5STACK_CORE2                        // Add support for M5Stack Core2
+  #define USE_I2S_SAY_TIME
+  #define USE_I2S_WEBRADIO
 #define USE_SDCARD
 
 #define USE_I2C
-  #define USE_BM8563
   #define USE_BMA423
   #define USE_MPU_ACCEL
 #define USE_SPI
@@ -129,8 +129,6 @@
 #ifndef USE_RULES
   #define USE_SCRIPT                             // Add support for script (+17k code)
 // Script related defines
-  #define USE_M5STACK_CORE2                      // Add scripter needed specific Core2 code
-  #undef  USE_BM8563
   #define MAXVARS 75
   #define MAXSVARS 15
   #define MAXFILT 10
@@ -147,6 +145,7 @@
   #define USE_GOOGLE_CHARTS
 #endif  // USE_RULES
 #endif  // FIRMWARE_M5STACK_CORE2
+
 
 /*********************************************************************************************\
  * [tasmota32-bluetooth.bin]
