@@ -1086,9 +1086,9 @@ void ws2812_set_array(float *array ,uint32_t len, uint32_t offset) {
   for (uint32_t cnt = 0; cnt < len; cnt++) {
     uint32_t index;
     if (! (offset & 0x1000)) {
-      index = cnt + offset;
+      index = cnt + (offset & 0x7ff);
     } else {
-      index = cnt/2 + offset;
+      index = cnt/2 + (offset & 0x7ff);
     }
     if (index > Settings->light_pixels) break;
     if (! (offset & 0x1000)) {
