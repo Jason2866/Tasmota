@@ -1083,11 +1083,23 @@ void script_udp_sendvar(char *vname,float *fp,char *sp) {
 void ws2812_set_array(float *array ,uint32_t len, uint32_t offset) {
 
   Ws2812ForceSuspend();
-  for (uint32_t cnt = 0; cnt<len; cnt++) {
-    uint32_t index = cnt + offset;
-    if (index>Settings->light_pixels) break;
-    uint32_t col = array[cnt];
-    Ws2812SetColor(index + 1, col>>16, col>>8, col, 0);
+  for (uint32_t cnt = 0; cnt < len; cnt++) {
+    uint32_t index;
+    if (! (offset & 0x1000)) {
+      index = cnt + offset;
+    } else {
+      index = cnt/2 + offset;
+    }
+    if (index > Settings->light_pixels) break;
+    if (! (offset & 0x1000)) {
+      uint32_t col = array[cnt];
+      Ws2812SetColor(index + 1, col>>16, col>>8, col, 0);
+    } else {
+      uint32_t hcol = array[cnt];
+      cnt++;
+      uint32_t lcol = array[cnt];
+      Ws2812SetColor(index + 1, hcol>>8, hcol, lcol>>8, lcol);
+    }
   }
   Ws2812ForceUpdate();
 }
