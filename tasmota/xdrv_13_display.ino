@@ -590,6 +590,7 @@ void DisplayText(void)
                         renderer = Init_uDisplay(fdesc, -1);
                         Set_display(temp);
                         AddLog(LOG_LEVEL_INFO, PSTR("DSP: File descriptor loaded %x"),renderer);
+                        free(fdesc);
                       }
                     }
                   }
