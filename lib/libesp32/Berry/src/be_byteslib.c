@@ -306,48 +306,48 @@ static uint8_t buf_get1(buf_impl* buf, int offset)
     return 0;
 }
 
-static void buf_set1(buf_impl* buf, const size_t offset, const uint8_t data)
+static void buf_set1(buf_impl* buf, size_t offset, uint8_t data)
 {
     if (offset < buf->len) {
         buf->buf[offset] = data;
     }
 }
 
-static void buf_set2_le(buf_impl* buf, const size_t offset, const uint16_t data)
+static void buf_set2_le(buf_impl* buf, size_t offset, uint16_t data)
 {
-    if ((offset >= 0) && (offset < buf->len - 1)) {
+    if (offset + 1 < buf->len) {
         buf->buf[offset] = data & 0xFF;
         buf->buf[offset+1] = data >> 8;
     }
 }
 
-static void buf_set2_be(buf_impl* buf, const size_t offset, const uint16_t data)
+static void buf_set2_be(buf_impl* buf, size_t offset, uint16_t data)
 {
-    if ((offset >= 0) && (offset < buf->len - 1)) {
+    if (offset + 1 < buf->len) {
         buf->buf[offset+1] = data & 0xFF;
         buf->buf[offset] = data >> 8;
     }
 }
 
-static uint16_t buf_get2_le(buf_impl* buf, int offset)
+static uint16_t buf_get2_le(buf_impl* buf, size_t offset)
 {
-    if ((offset >= 0) && (offset < buf->len - 1)) {
+    if (offset + 1 < buf->len) {
         return buf->buf[offset] | (buf->buf[offset+1] << 8);
     }
     return 0;
 }
 
-static uint16_t buf_get2_be(buf_impl* buf, int offset)
+static uint16_t buf_get2_be(buf_impl* buf, size_t offset)
 {
-    if (offset < buf->len - 1) {
+    if (offset + 1 < buf->len) {
         return buf->buf[offset+1] | (buf->buf[offset] << 8);
     }
     return 0;
 }
 
-static void buf_set4_le(buf_impl* buf, const size_t offset, const uint32_t data)
+static void buf_set4_le(buf_impl* buf, size_t offset, uint32_t data)
 {
-    if ((offset >= 0) && (offset < buf->len - 3)) {
+    if (offset + 3 < buf->len) {
         buf->buf[offset] = data & 0xFF;
         buf->buf[offset+1] = (data >> 8) & 0xFF;
         buf->buf[offset+2] = (data >> 16) & 0xFF;
@@ -355,9 +355,9 @@ static void buf_set4_le(buf_impl* buf, const size_t offset, const uint32_t data)
     }
 }
 
-static void buf_set4_be(buf_impl* buf, const size_t offset, const uint32_t data)
+static void buf_set4_be(buf_impl* buf, size_t offset, uint32_t data)
 {
-    if ((offset >= 0) && (offset < buf->len - 3)) {
+    if (offset + 3 < buf->len) {
         buf->buf[offset+3] = data & 0xFF;
         buf->buf[offset+2] = (data >> 8) & 0xFF;
         buf->buf[offset+1] = (data >> 16) & 0xFF;
@@ -365,18 +365,18 @@ static void buf_set4_be(buf_impl* buf, const size_t offset, const uint32_t data)
     }
 }
 
-static uint32_t buf_get4_le(buf_impl* buf, int offset)
+static uint32_t buf_get4_le(buf_impl* buf, size_t offset)
 {
-    if ((offset >= 0) && (offset < buf->len - 3)) {
+    if (offset + 3 < buf->len) {
         return buf->buf[offset] | (buf->buf[offset+1] << 8) |
             (buf->buf[offset+2] << 16) | (buf->buf[offset+3] << 24);
     }
     return 0;
 }
 
-static uint32_t buf_get4_be(buf_impl* buf, int offset)
+static uint32_t buf_get4_be(buf_impl* buf, size_t offset)
 {
-    if (offset < buf->len - 3) {
+    if (offset + 3 < buf->len) {
         return buf->buf[offset+3] | (buf->buf[offset+2] << 8) |
             (buf->buf[offset+1] << 16) | (buf->buf[offset] << 24);
     }
@@ -419,26 +419,17 @@ static void buf_add_hex(buf_impl* buf, const char *hex, size_t len)
 /********************************************************************
 ** Wrapping into lib
 ********************************************************************/
-// typedef int (*bntvfunc)(bvm*); /* native function pointer */
-int free_bytes_buf(bvm* vm)
-{
-    int argc = be_top(vm);
-    if (argc > 0) {
-        buf_impl * buf = (buf_impl*) be_tocomptr(vm, 1);
-        if (buf != NULL) {
-            be_os_free(buf);
-        }
-    }
-    be_return_nil(vm);
-}
 
-buf_impl * bytes_alloc(int32_t size)
+buf_impl * bytes_realloc(bvm *vm, buf_impl *oldbuf, int32_t size)
 {
     if (size < 4) { size = 4; }
     if (size > BYTES_MAX_SIZE) { size = BYTES_MAX_SIZE; }
-    buf_impl * next = (buf_impl*) be_os_malloc(size + BYTES_OVERHEAD);
+    size_t oldsize = oldbuf ? oldbuf->size + BYTES_OVERHEAD : 0;
+    buf_impl * next = (buf_impl*) be_realloc(vm, oldbuf, oldsize, size + BYTES_OVERHEAD);  /* malloc */
     next->size = size;
-    next->len = 0;
+    if (!oldbuf) {
+        next->len = 0; /* allocate a new buffer */
+    }
     return next;
 }
 
@@ -467,10 +458,10 @@ static int m_init(bvm *vm)
     } else if (argc > 1 && be_isstring(vm, 2)) {
         hex_in = be_tostring(vm, 2);
         if (hex_in) {
-            size = strlen(hex_in) / 2 + BYTES_HEADROOM;        // allocate headroom
+            size = strlen(hex_in) / 2 + BYTES_HEADROOM;        /* allocate headroom */
         }
     }
-    buf_impl * buf = bytes_alloc(size);
+    buf_impl * buf = bytes_realloc(vm, NULL, size); /* allocate new buffer */
     if (!buf) {
         be_throw(vm, BE_MALLOC_FAIL);
     }
@@ -478,22 +469,35 @@ static int m_init(bvm *vm)
     if (hex_in) {
         buf_add_hex(buf, hex_in, strlen(hex_in));
     } 
-    be_newcomobj(vm, buf, &free_bytes_buf);
+    be_pushcomptr(vm, buf);
     be_setmember(vm, 1, ".p");
     be_return_nil(vm);
+}
+
+/* deallocate buffer */
+static int m_deinit(bvm *vm) {
+{
+    be_getmember(vm, 1, ".p");
+    buf_impl * buf = be_tocomptr(vm, -1);
+    be_pop(vm, 1);
+    if (buf != NULL) {
+        be_realloc(vm, buf, buf->size + BYTES_OVERHEAD, 0);
+    }
+    be_pushcomptr(vm, NULL);  /* push NULL pointer instead, just in case */
+    be_setmember(vm, 1, ".p");
+    be_return_nil(vm);
+}
 }
 
 /* grow or shrink to the exact value */
 /* stack item 1 must contain the instance */
 static buf_impl * _bytes_resize(bvm *vm, buf_impl * buf, size_t new_size) {
-    buf_impl * new_buf = bytes_alloc(new_size);
+    buf_impl *new_buf = bytes_realloc(vm, buf, new_size);
     if (!new_buf) {
         be_throw(vm, BE_MALLOC_FAIL);
     }
-    memmove(buf_get_buf(new_buf), buf_get_buf(buf), buf->len);
-    new_buf->len = buf->len;
-    /* replace the .p attribute */
-    be_newcomobj(vm, new_buf, &free_bytes_buf);
+    /* replace the .p attribute since address may have changed */
+    be_pushcomptr(vm, new_buf);
     be_setmember(vm, 1, ".p");
     be_pop(vm, 1); /* remove comobj from stack */
     /* the old buffer will be garbage collected later */
@@ -504,7 +508,13 @@ static buf_impl * _bytes_resize(bvm *vm, buf_impl * buf, size_t new_size) {
 /* if grow, then add some headroom */
 /* stack item 1 must contain the instance */
 static buf_impl * bytes_resize(bvm *vm, buf_impl * buf, size_t new_size) {
-    if (buf->size >= new_size) { return buf; }  /* no resize needed */
+    /* when resized to smaller, we introduce a new heurstic */
+    /* If the buffer is 64 bytes or smaller, don't shrink */
+    /* Shrink buffer only if target size is smaller than half the original size */
+    if (buf->size >= new_size) {  /* enough room, consider if need to shrink */
+        if (buf->size <= 64) { return buf; }  /* don't shrink if below 64 bytes */
+        if (buf->size < new_size * 2) { return buf; }
+    }
     return _bytes_resize(vm, buf, new_size + BYTES_HEADROOM);
 }
 
@@ -536,7 +546,7 @@ static size_t tohex(char * out, size_t outsz, const uint8_t * in, size_t insz) {
 static int m_tostring(bvm *vm)
 {
     int argc = be_top(vm);
-    int max_len = 32;  /* limit to 32 bytes by default */
+    size_t max_len = 32;  /* limit to 32 bytes by default */
     int truncated = 0;
     if (argc > 1 && be_isint(vm, 2)) {
         max_len = be_toint(vm, 2);  /* you can specify the len as second argument, or 0 for unlimited */
@@ -918,7 +928,7 @@ static int m_tob64(bvm *vm)
     size_t b64_len = encode_base64_length(len) + 1;  /* size of base64 encoded string for this binary length, add NULL terminator */
 
     char * b64_out = be_pushbuffer(vm, b64_len);
-    size_t converted = encode_base64(buf_get_buf(buf), len, b64_out);
+    size_t converted = encode_base64(buf_get_buf(buf), len, (unsigned char*)b64_out);
 
     be_pushnstring(vm, b64_out, converted); /* make string from buffer */
     be_remove(vm, -2); /* remove buffer */
@@ -935,8 +945,7 @@ static int m_fromb64(bvm *vm)
     int argc = be_top(vm);
     if (argc >= 2 && be_isstring(vm, 2)) {
         const char *s = be_tostring(vm, 2);
-        size_t len = be_strlen(vm, 2);
-        size_t bin_len = decode_base64_length(s);   /* do a first pass to calculate the buffer size */
+        size_t bin_len = decode_base64_length((unsigned char*)s);   /* do a first pass to calculate the buffer size */
 
         buf_impl * buf = bytes_check_data(vm, 0);
         buf = bytes_resize(vm, buf, bin_len); /* resize if needed */
@@ -944,7 +953,7 @@ static int m_fromb64(bvm *vm)
             be_raise(vm, "memory_error", "cannot allocate buffer");
         }
 
-        size_t bin_len_final = decode_base64(s, buf_get_buf(buf));  /* decode */
+        size_t bin_len_final = decode_base64((unsigned char*)s, buf_get_buf(buf));  /* decode */
         buf->len = bin_len_final;
         be_pop(vm, 1); /* remove arg to leave instance */
         be_return(vm);
@@ -1106,6 +1115,7 @@ be_local_closure(getbits,   /* name */
   be_nested_proto(
     9,                          /* nstack */
     3,                          /* argc */
+    0,                          /* varg */
     0,                          /* has upvals */
     NULL,                       /* no upvals */
     0,                          /* has sup protos */
@@ -1165,6 +1175,7 @@ be_local_closure(setbits,   /* name */
   be_nested_proto(
     10,                          /* nstack */
     4,                          /* argc */
+    0,                          /* varg */
     0,                          /* has upvals */
     NULL,                       /* no upvals */
     0,                          /* has sup protos */
@@ -1225,6 +1236,7 @@ void be_load_byteslib(bvm *vm)
         { ".p", NULL },
         { "_buffer", m_buffer },
         { "init", m_init },
+        { "deinit", m_deinit },
         { "tostring", m_tostring },
         { "asstring", m_asstring },
         { "fromstring", m_fromstring },
@@ -1260,6 +1272,7 @@ class be_class_bytes (scope: global, name: bytes) {
     .p, var
     _buffer, func(m_buffer)
     init, func(m_init)
+    deinit, func(m_deinit)
     tostring, func(m_tostring)
     asstring, func(m_asstring)
     fromstring, func(m_fromstring)

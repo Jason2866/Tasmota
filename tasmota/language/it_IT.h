@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v9.5.0.3 - Last update 19.07.2021
+ * Updated until v9.5.0.3 - Last update 31.08.2021
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -328,8 +328,8 @@
 #define D_WEB_ADMIN_PASSWORD  "Password amministratore web"
 #define D_MQTT_ENABLE         "Abilita MQTT"
 #define D_MQTT_TLS_ENABLE     "MQTT TLS"
-#define D_HTTP_API            "HTTP API"
-#define D_HTTP_API_ENABLE     "Abilita HTTP API"
+#define D_HTTP_API            "API HTTP"
+#define D_HTTP_API_ENABLE     "Abilita API HTTP"
 #define D_FRIENDLY_NAME       "Nome amichevole"
 #define D_BELKIN_WEMO         "Belkin WeMo"
 #define D_HUE_BRIDGE          "Bridge Hue"
@@ -764,6 +764,7 @@
 #define D_SENSOR_LE01MR_RX              "LE-01MR - RX"
 #define D_SENSOR_LE01MR_TX              "LE-01MR - TX"
 #define D_SENSOR_BL0940_RX              "BL0940 - RX"
+#define D_SENSOR_BL0939_RX              "BL0939 - RX"
 #define D_SENSOR_CC1101_GDO0            "CC1101 - GDO0"
 #define D_SENSOR_CC1101_GDO2            "CC1101 - GDO2"
 #define D_SENSOR_HRXL_RX                "HRXL - RX"
@@ -836,6 +837,9 @@
 #define D_SENSOR_HALLEFFECT             "Effetto hall"
 #define D_SENSOR_EPD_DATA               "EPD - Dati"
 #define D_SENSOR_MCP2515_CS             "MCP2515 - CS"
+#define D_SENSOR_HRG15_RX               "HRG15 - RX"
+#define D_SENSOR_HRG15_TX               "HRG15 - TX"
+#define D_SENSOR_VINDRIKTNING_RX        "VINDRIKTNING"
 
 // Units
 #define D_UNIT_AMPERE                     "A"

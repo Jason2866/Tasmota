@@ -276,6 +276,32 @@ void UpdateQuickPowerCycle(bool update) {
 #endif  // FIRMWARE_MINIMAL
 }
 
+#ifdef USE_EMERGENCY_RESET
+/*********************************************************************************************\
+ * Emergency reset if Rx and Tx are tied together
+\*********************************************************************************************/
+
+void EmergencyReset(void) {
+  Serial.begin(115200);
+  Serial.write(0xAA);
+  Serial.write(0x55);
+  delay(1);
+  if (Serial.available() == 2) {
+    if ((Serial.read() == 0xAA) && (Serial.read() == 0x55)) {
+      SettingsErase(3);       // Reset all settings including QuickPowerCycle flag
+
+      do {                    // Wait for user to remove Rx Tx jumper and power cycle
+        Serial.write(0xA5);
+        delay(1000);          // Satisfy SDK
+      } while (Serial.read() == 0xA5);  // Poll for removal of jumper
+
+      ESP_Restart();          // Restart to init default settings
+    }
+  }
+  while (Serial.available()) { Serial.read(); }  // Flush input buffer
+}
+#endif  // USE_EMERGENCY_RESET
+
 /*********************************************************************************************\
  * Settings services
 \*********************************************************************************************/
@@ -888,8 +914,11 @@ void SettingsDefaultSet2(void) {
   Settings->weblog_level = WEB_LOG_LEVEL;
   SettingsUpdateText(SET_WEBPWD, PSTR(WEB_PASSWORD));
   SettingsUpdateText(SET_CORS, PSTR(CORS_DOMAIN));
-  Settings->flag5.disable_referer_chk |= true;
-
+#ifdef DISABLE_REFERER_CHK
+  flag5.disable_referer_chk |= false;
+#else
+  flag5.disable_referer_chk |= true;
+#endif
   // Button
   flag.button_restrict |= KEY_DISABLE_MULTIPRESS;
   flag.button_swap |= KEY_SWAP_DOUBLE_PRESS;
@@ -1087,7 +1116,7 @@ void SettingsDefaultSet2(void) {
   Settings->display_rows = 2;
   Settings->display_cols[0] = 16;
   Settings->display_cols[1] = 8;
-  Settings->display_dimmer = 1;
+  Settings->display_dimmer_protected = -10;  // 10%
   Settings->display_size = 1;
   Settings->display_font = 1;
 //  Settings->display_rotate = 0;
@@ -1397,7 +1426,11 @@ void SettingsDelta(void) {
       SettingsUpdateText(SET_RGX_PASSWORD, PSTR(WIFI_RGX_PASSWORD));
     }
     if (Settings->version < 0x09050007) {
-      Settings->flag5.disable_referer_chk = true;
+#ifdef DISABLE_REFERER_CHK
+      Settings->flag5.disable_referer_chk |= false;
+#else
+      Settings->flag5.disable_referer_chk |= true;
+#endif
     }
 
     Settings->version = VERSION;

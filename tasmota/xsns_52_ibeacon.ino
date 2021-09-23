@@ -759,12 +759,12 @@ uint32_t difftime=millis()-hm17_lastms;
 
 #ifdef USE_WEBSERVER
 const char HTTP_IBEACON_mac[] PROGMEM =
- "{s}IBEACON-MAC : %s" " - RSSI :" "{m}%s{e}";
+ "{s}IBEACON-MAC : %s" " - RSSI : %s" "{m}{e}";
 const char HTTP_IBEACON_uid[] PROGMEM =
- "{s}IBEACON-UID : %s" " - RSSI :" "{m}%s{e}";
+ "{s}IBEACON-UID : %s" " - RSSI : %s" "{m}{e}";
 #ifdef USE_IBEACON_ESP32
 const char HTTP_IBEACON_name[] PROGMEM =
- "{s}IBEACON-NAME : %s (%s)" " - RSSI :" "{m}%s{e}";
+ "{s}IBEACON-NAME : %s (%s)" " - RSSI : %s" "{m}{e}";
 #endif
 void IBEACON_Show(void) {
 char mac[14];

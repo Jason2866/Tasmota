@@ -28,7 +28,7 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
   struct {                                 // SetOption0 .. SetOption31
     uint32_t save_state : 1;               // bit 0              - SetOption0   - (Settings) Save power state (1) and use after restart
     uint32_t button_restrict : 1;          // bit 1              - SetOption1   - (Button) Control button single press (1) or multipress (0)
-    uint32_t ex_value_units : 1;           // bit 2              - SetOption2   - (not used) Add units to JSON status messages - removed 6.6.0.21
+    uint32_t mqtt_add_global_info : 1;     // bit 2              - SetOption2   - (MQTT) Add global temperature/humidity/pressure info to JSON sensor message
     uint32_t mqtt_enabled : 1;             // bit 3              - SetOption3   - (MQTT) Enable (1)
     uint32_t mqtt_response : 1;            // bit 4              - SetOption4   - (MQTT) Switch between RESULT (0) or COMMAND (1)
     uint32_t mqtt_power_retain : 1;        // bit 5              - CMND_POWERRETAIN
@@ -469,7 +469,7 @@ typedef struct {
   uint8_t       display_rows;              // 2D5
   uint8_t       display_cols[2];           // 2D6
   uint8_t       display_address[8];        // 2D8
-  uint8_t       display_dimmer;            // 2E0
+  int8_t        display_dimmer_protected;  // 2E0 - if positive range 0..15, if negative range 0..100 (neg) - don't use directly
   uint8_t       display_size;              // 2E1
   TimeRule      tflag[2];                  // 2E2
   uint16_t      pwm_frequency;             // 2E6
