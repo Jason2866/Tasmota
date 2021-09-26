@@ -44,6 +44,23 @@ Powerwall::Powerwall() {
     }
 }
 
+const char* root_ca= \
+"-----BEGIN CERTIFICATE-----\n"
+"MIICkzCCAjmgAwIBAgIRANFdB/NLmYDQzgFJonZJTQcwCgYIKoZIzj0EAwIwgZEx\n"
+"CzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRIwEAYDVQQHEwlQYWxv\n"
+"IEFsdG8xDjAMBgNVBAoTBVRlc2xhMR4wHAYDVQQLExVUZXNsYSBFbmVyZ3kgUHJv\n"
+"ZHVjdHMxKTAnBgNVBAMTIGY2ZTBiOGZmYmJkNTMxMjUzMTMyOTViM2FiZWEwOTFk\n"
+"MB4XDTE4MDkxNTA5Mzg0OFoXDTQzMDkwOTA5Mzg0OFowgZExCzAJBgNVBAYTAlVT\n"
+"MRMwEQYDVQQIEwpDYWxpZm9ybmlhMRIwEAYDVQQHEwlQYWxvIEFsdG8xDjAMBgNV\n"
+"BAoTBVRlc2xhMR4wHAYDVQQLExVUZXNsYSBFbmVyZ3kgUHJvZHVjdHMxKTAnBgNV\n"
+"BAMTIGY2ZTBiOGZmYmJkNTMxMjUzMTMyOTViM2FiZWEwOTFkMFkwEwYHKoZIzj0C\n"
+"AQYIKoZIzj0DAQcDQgAEC9OseunYQc+aUbArfdjf61TOBpKq3MRc0nWKiLw7taZV\n"
+"sLPxrTJaqgdHumyw1GziJ981ppbRyOmNpi3QJrnXeqNwMG4wDgYDVR0PAQH/BAQD\n"
+"AgKkMBMGA1UdJQQMMAoGCCsGAQUFBwMBMA8GA1UdEwEB/wQFMAMBAf8wNgYDVR0R\n"
+"BC8wLYIDdGVngglwb3dlcndhbGyCCXBvd2VycGFja4cEwKhaAYcEwKhaAocEwKhb\n"
+"ATAKBggqhkjOPQQDAgNIADBFAiB3LWJD8hEk+/hUtL+IluZF0E78QTrW8d8YydC+\n"
+"8REfMgIhALzmRFGXbUh9lH57KB6KH98iTBKUtgHDsGyK+uKQ+dEn"
+"-----END CERTIFICATE-----\n";
 
 /**
  * This function returns a string with the authToken based on the basic login endpoint of
@@ -55,6 +72,29 @@ String Powerwall::getAuthCookie() {
     String apiLoginURL = "/api/login/Basic";
 
     esp_log_level_set("*", ESP_LOG_VERBOSE);
+
+
+  //  String pw_ip = "https://" + powerwall_ip;
+
+
+    HTTPClient http;
+
+    http.begin("https://192.168.178.154/api/meters/aggregates", root_ca); //Specify the URL and certificate
+    int httpCode = http.GET();                                                  //Make the request
+
+    if (httpCode > 0) { //Check for the returning code
+      String payload = http.getString();
+      Serial.println(httpCode);
+      Serial.println(payload);
+    } else {
+      Serial.println("Error on HTTP request");
+    }
+
+return "result";
+
+    //WiFiClient wifi_test;
+    //wifi_test.connect(powerwall_ip, 80);
+    //wifi_test.stop();
 
     WiFiClientSecure httpsClient;
     httpsClient.setInsecure();

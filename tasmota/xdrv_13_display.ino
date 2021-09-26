@@ -587,13 +587,18 @@ void DisplayText(void)
             break;
 #ifdef USE_MULTI_DISPLAY
           case 'S':
-            {
+            { int16_t rot = -1, srot;
               var = atoiv(cp, &temp);
               cp += var;
               if (temp < 1 || temp > MAX_MULTI_DISPLAYS) {
                 temp = 1;
               }
               temp--;
+              if (*cp == 'r') {
+                cp++;
+                var = atoiv(cp, &rot);
+                cp += var;
+              }
               if (*cp == ':') {
                 cp++;
                 if (displays[temp].display) {
@@ -616,7 +621,14 @@ void DisplayText(void)
                         fp.read((uint8_t*)fdesc, size);
                         fp.close();
                         Get_display(temp);
+                        if (rot >= 0) {
+                          srot = Settings->display_rotate;
+                          Settings->display_rotate = rot;
+                        }
                         renderer = Init_uDisplay(fdesc, -1);
+                        if (rot >= 0) {
+                          Settings->display_rotate = srot;
+                        }
                         Set_display(temp);
                         AddLog(LOG_LEVEL_INFO, PSTR("DSP: File descriptor loaded %x"),renderer);
                         free(fdesc);
