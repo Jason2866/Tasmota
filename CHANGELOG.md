@@ -3,7 +3,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [9.5.0.8]
+## [9.5.0.9]
+### Changed
+- LVGL updated to v8.0.2 **breaking changes**
+
+## [9.5.0.8] 20210927
 ### Added
 - Command ``WebGetConfig <url>`` if ``#define USE_WEBGETCONFIG`` is enabled to restore/init configuration from external webserver (#13034)
 - Berry class ``webclient`` for HTTP/HTTPS requests
@@ -12,7 +16,10 @@ All notable changes to this project will be documented in this file.
 - Crash recorder ``Status 12`` for ESP32/ESP32S2/ESP32C3, supporting Esp-idf 3.3/4.4
 - Support for ESP32/ESP32S2 DAC gpio via Berry
 - Berry support for Serial
+- Support for Sensirion SCD40/SCD41 CO2 sensor (#13139)
 - Support for BL0939 energy monitor as used in ESP32 based Sonoff Dual R3 V2 Pow (#13195)
+- Command ``WebQuery <url> GET|POST|PUT|PATCH [<headers>] <body>`` to extent HTTP requests (#13209)
+- Berry print stack trace when exception, more detailed with line numbers if `#define USE_BERRY_DEBUG`
 
 ### Changed
 - M5 Stack Core2 uses UNIVERSAL_DISPLAY with enabled LVGL as default now
@@ -20,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - Minimum PWM Frequency lowered to 2Hz on ESP32 (#13123)
 - Use Tasmota Arduino Core32 1.0.7.4 for ESP32 builds (#13154)
 - Shrinked Webcam build, uses now `USE_TASMOTA_DISCOVERY` (#13148)
+- Berry revamped ``energy`` module to expose all C variables to Berry (read/write)
 
 ### Fixed
 - OpenTherm invalid JSON (#13028)

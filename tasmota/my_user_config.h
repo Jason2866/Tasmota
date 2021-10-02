@@ -607,6 +607,7 @@
 //  #define USE_MGC3130                            // [I2cDriver27] Enable MGC3130 Electric Field Effect Sensor (I2C address 0x42) (+2k7 code, 0k3 mem)
 //  #define USE_MAX44009                           // [I2cDriver28] Enable MAX44009 Ambient Light sensor (I2C addresses 0x4A and 0x4B) (+0k8 code)
 //  #define USE_SCD30                              // [I2cDriver29] Enable Sensiron SCd30 CO2 sensor (I2C address 0x61) (+3k3 code)
+//  #define USE_SCD40                              // [I2cDriver62] Enable Sensiron SCd40/Scd41 CO2 sensor (I2C address 0x62) (+3k5 code)
 //  #define USE_SPS30                              // [I2cDriver30] Enable Sensiron SPS30 particle sensor (I2C address 0x69) (+1.7 code)
   #define USE_ADE7953                            // [I2cDriver7] Enable ADE7953 Energy monitor as used on Shelly 2.5 (I2C address 0x38) (+1k5)
 //  #define USE_VL53L0X                            // [I2cDriver31] Enable VL53L0x time of flight sensor (I2C address 0x29) (+4k code)
@@ -981,6 +982,7 @@
 
 #define USE_BERRY                                // Enable Berry scripting language
   #define USE_BERRY_PSRAM                        // Allocate Berry memory in PSRAM if PSRAM is connected - this might be slightly slower but leaves main memory intact
+  // #define USE_BERRY_DEBUG                        // Compile Berry bytecode with line number information, makes exceptions easier to debug. Adds +8% of memory consumption for compiled code
   #define USE_WEBCLIENT                          // Enable `webclient` to make HTTP/HTTPS requests. Can be disabled for security reasons.
     // #define USE_WEBCLIENT_HTTPS                  // Enable HTTPS outgoing requests based on BearSSL (much ligher then mbedTLS, 42KB vs 150KB) in insecure mode (no verification of server's certificate)
                                                  // Note that only one cipher is enabled: ECDHE_RSA_WITH_AES_128_GCM_SHA256 which is very commonly used and highly secure
@@ -1001,40 +1003,30 @@
     #define USE_LVGL_FREETYPE_MAX_BYTES_PSRAM 64*1024  // max bytes in cache when using PSRAM
   #define USE_LVGL_BG_DEFAULT 0x000000           // Default color for the uninitialized background screen (black)
   // Disabling select widgets that will be rarely used in Tasmota (-13KB)
-    #define BE_LV_WIDGET_ARC 1
-    #define BE_LV_WIDGET_BAR 1
-    #define BE_LV_WIDGET_BTN 1
-    #define BE_LV_WIDGET_BTNMATRIX 1
-    #define BE_LV_WIDGET_CALENDAR 0
-    #define BE_LV_WIDGET_CANVAS 1
-    #define BE_LV_WIDGET_CHART 1
-    #define BE_LV_WIDGET_CHECKBOX 1
-    #define BE_LV_WIDGET_CONT 1
-    #define BE_LV_WIDGET_CPICKER 1
-    #define BE_LV_WIDGET_DROPDOWN 1
-    #define BE_LV_WIDGET_GAUGE 1
-    #define BE_LV_WIDGET_IMG 1
-    #define BE_LV_WIDGET_IMGBTN 1
-    #define BE_LV_WIDGET_KEYBOARD 0
-    #define BE_LV_WIDGET_LABEL 1
-    #define BE_LV_WIDGET_LED 1
-    #define BE_LV_WIDGET_LINE 1
-    #define BE_LV_WIDGET_LINEMETER 1
-    #define BE_LV_WIDGET_LIST 1
-    #define BE_LV_WIDGET_MSGBOX 1
-    #define BE_LV_WIDGET_OBJMASK 1
-    #define BE_LV_WIDGET_TEMPL 1
-    #define BE_LV_WIDGET_PAGE 1
-    #define BE_LV_WIDGET_ROLLER 1
-    #define BE_LV_WIDGET_SLIDER 1
-    #define BE_LV_WIDGET_SPINBOX 1
-    #define BE_LV_WIDGET_SPINNER 1
-    #define BE_LV_WIDGET_SWITCH 1
-    #define BE_LV_WIDGET_TABLE 1
-    #define BE_LV_WIDGET_TABVIEW 1
-    #define BE_LV_WIDGET_TEXTAREA 1
-    #define BE_LV_WIDGET_TILEVIEW 1
-    #define BE_LV_WIDGET_WIN 0
+  // Main widgets as defined in LVGL8
+    #define BE_LV_WIDGET_ARC
+    #define BE_LV_WIDGET_BAR
+    #define BE_LV_WIDGET_BTN
+    #define BE_LV_WIDGET_BTNMATRIX
+    #define BE_LV_WIDGET_CANVAS
+    #define BE_LV_WIDGET_CHECKBOX
+    #define BE_LV_WIDGET_DROPDOWN
+    #define BE_LV_WIDGET_IMG
+    #define BE_LV_WIDGET_LABEL
+    #define BE_LV_WIDGET_LINE
+    #define BE_LV_WIDGET_ROLLER
+    #define BE_LV_WIDGET_SLIDER
+    #define BE_LV_WIDGET_SWITCH
+    #define BE_LV_WIDGET_TABLE
+    #define BE_LV_WIDGET_TEXTAREA
+
+    #define BE_LV_WIDGET_CHART
+    #define BE_LV_WIDGET_COLORWHEEL
+    #define BE_LV_WIDGET_IMGBTN
+    #define BE_LV_WIDGET_LED
+    #define BE_LV_WIDGET_METER
+    #define BE_LV_WIDGET_MSGBOX
+    #define BE_LV_WIDGET_SPINBOX
 
 #endif  // ESP32
 
