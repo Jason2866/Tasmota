@@ -8047,6 +8047,8 @@ int32_t lvgl_test(char **lpp, int32_t p) {
   lv_obj_t *obj;
   lv_obj_t *label;
   float xp, yp, xs, ys, min, max;
+  lv_meter_scale_t * scale;
+  lv_meter_indicator_t * indic;
   char str[SCRIPT_MAXSSIZE];
   int32_t res = 0;
 
@@ -8082,7 +8084,8 @@ int32_t lvgl_test(char **lpp, int32_t p) {
       lv_obj_add_event_cb(obj, btn_event_cb, LV_EVENT_ALL, nullptr);
       label = lv_label_create(obj);
       lv_label_set_text(label, str);
-      lvgl_StoreObj(obj);
+      lv_obj_add_flag(obj, LV_OBJ_FLAG_CHECKABLE);
+      //lvgl_StoreObj(obj);
       break;
 
     case 3:
@@ -8099,7 +8102,7 @@ int32_t lvgl_test(char **lpp, int32_t p) {
       lv_obj_set_pos(obj, xp, yp);
       lv_obj_set_size(obj, xs, ys);
       lv_obj_add_event_cb(obj, slider_event_cb, LV_EVENT_ALL, nullptr);
-      lvgl_StoreObj(obj);
+      //lvgl_StoreObj(obj);
       break;
 
     case 4:
@@ -8119,8 +8122,12 @@ int32_t lvgl_test(char **lpp, int32_t p) {
       obj = lv_meter_create(lv_scr_act());
       lv_obj_set_pos(obj, xp, yp);
       lv_obj_set_size(obj, xs, ys);
+      scale = lv_meter_add_scale(obj);
+      /*Add a needle line indicator*/
+      indic = lv_meter_add_needle_line(obj, scale, 4, lv_palette_main(LV_PALETTE_GREY), -10);
+
       // lv_gauge_set_range(obj, min, max);   // TODO LVGL8
-      lvgl_StoreObj(obj);
+      //lvgl_StoreObj(obj);
       break;
 
     case 5:
@@ -8150,7 +8157,7 @@ int32_t lvgl_test(char **lpp, int32_t p) {
       lv_obj_set_pos(obj, xp, yp);
       lv_obj_set_size(obj, xs, ys);
       lv_label_set_text(obj, str);
-      lvgl_StoreObj(obj);
+      //lvgl_StoreObj(obj);
       break;
 
     case 7:
@@ -8188,7 +8195,7 @@ int32_t lvgl_test(char **lpp, int32_t p) {
 
     default:
       start_lvgl(0);
-      lvgl_setup();
+      //lvgl_setup();
       break;
   }
 
@@ -8234,6 +8241,7 @@ void lvgl_setup(void) {
   lv_style_set_pad_right(&tab_background_style, 2);
   lv_style_set_pad_bottom(&tab_background_style, 0);
   // lv_obj_add_style(tabview, LV_TABVIEW_PART_TAB_BG, &tab_background_style); // LVGL8 TODO
+  //lv_tabview_add_tab(tabview, LV_TABVIEW_PART_TAB_BG, &tab_background_style); // LVGL8 TODO
 
   // Style for tabs. Active tab is white with opaque background, inactive
   // tabs are transparent so the background shows through (only the white
