@@ -294,6 +294,14 @@ uDisplay *udisp;
     }
 #endif
 
+    uint8_t inirot = Settings->display_rotate;
+
+    cp = strstr(ddesc, ":r,");
+    if (cp) {
+      cp+=3;
+      inirot = strtol(cp, &cp, 10);
+    }
+
     // release desc buffer
     if (fbuff) free(fbuff);
 
@@ -311,7 +319,7 @@ uDisplay *udisp;
     renderer->SetDimCB(Core2DisplayDim);
 #endif
 
-    renderer->DisplayInit(DISPLAY_INIT_MODE, Settings->display_size, Settings->display_rotate, Settings->display_font);
+    renderer->DisplayInit(DISPLAY_INIT_MODE, Settings->display_size, inirot, Settings->display_font);
     ApplyDisplayDimmer();
 
 #ifdef SHOW_SPLASH
