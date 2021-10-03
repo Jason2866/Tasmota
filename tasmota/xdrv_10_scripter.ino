@@ -8085,7 +8085,7 @@ int32_t lvgl_test(char **lpp, int32_t p) {
       label = lv_label_create(obj);
       lv_label_set_text(label, str);
       lv_obj_add_flag(obj, LV_OBJ_FLAG_CHECKABLE);
-      //lvgl_StoreObj(obj);
+      lvgl_StoreObj(obj);
       break;
 
     case 3:
@@ -8102,7 +8102,7 @@ int32_t lvgl_test(char **lpp, int32_t p) {
       lv_obj_set_pos(obj, xp, yp);
       lv_obj_set_size(obj, xs, ys);
       lv_obj_add_event_cb(obj, slider_event_cb, LV_EVENT_ALL, nullptr);
-      //lvgl_StoreObj(obj);
+      lvgl_StoreObj(obj);
       break;
 
     case 4:
@@ -8127,7 +8127,7 @@ int32_t lvgl_test(char **lpp, int32_t p) {
       indic = lv_meter_add_needle_line(obj, scale, 4, lv_palette_main(LV_PALETTE_GREY), -10);
 
       // lv_gauge_set_range(obj, min, max);   // TODO LVGL8
-      //lvgl_StoreObj(obj);
+      lvgl_StoreObj(obj);
       break;
 
     case 5:
@@ -8157,7 +8157,7 @@ int32_t lvgl_test(char **lpp, int32_t p) {
       lv_obj_set_pos(obj, xp, yp);
       lv_obj_set_size(obj, xs, ys);
       lv_label_set_text(obj, str);
-      //lvgl_StoreObj(obj);
+      lvgl_StoreObj(obj);
       break;
 
     case 7:
@@ -8195,7 +8195,7 @@ int32_t lvgl_test(char **lpp, int32_t p) {
 
     default:
       start_lvgl(0);
-      //lvgl_setup();
+      lvgl_setup();
       break;
   }
 
