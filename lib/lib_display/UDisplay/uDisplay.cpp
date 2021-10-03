@@ -1445,8 +1445,8 @@ void uDisplay::TS_RotConvert(int16_t *x, int16_t *y) {
     temp = *y;
     *y = *x;
     *x = temp;
+    //Serial.printf("swap\n");
   }
-
 
   if (rotmap_xmin >= 0) {
     *y = map(*y, rotmap_ymin, rotmap_ymax, 0, gys);
@@ -1454,6 +1454,8 @@ void uDisplay::TS_RotConvert(int16_t *x, int16_t *y) {
   }
   *x = constrain(*x, 0, gxs);
   *y = constrain(*y, 0, gys);
+
+  //Serial.printf("rot 1 %d - %d\n",*x,*y );
 
   switch (rot_t[cur_rot]) {
     case 0:
@@ -1472,7 +1474,15 @@ void uDisplay::TS_RotConvert(int16_t *x, int16_t *y) {
       *y = *x;
       *x = width() - temp;
       break;
+    case 4:
+      *x = width() - *x;
+      break;
+    case 5:
+      *y = height() - *y;
+      break;
   }
+
+  //Serial.printf("rot 2 %d - %d\n",*x,*y );
 }
 
 uint8_t uDisplay::strlen_ln(char *str) {
