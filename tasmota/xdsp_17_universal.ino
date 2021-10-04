@@ -308,8 +308,6 @@ uDisplay *udisp;
     renderer = udisp->Init();
     if (!renderer) return 0;
 
-    Settings->display_width = renderer->width();
-    Settings->display_height = renderer->height();
     fg_color = renderer->fgcol();
     bg_color = renderer->bgcol();
     color_type = renderer->color_type();
@@ -320,6 +318,10 @@ uDisplay *udisp;
 #endif
 
     renderer->DisplayInit(DISPLAY_INIT_MODE, Settings->display_size, inirot, Settings->display_font);
+
+    Settings->display_width = renderer->width();
+    Settings->display_height = renderer->height();
+    
     ApplyDisplayDimmer();
 
 #ifdef SHOW_SPLASH
