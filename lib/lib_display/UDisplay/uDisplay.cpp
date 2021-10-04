@@ -71,7 +71,6 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   splash_font = -1;
   rotmap_xmin = -1;
   bpanel = -1;
-  rotswap = -1;
   allcmd_mode = 0;
   startline = 0xA1;
   uint8_t section = 0;
@@ -207,40 +206,24 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             x_addr_offs[0] = next_hex(&lp1);
             y_addr_offs[0] = next_hex(&lp1);
             rot_t[0] = next_hex(&lp1);
-            if (*lp1 == 's') {
-              lp1++;
-              rotswap = 1;
-            }
             break;
           case '1':
             rot[1] = next_hex(&lp1);
             x_addr_offs[1] = next_hex(&lp1);
             y_addr_offs[1] = next_hex(&lp1);
             rot_t[1] = next_hex(&lp1);
-            if (*lp1 == 's') {
-              lp1++;
-              rotswap = 1;
-            }
             break;
           case '2':
             rot[2] = next_hex(&lp1);
             x_addr_offs[2] = next_hex(&lp1);
             y_addr_offs[2] = next_hex(&lp1);
             rot_t[2] = next_hex(&lp1);
-            if (*lp1 == 's') {
-              lp1++;
-              rotswap = 1;
-            }
             break;
           case '3':
             rot[3] = next_hex(&lp1);
             x_addr_offs[3] = next_hex(&lp1);
             y_addr_offs[3] = next_hex(&lp1);
             rot_t[3] = next_hex(&lp1);
-            if (*lp1 == 's') {
-              lp1++;
-              rotswap = 1;
-            }
             break;
           case 'A':
             if (interface == _UDSP_I2C || bpp == 1) {
@@ -1441,11 +1424,10 @@ void uDisplay::dim8(uint8_t dim, uint8_t dim_gamma) {           // dimmer with 8
 void uDisplay::TS_RotConvert(int16_t *x, int16_t *y) {
   int16_t temp;
 
-  if (rotswap > 0) {
+  if (rot_t[cur_rot] & 0x80) {
     temp = *y;
     *y = *x;
     *x = temp;
-    //Serial.printf("swap\n");
   }
 
   if (rotmap_xmin >= 0) {
@@ -1457,7 +1439,7 @@ void uDisplay::TS_RotConvert(int16_t *x, int16_t *y) {
 
   //Serial.printf("rot 1 %d - %d\n",*x,*y );
 
-  switch (rot_t[cur_rot]) {
+  switch (rot_t[cur_rot] & 0xf) {
     case 0:
       break;
     case 1:
