@@ -765,6 +765,7 @@
 #define D_SENSOR_LE01MR_TX              "LE-01MR - TX"
 #define D_SENSOR_BL0940_RX              "BL0940 - RX"
 #define D_SENSOR_BL0939_RX              "BL0939 - RX"
+#define D_SENSOR_BL0942_RX     "BL0942 Rx"
 #define D_SENSOR_CC1101_GDO0            "CC1101 - GDO0"
 #define D_SENSOR_CC1101_GDO2            "CC1101 - GDO2"
 #define D_SENSOR_HRXL_RX                "HRXL - RX"
@@ -949,6 +950,7 @@
 #define D_CREATE_NEW_FILE      "Crea e modifica nuovo file"
 #define D_EDIT_FILE            "Modifica file"
 #define D_CONFIRM_FILE_DEL     "Conferma eliminazione file"
+#define D_SHOW_HIDDEN_FILES    "Show hidden files"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN       "guadagno:"

@@ -711,6 +711,7 @@
 #define D_SENSOR_CSE7766_TX    "CSE7766 TX"
 #define D_SENSOR_CSE7766_RX    "CSE7766 Rx"
 #define D_SENSOR_BL0939_RX     "BL0939 Rx"
+#define D_SENSOR_BL0942_RX     "BL0942 Rx"
 #define D_SENSOR_PN532_TX      "PN532 TX"
 #define D_SENSOR_PN532_RX      "PN532 RX"
 #define D_SENSOR_SM16716_CLK   "SM16716 CLK"
@@ -948,6 +949,7 @@
 #define D_CREATE_NEW_FILE      "Créer and modifier un nouveau fichier"
 #define D_EDIT_FILE            "Modification de fichier"
 #define D_CONFIRM_FILE_DEL     "Confirmez la suppression du fichier"
+#define D_SHOW_HIDDEN_FILES    "Affichez les fichiers cachés"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "gain:"
