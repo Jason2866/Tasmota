@@ -105,6 +105,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - Command ``SetOption127 1`` to force Wi-Fi in no-sleep mode even if ``Sleep 0`` is not enabled
 - Command ``SetOption128 0|1`` web referer check disabling HTTP API commands if set to 0. Default set to 1 for backward compatibility [#12828](https://github.com/arendst/Tasmota/issues/12828)
 - Command ``SetOption129 1`` to enable split total energy results [#13030](https://github.com/arendst/Tasmota/issues/13030)
+- Command ``SetOption130 1`` adding heap size (and ESP32 fragmentation) to logging timestamp for debugging
 - Command ``SetSensor1..127 0|1`` to globally disable individual sensor driver
 - Command ``Subscribe2 ...`` to subscribe to a MQTT topic without appended "/#" [#12858](https://github.com/arendst/Tasmota/issues/12858)
 - Command ``WebGetConfig <url>`` if ``#define USE_WEBGETCONFIG`` is enabled to restore/init configuration from external webserver [#13034](https://github.com/arendst/Tasmota/issues/13034)
@@ -125,6 +126,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - Support for Sensirion SCD40/SCD41 CO2 sensor [#13139](https://github.com/arendst/Tasmota/issues/13139)
 - Support for BL0939 energy monitor as used in ESP32 based Sonoff Dual R3 V2 Pow [#13195](https://github.com/arendst/Tasmota/issues/13195)
 - Support for BL0942 energy monitor [#13259](https://github.com/arendst/Tasmota/issues/13259)
+- Support for HM330X SeedStudio Grove Particule sensor [#13250](https://github.com/arendst/Tasmota/issues/13250)
 - Initial support for Tasmota Mesh (TasMesh) providing node/broker communication using ESP-NOW [#11939](https://github.com/arendst/Tasmota/issues/11939)
 - Initial support for Wi-Fi extender [#12784](https://github.com/arendst/Tasmota/issues/12784)
 - Rule event support as JSON payload [#12496](https://github.com/arendst/Tasmota/issues/12496)
@@ -175,6 +177,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmo
 - ESP32 M5 Stack Core2 uses UNIVERSAL_DISPLAY with enabled LVGL as default now
 - ESP32 minimum PWM Frequency lowered to 2Hz [#13123](https://github.com/arendst/Tasmota/issues/13123)
 - ESP32 shrinked Webcam build, uses now `USE_TASMOTA_DISCOVERY` [#13148](https://github.com/arendst/Tasmota/issues/13148)
+- ESP32 Memory display to exclude IRAM (i.e. less by 40-50KB) [#13294](https://github.com/arendst/Tasmota/issues/13294)
 
 ### Fixed
 - Sonoff L1 (lite) smoother color transitions

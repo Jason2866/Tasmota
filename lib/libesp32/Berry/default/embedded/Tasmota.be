@@ -30,12 +30,18 @@ class Tasmota
   # inv is optional and inverses the behavior, i.e. look for chars not in the list
   def chars_in_string(s,c,inv)
     var inverted = inv ? true : false
-    for i:0..size(s)-1
+    var i = 0
+    while i < size(s)
+    # for i:0..size(s)-1
       var found = false
-      for j:0..size(c)-1
+      var j = 0
+      while j < size(c)
+      # for j:0..size(c)-1
         if s[i] == c[j] found = true end
+        j += 1
       end
       if inverted != found return i end
+      i += 1
     end
     return -1
   end
@@ -44,7 +50,7 @@ class Tasmota
   def find_key_i(m,keyi)
     import string
     var keyu = string.toupper(keyi)
-    if classof(m) == map
+    if isinstance(m, map)
       for k:m.keys()
         if string.toupper(k)==keyu || keyi=='?'
           return k
@@ -99,10 +105,14 @@ class Tasmota
     var rl_list = self.find_op(rule)
     var sub_event = event
     var rl = string.split(rl_list[0],'#')
-    for it:rl
+    var i = 0
+    while i < size(rl)
+    # for it:rl
+      var it = rl[i]
       var found=self.find_key_i(sub_event,it)
       if found == nil return false end
       sub_event = sub_event[found]
+      i += 1
     end
     var op=rl_list[1]
     var op2=rl_list[2]
@@ -139,9 +149,14 @@ class Tasmota
       if ev == nil
         print('BRY: ERROR, bad json: '+ev_json, 3)
       else
-        for r: self._rules.keys()
-          ret = self.try_rule(ev,r,self._rules[r]) || ret
+        try
+          ret = self._rules.reduce( /k,v,r-> self.try_rule(ev,k,v) || r, nil, false)
+        except "stop_iteration"
+          # silence stop_iteration which means that the map was resized during iteration
         end
+        # for r: self._rules.keys()
+        #   ret = self.try_rule(ev,r,self._rules[r]) || ret
+        # end
       end
       return ret
     end
@@ -267,7 +282,8 @@ class Tasmota
       if f_time == nil && f_time_bc == nil  return false end
       if f_time_bc != nil && (f_time == nil || f_time_bc >= f_time)
         # bytecode exists and is more recent than berry source, use bytecode
-        f = f + "c"   # use bytecode name
+        ##### temporarily disable loading from bec file
+        # f = f + "c"   # use bytecode name
         is_bytecode = true
       end
     end
@@ -289,6 +305,8 @@ class Tasmota
 
   def event(event_type, cmd, idx, payload, raw)
     import introspect
+    import debug
+    import string
     if event_type=='every_50ms' self.run_deferred() end  #- first run deferred events -#
 
     var done = false
@@ -296,17 +314,21 @@ class Tasmota
     elif event_type=='rule' return self.exec_rules(payload)
     elif event_type=='gc' return self.gc()
     elif self._drivers
-      for d:self._drivers
+      var i = 0
+      while i < size(self._drivers)
+      #for d:self._drivers
+        var d = self._drivers[i]
         var f = introspect.get(d, event_type)   # try to match a function or method with the same name
         if type(f) == 'function'
           try
             done = f(d, cmd, idx, payload, raw)
             if done break end
           except .. as e,m
-            import string
             print(string.format("BRY: Exception> '%s' - %s", e, m))
+            debug.traceback()
           end
         end
+        i += 1
       end
     end
 

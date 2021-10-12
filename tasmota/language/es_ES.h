@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v9.5.0.3
+ * Updated until v9.5.0.9
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -712,6 +712,7 @@
 #define D_SENSOR_CSE7766_RX    "CSE7766 Rx"
 #define D_SENSOR_BL0939_RX     "BL0939 Rx"
 #define D_SENSOR_BL0942_RX     "BL0942 Rx"
+#define D_SENSOR_HM330X_SET    "HM330X SET"
 #define D_SENSOR_PN532_TX      "PN532 Tx"
 #define D_SENSOR_PN532_RX      "PN532 Rx"
 #define D_SENSOR_SM16716_CLK   "SM16716 CLK"
@@ -946,11 +947,11 @@
 #define D_MANAGE_FILE_SYSTEM   "Explorar Archivos"
 #define D_FS_SIZE              "Tamaño"
 #define D_FS_FREE              "Libre"
-#define D_NEW_FILE             "nuevo.txt"
-#define D_CREATE_NEW_FILE      "Crear y editar un archivo nuevo"
+#define D_NEW_FILE             "Nuevo.txt"
+#define D_CREATE_NEW_FILE      "Crear un archivo nuevo"
 #define D_EDIT_FILE            "Editar Archivo"
-#define D_CONFIRM_FILE_DEL     "Confirmar la eliminación del archivo"
-#define D_SHOW_HIDDEN_FILES    "Show hidden files"
+#define D_CONFIRM_FILE_DEL     "Confirmar eliminación del archivo"
+#define D_SHOW_HIDDEN_FILES    "Mostrar archivos ocultos"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "Ganancia:"

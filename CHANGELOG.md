@@ -6,10 +6,12 @@ All notable changes to this project will be documented in this file.
 ## [9.5.0.9]
 ### Added
 - Command ``SetOption129 1`` to enable split total energy results (#13030)
+- Command ``SetOption130 1`` adding heap size (and ESP32 fragmentation) to logging timestamp for debugging
 - Commands ``EnergyTotal<phase>``, ``EnergyToday<phase>`` and ``EnergyYesterday<phase>`` to (re)set energy values
 - Commands ``EnergyUsage`` and ``EnergyExport`` to (re)set energy usage and export values
 - Berry add module ``import persist``
 - Support for BL0942 energy monitor (#13259)
+- Support for HM330X SeedStudio Grove Particule sensor (#13250)
 
 ### Breaking Changed
 - ESP32 LVGL updated to v8.0.2
@@ -17,6 +19,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Removed command ``EnergyReset`` as it is replaced by new commands
 - Files starting with underscore in file system are no more hidden
+- ESP32 Memory display to exclude IRAM (i.e. less by 40-50KB) (#13294)
 
 ## [9.5.0.8] 20210927
 ### Added
