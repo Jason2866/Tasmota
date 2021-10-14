@@ -717,7 +717,9 @@ void UfsListDir(char *path, uint8_t depth) {
       // osx formatted disks contain a lot of stuff we dont want
       bool hiddable = UfsReject((char*)ep);
 
+#ifndef FORCE_HIDE_FILES
       if (!hiddable) {
+#endif
 
       for (uint8_t cnt = 0; cnt<depth; cnt++) {
         *cp++ = '-';
@@ -754,7 +756,9 @@ void UfsListDir(char *path, uint8_t depth) {
       }
       entry.close();
     }
+#ifndef FORCE_HIDE_FILES
   }
+#endif
     dir.close();
   }
 }
