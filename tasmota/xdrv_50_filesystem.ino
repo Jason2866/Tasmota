@@ -563,7 +563,9 @@ const char UFS_FORM_FILE_UPGb[] PROGMEM =
   "<form method='get' action='ufse'><input type='hidden' file='" D_NEW_FILE "'>"
   "<button type='submit'>" D_CREATE_NEW_FILE "</button></form>"
 #endif
+#ifndef FORCE_HIDE_FILES
   "<input type='checkbox' id='shf' onclick='sf(eb(\"shf\").checked);' name='shf'>" D_SHOW_HIDDEN_FILES "</input>"
+#endif
   "</fieldset>"
   "</div>"
   "<div id='f2' name='f2' style='display:none;text-align:center;'><b>" D_UPLOAD_STARTED " ...</b></div>";
