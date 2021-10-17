@@ -146,6 +146,7 @@ void UfsCheckSDCardInit(void) {
       cs = Pin(GPIO_SDCARD_CS);
     }
 
+
 #ifdef EPS8266
     SPI.begin();
 #endif // EPS8266
@@ -563,9 +564,12 @@ const char UFS_FORM_FILE_UPGb[] PROGMEM =
   "<form method='get' action='ufse'><input type='hidden' file='" D_NEW_FILE "'>"
   "<button type='submit'>" D_CREATE_NEW_FILE "</button></form>"
 #endif
-#ifndef FORCE_HIDE_FILES
-  "<input type='checkbox' id='shf' onclick='sf(eb(\"shf\").checked);' name='shf'>" D_SHOW_HIDDEN_FILES "</input>"
-#endif
+;
+
+const char UFS_FORM_FILE_UPGb1[] PROGMEM =
+  "<input type='checkbox' id='shf' onclick='sf(eb(\"shf\").checked);' name='shf'>" D_SHOW_HIDDEN_FILES "</input>";
+
+const char UFS_FORM_FILE_UPGb2[] PROGMEM =
   "</fieldset>"
   "</div>"
   "<div id='f2' name='f2' style='display:none;text-align:center;'><b>" D_UPLOAD_STARTED " ...</b></div>";
@@ -667,10 +671,21 @@ void UfsDirectory(void) {
   }
   WSContentSend_P(UFS_FORM_SDC_DIRc);
   WSContentSend_P(UFS_FORM_FILE_UPGb);
+  if (!isSDC()) {
+    WSContentSend_P(UFS_FORM_FILE_UPGb1);
+  }
+  WSContentSend_P(UFS_FORM_FILE_UPGb2);
+
   WSContentSpaceButton(BUTTON_MANAGEMENT);
   WSContentStop();
 
   Web.upload_file_type = UPL_UFSFILE;
+}
+
+bool isSDC(void) {
+  if (((uint32_t)ufsp != (uint32_t)ffsp) && ((uint32_t)ffsp == (uint32_t)dfsp)) return false;
+  if (((uint32_t)ufsp == (uint32_t)ffsp) && (ufs_type != UFS_TSDC)) return false;
+  return true;
 }
 
 void UfsListDir(char *path, uint8_t depth) {
@@ -719,9 +734,7 @@ void UfsListDir(char *path, uint8_t depth) {
       // osx formatted disks contain a lot of stuff we dont want
       bool hiddable = UfsReject((char*)ep);
 
-#ifdef FORCE_HIDE_FILES
-      if (!hiddable) {
-#endif
+      if (!hiddable || !isSDC() ) {
 
       for (uint8_t cnt = 0; cnt<depth; cnt++) {
         *cp++ = '-';
@@ -758,9 +771,9 @@ void UfsListDir(char *path, uint8_t depth) {
       }
       entry.close();
     }
-#ifdef FORCE_HIDE_FILES
+
   }
-#endif
+
     dir.close();
   }
 }
