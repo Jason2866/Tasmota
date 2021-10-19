@@ -682,14 +682,19 @@ void UfsDirectory(void) {
   Web.upload_file_type = UPL_UFSFILE;
 }
 
+// return true if SDC
 bool isSDC(void) {
+#ifndef SDC_HIDE_INVISIBLES
+  return false;
+#else
   if (((uint32_t)ufsp != (uint32_t)ffsp) && ((uint32_t)ffsp == (uint32_t)dfsp)) return false;
   if (((uint32_t)ufsp == (uint32_t)ffsp) && (ufs_type != UFS_TSDC)) return false;
   return true;
+#endif
 }
 
 void UfsListDir(char *path, uint8_t depth) {
-  char name[32];
+  char name[48];
   char npath[128];
   char format[12];
   sprintf(format, PSTR("%%-%ds"), 24 - depth);
