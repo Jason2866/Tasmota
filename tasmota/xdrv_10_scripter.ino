@@ -163,7 +163,6 @@ void Script_ticker4_end(void) {
 
 #if defined(USE_SML_M) && defined (USE_SML_SCRIPT_CMD)
 extern uint8_t sml_json_enable;
-extern uint8_t dvalid[SML_MAX_VARS];
 #endif
 
 #if defined(EEP_SCRIPT_SIZE) && !defined(ESP32)
@@ -3171,15 +3170,7 @@ chknext:
         }
         if (!strncmp(vname, "smlv[", 5)) {
           lp = GetNumericArgument(lp + 5, OPER_EQU, &fvar, gv);
-          if (!fvar) {
-            for (uint8_t cnt = 0; cnt < SML_MAX_VARS; cnt++) {
-              dvalid[cnt] = 0;
-            }
-            fvar = 0;
-          } else {
-            if (fvar < 1) fvar = 1;
-            fvar = dvalid[(uint32_t)fvar - 1];
-          }
+          fvar = sml_getv(fvar);
           lp++;
           len = 0;
           goto exit;
