@@ -15,7 +15,7 @@ uint8 = ctypes.u8
 uint16 = ctypes.u16
 uint32 = ctypes.u32
 int32 = ctypes.i32
-bool = ctypes.bf_1
+bool = ctypes.u8
 
 energy_struct = [
     [float, "voltage"],
@@ -27,6 +27,9 @@ energy_struct = [
     [float, "active_power"],
     [float, "active_power_2"],
     [float, "active_power_3"],
+    [float, "apparent_power"],
+    [float, "apparent_power_2"],
+    [float, "apparent_power_3"],
     [float, "reactive_power"],
     [float, "reactive_power_2"],
     [float, "reactive_power_3"],
@@ -36,19 +39,38 @@ energy_struct = [
     [float, "frequency"],
     [float, "frequency_2"],
     [float, "frequency_3"],
-# relocate SDM630_IMPORT and SDM72_IMPEXP
+    [float, "import_active"],
+    [float, "import_active_2"],
+    [float, "import_active_3"],
     [float, "export_active"],
     [float, "export_active_2"],
     [float, "export_active_3"],
-
     [float, "start_energy"],
+    [float, "start_energy_2"],
+    [float, "start_energy_3"],
     [float, "daily"],
+    [float, "daily_2"],
+    [float, "daily_3"],
     [float, "total"],
+    [float, "total_2"],
+    [float, "total_3"],
+
+    [float, "daily_sum"],
+    [float, "total_sum"],
+    [float, "yesterday_sum"],
 
     [uint32, "today_delta_kwh"],
+    [uint32, "today_delta_kwh_2"],
+    [uint32, "today_delta_kwh_3"],
     [uint32, "today_offset_kwh"],
+    [uint32, "today_offset_kwh_2"],
+    [uint32, "today_offset_kwh_3"],
     [uint32, "today_kwh"],
+    [uint32, "today_kwh_2"],
+    [uint32, "today_kwh_3"],
     [uint32, "period"],
+    [uint32, "period_2"],
+    [uint32, "period_3"],
 
     [uint8, "fifth_second"],
     [uint8, "command_code"],

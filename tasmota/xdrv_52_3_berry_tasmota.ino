@@ -27,7 +27,7 @@ const uint32_t BERRY_MAX_LOGS = 16;   // max number of print output recorded whe
 
 /*********************************************************************************************\
  * Return C callback from index
- * 
+ *
 \*********************************************************************************************/
 extern "C" {
   int32_t l_get_cb(struct bvm *vm);
@@ -47,11 +47,11 @@ extern "C" {
 
 /*********************************************************************************************\
  * Native functions mapped to Berry functions
- * 
+ *
  * log(msg:string [,log_level:int]) ->nil
- * 
+ *
  * import tasmota
- * 
+ *
  * tasmota.get_free_heap() -> int
  * tasmota.publish(topic:string, payload:string[, retain:bool]) -> nil
  * tasmota.cmd(command:string) -> string
@@ -59,12 +59,12 @@ extern "C" {
  * tasmota.millis([delay:int]) -> int
  * tasmota.time_reached(timer:int) -> bool
  * tasmota.yield() -> nil
- * 
+ *
  * tasmota.get_light([index:int = 0]) -> map
  * tasmota.get_power([index:int = 0]) -> bool
  * tasmota.set_power(idx:int, power:bool) -> bool or nil
  * tasmota.set_light(idx:int, values:map) -> map
- * 
+ *
 \*********************************************************************************************/
 extern "C" {
   // Berry: `tasmota.publish(topic, payload [,retain]) -> nil``
@@ -97,7 +97,7 @@ extern "C" {
     }
     be_raise(vm, kTypeError, nullptr);
   }
-  
+
   // Berry: `tasmota.publish_result(payload:string, subtopic:string) -> nil``
   //
   int32_t l_publish_result(struct bvm *vm);
@@ -123,8 +123,7 @@ extern "C" {
       const char * command = be_tostring(vm, 2);
       be_pop(vm, 2);    // clear the stack before calling, because of re-entrant call to Berry in a Rule
       ExecuteCommand(command, SRC_BERRY);
-      be_pushstring(vm, ResponseData());
-      be_return(vm); // Return
+      be_return_nil(vm); // Return
     }
     be_raise(vm, kTypeError, nullptr);
   }
@@ -201,8 +200,7 @@ extern "C" {
       map_insert_int(vm, "program", ESP_getSketchSize() / 1024);
       map_insert_int(vm, "program_free", ESP.getFreeSketchSpace() / 1024);
       map_insert_int(vm, "heap_free", ESP_getFreeHeap() / 1024);
-      int32_t freeMaxMem = 100 - (int32_t)(ESP_getMaxAllocHeap() * 100 / ESP_getFreeHeap());
-      map_insert_int(vm, "frag", freeMaxMem);
+      map_insert_int(vm, "frag", ESP_getHeapFragmentation());
       if (UsePSRAM()) {
         map_insert_int(vm, "psram", ESP.getPsramSize() / 1024);
         map_insert_int(vm, "psram_free", ESP.getFreePsram() / 1024);
@@ -310,7 +308,8 @@ extern "C" {
   // ESP object
   int32_t l_yield(bvm *vm);
   int32_t l_yield(bvm *vm) {
-    optimistic_yield(10);
+    TWDTLoop();   // reset watchdog
+    BrTimeoutYield();   // reset timeout
     be_return_nil(vm);
   }
 
@@ -360,7 +359,7 @@ extern "C" {
     ResponseCmndDone();
     be_return_nil(vm);
   }
-  
+
   int32_t l_respCmndError(bvm *vm);
   int32_t l_respCmndError(bvm *vm) {
     ResponseCmndError();
@@ -488,9 +487,9 @@ extern "C" {
 
 /*********************************************************************************************\
  * Native functions mapped to Berry functions
- * 
+ *
  * log(msg:string [,log_level:int]) ->nil
- * 
+ *
 \*********************************************************************************************/
 extern "C" {
   // Berry: `log(msg:string [,log_level:int]) ->nil`
@@ -547,6 +546,8 @@ void berry_log(const char * berry_buf) {
     if (berry.log.log.length() >= BERRY_MAX_LOGS) {
       berry.log.log.remove(berry.log.log.head());
     }
+  } else {
+    TWDTLoop();   // if REPL, printing resets the WDT
   }
   // AddLog(LOG_LEVEL_INFO, PSTR("[Add to log] %s"), berry_buf);
   berry.log.addString(berry_buf, pre_delimiter, "\n");

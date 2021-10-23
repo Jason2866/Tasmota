@@ -78,6 +78,10 @@
 // Structs
 #include "settings.h"
 
+#ifdef CONFIG_IDF_TARGET_ESP32
+#include "soc/efuse_reg.h"
+#endif
+
 /*********************************************************************************************\
  * Global variables
 \*********************************************************************************************/
@@ -86,7 +90,7 @@ const uint32_t VERSION_MARKER[] PROGMEM = { 0x5AA55AA5, 0xFFFFFFFF, 0xA55AA55A }
 
 WiFiUDP PortUdp;                            // UDP Syslog and Alexa
 
-struct {
+struct TasmotaGlobal_t {
   uint32_t global_update;                   // Timestamp of last global temperature and humidity update
   uint32_t baudrate;                        // Current Serial baudrate
   uint32_t pulse_timer[MAX_PULSETIMERS];    // Power off timer
@@ -222,6 +226,18 @@ void setup(void) {
 #endif
 #endif
 
+#ifdef CONFIG_IDF_TARGET_ESP32
+  // restore GPIO16/17 if no PSRAM is found
+  if (!FoundPSRAM()) {
+    // test if the CPU is not pico
+    uint32_t chip_ver = REG_GET_FIELD(EFUSE_BLK0_RDATA3_REG, EFUSE_RD_CHIP_VER_PKG);
+    uint32_t pkg_version = chip_ver & 0x7;
+    if (pkg_version <= 3) {   // D0WD, S0WD, D2WD
+      gpio_reset_pin(GPIO_NUM_16);
+      gpio_reset_pin(GPIO_NUM_17);
+    }
+  }
+#endif
   RtcPreInit();
   SettingsInit();
 
@@ -301,6 +317,9 @@ void setup(void) {
   SettingsLoad();
   SettingsDelta();
 
+#ifdef ESP32
+  TWDTInit();  // Start Task WDT for ESP32 - FreeRTOS only
+#endif
   OsWatchInit();
 
   TasmotaGlobal.seriallog_level = Settings->seriallog_level;
@@ -493,6 +512,9 @@ void Scheduler(void) {
 #endif  // USE_DISCOVERY
 #endif  // ESP8266
 
+#ifdef ESP32
+  TWDTLoop();
+#endif
   OsWatchLoop();
   ButtonLoop();
   SwitchLoop();
@@ -557,7 +579,7 @@ void loop(void) {
       SleepDelay((uint32_t)TasmotaGlobal.sleep - my_activity);  // Provide time for background tasks like wifi
     } else {
       if (TasmotaGlobal.global_state.network_down) {
-        SleepDelay(my_activity /2);                // If wifi down and my_activity > setoption36 then force loop delay to 1/3 of my_activity period
+        SleepDelay(my_activity /2);                // If wifi down and my_activity > setoption36 then force loop delay to 1/2 of my_activity period
       }
     }
   }

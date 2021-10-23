@@ -711,6 +711,8 @@
 #define D_SENSOR_CSE7766_TX    "CSE7766 Tx"
 #define D_SENSOR_CSE7766_RX    "CSE7766 Rx"
 #define D_SENSOR_BL0939_RX     "BL0939 Rx"
+#define D_SENSOR_BL0942_RX     "BL0942 Rx"
+#define D_SENSOR_HM330X_SET    "HM330X SET"
 #define D_SENSOR_PN532_TX      "PN532 Tx"
 #define D_SENSOR_PN532_RX      "PN532 Rx"
 #define D_SENSOR_SM16716_CLK   "SM16716 CLK"
@@ -949,6 +951,7 @@
 #define D_CREATE_NEW_FILE      "Create and edit new file"
 #define D_EDIT_FILE            "Edit File"
 #define D_CONFIRM_FILE_DEL     "Confirm file deletion"
+#define D_SHOW_HIDDEN_FILES    "Show hidden files"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "nyereség:"
@@ -1061,6 +1064,7 @@
 #define D_NEOPOOL_RELAY_CD                "Brine pump"
 #define D_NEOPOOL_TIME                    "Idő"
 #define D_NEOPOOL_FILT_MODE               "Filtration"
+#define D_NEOPOOL_CELL_RUNTIME            "Cell runtime"
 #define D_NEOPOOL_POLARIZATION            "Pol"               // Sensor status
 #define D_NEOPOOL_PR_OFF                  "PrOff"
 #define D_NEOPOOL_SETPOINT_OK             "Ok"

@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v9.3.1.1
+ * Updated until v9.5.0.9
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -711,6 +711,8 @@
 #define D_SENSOR_CSE7766_TX    "CSE7766 TX"
 #define D_SENSOR_CSE7766_RX    "CSE7766 Rx"
 #define D_SENSOR_BL0939_RX     "BL0939 Rx"
+#define D_SENSOR_BL0942_RX     "BL0942 Rx"
+#define D_SENSOR_HM330X_SET    "HM330X SET"
 #define D_SENSOR_PN532_TX      "PN532 TX"
 #define D_SENSOR_PN532_RX      "PN532 RX"
 #define D_SENSOR_SM16716_CLK   "SM16716 CLK"
@@ -948,6 +950,7 @@
 #define D_CREATE_NEW_FILE      "Créer and modifier un nouveau fichier"
 #define D_EDIT_FILE            "Modification de fichier"
 #define D_CONFIRM_FILE_DEL     "Confirmez la suppression du fichier"
+#define D_SHOW_HIDDEN_FILES    "Affichez les fichiers cachés"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "gain:"
@@ -1060,6 +1063,7 @@
 #define D_NEOPOOL_RELAY_CD                "Pompe Brome"
 #define D_NEOPOOL_TIME                    "Durée"
 #define D_NEOPOOL_FILT_MODE               "Filtration"
+#define D_NEOPOOL_CELL_RUNTIME            "Cell runtime"
 #define D_NEOPOOL_POLARIZATION            "Pol"               // Sensor status
 #define D_NEOPOOL_PR_OFF                  "PrOff"
 #define D_NEOPOOL_SETPOINT_OK             "OK"

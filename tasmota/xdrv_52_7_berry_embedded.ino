@@ -26,64 +26,17 @@
 \*********************************************************************************************/
 
 const char berry_prog[] =
-  ""
-  // create a 'ntv' module to allow functions to be registered in a safe namespace
-  // "ntv = module('ntv') "
 
-  // auto-import modules
-  // // import alias
+#ifdef USE_BERRY_PYTHON_COMPAT
+  // enable python syntax compatibility mode
+  "import python_compat "
+#endif
+  // persistance module
+  "import persist "
+
 #ifdef USE_ENERGY_SENSOR
   "import energy "
 #endif
-
-
-    // // Force gc and return allocated memory
-    // "def gc() "
-    //   "import gc "
-    //   "gc.collect() "
-    //   "return gc.allocated() "
-    // // "end "
-    // // simple wrapper to load a file
-    // // prefixes '/' if needed, and simpler to use than `compile()`
-    // "def load(f) "
-    //   "import string "
-    //   "try "
-    //     // check that the file ends with '.be' of '.bec'
-    //     "var fl = string.split(f,'.') "
-    //     "if (size(fl) <= 1 || (fl[-1] != 'be' && fl[-1] != 'bec')) "
-    //       "raise \"file extension is not '.be' or '.bec'\" "
-    //     "end "
-    //     "var native = f[size(f)-1] == 'c' "
-    //     // add prefix if needed
-    //     "if f[0] != '/' f = '/' + f end "
-    //     // load - works the same for .be and .bec
-    //     "var c = compile(f,'file') "
-    //     // save the compiled bytecode
-    //     "if !native "
-    //       "try "
-    //         "self.save(f+'c', c) "
-    //       "except .. as e "
-    //         "self.log(string.format('BRY: could not save compiled file %s (%s)',f+'c',e)) "
-    //       "end "
-    //     "end "
-    //     // call the compiled code
-    //     "c() "
-    //     "self.log(string.format(\"BRY: sucessfully loaded '%s'\",f)) "
-    //   "except .. as e "
-    //     "raise \"io_error\",string.format(\"Could not load file '%s'\",f) "
-    //   "end "
-
-    // "end "
-
-
-  // // Monkey patch `Driver` class - To be continued
-  // "class Driver2 : Driver "
-  //   "def add_cmd(c, f) "
-  //     "var tasmota = self.get_tasmota() "
-  //     "tasmota.add_cmd(c, / cmd, idx, payload, payload_json -> f(self, cmd, idx, payload, payload_json)) "
-  //   "end "
-  // "end "
-  // "Driver = Driver2 "
 
   // Instantiate tasmota object
   "tasmota = Tasmota() "
@@ -91,62 +44,11 @@ const char berry_prog[] =
   "def load(f) return tasmota.load(f) end "
 
 #ifdef USE_LVGL
-  // instanciate singleton
-  // "class lvgl : lvgl_ntv "
-  // "end "
-  // "lv = lvgl() "
-  "import lvgl as lv "
-  // 'lv_group_focus_cb', 'lv_event_cb', 'lv_signal_cb', 'lv_design_cb', 'lv_gauge_format_cb'
-  "_lvgl_cb = [ {}, {}, {}, {}, {}, {} ] "
-  "_lvgl_cb_obj = [ {}, {}, {}, {}, {}, {} ] "
-  "def _lvgl_cb_dispatch(idx, obj, v1, v2, v3, v4) "
-    // "import string print(string.format('>>> idx=%i obj=0x%08X v1=%i', idx, obj, v1)) "
-    "var func = _lvgl_cb[idx].find(obj) "
-    "var inst = _lvgl_cb_obj[idx].find(obj) "
-    // convert arguments to ctypes if needed
-
-    // typedef void (*lv_group_focus_cb_t)(struct _lv_group_t *);
-    // typedef void (*lv_event_cb_t)(struct _lv_obj_t * obj, lv_event_t event);
-    // typedef lv_res_t (*lv_signal_cb_t)(struct _lv_obj_t * obj, lv_signal_t sign, void * param);
-    // typedef lv_design_res_t (*lv_design_cb_t)(struct _lv_obj_t * obj, const lv_area_t * clip_area, lv_design_mode_t mode);
-    // typedef void (*lv_gauge_format_cb_t)(lv_obj_t * gauge, char * buf, int bufsize, int32_t value);
-
-    "if idx == 3 "
-      // lv_signal_cb - arg2 is lv_area
-      "v1 = lv_area(v1) "
-    "end "
-    
-    "if func != nil "
-      "return func(inst, v1, v2, v3, v4) "
-    "end "
-    "return nil "
-  "end "
-  // array of 6 callback types, each with key (lv_obj pointer converted to int, closure)
+  "import lv "
+  // create the '_lvgl' global singleton
+  "_lvgl = LVGL_glob() "
 
 #endif // USE_LVGL
-
-  // Wire class
-  // "class Wire : Wire_ntv "
-  //   // read bytes as `bytes()` object
-  //   "def read_bytes(addr,reg,size) "
-  //     "self._begin_transmission(addr) "
-  //     "self._write(reg) "
-  //     "self._end_transmission(false) "
-  //     "self._request_from(addr,size) "
-  //     "var ret=bytes(size) "
-  //     "while (self._available()) "
-  //       "ret..self._read() "
-  //     "end "
-  //     "return ret "
-  //   "end "
-  //   // write bytes from `bytes` object
-  //   "def write_bytes(addr,reg,b) "
-  //     "self._begin_transmission(addr) "
-  //     "self._write(reg) "
-  //     "self._write(b) "
-  //     "self._end_transmission() "
-  //   "end "
-  // "end "
 
 #ifdef USE_I2C
   "tasmota.wire1 = Wire(1) "

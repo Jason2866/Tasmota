@@ -17,6 +17,26 @@ end
 
 tasmota = nil
 class Tasmota
+  var _rules
+  var _timers
+  var _ccmd
+  var _drivers
+  var _cb
+  var wire1
+  var wire2
+  var cmd_res     # store the command result, nil if disables, true if capture enabled, contains return value
+  var global      # mapping to TasmotaGlobal
+  var settings
+
+  def init()
+    # instanciate the mapping object to TasmotaGlobal
+    self.global = ctypes_bytes_dyn(self._global_addr, self._global_def)
+    import introspect
+    var settings_addr = bytes(self._settings_ptr, 4).get(0,4)
+    if settings_addr
+      self.settings = ctypes_bytes_dyn(introspect.toptr(settings_addr), self._settings_def)
+    end
+  end
 
   # add `chars_in_string(s:string,c:string) -> int``
   # looks for any char in c, and return the position of the first char
@@ -24,12 +44,18 @@ class Tasmota
   # inv is optional and inverses the behavior, i.e. look for chars not in the list
   def chars_in_string(s,c,inv)
     var inverted = inv ? true : false
-    for i:0..size(s)-1
+    var i = 0
+    while i < size(s)
+    # for i:0..size(s)-1
       var found = false
-      for j:0..size(c)-1
+      var j = 0
+      while j < size(c)
+      # for j:0..size(c)-1
         if s[i] == c[j] found = true end
+        j += 1
       end
       if inverted != found return i end
+      i += 1
     end
     return -1
   end
@@ -38,7 +64,7 @@ class Tasmota
   def find_key_i(m,keyi)
     import string
     var keyu = string.toupper(keyi)
-    if classof(m) == map
+    if isinstance(m, map)
       for k:m.keys()
         if string.toupper(k)==keyu || keyi=='?'
           return k
@@ -93,10 +119,14 @@ class Tasmota
     var rl_list = self.find_op(rule)
     var sub_event = event
     var rl = string.split(rl_list[0],'#')
-    for it:rl
+    var i = 0
+    while i < size(rl)
+    # for it:rl
+      var it = rl[i]
       var found=self.find_key_i(sub_event,it)
       if found == nil return false end
       sub_event = sub_event[found]
+      i += 1
     end
     var op=rl_list[1]
     var op2=rl_list[2]
@@ -126,16 +156,47 @@ class Tasmota
   # Run rules, i.e. check each individual rule
   # Returns true if at least one rule matched, false if none
   def exec_rules(ev_json)
-    if self._rules
+    if self._rules || self.cmd_res != nil  # if there is a rule handler, or we record rule results
       import json
-      var ev = json.load(ev_json)
+      var ev = json.load(ev_json)   # returns nil if invalid JSON
       var ret = false
       if ev == nil
-        print('BRY: ERROR, bad json: '+ev_json, 3)
-      else
-        for r: self._rules.keys()
-          ret = self.try_rule(ev,r,self._rules[r]) || ret
+        self.log('BRY: ERROR, bad json: '+ev_json, 3)
+        ev = ev_json                # revert to string
+      end
+      # record the rule payload for tasmota.cmd()
+      if self.cmd_res != nil
+        self.cmd_res = ev
+      end
+      # try all rule handlers
+      if self._rules
+        try
+          ret = self._rules.reduce( /k,v,r-> self.try_rule(ev,k,v) || r, nil, false)
+        except "stop_iteration"
+          # silence stop_iteration which means that the map was resized during iteration
         end
+      end
+      return ret
+    end
+    return false
+  end
+
+  # Run tele rules
+  def exec_tele(ev_json)
+    if self._rules
+      import json
+      var ev = json.load(ev_json)   # returns nil if invalid JSON
+      var ret = false
+      if ev == nil
+        self.log('BRY: ERROR, bad json: '+ev_json, 3)
+        ev = ev_json                # revert to string
+      end
+      # insert tele prefix
+      ev = { "Tele": ev }
+      try
+        ret = self._rules.reduce( /k,v,r-> self.try_rule(ev,k,v) || r, nil, false)
+      except "stop_iteration"
+        # silence stop_iteration which means that the map was resized during iteration
       end
       return ret
     end
@@ -237,61 +298,88 @@ class Tasmota
 
   def load(f)
     import string
+    import path
+
+    # if the filename has no '.' append '.be'
+    if string.find(f, '.') < 0
+      f += ".be"
+    end
 
     # check that the file ends with '.be' of '.bec'
     var fl = string.split(f,'.')
     if (size(fl) <= 1 || (fl[-1] != 'be' && fl[-1] != 'bec'))
       raise "io_error", "file extension is not '.be' or '.bec'"
     end
-    var native = f[size(f)-1] == 'c'
-    # load - works the same for .be and .bec
 
-    # try if file exists
-    try
-      var ff = open(f, 'r')
-      ff.close()
-    except 'io_error'
-      return false    # signals that file does not exist
+    var is_bytecode = f[-1] == 'c'            # file is Berry source and not bytecode
+    var f_time = path.last_modified(f)
+
+    if is_bytecode
+      if f_time == nil  return false end      # file does not exist
+      # f is the right file, continue
+    else
+      var f_time_bc = path.last_modified(f + "c") # timestamp for bytecode
+      if f_time == nil && f_time_bc == nil  return false end
+      if f_time_bc != nil && (f_time == nil || f_time_bc >= f_time)
+        # bytecode exists and is more recent than berry source, use bytecode
+        ##### temporarily disable loading from bec file
+        # f = f + "c"   # use bytecode name
+        is_bytecode = true
+      end
     end
-
-    var c = compile(f,'file')
+    
+    var c = compile(f, 'file')
     # save the compiled bytecode
-    if !native
+    if !is_bytecode
       try
-        self.save(f+'c', c)
+        self.save(f + 'c', c)
       except .. as e
-        self.log(string.format('BRY: could not save compiled file %s (%s)',f+'c',e))
+        print(string.format('BRY: could not save compiled file %s (%s)',f+'c',e))
       end
     end
     # call the compiled code
     c()
     # call successfuls
     return true
-
   end
 
   def event(event_type, cmd, idx, payload, raw)
     import introspect
+    import debug
+    import string
     if event_type=='every_50ms' self.run_deferred() end  #- first run deferred events -#
 
+    var done = false
     if event_type=='cmd' return self.exec_cmd(cmd, idx, payload)
+    elif event_type=='tele' return self.exec_tele(payload)
     elif event_type=='rule' return self.exec_rules(payload)
     elif event_type=='gc' return self.gc()
     elif self._drivers
-      for d:self._drivers
+      var i = 0
+      while i < size(self._drivers)
+      #for d:self._drivers
+        var d = self._drivers[i]
         var f = introspect.get(d, event_type)   # try to match a function or method with the same name
         if type(f) == 'function'
           try
-            var done = f(d, cmd, idx, payload, raw)
-            if done == true return true end
+            done = f(d, cmd, idx, payload, raw)
+            if done break end
           except .. as e,m
-            import string
             print(string.format("BRY: Exception> '%s' - %s", e, m))
+            debug.traceback()
           end
         end
+        i += 1
       end
-      return false
     end
+
+    # save persist
+    if event_type=='save_before_restart'
+      import persist
+      persist.save()
+    end
+
+    return done
   end
 
   def add_driver(d)
@@ -313,14 +401,17 @@ class Tasmota
 
   # cmd high-level function
   def cmd(command)
-    import json
-    var ret = self._cmd(command)
-    var j = json.load(ret)
-    if type(j) == 'instance'
-      return j
-    else
-      return {'response':j}
+    self.cmd_res = true      # signal buffer capture
+
+    self._cmd(command)
+    
+    var ret = nil
+    if self.cmd_res != true       # unchanged
+      ret = self.cmd_res
     end
+    self.cmd_res = nil       # clear buffer
+    
+    return ret
   end
 
   # set_light and get_light deprecetaion

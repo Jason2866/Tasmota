@@ -73,7 +73,7 @@ extern "C" {
 }
 
 #define be_const_comptr(_val) {                                 \
-    .v.p = (void*)(_val),                                       \
+    .v.c = (const void*)(_val),                                       \
     .type = BE_COMPTR                                           \
 }
 
@@ -138,13 +138,12 @@ const bvector _name = {                                         \
     .end = (void*)(_data + (_size) - 1)                         \
 }
 
-#define be_define_const_native_module(_module, _init)           \
+#define be_define_const_native_module(_module)                  \
 const bntvmodule be_native_module(_module) = {                  \
     .name = #_module,                                           \
     .attrs = NULL,                                              \
     .size = 0,                                                  \
-    .module = (bmodule*)&(m_lib##_module),                      \
-    .init = _init                                               \
+    .module = (bmodule*)&(m_lib##_module)                       \
 }
 
 /* defines needed for solidified classes */
@@ -155,6 +154,14 @@ const bntvmodule be_native_module(_module) = {                  \
     .super = (bclass*)_super,                                   \
     .members = (bmap*)_map,                                     \
     .name = _cname                                              \
+}
+
+/* defines needed for solidified modules */
+#define be_local_module(_c_name, _module_name, _map)            \
+  static const bmodule m_lib##_c_name = {                       \
+    be_const_header(BE_MODULE),                                 \
+    .table = (bmap*)_map,                                       \
+    .info.name = _module_name                                   \
 }
 
 #define be_nested_map(_size, _slots)                            \

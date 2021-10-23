@@ -158,8 +158,8 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
     uint32_t ds18x20_mean : 1;             // bit 12 (v9.3.1.2)  - SetOption126 - (DS18x20) Enable arithmetic mean over teleperiod for JSON temperature (1)
     uint32_t wifi_no_sleep : 1;            // bit 13 (v9.5.0.2)  - SetOption127 - (Wifi) Keep wifi in no-sleep mode, prevents some occasional unresponsiveness
     uint32_t disable_referer_chk : 1;      // bit 14 (v9.5.0.5)  - SetOption128 - (Web) Allow access without referer check
-    uint32_t spare15 : 1;                  // bit 15
-    uint32_t spare16 : 1;                  // bit 16
+    uint32_t energy_phase : 1;             // bit 15 (v9.5.0.9)  - SetOption129 - (Energy) Show phase information
+    uint32_t show_heap_with_timestamp : 1; // bit 16 (v9.5.0.9)  - SetOption130 - (Debug) Show heap with logging timestamp
     uint32_t spare17 : 1;                  // bit 17
     uint32_t spare18 : 1;                  // bit 18
     uint32_t spare19 : 1;                  // bit 19
@@ -483,9 +483,9 @@ typedef struct {
   int16_t       toffset[2];                // 30E
   uint8_t       display_font;              // 312
   DisplayOptions  display_options;         // 313
-  uint32_t      energy_kWhtoday_ph[3];     // 314
-  uint32_t      energy_kWhyesterday_ph[3]; // 320
-  uint32_t      energy_kWhtotal_ph[3];     // 32C
+  int32_t       energy_kWhtoday_ph[3];     // 314
+  int32_t       energy_kWhyesterday_ph[3]; // 320
+  int32_t       energy_kWhtotal_ph[3];     // 32C
 
   uint8_t       free_338[7];               // 338
 
@@ -786,8 +786,8 @@ typedef struct {
 
   uint8_t       free_2d6[2];               // 2D6
 
-  uint32_t      energy_kWhtoday_ph[3];     // 2D8
-  uint32_t      energy_kWhtotal_ph[3];     // 2E4
+  int32_t       energy_kWhtoday_ph[3];     // 2D8
+  int32_t       energy_kWhtotal_ph[3];     // 2E4
 
                                            // 2F0 - 2FF free locations
 } TRtcSettings;

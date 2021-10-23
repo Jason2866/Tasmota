@@ -696,7 +696,9 @@ bool RuleSetProcess(uint8_t rule_set, String &event_saved)
 
   delay(0);                                               // Prohibit possible loop software watchdog
 
-//AddLog(LOG_LEVEL_DEBUG, PSTR("RUL-RP1: Event = %s, Rule = %s"), event_saved.c_str(), Settings->rules[rule_set]);
+#ifdef DEBUG_RULES
+  AddLog(LOG_LEVEL_DEBUG, PSTR("RUL-RP1: Event = %s, Rule = %s"), event_saved.c_str(), Settings->rules[rule_set]);
+#endif
 
   String rules = GetRule(rule_set);
 
@@ -716,6 +718,7 @@ bool RuleSetProcess(uint8_t rule_set, String &event_saved)
     int pevt = rule.indexOf(F(" DO "));
     if (pevt == -1) { return serviced; }                  // Bad syntax - Nothing to do
     String event_trigger = rule.substring(3, pevt);       // "INA219#CURRENT>0.100"
+    event_trigger.trim();
 
     plen = rule.indexOf(F(" ENDON"));
     plen2 = rule.indexOf(F(" BREAK"));
@@ -730,7 +733,7 @@ bool RuleSetProcess(uint8_t rule_set, String &event_saved)
     String event = event_saved;
 
 #ifdef DEBUG_RULES
-//    AddLog(LOG_LEVEL_DEBUG, PSTR("RUL-RP2: Event |%s|, Rule |%s|, Command(s) |%s|"), event.c_str(), event_trigger.c_str(), commands.c_str());
+    AddLog(LOG_LEVEL_DEBUG, PSTR("RUL-RP2: Event |%s|, Rule |%s|, Command(s) |%s|"), event.c_str(), event_trigger.c_str(), commands.c_str());
 #endif
 
     if (RulesRuleMatch(rule_set, event, event_trigger, stop_all_rules)) {
@@ -803,7 +806,7 @@ bool RulesProcessEvent(const char *json_event)
 {
 #ifdef USE_BERRY
   // events are passed to Berry before Rules engine
-  callBerryRule(json_event);
+  callBerryRule(json_event, Rules.teleperiod);
 #endif
 
   if (Rules.busy) { return false; }
@@ -813,7 +816,9 @@ bool RulesProcessEvent(const char *json_event)
 
   SHOW_FREE_MEM(PSTR("RulesProcessEvent"));
 
-//AddLog(LOG_LEVEL_DEBUG, PSTR("RUL: ProcessEvent |%s|"), json_event);
+#ifdef DEBUG_RULES
+  AddLog(LOG_LEVEL_DEBUG, PSTR("RUL: ProcessEvent |%s|"), json_event);
+#endif
 
   String event_saved = json_event;
   // json_event = {"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}}
@@ -827,7 +832,9 @@ bool RulesProcessEvent(const char *json_event)
   }
   event_saved.toUpperCase();
 
-//AddLog(LOG_LEVEL_DEBUG, PSTR("RUL: Event |%s|"), event_saved.c_str());
+#ifdef DEBUG_RULES
+  AddLog(LOG_LEVEL_DEBUG, PSTR("RUL: Event |%s|"), event_saved.c_str());
+#endif
 
   for (uint32_t i = 0; i < MAX_RULE_SETS; i++) {
     if (GetRuleLen(i) && bitRead(Settings->rule_enabled, i)) {
@@ -2193,7 +2200,7 @@ void CmndEvent(void)
   if (XdrvMailbox.data_len > 0) {
     strlcpy(Rules.event_data, XdrvMailbox.data, sizeof(Rules.event_data));
 #ifdef USE_DEVICE_GROUPS
-    SendDeviceGroupMessage(1, DGR_MSGTYP_UPDATE, DGR_ITEM_EVENT, XdrvMailbox.data);
+    if (!XdrvMailbox.grpflg) SendDeviceGroupMessage(1, DGR_MSGTYP_UPDATE, DGR_ITEM_EVENT, XdrvMailbox.data);
 #endif  // USE_DEVICE_GROUPS
   }
   if (XdrvMailbox.command) ResponseCmndDone();
