@@ -1945,7 +1945,7 @@ chknext:
           while (*lp==' ') lp++;
           switch ((uint32_t)fvar) {
             case 0:
-              fvar = Energy.total;
+              fvar = Energy.total_sum;
               break;
             case 1:
               fvar = Energy.voltage[0];
@@ -1975,13 +1975,13 @@ chknext:
               fvar = Energy.active_power[2];
               break;
             case 10:
-              fvar = Energy.start_energy;
+              fvar = Energy.start_energy[0];
               break;
             case 11:
-              fvar = Energy.daily;
+              fvar = Energy.daily_sum;
               break;
             case 12:
-              fvar = (float)Settings->energy_kWhyesterday/100000.0;
+              fvar = Energy.yesterday_sum;
               break;
 
             default:
@@ -8075,7 +8075,6 @@ int32_t lvgl_test(char **lpp, int32_t p) {
       lv_obj_add_event_cb(obj, btn_event_cb, LV_EVENT_ALL, nullptr);
       label = lv_label_create(obj);
       lv_label_set_text(label, str);
-      lv_obj_add_flag(obj, LV_OBJ_FLAG_CHECKABLE);
       lvgl_StoreObj(obj);
       break;
 

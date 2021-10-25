@@ -33,7 +33,8 @@
         be_writestring(__lbuf);         \
     } while (0)
 
-static void m_solidify_bvalue(bvm *vm, bvalue * value)
+// pass key name in case of class, or NULL if none
+static void m_solidify_bvalue(bvm *vm, bvalue * value, const char *classname, const char *key)
 {
     int type = var_type(value);
     switch (type) {
@@ -80,6 +81,12 @@ static void m_solidify_bvalue(bvm *vm, bvalue * value)
         break;
     case BE_CLASS:
         logfmt("be_const_class(be_class_%s)", str(((bclass*) var_toobj(value))->name));
+        break;
+    case BE_COMPTR:
+        logfmt("be_const_comptr(&be_ntv_%s_%s)", classname ? classname : "unknown", key ? key : "unknown");
+        break;
+    case BE_NTVFUNC:
+        logfmt("be_const_func(be_ntv_%s_%s)", classname ? classname : "unknown", key ? key : "unknown");
         break;
     default:
         {
@@ -150,7 +157,7 @@ static void m_solidify_proto(bvm *vm, bproto *pr, const char * func_name, int bu
         logfmt("%*s( &(const bvalue[%2d]) {     /* constants */\n", indent, "", pr->nconst);
         for (int k = 0; k < pr->nconst; k++) {
             logfmt("%*s/* K%-3d */  ", indent, "", k);
-            m_solidify_bvalue(vm, &pr->ktab[k]);
+            m_solidify_bvalue(vm, &pr->ktab[k], NULL, NULL);
             logfmt(",\n");
         }
         logfmt("%*s}),\n", indent, "");
@@ -262,7 +269,7 @@ static void m_solidify_subclass(bvm *vm, bclass *cl, int builtins)
                 key_next = -1;      /* more readable */
             }
             logfmt("        { be_nested_key(\"%s\", %i, %zu, %i), ", str(node->key.v.s), be_strhash(node->key.v.s), len >= 255 ? 255 : len, key_next);
-            m_solidify_bvalue(vm, &node->value);
+            m_solidify_bvalue(vm, &node->value, class_name, str(node->key.v.s));
 
             logfmt(" },\n");
         }
@@ -290,6 +297,62 @@ static void m_solidify_class(bvm *vm, bclass *cl, int builtins)
     logfmt("}\n");
 }
 
+static void m_solidify_module(bvm *vm, bmodule *ml, int builtins)
+{
+    const char * module_name = ml->info.name;
+
+    /* iterate on members to dump closures */
+    if (ml->table) {
+        bmapnode *node;
+        bmapiter iter = be_map_iter();
+        while ((node = be_map_next(ml->table, &iter)) != NULL) {
+            if (var_isstr(&node->key) && var_isclosure(&node->value)) {
+                bclosure *f = var_toobj(&node->value);
+                m_solidify_closure(vm, f, builtins);
+            }
+        }
+    }
+
+
+    logfmt("\n");
+    logfmt("/********************************************************************\n");
+    logfmt("** Solidified module: %s\n", module_name);
+    logfmt("********************************************************************/\n");
+
+    logfmt("be_local_module(%s,\n", module_name);
+    logfmt("    \"%s\",\n", module_name);
+
+    if (ml->table) {
+        logfmt("    be_nested_map(%i,\n", ml->table->count);
+
+        logfmt("    ( (struct bmapnode*) &(const bmapnode[]) {\n");
+        for (int i = 0; i < ml->table->count; i++) {
+            bmapnode * node = &ml->table->slots[i];
+            if (node->key.type != BE_STRING) {
+                char error[64];
+                snprintf(error, sizeof(error), "Unsupported type in key: %i", node->key.type);
+                be_raise(vm, "internal_error", error);
+            }
+            int key_next = node->key.next;
+            size_t len = strlen(str(node->key.v.s));
+            if (0xFFFFFF == key_next) {
+                key_next = -1;      /* more readable */
+            }
+            logfmt("        { be_nested_key(\"%s\", %i, %zu, %i), ", str(node->key.v.s), be_strhash(node->key.v.s), len >= 255 ? 255 : len, key_next);
+            m_solidify_bvalue(vm, &node->value, module_name, str(node->key.v.s));
+
+            logfmt(" },\n");
+        }
+        logfmt("    }))\n");
+    } else {
+        logfmt("    NULL,\n");
+    }
+    logfmt(");\n");
+    logfmt("BE_EXPORT_VARIABLE be_define_const_native_module(%s, NULL);\n", module_name);
+    logfmt("/********************************************************************\n");
+
+}
+
 #define be_builtin_count(vm) \
     be_vector_count(&(vm)->gbldesc.builtin.vlist)
 
@@ -301,6 +364,8 @@ static int m_dump(bvm *vm)
             m_solidify_closure(vm, var_toobj(v), be_builtin_count(vm));
         } else if (var_isclass(v)) {
             m_solidify_class(vm, var_toobj(v), be_builtin_count(vm));
+        } else if (var_ismodule(v)) {
+            m_solidify_module(vm, var_toobj(v), be_builtin_count(vm));
         }
     }
     be_return_nil(vm);

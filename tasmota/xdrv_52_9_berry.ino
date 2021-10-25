@@ -95,12 +95,12 @@ extern "C" {
 // // call a function (if exists) of type void -> void
 
 // If event == nullptr, then take XdrvMailbox.data
-bool callBerryRule(const char *event) {
+bool callBerryRule(const char *event, bool teleperiod) {
   if (berry.rules_busy) { return false; }
   berry.rules_busy = true;
   char * json_event = XdrvMailbox.data;
   bool serviced = false;
-  serviced = callBerryEventDispatcher(PSTR("rule"), nullptr, 0, event ? event : XdrvMailbox.data);
+  serviced = callBerryEventDispatcher(teleperiod ? "tele" : "rule", nullptr, 0, event ? event : XdrvMailbox.data);
   berry.rules_busy = false;
   return serviced;     // TODO event not handled
 }
@@ -214,6 +214,7 @@ int32_t callBerryEventDispatcher(const char *type, const char *cmd, int32_t idx,
       be_pushstring(vm, cmd != nullptr ? cmd : "");
       be_pushint(vm, idx);
       be_pushstring(vm, payload != nullptr ? payload : "{}");  // empty json
+      BrTimeoutStart();
       if (data_len > 0) {
         be_pushbytes(vm, payload, data_len);    // if data_len is set, we also push raw bytes
         ret = be_pcall(vm, 6);   // 6 arguments
@@ -221,6 +222,7 @@ int32_t callBerryEventDispatcher(const char *type, const char *cmd, int32_t idx,
       } else {
         ret = be_pcall(vm, 5);   // 5 arguments
       }
+      BrTimeoutReset();
       if (ret != 0) {
         BerryDumpErrorAndClear(vm, false);  // log in Tasmota console only
         return ret;
@@ -266,7 +268,18 @@ void BerryObservability(bvm *vm, int event...) {
         }
       }
       break;
-    default: break;
+    case BE_OBS_VM_HEARTBEAT:
+      {
+        // AddLog(LOG_LEVEL_INFO, ">>>: Heartbeat now=%i timeout=%i", millis(), berry.timeout);
+        if (berry.timeout) {
+          if (TimeReached(berry.timeout)) {
+            be_raise(vm, "timeout_error", "Berry code running for too long");
+          }
+        }
+      }
+      break;
+    default:
+      break;
   }
   va_end(param);
 }
@@ -348,10 +361,12 @@ void BrLoad(const char * script_name) {
   if (!be_isnil(berry.vm, -1)) {
     be_pushstring(berry.vm, script_name);
 
+    BrTimeoutStart();
     if (be_pcall(berry.vm, 1) != 0) {
       BerryDumpErrorAndClear(berry.vm, false);
       return;
     }
+    BrTimeoutReset();
     bool loaded = be_tobool(berry.vm, -2);  // did it succeed?
     be_pop(berry.vm, 2);
     if (loaded) {
@@ -389,7 +404,9 @@ void CmndBrRun(void) {
     }
     if (0 != ret_code) break;
 
+    BrTimeoutStart();
     ret_code = be_pcall(berry.vm, 0);     // execute code
+    BrTimeoutReset();
   } while (0);
 
   if (0 == ret_code) {
@@ -437,7 +454,9 @@ void BrREPLRun(char * cmd) {
       // AddLog(LOG_LEVEL_INFO, PSTR(">>>> be_loadbuffer cmd1 '%s', ret=%i"), cmd, ret_code);
     }
     if (0 == ret_code) {    // code is ready to run
+      BrTimeoutStart();
       ret_code = be_pcall(berry.vm, 0);     // execute code
+      BrTimeoutReset();
       // AddLog(LOG_LEVEL_INFO, PSTR(">>>> be_pcall ret=%i"), ret_code);
       if (0 == ret_code) {
         if (!be_isnil(berry.vm, 1)) {
@@ -741,7 +760,10 @@ bool Xdrv52(uint8_t function)
 
     // Berry wide commands and events
     case FUNC_RULES_PROCESS:
-      result = callBerryRule(nullptr);
+      result = callBerryRule(nullptr, false);
+      break;
+    case FUNC_TELEPERIOD_RULES_PROCESS:
+      result = callBerryRule(nullptr, true);
       break;
     case FUNC_MQTT_DATA:
       result = callBerryEventDispatcher(PSTR("mqtt_data"), XdrvMailbox.topic, 0, XdrvMailbox.data, XdrvMailbox.data_len);
