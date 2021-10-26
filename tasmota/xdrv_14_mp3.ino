@@ -144,13 +144,14 @@ uint16_t MP3_Checksum(uint8_t *array)
 \*********************************************************************************************/
 
 void MP3PlayerInit(void) {
+  if (!PinUsed(GPIO_MP3_DFR562)) return;
   MP3Player = new TasmotaSerial(-1, Pin(GPIO_MP3_DFR562));
   // start serial communication fixed to 9600 baud
   if (MP3Player->begin(9600)) {
     MP3Player->flush();
-    delay(1000);
+  //  delay(1000);
     MP3_CMD(MP3_CMD_RESET, MP3_CMD_RESET_VALUE);    // reset the player to defaults
-    delay(3000);
+  //  delay(3000);
     MP3_CMD(MP3_CMD_VOLUME, MP3_VOLUME);            // after reset set volume depending on the entry in the my_user_config.h
   }
   return;
