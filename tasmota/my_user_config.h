@@ -967,6 +967,11 @@
 
 #ifdef ESP32
 
+#ifdef APP_NORMAL_SLEEP
+  #undef APP_NORMAL_SLEEP
+  #define APP_NORMAL_SLEEP       true             // [SetOption60] Enable normal sleep instead of dynamic sleep
+#endif // APP_NORMAL_SLEEP
+
 //#define USE_ETHERNET                             // Add support for ethernet (Currently fixed for Olimex ESP32-PoE)
 //  #define USE_WT32_ETH01                         // Add support for Wireless-Tag WT32-ETH01
 //  #define ETH_TYPE          0                    // [EthType] 0 = ETH_PHY_LAN8720, 1 = ETH_PHY_TLK110/ETH_PHY_IP101, 2 = ETH_PHY_RTL8201, 3 = ETH_PHY_DP83848, 4 = ETH_PHY_DM9051, 5 = ETH_PHY_KSZ8081
