@@ -21,6 +21,8 @@
 #ifndef _AUDIOFILESOURCESPIFFS_H
 #define _AUDIOFILESOURCESPIFFS_H
 
+#ifndef ESP32 // No LittleFS there, yet
+
 #include <Arduino.h>
 #include <LittleFS.h>
 
@@ -34,6 +36,8 @@ class AudioFileSourceLittleFS : public AudioFileSourceFS
     AudioFileSourceLittleFS(const char *filename) : AudioFileSourceFS(LittleFS, filename) {};
     // Others are inherited from base
 };
+
+#endif
 
 #endif
 
