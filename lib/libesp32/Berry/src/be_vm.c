@@ -87,7 +87,7 @@
         res = ibinop(op, a, b); \
     } else if (var_isnumber(a) && var_isnumber(b)) { \
         res = var2real(a) op var2real(b); \
-    } else if (var_isinstance(a)) { \
+    } else if (var_isinstance(a) && !var_isnil(b)) { \
         res = object_eqop(vm, #op, iseq, a, b); \
     } else if (var_type(a) == var_type(b)) { /* same types */ \
         if (var_isnil(a)) { /* nil op nil */ \
@@ -821,7 +821,6 @@ newframe: /* a new call frame */
             vm->counter_get++;
 #endif
             bvalue a_temp;  /* copy result to a temp variable because the stack may be relocated in virtual member calls */
-            // bvalue *a = RA(), *b = RKB(), *c = RKC();
             bvalue *b = RKB(), *c = RKC();
             if (var_isinstance(b) && var_isstr(c)) {
                 obj_attribute(vm, b, var_tostr(c), &a_temp);
@@ -834,6 +833,7 @@ newframe: /* a new call frame */
                 reg = vm->reg;
             } else {
                 attribute_error(vm, "attribute", b, c);
+                a_temp = *RA();     /* avoid gcc warning for uninitialized variable a_temp, this code is never reached */
             }
             bvalue *a = RA();
             *a = a_temp;    /* assign the resul to the specified register on the updated stack */
@@ -882,28 +882,34 @@ newframe: /* a new call frame */
                 binstance *obj = var_toobj(a);
                 bstring *attr = var_tostr(b);
                 if (!be_instance_setmember(vm, obj, attr, c)) {
+                    reg = vm->reg;
                     vm_error(vm, "attribute_error",
                         "class '%s' cannot assign to attribute '%s'",
                         str(be_instance_name(obj)), str(attr));
                 }
+                reg = vm->reg;
                 dispatch();
             }
             if (var_isclass(a) && var_isstr(b)) {
                 bclass *obj = var_toobj(a);
                 bstring *attr = var_tostr(b);
                 if (!be_class_setmember(vm, obj, attr, c)) {
+                    reg = vm->reg;
                     vm_error(vm, "attribute_error",
                         "class '%s' cannot assign to static attribute '%s'",
                         str(be_class_name(obj)), str(attr));
                 }
+                reg = vm->reg;
                 dispatch();
             }
             if (var_ismodule(a) && var_isstr(b)) {
                 bmodule *obj = var_toobj(a);
                 bstring *attr = var_tostr(b);
                 if (be_module_setmember(vm, obj, attr, c)) {
+                    reg = vm->reg;
                     dispatch();
                 } else {
+                    reg = vm->reg;
                     // fall through exception below
                 }
             }

@@ -405,6 +405,7 @@ enum beobshookevents {
   BE_OBS_GC_START,        /* start of GC, arg = allocated size */
   BE_OBS_GC_END,          /* end of GC, arg = allocated size */
   BE_OBS_VM_HEARTBEAT,    /* VM heartbeat called every million instructions */
+  BE_OBS_STACK_RESIZE_START,    /* Berry stack resized */
 };
 
 /* FFI functions */
@@ -561,7 +562,7 @@ BERRY_API void be_module_path(bvm *vm);
 BERRY_API void be_module_path_set(bvm *vm, const char *path);
 
 /* bytes operations */
-BERRY_API void be_pushbytes(bvm *vm, const void *buf, size_t len);
+BERRY_API void* be_pushbytes(bvm *vm, const void *buf, size_t len);
 BERRY_API const void* be_tobytes(bvm *vm, int index, size_t *len);
 
 /* registry operation */

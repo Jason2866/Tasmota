@@ -501,6 +501,9 @@ void lv_draw_polygon(const lv_point_t points[], uint16_t point_cnt, const lv_are
 lv_theme_t * lv_theme_default_init(lv_disp_t * disp, lv_color_t color_primary, lv_color_t color_secondary, bool dark, const lv_font_t * font)
 bool lv_theme_default_is_inited(void)
 
+// ../../lib/libesp32_lvgl/LVGL8/src/extra/themes/mono/lv_theme_mono.h
+lv_theme_t * lv_theme_mono_init(lv_disp_t * disp, bool dark_bg, const lv_font_t * font)
+
 // ../../lib/libesp32_lvgl/LVGL8/src/extra/widgets/chart/lv_chart.h
 lv_obj_t * lv_chart_create(lv_obj_t * parent)
 void lv_chart_set_type(lv_obj_t * obj, lv_chart_type_t type)
@@ -600,6 +603,9 @@ void lv_spinbox_step_next(lv_obj_t * obj)
 void lv_spinbox_step_prev(lv_obj_t * obj)
 void lv_spinbox_increment(lv_obj_t * obj)
 void lv_spinbox_decrement(lv_obj_t * obj)
+
+// ../../lib/libesp32_lvgl/LVGL8/src/extra/widgets/spinner/lv_spinner.h
+lv_obj_t * lv_spinner_create(lv_obj_t * parent, uint32_t time, uint32_t arc_length)
 
 // ../../lib/libesp32_lvgl/LVGL8/src/misc/lv_style_gen.h
 void lv_style_set_width(lv_style_t * style, lv_coord_t value)

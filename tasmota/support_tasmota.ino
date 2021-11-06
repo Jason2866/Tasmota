@@ -1766,6 +1766,10 @@ void GpioInit(void)
         TasmotaGlobal.ledlnk_inverted = 1;
         mpin -= (AGPIO(GPIO_LEDLNK_INV) - AGPIO(GPIO_LEDLNK));
       }
+      else if (mpin == AGPIO(GPIO_HEARTBEAT_INV)) {
+        TasmotaGlobal.heartbeat_inverted = 1;
+        mpin -= (AGPIO(GPIO_HEARTBEAT_INV) - AGPIO(GPIO_HEARTBEAT));
+      }
       else if ((mpin >= AGPIO(GPIO_PWM1_INV)) && (mpin < (AGPIO(GPIO_PWM1_INV) + MAX_PWMS))) {
         bitSet(TasmotaGlobal.pwm_inverted, mpin - AGPIO(GPIO_PWM1_INV));
         mpin -= (AGPIO(GPIO_PWM1_INV) - AGPIO(GPIO_PWM1));
@@ -1891,6 +1895,11 @@ void GpioInit(void)
 #endif  // ESP8266
   }
 
+  if (PinUsed(GPIO_HEARTBEAT)) {
+    pinMode(Pin(GPIO_HEARTBEAT), OUTPUT);
+    digitalWrite(Pin(GPIO_HEARTBEAT), TasmotaGlobal.heartbeat_inverted);
+  }
+
   // Digital input
   for (uint32_t i = 0; i < MAX_SWITCHES; i++) {
     if (PinUsed(GPIO_INPUT, i)) {
@@ -1901,12 +1910,12 @@ void GpioInit(void)
 #ifdef USE_I2C
   TasmotaGlobal.i2c_enabled = (PinUsed(GPIO_I2C_SCL) && PinUsed(GPIO_I2C_SDA));
   if (TasmotaGlobal.i2c_enabled) {
-    Wire.begin(Pin(GPIO_I2C_SDA), Pin(GPIO_I2C_SCL));
+    TasmotaGlobal.i2c_enabled = I2cBegin(Pin(GPIO_I2C_SDA), Pin(GPIO_I2C_SCL));
   }
 #ifdef ESP32
   TasmotaGlobal.i2c_enabled_2 = (PinUsed(GPIO_I2C_SCL, 1) && PinUsed(GPIO_I2C_SDA, 1));
   if (TasmotaGlobal.i2c_enabled_2) {
-    Wire1.begin(Pin(GPIO_I2C_SDA, 1), Pin(GPIO_I2C_SCL, 1));
+    TasmotaGlobal.i2c_enabled_2 = I2c2Begin(Pin(GPIO_I2C_SDA, 1), Pin(GPIO_I2C_SCL, 1));
   }
 #endif
 #endif  // USE_I2C
