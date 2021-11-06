@@ -75,6 +75,17 @@
 
 #undef USE_HOME_ASSISTANT
 
+#define USE_BERRY
+  #define USE_BERRY_DEBUG
+  #define USE_BERRY_PSRAM
+  #define USE_WEBCLIENT
+  #define USE_WEBCLIENT_HTTPS
+#define USE_ETHERNET
+#define USE_I2C
+#define USE_SPI
+#define USE_I2S
+
+
 #define USE_ADC
 #define USE_SPI
   #define USE_DISPLAY                            // Add SPI Display Support (+2k code)
@@ -164,17 +175,30 @@
 #undef FALLBACK_MODULE
 #define FALLBACK_MODULE        WEMOS             // [Module2] Select default module on fast reboot where USER_MODULE is user template
 
-#define USE_INFLUXDB                             // Enable influxdb support (+5k code)
+// #define USE_INFLUXDB                             // Enable influxdb support (+5k code)
 #define USE_TASMOTA_DISCOVERY
 #undef USE_HOME_ASSISTANT
 
-#define USE_SDCARD
+// #define USE_SDCARD
+#undef USE_I2C
+#undef USE_LVGL
+#undef USE_DISPLAY
+#undef USE_LIGHT
+#undef USE_IRREMOTE
+#undef USE_DOMOTICZ
+#undef USE_KNX
 
 #define USE_ADC
-#undef USE_BERRY                                 // Disable Berry scripting language
-#define USE_BLE_ESP32                            // Enable new BLE driver
-#define USE_EQ3_ESP32
+// #undef USE_BERRY                                 // Disable Berry scripting language
+// #define USE_BLE_ESP32                            // Enable new BLE driver
+// #define USE_EQ3_ESP32
 #define USE_MI_ESP32                             // (ESP32 only) Add support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
+#ifdef USE_MI_ESP32
+  #if(USE_MI_HOMEKIT != 1)                       //only for the .c-file
+  #undef USE_MI_HOMEKIT
+  #endif //USE_MI_HOMEKIT
+  #define USE_MI_EXT_GUI
+#endif //USE_MI_ESP32
 #endif  // FIRMWARE_BLUETOOTH
 
 /*********************************************************************************************\
