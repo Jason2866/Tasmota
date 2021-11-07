@@ -23,7 +23,7 @@ extern uint32_t MI32getDeviceType(uint32_t slot);
 extern void MI32saveHAPhandles(uint32_t slot, uint32_t type, void* handle);
 extern void MI32passHapEvent(uint32_t event);
 extern void MI32didStartHAP();
-extern void MI32getSetupCodeFromMAC(char* code);
+extern const char * MI32getSetupCode();
 extern uint32_t MI32numOfRelays();
 extern void MI32setRelayFromHK(uint32_t relay, bool onOff);
 
@@ -284,9 +284,7 @@ static void MI32_bridge_thread_entry(void *p)
 
     hap_register_event_handler(mi_hap_event_handler);
 
-    char _setupCode[11];
-    MI32getSetupCodeFromMAC(_setupCode);
-    hap_set_setup_code(_setupCode);
+    hap_set_setup_code(MI32getSetupCode());
     /* Unique four character Setup Id. Default: ES32 */
     hap_set_setup_id(CONFIG_EXAMPLE_SETUP_ID);
 

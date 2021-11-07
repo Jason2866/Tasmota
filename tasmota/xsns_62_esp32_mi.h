@@ -192,6 +192,7 @@ struct {
 
 #ifdef USE_MI_HOMEKIT
   void *outlet_hap_service[4]; //arbitrary chosen
+  char hk_setup_code[11];
 #endif //USE_MI_HOMEKIT
 } MI32;
 
