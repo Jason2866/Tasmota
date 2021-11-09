@@ -124,6 +124,46 @@ String GetDeviceHardware(void) {
 
 #include <esp_phy_init.h>
 
+#if CONFIG_IDF_TARGET_ESP32
+//ulp section
+    #include "esp32/ulp.h"
+    #include "soc/sens_reg.h"
+
+#define I_PUTO(reg_src, reg_offset, val_offset, var) \
+    I_ST(reg_src, reg_offset, (uint16_t)(RTC_WORD_OFFSET(var) - (val_offset)))
+#define I_PUT(reg_src, reg_zero, var) \
+    I_PUTO(reg_src, reg_zero, 0, var)
+#define RTC_WORD_OFFSET(x) ((uint16_t)((uint32_t*)(&(x)) - RTC_SLOW_MEM))
+
+RTC_DATA_ATTR uint32_t ESP32_CPU_Temp = 0; //global
+
+const ulp_insn_t ESP32_ulp_program[] = {
+  M_LABEL(1),
+    // I_WR_REG(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR_S, SENS_FORCE_XPD_SAR_S + 1, 3), //eneable tsens
+    I_TSENS(R0, 0xff),
+    // I_WR_REG(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR_S, SENS_FORCE_XPD_SAR_S + 1, 0), //disable tsens
+    I_MOVI(R2,0),
+    I_PUT(R0, R2, ESP32_CPU_Temp),
+    I_DELAY(0xffff),
+    I_DELAY(0xffff),
+    I_DELAY(0xffff),
+    M_BX(1)
+};
+
+void ESP32startULP(){
+  // REG_SET_FIELD(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_CLK_DIV, 3);
+  // REG_SET_FIELD(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR, SENS_FORCE_XPD_SAR_PU);
+  // REG_CLR_BIT(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP);
+  // REG_CLR_BIT(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT);
+  // REG_CLR_BIT(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP_FORCE);
+
+  size_t _load_addr = 0;
+  size_t _size = sizeof(ESP32_ulp_program)/sizeof(ulp_insn_t);
+  ulp_process_macros_and_load(_load_addr, ESP32_ulp_program, &_size);
+  ulp_run(_load_addr);
+}
+#endif //CONFIG_IDF_TARGET_ESP32
+
 void NvmLoad(const char *sNvsName, const char *sName, void *pSettings, unsigned nSettingsLen) {
   nvs_handle handle;
   noInterrupts();
@@ -476,9 +516,15 @@ void *special_calloc(size_t num, size_t size) {
   }
 }
 
+#ifdef CONFIG_IDF_TARGET_ESP32
+
+#endif //CONFIG_IDF_TARGET_ESP32
+
+
 float CpuTemperature(void) {
 #ifdef CONFIG_IDF_TARGET_ESP32
-  return (float)temperatureRead();  // In Celsius
+  // return (float)temperatureRead();  // In Celsius
+  return ((float)(ESP32_CPU_Temp & 0xffff)-32.0)/1.8f;
 /*
   // These jumps are not stable either. Sometimes it jumps to 77.3
   float t = (float)temperatureRead();  // In Celsius
