@@ -121,13 +121,32 @@ union mi_bindKey_t{
   uint8_t buf[22];
 };
 
-struct ATCPacket_t{
+struct ATCPacket_t{ //and PVVX
   uint8_t MAC[6];
-  uint16_t temp; //sadly this is in wrong endianess
-  uint8_t hum;
-  uint8_t batPer;
-  uint16_t batMV;
-  uint8_t frameCnt;
+  union {
+    struct{
+      uint16_t temp; //sadly this is in wrong endianess
+      uint8_t hum;
+      uint8_t batPer;
+      uint16_t batMV;
+      uint8_t frameCnt;
+    } A; //ATC
+    struct{
+      int16_t temp;
+      uint16_t hum; // x 0.01 %
+      uint16_t batMV;
+      uint8_t batPer;
+      uint8_t frameCnt;
+      struct {
+        uint8_t reed:1;
+        uint8_t TRGval:1;
+        uint8_t TRGcrtl:1;
+        uint8_t tempTrig:1;
+        uint8_t humTrig:1;
+        uint8_t spare:3;
+      };
+    }P; //PVVX
+  };
 };
 
 #pragma pack(0)
@@ -329,8 +348,9 @@ void (*const MI32_Commands[])(void) PROGMEM = {&CmndMi32Key, &CmndMi32Time, &Cmn
 #define ATC         12
 #define MCCGQ02     13
 #define SJWS01L     14
+#define PVVX        15
 
-#define MI32_TYPES    14 //count this manually
+#define MI32_TYPES    15 //count this manually
 
 const uint16_t kMI32DeviceID[MI32_TYPES]={ 0x0098, // Flora
                                   0x01aa, // MJ_HT_V1
@@ -345,7 +365,8 @@ const uint16_t kMI32DeviceID[MI32_TYPES]={ 0x0098, // Flora
                                   0x06d3, // MHO-C303
                                   0x0a1c, // ATC -> this is a fake ID
                                   0x098b, // MCCGQ02
-                                  0x0863  // SJWS01L
+                                  0x0863, // SJWS01L
+                                  0x944a  // PVVX -> this is a fake ID
                                   };
 
 const char kMI32DeviceType1[] PROGMEM = "Flora";
@@ -362,10 +383,11 @@ const char kMI32DeviceType11[] PROGMEM ="MHOC303";
 const char kMI32DeviceType12[] PROGMEM ="ATC";
 const char kMI32DeviceType13[] PROGMEM ="MCCGQ02";
 const char kMI32DeviceType14[] PROGMEM ="SJWS01L";
+const char kMI32DeviceType15[] PROGMEM ="PVVX";
 const char * kMI32DeviceType[] PROGMEM = {kMI32DeviceType1,kMI32DeviceType2,kMI32DeviceType3,kMI32DeviceType4,
                                           kMI32DeviceType5,kMI32DeviceType6,kMI32DeviceType7,kMI32DeviceType8,
                                           kMI32DeviceType9,kMI32DeviceType10,kMI32DeviceType11,kMI32DeviceType12,
-                                          kMI32DeviceType13,kMI32DeviceType14};
+                                          kMI32DeviceType13,kMI32DeviceType14,kMI32DeviceType15};
 
 /*********************************************************************************************\
  * enumerations

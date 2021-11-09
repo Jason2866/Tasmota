@@ -337,7 +337,6 @@ int MI32_decryptPacket(char * _buf, uint16_t _bufSize, uint8_t * _payload, uint3
  * @return uint32_t   Known or new slot in the sensors-vector
  */
 uint32_t MIBLEgetSensorSlot(uint8_t (&_MAC)[6], uint16_t _type, uint8_t counter){
-
   DEBUG_SENSOR_LOG(PSTR("%s: will test ID-type: %x"),D_CMND_MI32, _type);
   bool _success = false;
   for (uint32_t i=0;i<MI32_TYPES;i++){ // i < sizeof(kMI32DeviceID) gives compiler warning
@@ -1250,16 +1249,30 @@ if(decryptRet<0){
 
 void MI32ParseATCPacket(char * _buf, uint32_t length, uint8_t addr[6], int RSSI){
   ATCPacket_t *_packet = (ATCPacket_t*)_buf;
-  uint32_t _slot = MIBLEgetSensorSlot(_packet->MAC, 0x0a1c, _packet->frameCnt); // This must be a hard-coded fake ID
+  bool isATC = (length == 0x0d);
+  uint32_t _slot;
+  if (isATC)  _slot = MIBLEgetSensorSlot(_packet->MAC, 0x0a1c, _packet->A.frameCnt); // This must be a hard-coded fake ID
+  else {
+    MI32_ReverseMAC(_packet->MAC);
+    _slot = MIBLEgetSensorSlot(_packet->MAC, 0x944a, _packet->P.frameCnt); // ... and again
+  }
   if(_slot==0xff) return;
   AddLog(LOG_LEVEL_DEBUG,PSTR("%s at slot %u"), kMI32DeviceType[MIBLEsensors[_slot].type-1],_slot);
 
   MIBLEsensors[_slot].RSSI=RSSI;
   MIBLEsensors[_slot].lastTime = millis();
-  MIBLEsensors[_slot].temp = (float)(int16_t(__builtin_bswap16(_packet->temp)))/10.0f;
-  MIBLEsensors[_slot].hum = (float)_packet->hum;
+  if(isATC){
+    MIBLEsensors[_slot].temp = (float)(int16_t(__builtin_bswap16(_packet->A.temp)))/10.0f;
+    MIBLEsensors[_slot].hum = (float)_packet->A.hum;
+    MIBLEsensors[_slot].bat = _packet->A.batPer;
+  }
+  else{
+    MIBLEsensors[_slot].temp = (float)(_packet->P.temp)/100.0f;
+    MIBLEsensors[_slot].hum = (float)_packet->P.hum/100.0f;
+    MIBLEsensors[_slot].bat = _packet->P.batPer;
+  }
+
   MIBLEsensors[_slot].eventType.tempHum  = 1;
-  MIBLEsensors[_slot].bat = _packet->batPer;
   MIBLEsensors[_slot].eventType.bat  = 1;
 #ifdef USE_MI_HOMEKIT
   if(MIBLEsensors[_slot].temp_hap_service != nullptr){

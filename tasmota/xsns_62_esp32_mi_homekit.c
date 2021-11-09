@@ -45,6 +45,7 @@ static const char *TAG = "Mi Bridge";
 #define ATC         12
 #define MCCGQ02     13
 #define SJWS01L     14
+#define PVVX        15
 
 /*********************************************************************************************\
  * Homekit
@@ -156,7 +157,7 @@ static void MI32_bridge_thread_entry(void *p)
         accessory = hap_acc_create(&bridge_cfg);
 
         switch (MI32getDeviceType(i)){
-            case LYWSD02: case LYWSD03MMC: case CGG1: case CGD1: case MHOC303: case MHOC401: case ATC:
+            case LYWSD02: case LYWSD03MMC: case CGG1: case CGD1: case MHOC303: case MHOC401: case ATC: case PVVX:
             {
                 service = hap_serv_humidity_sensor_create(50.0f);
                 hap_serv_set_bulk_read_cb(service, MI32_bridge_read_callback);
