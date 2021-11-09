@@ -60,6 +60,7 @@
 extern "C" void mi_homekit_main(void);
 extern "C" void mi_homekit_update_value(void* handle, float value, uint32_t type);
 extern "C" void mi_homekit_stop();
+void MI32getSetupCodeFromMAC(char* code);
 #endif //USE_MI_HOMEKIT
 
 
@@ -577,13 +578,14 @@ void MI32Init(void) {
   if(MI32.mode.didGetConfig){
     MI32.mode.didStartHAP = 0;
   #ifdef USE_MI_HOMEKIT
+    MI32getSetupCodeFromMAC(MI32.hk_setup_code);
     AddLog(LOG_LEVEL_INFO,PSTR("M32: Init HAP core"));
     mi_homekit_main();
-  #else 
+  #else
     MI32.mode.didStartHAP = 1;
   #endif //USE_MI_HOMEKIT
   }
-  
+
   if (!MI32.mode.init) {
     NimBLEDevice::init("MI32");
     AddLog(LOG_LEVEL_INFO,PSTR("M32: Init BLE device"));
@@ -607,9 +609,9 @@ void MI32Init(void) {
 #ifdef USE_MI_HOMEKIT
 extern "C" {
 
-  // bool MI32hasEnergydriver(){
-  //   return TasmotaGlobal.energy_driver;
-  // }
+  const char * MI32getSetupCode(){
+    return (const char*)MI32.hk_setup_code;
+  }
 
   uint32_t MI32numOfRelays(){
     return TasmotaGlobal.devices_present;
@@ -629,25 +631,6 @@ extern "C" {
 
   uint32_t MI32getDeviceType(uint32_t slot){
     return MIBLEsensors[slot].type;
-  }
-
-/**
- * @brief Creates a simplified setup code from the Wifi MAC for HomeKit by converting every ascii-converted byte to 1, if it not 2-9
- *        Example: AABBCC1234f2
- *              -> 111-11-234
- *        This is no security feature, only for convenience
- *  * @param setupcode 
- */
-  void MI32getSetupCodeFromMAC(char *setupcode){
-    char *_mac = (char*)WiFi.macAddress().c_str();
-    for(int i = 0; i<10; i++){
-      if(_mac[i]>'9' || _mac[i]<'1') setupcode[i]='1';
-      else setupcode[i] = _mac[i];
-    }
-    setupcode[3] = '-';
-    setupcode[6] = '-';
-    setupcode[10] = 0;
-    return;
   }
 
 /**
@@ -675,12 +658,12 @@ extern "C" {
     else{
       AddLog(LOG_LEVEL_INFO,PSTR("M32: HAP core did not start!!"));
     }
-    
+
   }
 
 /**
  * @brief Simply store the writeable HAP characteristics as void pointers in the "main" driver for updates of the values
- * 
+ *
  * @param slot - sensor slot in MIBLEsensors
  * @param type - sensors type, except for the buttons this is equal to the mibeacon types
  * @param handle - a void ponter to a characteristic
@@ -721,6 +704,31 @@ extern "C" {
     }
   }
 }
+
+/**
+ * @brief Creates a simplified setup code from the Wifi MAC for HomeKit by converting every ascii-converted byte to 1, if it not 2-9
+ *        Example: AABBCC1234f2
+ *              -> 111-11-234
+ *        This is no security feature, only for convenience
+ *  * @param setupcode 
+ */
+  void MI32getSetupCodeFromMAC(char *setupcode){
+    uint8_t _mac[6];
+    char _macStr[13] = { 0 };
+    WiFi.macAddress(_mac);
+    ToHex_P(_mac,6,_macStr,13);
+    AddLog(LOG_LEVEL_INFO,PSTR("M32: Wifi MAC: %s"), _macStr);
+    for(int i = 0; i<10; i++){
+      if(_macStr[i]>'9' || _macStr[i]<'1') setupcode[i]='1';
+      else setupcode[i] = _macStr[i];
+    }
+    setupcode[3] = '-';
+    setupcode[6] = '-';
+    setupcode[10] = 0;
+    AddLog(LOG_LEVEL_INFO,PSTR("M32: HK setup code: %s"), setupcode);
+    return;
+  }
+
 #endif //USE_MI_HOMEKIT
 /*********************************************************************************************\
  * Config section
@@ -1909,11 +1917,8 @@ void MI32InitGUI(void){
   WSContentSend_P(HTTP_MI32_STYLE_SVG,3,242,240,176,242,240,176);
   char _setupCode[12];
 #ifdef USE_MI_HOMEKIT
-  MI32getSetupCodeFromMAC(_setupCode);
-#else
-  _setupCode[0] = 0;
+  WSContentSend_P((HTTP_MI32_PARENT_START),MIBLEsensors.size(),UpTime(),MI32.hk_setup_code);
 #endif //USE_MI_HOMEKIT
-  WSContentSend_P((HTTP_MI32_PARENT_START),MIBLEsensors.size(),UpTime(),_setupCode);
   for(uint32_t _slot = 0;_slot<MIBLEsensors.size();_slot++){
     MI32sendWidget(_slot);
   }
@@ -2191,9 +2196,7 @@ void MI32Show(bool json)
       WSContentSend_P(HTTP_MI32, MIBLEsensors.size());
 #ifdef USE_MI_HOMEKIT
       if(MI32.mode.didStartHAP){
-        char _setupCode[11];
-        MI32getSetupCodeFromMAC(_setupCode);
-        WSContentSend_PD(PSTR("{s}HomeKit Code{m} %s{e}"),_setupCode);
+        WSContentSend_PD(PSTR("{s}HomeKit Code{m} %s{e}"),MI32.hk_setup_code);
       }
 #endif //USE_MI_HOMEKIT
 #ifndef USE_MI_EXT_GUI

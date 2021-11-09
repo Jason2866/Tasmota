@@ -23,7 +23,7 @@ extern uint32_t MI32getDeviceType(uint32_t slot);
 extern void MI32saveHAPhandles(uint32_t slot, uint32_t type, void* handle);
 extern void MI32passHapEvent(uint32_t event);
 extern void MI32didStartHAP();
-extern void MI32getSetupCodeFromMAC(char* code);
+extern const char * MI32getSetupCode();
 extern uint32_t MI32numOfRelays();
 extern void MI32setRelayFromHK(uint32_t relay, bool onOff);
 
@@ -198,7 +198,7 @@ static void MI32_bridge_thread_entry(void *p)
                 hap_serv_set_bulk_read_cb(service, MI32_bridge_read_callback);
                 hap_acc_add_serv(accessory, service);
                 MI32saveHAPhandles(i,0x0f,hap_serv_get_char_by_uuid(service, HAP_CHAR_UUID_MOTION_DETECTED));
-                
+
                 service = hap_serv_battery_service_create(50,0,0);
                 hap_serv_set_bulk_read_cb(service, MI32_bridge_read_callback);
                 hap_acc_add_serv(accessory, service);
@@ -284,9 +284,7 @@ static void MI32_bridge_thread_entry(void *p)
 
     hap_register_event_handler(mi_hap_event_handler);
 
-    char _setupCode[11];
-    MI32getSetupCodeFromMAC(_setupCode);
-    hap_set_setup_code(_setupCode);
+    hap_set_setup_code(MI32getSetupCode());
     /* Unique four character Setup Id. Default: ES32 */
     hap_set_setup_id(CONFIG_EXAMPLE_SETUP_ID);
 
@@ -315,7 +313,7 @@ void mi_homekit_update_value(void* handle, float value, uint32_t type){
             new_val.b = (value > 0.0f);
             break;
         default:
-          new_val.f = value;  
+          new_val.f = value;
     }
 	int ret = hap_char_update_val((hap_char_t *)handle, &new_val);
     if(ret!= HAP_SUCCESS){
@@ -328,4 +326,3 @@ void mi_homekit_stop(){
 }
 
 #endif //USE_MI_ESP32
-
