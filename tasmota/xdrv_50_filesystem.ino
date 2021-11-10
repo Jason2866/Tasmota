@@ -324,6 +324,11 @@ bool TfsLoadFile(const char *fname, uint8_t *buf, uint32_t len) {
     return false;
   }
 
+  size_t flen = file.size();
+  if (len > flen){
+    len = flen;
+  }
+
   file.read(buf, len);
   file.close();
   return true;
@@ -346,6 +351,42 @@ bool TfsRenameFile(const char *fname1, const char *fname2) {
     AddLog(LOG_LEVEL_INFO, PSTR("TFS: Rename failed"));
     return false;
   }
+  return true;
+}
+
+bool TfsDeleteDir(const char *fname) {
+  if (!ffs_type) { return false; }
+
+  if (!ffsp->rmdir(fname)) {
+    AddLog(LOG_LEVEL_INFO, PSTR("TFS: Delete failed"));
+    return false;
+  }
+  return true;
+}
+
+bool TfsDeleteTree(const char *path ){
+  if (!ffs_type) { return false; }
+
+  AddLog(LOG_LEVEL_INFO, PSTR("TFS: will delete %s"), path);
+  File dir = ffsp->open(path);
+  if(!dir.isDirectory()){
+    dir.close();
+    TfsDeleteFile(path);
+    return true;
+  }
+  File entry;
+  while (entry = dir.openNextFile()){
+    if (entry.isDirectory()){
+      TfsDeleteTree(entry.name());
+    } else{
+      char* tmpname = strdup(entry.name());
+      entry.close();
+      TfsDeleteFile(tmpname);
+      free( tmpname );
+    }
+  }
+  dir.close();
+  TfsDeleteDir( path );
   return true;
 }
 
