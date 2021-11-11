@@ -274,7 +274,7 @@ static void MI32_bridge_thread_entry(void *p)
         /* Create accessory object */
         accessory = hap_acc_create(&bridge_cfg);
         service = hap_serv_outlet_create(false,true);
-        hap_serv_set_read_cb(service, MI32_bridge_read_callback);
+        hap_serv_set_bulk_read_cb(service, MI32_bridge_read_callback);
         hap_serv_set_write_cb(service, MI32_outlets_write_callback);
         hap_serv_set_priv(service, strdup(_serialNum));
         hap_acc_add_serv(accessory, service);
