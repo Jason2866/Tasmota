@@ -79,7 +79,7 @@
 #define WIFI_CONFIG_TOOL       WIFI_RETRY        // [WifiConfig] Default tool if Wi-Fi fails to connect (default option: 4 - WIFI_RETRY)
                                                  // (WIFI_RESTART, WIFI_MANAGER, WIFI_RETRY, WIFI_WAIT, WIFI_SERIAL, WIFI_MANAGER_RESET_ONLY)
                                                  // The configuration can be changed after first setup using WifiConfig 0, 2, 4, 5, 6 and 7.
-#define WIFI_ARP_INTERVAL      0                 // [SetOption41] Send gratuitous ARP interval
+#define WIFI_ARP_INTERVAL      60                // [SetOption41] Send gratuitous ARP interval
 #define WIFI_SCAN_AT_RESTART   false             // [SetOption56] Scan Wi-Fi network at restart for configured AP's
 #define WIFI_SCAN_REGULARLY    true              // [SetOption57] Scan Wi-Fi network every 44 minutes for configured AP's
 
@@ -990,6 +990,7 @@
 //#define USE_IBEACON_ESP32
 //#define USE_WEBCAM                               // Add support for webcam
 
+// #define USE_AUTOCONF                             // Enable Esp32 autoconf feature, requires USE_BERRY and USE_WEBCLIENT_HTTPS (12KB Flash)
 #define USE_BERRY                                // Enable Berry scripting language
   #define USE_BERRY_PYTHON_COMPAT                // Enable by default `import python_compat`
   #define USE_BERRY_TIMEOUT             4000     // Timeout in ms, will raise an exception if running time exceeds this timeout
@@ -1090,6 +1091,19 @@
 #if defined(USE_RULES) && defined(USE_SCRIPT)
   #error "Select either USE_RULES or USE_SCRIPT. They can't both be used at the same time"
 #endif
+
+/*********************************************************************************************\
+ * Post-process compile options for Autoconf
+\*********************************************************************************************/
+
+#if defined(USE_AUTOCONF)
+  #ifndef USE_BERRY
+    #define USE_BERRY
+  #endif
+  #ifndef USE_WEBCLIENT_HTTPS
+    #define USE_WEBCLIENT_HTTPS
+  #endif
+#endif // USE_AUTOCONF
 
 /*********************************************************************************************\
  * Post-process compile options for TLS
