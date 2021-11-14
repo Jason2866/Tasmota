@@ -3,7 +3,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [10.0.0.2]
+## [10.0.0.3]
+### Added
+- Autoconfiguration for ESP32 and variants
+
+### Changed
+- ESP8266 Gratuitous ARP enabled and set to 60 seconds (#13623)
+
+## [10.0.0.2] 20211113
 ### Added
 - Support for HDC2010 temperature/humidity sensor by Luc Boudreau (#13633)
 
