@@ -171,10 +171,16 @@
 #define USE_SDCARD
 
 #define USE_ADC
-//#undef USE_BERRY                                 // Disable Berry scripting language
-#define USE_BLE_ESP32                            // Enable new BLE driver
-#define USE_EQ3_ESP32
+// #undef USE_BERRY                                 // Disable Berry scripting language
+// #define USE_BLE_ESP32                            // Enable new BLE driver
+// #define USE_EQ3_ESP32
 #define USE_MI_ESP32                             // (ESP32 only) Add support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
+#ifdef USE_MI_ESP32
+  #if(USE_MI_HOMEKIT != 1)                       //only for the .c-file
+  #undef USE_MI_HOMEKIT
+  #endif //USE_MI_HOMEKIT
+  #define USE_MI_EXT_GUI
+#endif //USE_MI_ESP32
 #endif  // FIRMWARE_BLUETOOTH
 
 /*********************************************************************************************\
