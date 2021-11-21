@@ -2598,7 +2598,7 @@ void HandleUploadDone(void) {
   WSContentStop();
 }
 
-#ifdef USE_BLE_ESP32
+#if defined(USE_BLE_ESP32) || defined(USE_MI_ESP32)
   // declare the fn
   int ExtStopBLE();
 #endif
@@ -2626,7 +2626,7 @@ void UploadServices(uint32_t start_service) {
   } else {
 //    AddLog(LOG_LEVEL_DEBUG, PSTR("UPL: Services disabled"));
 
-#ifdef USE_BLE_ESP32
+#if defined(USE_BLE_ESP32) || defined(USE_MI_ESP32)
     ExtStopBLE();
 #endif
 #ifdef USE_EMULATION

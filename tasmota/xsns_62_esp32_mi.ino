@@ -2403,6 +2403,16 @@ void MI32Show(bool json)
     vTaskResume(MI32.ScanTask);
 }
 
+int ExtStopBLE(){
+      vTaskSuspend(MI32.ScanTask);
+      NimBLEDevice::deinit(true);
+#ifdef USE_MI_HOMEKIT
+      void mi_homekit_stop(); //does probably nothing
+#endif //USE_MI_HOMEKIT
+      AddLog(LOG_LEVEL_DEBUG,PSTR("M32: stop Homebridge and BLE"));
+      return 0;
+}
+
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
@@ -2431,12 +2441,7 @@ bool Xsns62(uint8_t function)
       MI32EverySecond(false);
       break;
     case FUNC_SAVE_BEFORE_RESTART:
-      vTaskSuspend(MI32.ScanTask);
-      NimBLEDevice::deinit(true);
-#ifdef USE_MI_HOMEKIT
-      void mi_homekit_stop(); //does probably nothing
-#endif //USE_MI_HOMEKIT
-      AddLog(LOG_LEVEL_DEBUG,PSTR("M32: stop Homebridge and BLE"));
+      ExtStopBLE();
       break;
     case FUNC_COMMAND:
       result = DecodeCommand(kMI32_Commands, MI32_Commands);

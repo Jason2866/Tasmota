@@ -147,6 +147,12 @@ extern "C" {
       MI32setBerryAdvCB(cb,buf);
       be_return(vm); // Return
     }
+    else if(argc == 2 && be_isint(vm, 2)){
+      if(be_toint(vm, 2) == 0){
+        MI32setBerryAdvCB(NULL,NULL);
+        be_return(vm); // Return
+      }
+    }
     be_raise(vm, kTypeError, nullptr);
   }
 
@@ -194,8 +200,8 @@ extern "C" {
 #endif  // USE_BERRY
 
 /*
-BLE.svc
-BLE.chr
+BLE.set_svc
+BLE.set_chr
 
 be_BLE_op
 1 connect
@@ -205,15 +211,15 @@ be_BLE_op
 5 subscribe
 6 unsubscribe
 
-BLE.MAC
+BLE.set_MAC
 BLE.run(op)
 
 BLE.conn_cb(cb,buffer)
 BLE.adv_cb(cb,buffer)
 
 MI32.devices()
-MI32.name(slot)
-MI32.MAC(slot)
+MI32.get_name(slot)
+MI32.get_MAC(slot)
 MI32.set_bat(slot,int)
 MI32.set_hum(slot,float)
 MI32.set_temp(slot,float)
