@@ -113,6 +113,15 @@ struct encPacket_t{
   uint8_t payload[16]; // only a pointer to the address, size is variable
 };
 
+struct berryAdvPacket_t{
+  uint8_t MAC[6];
+  uint16_t svcUUID;
+  uint8_t RSSI;
+  uint8_t length;
+  uint8_t svcData[40]; // only a pointer to the address, size is variable
+};
+
+
 union mi_bindKey_t{
   struct{
     uint8_t key[16];
@@ -149,6 +158,8 @@ struct ATCPacket_t{ //and PVVX
   };
 };
 
+typedef void (*MI32CallbackNoArgs) ();                      // simple typedef for a callback
+
 #pragma pack(0)
 
 struct MI32connectionContext_t{
@@ -161,10 +172,20 @@ struct MI32connectionContext_t{
   uint8_t length;
 };
 
+struct MI32connectionContextBerry_t{
+  NimBLEUUID serviceUUID;
+  NimBLEUUID charUUID;
+  uint8_t * MAC;
+  uint8_t * buffer;
+  uint8_t length;
+  uint8_t operation;
+};
+
 struct {
   uint32_t period;             // set manually in addition to TELE-period, is set to TELE-period after start
   TaskHandle_t ScanTask;
-  MI32connectionContext_t *conCtx = nullptr;     
+  MI32connectionContext_t *conCtx = nullptr;
+  MI32connectionContextBerry_t *beConnCtx = nullptr;
   union {
     struct {
       uint32_t init:1;
@@ -186,6 +207,7 @@ struct {
       // uint32_t shallShowBlockList:1;
       uint32_t didGetConfig:1;
       uint32_t didStartHAP:1;
+      uint32_t triggerBerryAdvCB:1;
     };
     uint32_t all = 0;
   } mode;
@@ -213,6 +235,9 @@ struct {
   void *outlet_hap_service[4]; //arbitrary chosen
   char hk_setup_code[11];
 #endif //USE_MI_HOMEKIT
+  void *beConnCB; 
+  void *beAdvCB;
+  uint8_t *beAdvBuf;
 } MI32;
 
 struct mi_sensor_t{

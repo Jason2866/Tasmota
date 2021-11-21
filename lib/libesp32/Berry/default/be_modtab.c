@@ -40,6 +40,9 @@ be_extern_native_module(lv);
 #endif // USE_LVGL
 
 /* user-defined modules declare start */
+// #ifdef USE_MI_ESP32
+// be_extern_native_module(MI32);
+// #endif // USE_MI_ESP32
 
 /* user-defined modules declare end */
 
@@ -111,6 +114,9 @@ BERRY_LOCAL const bntvmodule* const be_module_table[] = {
 #ifdef USE_WEBSERVER
     &be_native_module(webserver),
 #endif // USE_WEBSERVER
+// #ifdef USE_MI_ESP32
+//     &be_native_module(MI32),
+// #endif // USE_MI_ESP32
     &be_native_module(flash),
 
 
@@ -151,6 +157,11 @@ extern void be_load_lv_wifi_arcs_class(bvm *vm);
 extern void be_load_lv_wifi_arcs_icon_class(bvm *vm);
 extern void be_load_lv_clock_icon_class(bvm *vm);
 #endif// USE_LVGL
+
+#ifdef USE_MI_ESP32
+extern void be_load_MI32_class(bvm *vm);
+extern void be_load_BLE_class(bvm *vm);
+#endif //USE_MI_ESP32
 
 /* this code loads the native class definitions */
 BERRY_API void be_load_custom_libs(bvm *vm)
@@ -202,5 +213,9 @@ BERRY_API void be_load_custom_libs(bvm *vm)
     be_load_lv_wifi_arcs_icon_class(vm);
     be_load_lv_clock_icon_class(vm);
 #endif // USE_LVGL
+#ifdef USE_MI_ESP32
+    be_load_MI32_class(vm);
+    be_load_BLE_class(vm);
+#endif //USE_MI_ESP32
 }
 #endif

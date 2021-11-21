@@ -114,23 +114,46 @@ class MI32AdvCallbacks: public NimBLEAdvertisedDeviceCallbacks {
     uint8_t addr[6];
     memcpy(addr,advertisedDevice->getAddress().getNative(),6);
     MI32_ReverseMAC(addr);
+    size_t ServiceDataLength = 0;
+
+
     if (advertisedDevice->getServiceDataCount() == 0) {
       // AddLog(LOG_LEVEL_DEBUG,PSTR("No Xiaomi Device: %s Buffer: %u"),advertisedDevice->getAddress().toString().c_str(),advertisedDevice->getServiceData(0).length());
-      if(MI32.state.beaconScanCounter==0 && !MI32.mode.activeBeacon){
-        MI32Scan->erase(advertisedDevice->getAddress());
-        _mutex = false;
-        return;
-        }
-      else{
-        MI32HandleGenericBeacon(advertisedDevice->getPayload(), advertisedDevice->getPayloadLength(), RSSI, addr);
-        _mutex = false;
-        return;
-        }
+      // if(MI32.state.beaconScanCounter==0 && !MI32.mode.activeBeacon){
+      //   MI32Scan->erase(advertisedDevice->getAddress());
+      //   _mutex = false;
+      //   return;
+      //   }
+      // else{
+      //   MI32HandleGenericBeacon(advertisedDevice->getPayload(), advertisedDevice->getPayloadLength(), RSSI, addr);
+      //   _mutex = false;
+      //   return;
+      //   }
+      if(MI32.beAdvCB != nullptr && MI32.mode.triggerBerryAdvCB == 0){
+        berryAdvPacket_t *_packet = (berryAdvPacket_t *)MI32.beAdvBuf;
+        memcpy(_packet->MAC,addr,6);
+        _packet->svcUUID = 0;
+        _packet->RSSI = (uint8_t)RSSI;
+        _packet->length = ServiceDataLength;
+        MI32.mode.triggerBerryAdvCB = 1;
+      }
+      _mutex = false;
+      return;
     }
     uint16_t UUID = advertisedDevice->getServiceDataUUID(0).getNative()->u16.value;
     // AddLog(LOG_LEVEL_DEBUG,PSTR("UUID: %x"),UUID);
 
-    size_t ServiceDataLength = advertisedDevice->getServiceData(0).length();
+    ServiceDataLength = advertisedDevice->getServiceData(0).length();
+    if(MI32.beAdvCB != nullptr && MI32.mode.triggerBerryAdvCB == 0){
+      berryAdvPacket_t *_packet = (berryAdvPacket_t *)MI32.beAdvBuf;
+      memcpy(_packet->MAC,addr,6);
+      _packet->svcUUID = UUID;
+      _packet->RSSI = (uint8_t)RSSI;
+      _packet->length = ServiceDataLength;
+      memcpy(_packet->svcData,advertisedDevice->getServiceData(0).data(),ServiceDataLength);
+      MI32.mode.triggerBerryAdvCB = 1;
+    }
+
     if(UUID==0xfe95) {
       MI32ParseResponse((char*)advertisedDevice->getServiceData(0).data(),ServiceDataLength, addr, RSSI);
     }
@@ -141,9 +164,9 @@ class MI32AdvCallbacks: public NimBLEAdvertisedDeviceCallbacks {
       MI32ParseATCPacket((char*)advertisedDevice->getServiceData(0).data(),ServiceDataLength, addr, RSSI);
     }
     else {
-      if(MI32.state.beaconScanCounter!=0 || MI32.mode.activeBeacon){
-        MI32HandleGenericBeacon(advertisedDevice->getPayload(), advertisedDevice->getPayloadLength(), RSSI, addr);
-      }
+      // if(MI32.state.beaconScanCounter!=0 || MI32.mode.activeBeacon){
+      //   MI32HandleGenericBeacon(advertisedDevice->getPayload(), advertisedDevice->getPayloadLength(), RSSI, addr);
+      // }
       // AddLog(LOG_LEVEL_DEBUG,PSTR("No Xiaomi Device: %x: %s Buffer: %u"), UUID, advertisedDevice->getAddress().toString().c_str(),advertisedDevice->getServiceData(0).length());
       MI32Scan->erase(advertisedDevice->getAddress());
     }
@@ -558,6 +581,8 @@ void MI32PreInit(void) {
   if(MIBLEsensors.size()>0){
     MI32.mode.didGetConfig = 1;
   }
+
+  MI32.beAdvCB = nullptr;
   AddLog(LOG_LEVEL_INFO,PSTR("M32: pre-init"));
 }
 
@@ -603,6 +628,96 @@ void MI32Init(void) {
 }
 
 /*********************************************************************************************\
+ * Berry section - partly used by HomeKit too
+\*********************************************************************************************/
+extern "C" {
+
+  bool MI32runBerryConnection(uint8_t operation){
+    if(MI32.beConnCtx != nullptr){
+      MI32.beConnCtx->operation = operation;
+      AddLog(LOG_LEVEL_INFO,PSTR("M32: shall run Berry connection op: %d"),operation);
+      return true;
+    }
+    return false;
+  }
+
+  void MI32setBerryConnCB(void* function, uint8_t *buffer){
+    if(MI32.beConnCtx == nullptr){
+      MI32.beConnCtx = new MI32connectionContextBerry_t;
+    }
+    MI32.beConnCtx->buffer = buffer;
+    MI32.beConnCB = function;
+  }
+
+  bool MI32setBerryCtxSvc(const char *Svc){
+    if(MI32.beConnCtx != nullptr){
+      MI32.beConnCtx->serviceUUID = NimBLEUUID(Svc);
+      AddLog(LOG_LEVEL_INFO,PSTR("M32: SVC: %s"),MI32.beConnCtx->serviceUUID.toString().c_str());
+      return true;
+    }
+    return false;
+  }
+
+  bool MI32setBerryCtxChr(const char *Chr){
+    if(MI32.beConnCtx != nullptr){
+      MI32.beConnCtx->charUUID = NimBLEUUID(Chr);
+      AddLog(LOG_LEVEL_INFO,PSTR("M32: CHR: %s"),MI32.beConnCtx->charUUID.toString().c_str());
+      return true;
+    }
+    return false;
+  }
+
+  bool MI32setBerryCtxMAC(uint8_t *MAC){
+    if(MI32.beConnCtx != nullptr){
+      MI32.beConnCtx->MAC = MAC;
+      return true;
+    }
+    return false;
+  }
+
+  void MI32setBerryAdvCB(void* function, uint8_t *buffer){
+    // AddLog(LOG_LEVEL_INFO,PSTR("M32: cb: %p, buf:%p"),function,buffer);
+    MI32.beAdvCB = function;
+    MI32.beAdvBuf = buffer;
+  }
+
+  void MI32setBatteryForSlot(uint32_t slot, uint8_t value){
+    if(slot>MIBLEsensors.size()-1) return;
+    if(MIBLEsensors[slot].feature.bat){
+      MIBLEsensors[slot].bat = value;
+    }
+  }
+
+  void MI32setHumidityForSlot(uint32_t slot, float value){
+    if(slot>MIBLEsensors.size()-1) return;
+    if(MIBLEsensors[slot].feature.hum){
+      MIBLEsensors[slot].hum = value;
+    }
+  }
+
+  void MI32setTemperatureForSlot(uint32_t slot, float value){
+    if(slot>MIBLEsensors.size()-1) return;
+    if(MIBLEsensors[slot].feature.temp){
+      MIBLEsensors[slot].temp = value;
+    }
+  }
+
+  uint32_t MI32numberOfDevices(){
+    return MIBLEsensors.size();
+  }
+
+  uint8_t * MI32getDeviceMAC(uint32_t slot){
+    if(slot>MIBLEsensors.size()-1) return NULL;
+    return MIBLEsensors[slot].MAC;
+  }
+
+  const char * MI32getDeviceName(uint32_t slot){
+    if(slot>MIBLEsensors.size()-1) return "";
+    return kMI32DeviceType[MIBLEsensors[slot].type-1];
+  }
+
+} //extern "C"
+/*********************************************************************************************\
  * Homekit section
 \*********************************************************************************************/
 #ifdef USE_MI_HOMEKIT
@@ -618,14 +733,6 @@ extern "C" {
 
   void MI32setRelayFromHK(uint32_t relay, bool onOff){
       ExecuteCommandPower(relay, onOff, SRC_IGNORE);
-  }
-
-  uint32_t MI32numberOfDevices(){
-    return MIBLEsensors.size();
-  }
-
-  const char * MI32getDeviceName(uint32_t slot){
-    return kMI32DeviceType[MIBLEsensors[slot].type-1];
   }
 
   uint32_t MI32getDeviceType(uint32_t slot){
@@ -1576,6 +1683,14 @@ void MI32Every50mSecond(){
   if(MI32.mode.shallTriggerTele){
       MI32.mode.shallTriggerTele = 0;
       MI32triggerTele();
+  }
+  if(MI32.mode.triggerBerryAdvCB == 1){
+    // AddLog(LOG_LEVEL_DEBUG,PSTR("call berry CB"));
+    if(MI32.beAdvCB != nullptr){
+    void (*func_ptr)(void) = (void (*)(void))MI32.beAdvCB;   
+    func_ptr();
+    } 
+    MI32.mode.triggerBerryAdvCB = 0;
   }
 }
 
