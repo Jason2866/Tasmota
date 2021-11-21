@@ -75,24 +75,18 @@
 
 #undef USE_HOME_ASSISTANT
 
-#define USE_BERRY
-  #define USE_BERRY_DEBUG
-  #define USE_BERRY_PSRAM
-  #define USE_WEBCLIENT
-  #define USE_WEBCLIENT_HTTPS
-#define USE_ETHERNET
 #define USE_I2C
 #define USE_SPI
-#define USE_I2S
-
-
-#define USE_ADC
-#define USE_SPI
-  #define USE_DISPLAY                            // Add SPI Display Support (+2k code)
+  #define USE_DISPLAY
   #define SHOW_SPLASH
-  #ifndef USE_UNIVERSAL_DISPLAY
-    #define USE_DISPLAY_ILI9341                  // [DisplayModel 4] Enable ILI9341 Tft 480x320 display (+19k code)
-  #endif
+#ifdef USE_UNIVERSAL_DISPLAY
+  #define USE_LVGL
+  #define USE_LVGL_FREETYPE
+//  #define USE_DISPLAY_LVGL_ONLY
+#else
+  #define USE_DISPLAY_ILI9341                      // [DisplayModel 4] Enable ILI9341 Tft 480x320 display (+19k code)
+  #define USE_DISPLAY_MODES1TO5
+#endif
 //#define USE_BLE_ESP32                            // Enable new BLE driver
 //#define USE_MI_ESP32                             // (ESP32 only) Add support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
 #endif  // FIRMWARE_ODROID_GO
@@ -189,7 +183,7 @@
 #undef USE_KNX
 
 #define USE_ADC
-// #undef USE_BERRY                                 // Disable Berry scripting language
+//#undef USE_BERRY                                 // Disable Berry scripting language
 // #define USE_BLE_ESP32                            // Enable new BLE driver
 // #define USE_EQ3_ESP32
 #define USE_MI_ESP32                             // (ESP32 only) Add support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
