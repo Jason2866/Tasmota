@@ -24,13 +24,16 @@
 /*********************************************************************************************\
  * Sonoff Stackable Power Manager (Current state: PROOF OF CONCEPT)
  *
+ * Initial POC template:
  * {"NAME":"Sonoff SPM (POC1)","GPIO":[1,1,1,1,3200,1,1,1,1,1,1,1,3232,1,1,1,0,1,1,1,0,1,1,1,0,0,0,0,544,1,1,32,1,0,0,1],"FLAG":0,"BASE":1}
+ * Add ethernet support:
+ * {"NAME":"Sonoff SPM (POC2)","GPIO":[1,0,1,0,3200,5536,0,0,1,1,1,0,3232,0,5600,0,0,0,0,5568,0,0,0,0,0,0,0,0,544,1,1,32,1,0,0,1],"FLAG":0,"BASE":1}
  *
  * Things to know:
  * Bulk of the action is handled by ARM processors present in every unit communicating over modbus RS-485.
  * Each SPM-4Relay has 4 bistable relays with their own CSE7761 energy monitoring device handled by an ARM processor.
  * Green led is controlled by ARM processor indicating SD-Card access.
- * ESP32 is used as interface between Welink and ARM processor in SPM-Main unit communicating over proprietary serial protocol.
+ * ESP32 is used as interface between eWelink and ARM processor in SPM-Main unit communicating over proprietary serial protocol.
  * Inductive/Capacitive loads are not reported correctly.
  * Power on sequence for two SPM-4Relay modules is 00-00-15-10-(0F)-(13)-(13)-(19)-0C-09-04-09-04-0B-0B
  *
@@ -40,8 +43,10 @@
  * Button on SPM-Main initiates re-scan of SPM-4Relay units.
  * Blue led equals Tasmota WiFi status.
  *
+ * Tasmota POC2:
+ * Ethernet support.
+ *
  * Todo:
- * Ethernet support (Find correct MDIO, MDC, POWER GPIO's and ETH_ parameters).
  * Gui optimization for energy display.
  * Gui for Overload Protection entry (is handled by ARM processor).
  * Gui for Scheduling entry (is handled by ARM processor).
@@ -56,26 +61,26 @@
  * GPIO01 - Serial console TX (921600bps8N1 originally)
  * GPIO03 - Serial console RX
  * GPIO04 - ARM processor TX (115200bps8N1)
+ * GPIO05 - ETH POWER
  * GPIO12 - SPI MISO ARM pulsetrain code (input?)
  * GPIO13 - SPI CLK
  * GPIO14 - SPI CS ARM pulsetrain eoc (input?)
  * GPIO15 - ARM reset (output) - 18ms low active 125ms after restart esp32
  * GPIO16 - ARM processor RX
  * GPIO17 - EMAC_CLK_OUT_180
- * GPIO18 - ??ETH MDIO
+ * GPIO18 - ETH MDIO
  * GPIO19 - EMAC_TXD0(RMII)
  * GPIO21 - EMAC_TX_EN(RMII)
  * GPIO22 - EMAC_TXD1(RMII)
- * GPIO23 - ??ETH MDC
+ * GPIO23 - ETH MDC
  * GPIO25 - EMAC_RXD0(RMII)
  * GPIO26 - EMAC_RXD1(RMII)
  * GPIO27 - EMAC_RX_CRS_DV
- * GPIO?? - ??ETH POWER
  * GPIO32 - Blue status led2
  * GPIO33 - Yellow error led3
  * GPIO35 - Button
  * #define ETH_TYPE          ETH_PHY_LAN8720
- * #define ETH_CLKMODE       ETH_CLOCK_GPIO0_IN
+ * #define ETH_CLKMODE       ETH_CLOCK_GPIO17_OUT
  * #define ETH_ADDRESS       0
  *
  * Variables used:
@@ -103,7 +108,6 @@
 #define SSPM_FUNC_GET_ENERGY_TOTAL   22      // 0x16
 #define SSPM_FUNC_GET_ENERGY         24      // 0x18
 #define SSPM_FUNC_GET_LOG            26      // 0x1A
-
 #define SSPM_FUNC_ENERGY_PERIOD      27      // 0x1B
 
 // Receive
@@ -124,10 +128,19 @@
 
 #define SSPM_MODULE_NAME_SIZE        12
 
-enum SspmInitSteps { SPM_NONE, SPM_WAIT, SPM_RESET, SPM_POLL, SPM_POLL_ACK, SPM_SEND_FUNC_UNITS, SPM_STEP_WAIT2,
-                     SPM_DEVICES_FOUND,
-                     SPM_GET_ENERGY_TOTALS,
-                     SPM_ALLOW_LOOP};
+enum SspmMachineStates { SPM_NONE,                 // Do nothing
+                         SPM_WAIT,                 // Wait 100ms
+                         SPM_RESET,                // Toggle ARM reset pin
+                         SPM_POLL_ARM,             // Wait for first acknowledge from ARM after reset
+                         SPM_POLL_ARM_2,           // Wait for second acknowledge from ARM after reset
+                         SPM_SEND_FUNC_UNITS,      // Get number of units
+                         SPM_START_SCAN,           // Start module scan sequence
+                         SPM_WAIT_FOR_SCAN,        // Wait for scan sequence to complete
+                         SPM_SCAN_COMPLETE,        // Scan complete
+                         SPM_GET_ENERGY_TOTALS,    // Init available Energy totals registers
+                         SPM_UPDATE_CHANNELS,      // Update Energy for powered on channels
+                         SPM_UPDATE_TOTALS         // Update Energy totals for powered on channels
+                         };
 
 #include <TasmotaSerial.h>
 TasmotaSerial *SspmSerial;
@@ -156,7 +169,7 @@ typedef struct {
   uint8_t counter;
   uint8_t command_sequence;
   uint8_t loop_step;
-  uint8_t init_step;
+  uint8_t mstate;
   uint8_t last_button;
   bool discovery_triggered;
 } TSspm;
@@ -528,7 +541,7 @@ void SSPMHandleReceivedData(void) {
                                                     |Er|        |St|
         */
         if ((1 == Sspm->expected_bytes) && (0 == SspmBuffer[19])) {
-          Sspm->init_step++;
+          Sspm->mstate++;   // Cycle to
         }
         break;
       case SSPM_FUNC_GET_OPS:
@@ -591,15 +604,14 @@ void SSPMHandleReceivedData(void) {
         } else {
           AddLog(LOG_LEVEL_DEBUG, PSTR("SPM: Relay scan done"));
 
-          Sspm->init_step = SPM_DEVICES_FOUND;
-//          Sspm->get_energy_relay = 1;
-//          Sspm->allow_updates = 1;      // Enable requests from 100mSec loop
+          Sspm->mstate = SPM_SCAN_COMPLETE;
         }
         break;
       case SSPM_FUNC_SET_TIME:
         /* 0x0C
         AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 80 0c 00 01 00 04 3e 62
         */
+        TasmotaGlobal.devices_present = 0;
         SSPMSendGetModuleState(Sspm->module_selected -1);
         break;
       case SSPM_FUNC_INIT_SCAN:
@@ -607,7 +619,6 @@ void SSPMHandleReceivedData(void) {
          0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22
         AA 55 01 ff ff ff ff ff ff ff ff ff ff ff ff 80 10 00 01 00 02 e5 03
         */
-        Sspm->module_max = 0;
         break;
       case SSPM_FUNC_UNITS:
         /* 0x15
@@ -615,7 +626,7 @@ void SSPMHandleReceivedData(void) {
         AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 80 15 00 04 00 01 00 00 01 81 b1
                                                                 |?? ?? ?? ??|
         */
-        SSPMSendInitScan();
+        Sspm->mstate = SPM_START_SCAN;
         break;
       case SSPM_FUNC_GET_ENERGY_TOTAL:
         /* 0x16
@@ -746,7 +757,6 @@ void SSPMHandleReceivedData(void) {
         /* 0x0F
         AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 00 0f 00 01 02 01 9d f8
         */
-//        Sspm->module_max = 0;
         SSPMSendAck(command_sequence);
         break;
       case SSPM_FUNC_SCAN_RESULT:
@@ -823,7 +833,8 @@ void SSPMSerialInput(void) {
 }
 
 void SSPMInit(void) {
-  if (!ValidTemplate(PSTR("Sonoff SPM (POC1)"))) { return; }
+  if (!ValidTemplate(PSTR("Sonoff SPM (POC1)")) &&
+      !ValidTemplate(PSTR("Sonoff SPM (POC2)"))) { return; }
   if (!PinUsed(GPIO_RXD) || !PinUsed(GPIO_TXD)) { return; }
 
   Sspm = (TSspm*)calloc(sizeof(TSspm), 1);
@@ -850,8 +861,16 @@ void SSPMInit(void) {
     Settings->flag2.energy_resolution = 0;    // SPM has no decimals on total energy
   }
 
+#if CONFIG_IDF_TARGET_ESP32
+#ifdef USE_ETHERNET
+  Settings->eth_address = 0;                      // EthAddress
+  Settings->eth_type = ETH_PHY_LAN8720;           // EthType
+  Settings->eth_clk_mode = ETH_CLOCK_GPIO17_OUT;  // EthClockMode
+#endif
+#endif
+
   Sspm->old_power = TasmotaGlobal.power;
-  Sspm->init_step = SPM_WAIT;  // Start init sequence
+  Sspm->mstate = SPM_WAIT;                    // Start init sequence
 }
 
 void SSPMEvery100ms(void) {
@@ -865,17 +884,18 @@ void SSPMEvery100ms(void) {
   }
 
   // Fix race condition if the ARM doesn't respond
-  if ((Sspm->init_step > SPM_NONE) && (Sspm->init_step < SPM_SEND_FUNC_UNITS)) {
+  if ((Sspm->mstate > SPM_NONE) && (Sspm->mstate < SPM_SEND_FUNC_UNITS)) {
     Sspm->counter++;
     if (Sspm->counter > 20) {
-      Sspm->init_step = SPM_NONE;
+      Sspm->mstate = SPM_NONE;
     }
   }
-  switch (Sspm->init_step) {
+  switch (Sspm->mstate) {
     case SPM_NONE:
       return;
     case SPM_WAIT:
-      Sspm->init_step++;
+      // 100ms wait
+      Sspm->mstate = SPM_RESET;
       break;
     case SPM_RESET:
       // Reset ARM
@@ -883,22 +903,34 @@ void SSPMEvery100ms(void) {
       delay(18);
       digitalWrite(SSPM_GPIO_ARM_RESET, 1);
       delay(18);
-      Sspm->init_step++;
-    case SPM_POLL:
+      Sspm->mstate = SPM_POLL_ARM;
+    case SPM_POLL_ARM:
+      // Wait for first acknowledge from ARM after reset
       SSPMSendCmnd(SSPM_FUNC_FIND);
       break;
-    case SPM_POLL_ACK:
+    case SPM_POLL_ARM_2:
+      // Wait for second acknowledge from ARM after reset
       SSPMSendCmnd(SSPM_FUNC_FIND);
       break;
     case SPM_SEND_FUNC_UNITS:
-      Sspm->init_step++;
+      // Get number of units
       SSPMSendCmnd(SSPM_FUNC_UNITS);
       break;
-    case SPM_DEVICES_FOUND:
-      TasmotaGlobal.discovery_counter = 1;      // force TasDiscovery()
+    case SPM_START_SCAN:
+      // Start scan module sequence
+      Sspm->module_max = 0;
+      SSPMSendInitScan();
+      Sspm->mstate = SPM_WAIT_FOR_SCAN;
+      break;
+    case SPM_WAIT_FOR_SCAN:
+      // Wait for scan sequence to complete
+      break;
+    case SPM_SCAN_COMPLETE:
+      // Scan sequence finished
+      TasmotaGlobal.discovery_counter = 1;      // Force TasDiscovery()
       Sspm->get_energy_relay = 1;
-      Sspm->allow_updates = 1;      // Enable requests from 100mSec loop
-      Sspm->init_step++;
+      Sspm->allow_updates = 1;                  // Enable requests from 100mSec loop
+      Sspm->mstate = SPM_GET_ENERGY_TOTALS;
       break;
     case SPM_GET_ENERGY_TOTALS:
       // Retrieve Energy total status from up to 128 relays
@@ -908,46 +940,53 @@ void SSPMEvery100ms(void) {
         Sspm->get_energy_relay++;
         if (Sspm->get_energy_relay > TasmotaGlobal.devices_present) {
           Sspm->get_energy_relay = 1;
-          Sspm->init_step++;
+          Sspm->mstate = SPM_UPDATE_CHANNELS;
         }
       }
       break;
-    case SPM_ALLOW_LOOP:
-      // Retrieve Energy status from up to 128 relays
+    case SPM_UPDATE_CHANNELS:
+      // Retrieve Energy status from up to 128 powered on relays
       if (Sspm->allow_updates && (Sspm->get_energy_relay > 0)) {
         power_t powered_on = TasmotaGlobal.power >> (Sspm->get_energy_relay -1);
-        if (0 == Sspm->loop_step) {
-          // Get energy total only once in any 256 requests to safe comms
-          if (powered_on &1) {
-            SSPMSetLock(4);
-            SSPMSendGetEnergyTotal(Sspm->get_energy_relay -1);
-          }
-          Sspm->get_energy_relay++;
-          if (Sspm->get_energy_relay > TasmotaGlobal.devices_present) {
-            Sspm->get_energy_relay = 1;
-            Sspm->loop_step++;
-          }
+        if (powered_on &1) {
+          SSPMSetLock(4);
+          SSPMSendGetEnergy(Sspm->get_energy_relay -1);
         } else {
-          if (powered_on &1) {
-            SSPMSetLock(4);
-            SSPMSendGetEnergy(Sspm->get_energy_relay -1);
-          } else {
-            uint32_t relay_set = (Sspm->get_energy_relay -1) >> 2;
-            uint32_t relay_num = (Sspm->get_energy_relay -1) &3;
-            if (Sspm->voltage[relay_set][relay_num]) {
-              Sspm->voltage[relay_set][relay_num] = 0;
-              Sspm->current[relay_set][relay_num] = 0;
-              Sspm->active_power[relay_set][relay_num] = 0;
-              Sspm->apparent_power[relay_set][relay_num] = 0;
-              Sspm->reactive_power[relay_set][relay_num] = 0;
-              Sspm->power_factor[relay_set][relay_num] = 0;
-            }
+          uint32_t relay_set = (Sspm->get_energy_relay -1) >> 2;
+          uint32_t relay_num = (Sspm->get_energy_relay -1) &3;
+          if (Sspm->voltage[relay_set][relay_num]) {
+            Sspm->voltage[relay_set][relay_num] = 0;
+            Sspm->current[relay_set][relay_num] = 0;
+            Sspm->active_power[relay_set][relay_num] = 0;
+            Sspm->apparent_power[relay_set][relay_num] = 0;
+            Sspm->reactive_power[relay_set][relay_num] = 0;
+            Sspm->power_factor[relay_set][relay_num] = 0;
           }
-          Sspm->loop_step++;     // Rolls over after 256 so allows for scanning at least all relays twice
-          Sspm->get_energy_relay++;
-          if ((Sspm->get_energy_relay > TasmotaGlobal.devices_present) || !Sspm->loop_step) {
-            Sspm->get_energy_relay = 1;
-          }
+        }
+        Sspm->get_energy_relay++;
+        if (Sspm->get_energy_relay > TasmotaGlobal.devices_present) {
+          Sspm->get_energy_relay = 1;
+        }
+        Sspm->loop_step++;     // Rolls over after 256 so allows for scanning at least all relays twice
+        if (!Sspm->loop_step) {
+          Sspm->get_energy_relay = 1;
+          Sspm->mstate = SPM_UPDATE_TOTALS;
+        }
+      }
+      break;
+    case SPM_UPDATE_TOTALS:
+      // Retrieve Energy totals from up to 128 powered on relays
+      if (Sspm->allow_updates && (Sspm->get_energy_relay > 0)) {
+        power_t powered_on = TasmotaGlobal.power >> (Sspm->get_energy_relay -1);
+        // Get energy total only once in any 256 requests to safe comms
+        if (powered_on &1) {
+          SSPMSetLock(4);
+          SSPMSendGetEnergyTotal(Sspm->get_energy_relay -1);
+        }
+        Sspm->get_energy_relay++;
+        if (Sspm->get_energy_relay > TasmotaGlobal.devices_present) {
+          Sspm->get_energy_relay = 1;
+          Sspm->mstate = SPM_UPDATE_CHANNELS;
         }
       }
       break;
@@ -973,7 +1012,7 @@ bool SSPMButton(void) {
   bool result = false;
   uint32_t button = XdrvMailbox.payload;
   if ((PRESSED == button) && (NOT_PRESSED == Sspm->last_button)) {  // Button pressed
-    SSPMSendInitScan();
+    Sspm->mstate = SPM_START_SCAN;
     result = true;                 // Disable further button processing
   }
   Sspm->last_button = button;
@@ -1000,7 +1039,7 @@ void SSPMEnergyShow(bool json) {
   if (json) {
     ResponseAppend_P(PSTR(",\"SPM\":{\"" D_JSON_TOTAL "\":["));
     for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
-      ResponseAppend_P(PSTR("%s%*_f"), (i>0)?",":"", 0, &Sspm->total[i >>2][i &3]);
+      ResponseAppend_P(PSTR("%s%*_f"), (i>0)?",":"", -1, &Sspm->total[i >>2][i &3]);
     }
     ResponseAppend_P(PSTR("],\"" D_JSON_POWERUSAGE "\":["));
     for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
@@ -1025,10 +1064,9 @@ void SSPMEnergyShow(bool json) {
     ResponseAppend_P(PSTR("]}"));
   } else {
     Sspm->rotate++;
-    if ((Sspm->rotate >> 2) == Sspm->module_max) {
+    if (Sspm->rotate >= TasmotaGlobal.devices_present) {
       Sspm->rotate = 0;
     }
-
     uint32_t module = Sspm->rotate >> 2;
     uint32_t relay_base = module * 4;
     WSContentSend_P(PSTR("{s}" D_SENSOR_RELAY "{m}L%02d / L%02d / L%02d / L%02d{e}"), relay_base +1, relay_base +2, relay_base +3, relay_base +4);
@@ -1077,9 +1115,8 @@ void CmndSSPMEnergyHistory(void) {
 }
 
 void CmndSSPMScan(void) {
-  SSPMSendInitScan();
-
-  ResponseCmndDone();
+  Sspm->mstate = SPM_START_SCAN;
+  ResponseCmndChar(PSTR(D_JSON_STARTED));
 }
 
 /*********************************************************************************************\
