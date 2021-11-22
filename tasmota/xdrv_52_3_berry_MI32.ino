@@ -159,7 +159,7 @@ extern "C" {
   int be_BLE_set_MAC(bvm *vm);
   int be_BLE_set_MAC(bvm *vm){    
     int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc == 2 && be_iscomptr(vm, 2)) {
+    if (argc == 2 && be_isbytes(vm, 2)) {
       size_t len = 6;
       if (MI32setBerryCtxMAC((uint8_t*)be_tobytes(vm, 2, &len))) be_return(vm);
     }
@@ -179,7 +179,7 @@ extern "C" {
   int be_BLE_set_characteristic(bvm *vm){    
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc == 2 && be_isstring(vm, 2)) {
-      if (MI32setBerryCtxSvc(be_tostring(vm, 2))) be_return(vm);
+      if (MI32setBerryCtxChr(be_tostring(vm, 2))) be_return(vm);
     }
     be_raise(vm, kTypeError, nullptr);
   }
