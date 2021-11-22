@@ -541,6 +541,36 @@ extern "C" {
   }
 }
 
+/*********************************************************************************************\
+ * Native functions mapped to Berry functions
+ *
+ * read_sensors(show_sensor:bool) -> string
+ *
+\*********************************************************************************************/
+extern "C" {
+  int32_t l_read_sensors(struct bvm *vm);
+  int32_t l_read_sensors(struct bvm *vm) {
+    int32_t top = be_top(vm); // Get the number of arguments
+    bool sensor_display = false;    // don't trigger a display by default
+    if (top >= 2) {
+      sensor_display = be_tobool(vm, 2);
+    }
+    be_pop(vm, top);    // clear stack to avoid `Error be_top is non zero=1` errors
+    ResponseClear();
+    if (MqttShowSensor(sensor_display)) {
+      // return string
+      be_pushstring(vm, ResponseData());
+      be_return(vm);
+    } else {
+      be_return_nil(vm);
+    }
+  }
+}
+
+/*********************************************************************************************\
+ * Logging functions
+ *
+\*********************************************************************************************/
 // called as a replacement to Berry `print()`
 void berry_log(const char * berry_buf);
 void berry_log(const char * berry_buf) {
