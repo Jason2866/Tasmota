@@ -152,13 +152,13 @@
 
 
 /** @brief Set if CCCD's and bond data should be stored in NVS */
-#define CONFIG_BT_NIMBLE_NVS_PERSIST 1
+#define CONFIG_BT_NIMBLE_NVS_PERSIST 0
 
 /** @brief Allow legacy paring */
-#define CONFIG_BT_NIMBLE_SM_LEGACY 1
+#define CONFIG_BT_NIMBLE_SM_LEGACY 0
 
 /** @brief Allow BLE secure connections */
-#define CONFIG_BT_NIMBLE_SM_SC 1
+#define CONFIG_BT_NIMBLE_SM_SC 0
 
 /** @brief Max device name length (bytes) */
 #define CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN 31
