@@ -15,6 +15,8 @@
   #include "tasmota_configurations.h"
 #endif
 
+// #define USE_BERRY_DEBUG
+
 /* Macro: BE_DEBUG
  * Berry interpreter debug switch.
  * Default: 0

@@ -21,12 +21,12 @@ be_local_class(MI32,
     NULL,
     be_nested_map(6,
     ( (struct bmapnode*) &(const bmapnode[]) {
-        { be_nested_key("devices", -1593144448, 7, 3), be_const_func(be_MI32_devices) },
+        { be_nested_key("devices", -1593144448, 7, -1), be_const_func(be_MI32_devices) },
         { be_nested_key("set_bat", -1558299945, 7, -1), be_const_func(be_MI32_set_bat) },
-        { be_nested_key("name", -1925595674, 4, 4), be_const_func(be_MI32_get_name) },
-        { be_nested_key("MAC", 827962248, 3, -1), be_const_func(be_MI32_get_MAC) },
-        { be_nested_key("set_hum", 964296026, 7, 5), be_const_func(be_MI32_set_hum) },
+        { be_nested_key("set_hum", 964296026, 7, 4), be_const_func(be_MI32_set_hum) },
+        { be_nested_key("get_MAC", 2091521771, 7, -1), be_const_func(be_MI32_get_MAC) },
         { be_nested_key("set_temp", 1952131250, 8, -1), be_const_func(be_MI32_set_temp) },
+        { be_nested_key("get_name", 1616902907, 8, 3), be_const_func(be_MI32_get_name) },
     })),
     (be_nested_const_str("MI32", -220693882, 4))
 );
@@ -53,11 +53,11 @@ be_local_class(BLE,
     be_nested_map(6,
     ( (struct bmapnode*) &(const bmapnode[]) {
         { be_nested_key("conn_cb", 1381122945, 7, -1), be_const_func(be_BLE_reg_conn_cb) },
-        { be_nested_key("adv_cb", 1957890034, 6, 5), be_const_func(be_BLE_reg_adv_cb) },
-        { be_nested_key("MAC", 827962248, 3, -1), be_const_func(be_BLE_set_MAC) },
-        { be_nested_key("chr", 176532340, 3, 7), be_const_func(be_BLE_set_characteristic) },
+        { be_nested_key("set_svc", 752734654, 7, -1), be_const_func(be_BLE_set_service) },
         { be_nested_key("run", 718098122, 3, -1), be_const_func(be_BLE_run) },
-        { be_nested_key("svc", -347630355, 3, -1), be_const_func(be_BLE_set_service) },
+        { be_nested_key("set_chr", 102133743, 7, 0), be_const_func(be_BLE_set_characteristic) },
+        { be_nested_key("adv_cb", 1957890034, 6, 1), be_const_func(be_BLE_reg_adv_cb) },
+        { be_nested_key("set_MAC", 1617581015, 7, -1), be_const_func(be_BLE_set_MAC) },
     })),
     (be_nested_const_str("BLE", -361123990, 3))
 );

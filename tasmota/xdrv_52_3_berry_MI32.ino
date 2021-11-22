@@ -159,7 +159,7 @@ extern "C" {
   int be_BLE_set_MAC(bvm *vm);
   int be_BLE_set_MAC(bvm *vm){    
     int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc == 2 && be_isint(vm, 2)) {
+    if (argc == 2 && be_iscomptr(vm, 2)) {
       size_t len = 6;
       if (MI32setBerryCtxMAC((uint8_t*)be_tobytes(vm, 2, &len))) be_return(vm);
     }

@@ -158,7 +158,7 @@ struct ATCPacket_t{ //and PVVX
   };
 };
 
-typedef void (*MI32CallbackNoArgs) ();                      // simple typedef for a callback
+// typedef void (*MI32CallbackNoArgs) ();                      // simple typedef for a callback
 
 #pragma pack(0)
 
@@ -177,7 +177,6 @@ struct MI32connectionContextBerry_t{
   NimBLEUUID charUUID;
   uint8_t * MAC;
   uint8_t * buffer;
-  uint8_t length;
   uint8_t operation;
 };
 
