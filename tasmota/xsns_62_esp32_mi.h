@@ -178,13 +178,14 @@ struct MI32connectionContextBerry_t{
   uint8_t * MAC;
   uint8_t * buffer;
   uint8_t operation;
+  bool oneOp;
 };
 
 struct {
   uint32_t period;             // set manually in addition to TELE-period, is set to TELE-period after start
   TaskHandle_t ScanTask;
-  MI32connectionContext_t *conCtx = nullptr;
-  MI32connectionContextBerry_t *beConnCtx = nullptr;
+  // MI32connectionContext_t *conCtx = nullptr;
+  MI32connectionContextBerry_t *conCtx = nullptr;
   union {
     struct {
       uint32_t init:1;
@@ -207,6 +208,7 @@ struct {
       uint32_t didGetConfig:1;
       uint32_t didStartHAP:1;
       uint32_t triggerBerryAdvCB:1;
+      uint32_t triggerBerryConnCB:1;
     };
     uint32_t all = 0;
   } mode;
@@ -354,9 +356,9 @@ struct MAC_t {
 
 #define D_CMND_MI32 "MI32"
 
-const char kMI32_Commands[] PROGMEM = D_CMND_MI32 "|Key|Time|Battery|Unit|Beacon|Cfg|Option";
+const char kMI32_Commands[] PROGMEM = D_CMND_MI32 "|Key|"/*Time|Battery|Unit|Beacon|*/"Cfg|Option";
 
-void (*const MI32_Commands[])(void) PROGMEM = {&CmndMi32Key, &CmndMi32Time, &CmndMi32Battery, &CmndMi32Unit, &CmndMi32Beacon, &CmndMi32Cfg, &CmndMi32Option };
+void (*const MI32_Commands[])(void) PROGMEM = {&CmndMi32Key, /*&CmndMi32Time, &CmndMi32Battery, &CmndMi32Unit, &CmndMi32Beacon,*/ &CmndMi32Cfg, &CmndMi32Option };
 
 #define FLORA       1
 #define MJ_HT_V1    2
@@ -418,11 +420,11 @@ const char * kMI32DeviceType[] PROGMEM = {kMI32DeviceType1,kMI32DeviceType2,kMI3
 \*********************************************************************************************/
 
 enum MI32_Commands {          // commands useable in console or rules
-  CMND_MI32_TIME,             // set LYWSD02-Time from ESP8266-time
-  CMND_MI32_BATTERY,          // read all battery levels
-  CMND_MI32_UNIT,             // toggles the displayed unit between C/F (LYWSD02)
+  // CMND_MI32_TIME,             // set LYWSD02-Time from ESP8266-time
+  // CMND_MI32_BATTERY,          // read all battery levels
+  // CMND_MI32_UNIT,             // toggles the displayed unit between C/F (LYWSD02)
   CMND_MI32_KEY,              // add bind key to a mac for packet decryption
-  CMND_MI32_BEACON,           // add up to 4 beacons defined by their MAC addresses
+  // CMND_MI32_BEACON,           // add up to 4 beacons defined by their MAC addresses
   CMND_MI32_CFG,              // save config file as JSON with all sensors w/o keys to mi32cfg
   CMND_MI32_OPTION            // change driver options at runtime
   };

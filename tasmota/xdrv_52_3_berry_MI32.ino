@@ -203,16 +203,19 @@ extern "C" {
 BLE.set_svc
 BLE.set_chr
 
-be_BLE_op
-1 connect
-2 disconnect
-3 read
-4 write
-5 subscribe
-6 unsubscribe
-
 BLE.set_MAC
 BLE.run(op)
+be_BLE_op:
+1 read
+2 write
+3 subscribe
+4 unsubscribe
+5 disconnect
+
+11 read once, then disconnect
+12 write once, then disconnect
+13 subscribe once, then disconnect
+14 unsubscribe once, then disconnect
 
 BLE.conn_cb(cb,buffer)
 BLE.adv_cb(cb,buffer)
