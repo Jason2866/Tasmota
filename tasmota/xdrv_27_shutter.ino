@@ -479,6 +479,10 @@ void ShutterPowerOff(uint8_t i)
   if (Shutter[i].direction !=0) {
     Shutter[i].direction = 0;
   }
+  if (Shutter[i].real_position == Shutter[i].start_position)  {
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("SHT: Update target tilt shutter %d from %d to %d"), i+1,  Shutter[i].tilt_target_pos , Shutter[i].tilt_real_pos); 
+    Shutter[i].tilt_target_pos = Shutter[i].tilt_real_pos;
+  }
   TasmotaGlobal.rules_flag.shutter_moved = 1;
   switch (Shutter[i].switch_mode) {
     case SHT_SWITCH:
@@ -558,6 +562,8 @@ void ShutterUpdatePosition(void)
         //AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("SHT: Pre: Tilt not match %d -> %d, moving: %d"),Shutter[i].tilt_real_pos,Shutter[i].tilt_target_pos,Shutter[i].tiltmoving);
         if (abs(Shutter[i].tilt_real_pos - Shutter[i].tilt_target_pos) > Shutter[i].min_TiltChange && Shutter[i].tiltmoving == 0) {
           AddLog(LOG_LEVEL_INFO, PSTR("SHT: Tilt not match %d -> %d"),Shutter[i].tilt_real_pos,Shutter[i].tilt_target_pos);
+          char databuf[1] = "";
+          XdrvMailbox.data = databuf;
           XdrvMailbox.payload = -99;
           XdrvMailbox.index = i+1;
           Shutter[i].tiltmoving = 1;
@@ -716,6 +722,9 @@ void ShutterRelayChanged(void)
           TasmotaGlobal.last_source = SRC_SHUTTER; // avoid switch off in the next loop
           if (Shutter[i].direction != 0 ) Shutter[i].target_position = Shutter[i].real_position;
       }
+      if (powerstate_local > 0) {
+        Shutter[i].tiltmoving = 0;
+      }
       switch (ShutterGlobal.position_mode) {
         // enum Shutterposition_mode {SHT_TIME, SHT_TIME_UP_DOWN, SHT_TIME_GARAGE, SHT_COUNTER, SHT_PWM_VALUE, SHT_PWM_TIME,};
         case SHT_TIME_UP_DOWN:
@@ -761,7 +770,7 @@ void ShutterRelayChanged(void)
 
 
 			  } // switch (ShutterGlobal.position_mode)
-        AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("SHT: Shtr%d, Target %ld, Powerstatelocal %d"), i+1, Shutter[i].target_position, powerstate_local);
+        AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("SHT: Shtr%d, Target %ld, Power: %d, tiltmv: %d"), i+1, Shutter[i].target_position, powerstate_local,Shutter[i].tiltmoving);
 		 } // if (manual_relays_changed)
   } // for (uint32_t i = 0; i < TasmotaGlobal.shutters_present; i++)
 }

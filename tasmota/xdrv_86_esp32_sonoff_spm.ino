@@ -88,6 +88,13 @@
  * relay   = 0 to 127                  Relays
 \*********************************************************************************************/
 
+#define SSPM_JSON_ENERGY_TODAY               // Show JSON energy today
+#define SSPM_JSON_ENERGY_YESTERDAY           // Show JSON energy yesterday
+
+/*********************************************************************************************\
+ * Fixed defines - Do not change
+\*********************************************************************************************/
+
 #define XDRV_86                      86
 
 #define SSPM_MAX_MODULES             7       // Currently supports up to 7 SPM-4RELAY units for a total of 28 relays restricted by power_t size
@@ -102,6 +109,7 @@
 #define SSPM_FUNC_SET_SCHEME         10      // 0x0A
 #define SSPM_FUNC_GET_SCHEME         11      // 0x0B
 #define SSPM_FUNC_SET_TIME           12      // 0x0C
+#define SSPM_FUNC_IAMHERE            13      // 0x0D
 #define SSPM_FUNC_INIT_SCAN          16      // 0x10
 #define SSPM_FUNC_UNITS              21      // 0x15
 #define SSPM_FUNC_GET_ENERGY_TOTAL   22      // 0x16
@@ -151,7 +159,9 @@ typedef struct {
   float apparent_power[SSPM_MAX_MODULES][4];      // 123.12 VA
   float reactive_power[SSPM_MAX_MODULES][4];      // 123.12 VAr
   float power_factor[SSPM_MAX_MODULES][4];        // 0.12
-  float total[SSPM_MAX_MODULES][4];               // 12345 kWh total energy
+  float energy_today[SSPM_MAX_MODULES][4];        // 12345 kWh
+  float energy_yesterday[SSPM_MAX_MODULES][4];    // 12345 kWh
+  float energy_total[SSPM_MAX_MODULES][4];        // 12345 kWh total energy since last 6 month!!!
 
   uint32_t timeout;
   power_t old_power;
@@ -362,7 +372,10 @@ void SSPMSendSetTime(void) {
   /*
    0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
   AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 00 0c 00 0b 07 e5 0b 06 0c 39 01 00 00 02 00 04 8a 37
-  Marker  |Module id                          |Ac|Cm|Size |YY YY MM DD HH MM SS|Ln|St|Tr|  |Ix|Chksm|
+  Marker  |Module id                          |Ac|Cm|Size |YY YY MM DD HH MM SS|Ln|St|Tr   |Ix|Chksm|
+  UTC time
+  Tr = Time zone, [-12,+14], can be a decimal, such as 7.5
+
   */
   SSPMInitSend();
   SspmBuffer[16] = SSPM_FUNC_SET_TIME;
@@ -376,6 +389,20 @@ void SSPMSendSetTime(void) {
   SspmBuffer[30] = Sspm->command_sequence;
 
   SSPMSend(33);
+}
+
+void SSPMSendIAmHere(uint32_t module) {
+  /*
+   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21
+  AA 55 01 8b 34 32 37 39 37 34 13 4b 35 36 37 00 0d 00 00 17 35 b6
+  Marker  |Module id                          |Ac|Cm|Size |Ix|Chksm|
+
+  Response
+  AA 55 01 8b 34 32 37 39 37 34 13 4b 35 36 37 80 0d 00 01 00 17 48 b5
+  Marker  |Module id                          |Ac|Cm|Size |Rs|Ix|Chksm|
+  */
+
+
 }
 
 void SSPMSendSetRelay(uint32_t relay, uint32_t state) {
@@ -648,23 +675,59 @@ void SSPMHandleReceivedData(void) {
         42 67 46
         */
         {
-          uint32_t total_energy = 0;
+          uint32_t energy_today = 0;
+          uint32_t energy_yesterday = 0;
+          uint32_t energy_total = 0;
           uint32_t entries = (Sspm->expected_bytes - 22) / 2;
+
           for (uint32_t i = 0; i < entries; i++) {
             uint32_t today_energy = (SspmBuffer[41 + (i*2)] << 8) + SspmBuffer[42 + (i*2)];
-            if (today_energy != 28702) {     // Unknown why sometimes 0x701E (=28702kWh) pops up
-              total_energy += today_energy;
-            }
+            if (28702 == today_energy) { today_energy = 0; }  // Unknown why sometimes 0x701E (=28702kWh) pops up
+            if (0 == i) { energy_today = today_energy; }
+            if (1 == i) { energy_yesterday = today_energy; }
+            energy_total += today_energy;
           }
           uint32_t channel = SspmBuffer[32];
           for (uint32_t module = 0; module < Sspm->module_max; module++) {
             if ((SspmBuffer[20] == Sspm->module[module][0]) && (SspmBuffer[21] == Sspm->module[module][1])) {
-              Sspm->total[module][channel] = total_energy;  // xkWh
+              Sspm->energy_today[module][channel] = energy_today;
+              Sspm->energy_yesterday[module][channel] = energy_yesterday;
+              Sspm->energy_total[module][channel] = energy_total;  // xkWh
               break;
             }
           }
           Sspm->allow_updates = 1;
         }
+        break;
+      case SSPM_FUNC_GET_LOG:
+        /* 0x1A
+        0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31
+        AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 80 1a 01 3a 00 6b 7e 32 37 39 37 34 13 4b 35 36 37
+        1e                            Number of log entries (1e = 30)
+        07 e5 0b 06 0f 25 19 02 01 00 10 byte log entry
+                                  |-- trigger 00 = App, 01 = Device, 02 = Overload, 03 = Overtemp
+                               |----- state   00 = Off, 01 = On
+                            |-------- Channel 00 to 03
+                         |----------- Second  = 25
+                      |-------------- Minute  = 37
+                   |----------------- Hour    = 15
+                |-------------------- Day     =  6
+             |----------------------- Month   = 11 = November
+        ----------------------------- Year    07 e5 = 2021
+        07 e5 0b 06 0f 1f 08 00 00 01
+        07 e5 0b 06 0f 1f 04 02 00 01
+        07 e5 0b 06 0f 1e 32 01 00 01
+        07 e5 0b 06 0f 1e 1e 01 01 01
+        07 e5 0b 06 0f 18 38 02 01 01
+        07 e5 0b 06 0f 12 38 00 01 01
+        07 e5 0b 06 0e 37 36 03 00 00
+        07 e5 0b 06 0e 37 36 01 00 00
+        07 e5 0b 06 0e 37 1e 03 01 00
+        07 e5 0b 06 0e 36 37 01 01 00
+        ...
+        07 e5 0b 06 0d 30 2d 03 00 01 09 89 fe
+        */
+
         break;
       case SSPM_FUNC_ENERGY_PERIOD:
         /* 0x1B
@@ -688,9 +751,10 @@ void SSPMHandleReceivedData(void) {
         AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 00 06 00 1C 8B 34 32 37 39 37 34 13 4B 35 36 37 08 02 04 00 DC 14 01 C1 3D 00 10 19 01 C2 29 4B 37 6B 26
         AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 00 06 00 1c 8b 34 32 37 39 37 34 13 4b 35 36 37 08 00 44 00 e1 35 00 9a 3e 00 01 45 00 9a 38 00 08 8b ae
         AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 00 06 00 1c 8b 34 32 37 39 37 34 13 4b 35 36 37 08 00 4a 00 e1 22 00 61 4d 00 2c 38 00 a8 28 20 26 21 70
-                                                                                                    |Ch|Curre|Voltage |ActivePo|Reactive|Apparent|??|
+                                                                                                    |Ch|Curre|Voltage |ActivePo|Reactive|Apparent|5m|
         Values are XX XX    - number
                          XX - decimals
+        5m - 5 minutes Power Consumption (Ws)
         */
         {
           uint32_t channel = 0;
@@ -705,6 +769,9 @@ void SSPMHandleReceivedData(void) {
               Sspm->active_power[module][channel] = (SspmBuffer[37] << 8) + SspmBuffer[38] + (float)SspmBuffer[39] / 100;    // x.xxW
               Sspm->reactive_power[module][channel] = (SspmBuffer[40] << 8) + SspmBuffer[41] + (float)SspmBuffer[42] / 100;  // x.xxVAr
               Sspm->apparent_power[module][channel] = (SspmBuffer[43] << 8) + SspmBuffer[44] + (float)SspmBuffer[45] / 100;  // x.xxVA
+              float power_factor = (Sspm->active_power[module][channel] && Sspm->apparent_power[module][channel]) ? Sspm->active_power[module][channel] / Sspm->apparent_power[module][channel] : 0;
+              if (power_factor > 1) { power_factor = 1; }
+              Sspm->power_factor[module][channel] = power_factor;
               break;
             }
           }
@@ -750,8 +817,9 @@ void SSPMHandleReceivedData(void) {
          0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57
         AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 00 13 00 24 6b 7e 32 37 39 37 34 13 4b 35 36 37 04 00 00 00 82 01 00 00 14 00 00 0a 00 f0 00 00 00 0a 11 30 00 00 00 0a 02 8f cd
         AA 55 01 00 00 00 00 00 00 00 00 00 00 00 00 00 13 00 24 8b 34 32 37 39 37 34 13 4b 35 36 37 04 00 00 00 82 01 00 00 14 00 00 0a 00 f0 00 00 00 0a 11 30 00 00 00 0a 02 a0 6f
-        Marker  |                                   |Ac|Cm|Size |Module id                          |Ch|                    |Max I|Min I|Max U   |Min U   |Max P   |Min P   |Ix|Chksm|
+        Marker  |                                   |Ac|Cm|Size |Module id                          |Ch|        |Ty|        |Max I|Min I|Max U   |Min U   |Max P   |Min P   |Ix|Chksm|
                                                                                                                             |  20A| 0.1A|    240V|    0.1V|   4400W|    0.1W|
+        Ty = Type of sub-device. 130: Four-channel sub-device
         */
         if ((0x24 == Sspm->expected_bytes) && (Sspm->module_max < SSPM_MAX_MODULES)) {
           memcpy(Sspm->module[1], Sspm->module[0], (SSPM_MAX_MODULES -1) * SSPM_MODULE_NAME_SIZE);
@@ -1018,15 +1086,19 @@ char* SSPMEnergyFormat(char* result, float* input, uint32_t resolution, bool jso
 }
 
 const char HTTP_SSPM_VOLTAGE[] PROGMEM =
-  "{s}" D_VOLTAGE "</th><td>%s" D_UNIT_VOLT "{e}";
+  "{s}" D_VOLTAGE "</th><td>%s" D_UNIT_VOLT "{e}";  // {s} = <tr><th>, {m} = </th><td style='width:20px;white-space:nowrap'>, {e} = </td></tr>
 const char HTTP_SSPM_CURRENT[] PROGMEM =
   "{s}" D_CURRENT "</th><td>%s" D_UNIT_AMPERE "{e}";
 const char HTTP_SSPM_POWER[] PROGMEM =
   "{s}" D_POWERUSAGE_ACTIVE "</th><td>%s" D_UNIT_WATT "{e}";
-const char HTTP_SSPM_ENERGY[] PROGMEM =
+const char HTTP_SSPM_POWER2[] PROGMEM =
   "{s}" D_POWERUSAGE_APPARENT "</th><td>%s" D_UNIT_VA "{e}"
   "{s}" D_POWERUSAGE_REACTIVE "</th><td>%s" D_UNIT_VAR "{e}"
-  "{s}" D_ENERGY_TOTAL "</th><td>%s" D_UNIT_KILOWATTHOUR "{e}";  // {s} = <tr><th>, {m} = </th><td style='width:20px;white-space:nowrap'>, {e} = </td></tr>
+  "{s}" D_POWER_FACTOR "</th><td>%s{e}";
+const char HTTP_SSPM_ENERGY[] PROGMEM =
+  "{s}" D_ENERGY_TODAY "</th><td>%s" D_UNIT_KILOWATTHOUR "{e}"
+  "{s}" D_ENERGY_YESTERDAY "</th><td>%s" D_UNIT_KILOWATTHOUR "{e}"
+  "{s}" D_ENERGY_TOTAL "</th><td>%s" D_UNIT_KILOWATTHOUR "{e}";
 
 void SSPMEnergyShow(bool json) {
   if (!TasmotaGlobal.devices_present) { return; }  // Not ready yet
@@ -1034,8 +1106,20 @@ void SSPMEnergyShow(bool json) {
   if (json) {
     ResponseAppend_P(PSTR(",\"SPM\":{\"" D_JSON_ENERGY "\":["));
     for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
-      ResponseAppend_P(PSTR("%s%*_f"), (i>0)?",":"", -1, &Sspm->total[i >>2][i &3]);
+      ResponseAppend_P(PSTR("%s%*_f"), (i>0)?",":"", -1, &Sspm->energy_total[i >>2][i &3]);
     }
+#ifdef SSPM_JSON_ENERGY_YESTERDAY
+    ResponseAppend_P(PSTR("],\"" D_JSON_YESTERDAY "\":["));
+    for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
+      ResponseAppend_P(PSTR("%s%*_f"), (i>0)?",":"", -1, &Sspm->energy_today[i >>2][i &3]);
+    }
+#endif
+#ifdef SSPM_JSON_ENERGY_TODAY
+    ResponseAppend_P(PSTR("],\"" D_JSON_TODAY "\":["));
+    for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
+      ResponseAppend_P(PSTR("%s%*_f"), (i>0)?",":"", -1, &Sspm->energy_yesterday[i >>2][i &3]);
+    }
+#endif
     ResponseAppend_P(PSTR("],\"" D_JSON_ACTIVE_POWERUSAGE "\":["));
     for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
       ResponseAppend_P(PSTR("%s%*_f"), (i>0)?",":"", Settings->flag2.wattage_resolution, &Sspm->active_power[i >>2][i &3]);
@@ -1047,6 +1131,10 @@ void SSPMEnergyShow(bool json) {
     ResponseAppend_P(PSTR("],\"" D_JSON_REACTIVE_POWERUSAGE "\":["));
     for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
       ResponseAppend_P(PSTR("%s%*_f"), (i>0)?",":"", Settings->flag2.wattage_resolution, &Sspm->reactive_power[i >>2][i &3]);
+    }
+    ResponseAppend_P(PSTR("],\"" D_JSON_POWERFACTOR "\":["));
+    for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
+      ResponseAppend_P(PSTR("%s%*_f"), (i>0)?",":"", 2, &Sspm->power_factor[i >>2][i &3]);
     }
     ResponseAppend_P(PSTR("],\"" D_JSON_VOLTAGE "\":["));
     for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
@@ -1075,9 +1163,12 @@ void SSPMEnergyShow(bool json) {
     WSContentSend_PD(HTTP_SSPM_POWER,   SSPMEnergyFormat(value_chr, Sspm->active_power[module], Settings->flag2.wattage_resolution, json));
     char valu2_chr[SSPM_SIZE];
     char valu3_chr[SSPM_SIZE];
-    WSContentSend_PD(HTTP_SSPM_ENERGY,  SSPMEnergyFormat(value_chr, Sspm->apparent_power[module], Settings->flag2.wattage_resolution, json),
+    WSContentSend_PD(HTTP_SSPM_POWER2,  SSPMEnergyFormat(value_chr, Sspm->apparent_power[module], Settings->flag2.wattage_resolution, json),
                                         SSPMEnergyFormat(valu2_chr, Sspm->reactive_power[module], Settings->flag2.wattage_resolution, json),
-                                        SSPMEnergyFormat(valu3_chr, Sspm->total[module], Settings->flag2.energy_resolution, json));
+                                        SSPMEnergyFormat(valu3_chr, Sspm->power_factor[module], 2, json));
+    WSContentSend_PD(HTTP_SSPM_ENERGY,  SSPMEnergyFormat(value_chr, Sspm->energy_today[module], Settings->flag2.energy_resolution, json),
+                                        SSPMEnergyFormat(valu2_chr, Sspm->energy_yesterday[module], Settings->flag2.energy_resolution, json),
+                                        SSPMEnergyFormat(valu3_chr, Sspm->energy_total[module], Settings->flag2.energy_resolution, json));
     WSContentSend_P(PSTR("</table>{t}"));    // {t} = <table style='width:100%'> - Define for next FUNC_WEB_SENSOR
   }
 }
