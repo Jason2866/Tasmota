@@ -117,7 +117,7 @@ struct berryAdvPacket_t{
   uint8_t MAC[6];
   uint16_t svcUUID;
   uint8_t RSSI;
-  uint8_t length;
+  uint8_t length;      // length of svcData
   uint8_t svcData[40]; // only a pointer to the address, size is variable
 };
 
@@ -162,15 +162,15 @@ struct ATCPacket_t{ //and PVVX
 
 #pragma pack(0)
 
-struct MI32connectionContext_t{
-  NimBLEUUID serviceUUID;
-  NimBLEUUID charUUID;
-  char connectionType; //'r','w','s'
-  char valueType; //'b','u','t'
-  uint8_t slot; //sensor slot
-  uint8_t buffer[32];
-  uint8_t length;
-};
+// struct MI32connectionContext_t{
+//   NimBLEUUID serviceUUID;
+//   NimBLEUUID charUUID;
+//   char connectionType; //'r','w','s'
+//   char valueType; //'b','u','t'
+//   uint8_t slot; //sensor slot
+//   uint8_t buffer[32];
+//   uint8_t length;
+// };
 
 struct MI32connectionContextBerry_t{
   NimBLEUUID serviceUUID;

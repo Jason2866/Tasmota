@@ -12,7 +12,7 @@ def cb()
     if j == 0
         print(cbuf)
     end
-    if j  == 1
+    if j == 1
         var temp = cbuf.get(1,2)/100.0
         var hum = cbuf.get(3,1)*1.0
         var bat = (cbuf.get(4,2)-2100)/12
@@ -20,7 +20,7 @@ def cb()
         m.set_hum(sl,hum)
         m.set_bat(sl,bat)
     end
-    if j  == 4
+    if j == 4
         var bat = cbuf.get(1,1)
         m.set_bat(sl,bat)
     end
@@ -95,6 +95,5 @@ def MI32Bat(slot)
         j = 4
         ble.run(11)
     end
-
 end
 
