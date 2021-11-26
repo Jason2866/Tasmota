@@ -10,8 +10,6 @@
 
 #include "be_object.h"
 
-#define BE_GCOBJECT         BE_STRING
-
 #define gc_object(o)        cast(bgcobject*, o)
 #define gc_cast(o, t, T)    ((o) && (o)->type == (t) ? (T*)(o) : NULL)
 #define cast_proto(o)       gc_cast(o, BE_PROTO, bproto)
@@ -38,7 +36,7 @@ if (!gc_isconst(o)) { \
 #define gc_setwhite(o)      gc_setmark((o), GC_WHITE)
 #define gc_setgray(o)       gc_setmark((o), GC_GRAY)
 #if BE_USE_PERF_COUNTERS
-    #define gc_setdark(o)       { vm->counter_gc_scanned++; gc_setmark((o), GC_DARK); }
+    #define gc_setdark(o)       { vm->counter_gc_kept++; gc_setmark((o), GC_DARK); }
 #else
     #define gc_setdark(o)       gc_setmark((o), GC_DARK)
 #endif
