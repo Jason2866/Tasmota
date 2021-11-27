@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## [10.0.0.3]
 ### Added
+- Shutter support for venetian blinds with tilt control
 - Autoconfiguration for ESP32 and variants
 - ESP32 fix leftover GPIO configuration after restart
 - ESP32 Proof of Concept Sonoff SPM with limited functionality (switching and energy monitoring) (#13447)
@@ -12,7 +13,9 @@ All notable changes to this project will be documented in this file.
 - Preliminary support for Tasmota Apps (.tapp extesions)
 - Berry support for neopixel (WS2812, SK6812)
 - Command ``IfxPeriod `` to overrule ``Teleperiod`` for Influx messages (#13750)
-- OTA over HTTPS
+- OTA over HTTPS (ESP32x only)
+- Berry add ``import re`` regex module
+- Add HTTPS support to ``WebQuery`` (ESP32x only)
 
 ### Changed
 - ESP8266 Gratuitous ARP enabled and set to 60 seconds (#13623)
