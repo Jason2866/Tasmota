@@ -8,7 +8,7 @@
  **********************************************/
 
 /** @brief Un-comment to change the number of simultaneous connections (esp controller max is 9) */
-// #define CONFIG_BT_NIMBLE_MAX_CONNECTIONS 3
+#define CONFIG_BT_NIMBLE_MAX_CONNECTIONS 3
 
 /** @brief Un-comment to change the default MTU size */
 // #define CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU 255
@@ -52,12 +52,12 @@
 /** @brief Un-comment if not using NimBLE Server functions \n
  *  Reduces flash size by approx. 16kB.
  */
-// #define CONFIG_BT_NIMBLE_ROLE_PERIPHERAL_DISABLED
+#define CONFIG_BT_NIMBLE_ROLE_PERIPHERAL_DISABLED
 
 /** @brief Un-comment if not using NimBLE Advertising functions \n
  *  Reduces flash size by approx. 5kB.
  */
-// #define CONFIG_BT_NIMBLE_ROLE_BROADCASTER_DISABLED
+#define CONFIG_BT_NIMBLE_ROLE_BROADCASTER_DISABLED
 
 /** @brief Un-comment to change the number of devices allowed to store/bond with */
 // #define CONFIG_BT_NIMBLE_MAX_BONDS 3
@@ -196,6 +196,17 @@
 #define CONFIG_BTDM_CONTROLLER_MODE_BLE_ONLY
 #endif
 
+#ifndef CONFIG_BTDM_SCAN_DUPL_TYPE_DEVICE
+#define CONFIG_BTDM_SCAN_DUPL_TYPE_DEVICE 0
+#endif
+
+#ifndef CONFIG_BTDM_SCAN_DUPL_TYPE_DATA
+#define CONFIG_BTDM_SCAN_DUPL_TYPE_DATA 1
+#endif
+
+#ifndef CONFIG_BTDM_SCAN_DUPL_TYPE_DATA_DEVICE
+#define CONFIG_BTDM_SCAN_DUPL_TYPE_DATA_DEVICE 2
+#endif
 
 #if !defined(CONFIG_IDF_TARGET_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32C3)
 #define CONFIG_IDF_TARGET_ESP32 1
