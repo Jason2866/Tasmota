@@ -44,11 +44,6 @@
 
 #define XSNS_62                    62
 
-// #ifdef USE_MI_HOMEKIT
-// #undef CONFIG_LWIP_MAX_SOCKETS
-// #define CONFIG_LWIP_MAX_SOCKETS    16
-// #endif //USE_MI_HOMEKIT
-
 #include <NimBLEDevice.h>
 #include <vector>
 
@@ -69,8 +64,8 @@ void MI32notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic, uint8_t* pD
 void MI32AddKey(mi_bindKey_t keyMAC);
 
 std::vector<mi_sensor_t> MIBLEsensors;
-std::array<generic_beacon_t,4> MIBLEbeacons; // we support a fixed number
-std::vector<scan_entry_t> MIBLEscanResult;
+// std::array<generic_beacon_t,4> MIBLEbeacons; // we support a fixed number
+// std::vector<scan_entry_t> MIBLEscanResult;
 
 static BLEScan* MI32Scan;
 
@@ -135,6 +130,12 @@ class MI32AdvCallbacks: public NimBLEAdvertisedDeviceCallbacks {
         _packet->svcUUID = 0;
         _packet->RSSI = (uint8_t)RSSI;
         _packet->length = ServiceDataLength;
+        _packet->svcData[0] = 0; //guarantee it is zero!!
+        if(advertisedDevice->haveManufacturerData()){
+          std::string _md = advertisedDevice->getManufacturerData();
+          _packet->svcData[ServiceDataLength] = _md.size();
+          memcpy((_packet->svcData)+ServiceDataLength+1,_md.data(), _md.size());
+        }
         MI32.mode.triggerBerryAdvCB = 1;
       }
       _mutex = false;
@@ -562,7 +563,7 @@ uint8_t MI32fetchHistory(uint8_t *history, uint32_t hour){
 
 void MI32PreInit(void) {
   MIBLEsensors.reserve(10);
-  MIBLEscanResult.reserve(20);
+  // MIBLEscanResult.reserve(20);
   MI32.mode.init = false;
 
   //test section for options
@@ -1739,29 +1740,29 @@ void MI32EverySecond(bool restart){
     }
   }
 
-  uint32_t _idx = 0;
-  uint32_t _activeBeacons = 0;
-  for (auto &_beacon : MIBLEbeacons){
-    _idx++;
-    if(_beacon.active == false) continue;
-    _activeBeacons++;
-    _beacon.time++;
-    Response_P(PSTR("{\"Beacon%u\":{\"Time\":%u}}"), _idx, _beacon.time);
-    XdrvRulesProcess(0);
-  }
-  if(_activeBeacons==0) MI32.mode.activeBeacon = 0;
+  // uint32_t _idx = 0;
+  // uint32_t _activeBeacons = 0;
+  // for (auto &_beacon : MIBLEbeacons){
+  //   _idx++;
+  //   if(_beacon.active == false) continue;
+  //   _activeBeacons++;
+  //   _beacon.time++;
+  //   Response_P(PSTR("{\"Beacon%u\":{\"Time\":%u}}"), _idx, _beacon.time);
+  //   XdrvRulesProcess(0);
+  // }
+  // if(_activeBeacons==0) MI32.mode.activeBeacon = 0;
 
-  if(MI32.state.beaconScanCounter!=0){
-    MI32.state.beaconScanCounter--;
-    if(MI32.state.beaconScanCounter==0){
-      MI32.mode.shallShowScanResult = 1;
-      MI32triggerTele();
-    }
-  }
+  // if(MI32.state.beaconScanCounter!=0){
+  //   MI32.state.beaconScanCounter--;
+  //   if(MI32.state.beaconScanCounter==0){
+  //     MI32.mode.shallShowScanResult = 1;
+  //     MI32triggerTele();
+  //   }
+  // }
 
-  if(MI32.mode.shallShowStatusInfo == 1){
-    MI32StatusInfo();
-  }
+  // if(MI32.mode.shallShowStatusInfo == 1){
+  //   MI32StatusInfo();
+  // }
 }
 
 /*********************************************************************************************\
@@ -2310,17 +2311,17 @@ void MI32Show(bool json)
       }
     }
     MI32.mode.triggeredTele = 0;
-// add beacons
-    uint32_t _idx = 0;
-    for (auto _beacon : MIBLEbeacons){
-      _idx++;
-      if(!_beacon.active) continue;
-      char _MAC[18];
-      ToHex_P(_beacon.MAC,6,_MAC,18,':');
-      ResponseAppend_P(PSTR(",\"Beacon%u\":{\"MAC\":\"%s\",\"CID\":\"0x%04x\",\"SVC\":\"0x%04x\","
-                            "\"UUID\":\"0x%04x\",\"Time\":%u,\"RSSI\":%d}"),
-                            _idx,_MAC,_beacon.CID,_beacon.SVC,_beacon.UUID,_beacon.time,_beacon.RSSI);
-    }
+// // add beacons
+//     uint32_t _idx = 0;
+//     for (auto _beacon : MIBLEbeacons){
+//       _idx++;
+//       if(!_beacon.active) continue;
+//       char _MAC[18];
+//       ToHex_P(_beacon.MAC,6,_MAC,18,':');
+//       ResponseAppend_P(PSTR(",\"Beacon%u\":{\"MAC\":\"%s\",\"CID\":\"0x%04x\",\"SVC\":\"0x%04x\","
+//                             "\"UUID\":\"0x%04x\",\"Time\":%u,\"RSSI\":%d}"),
+//                             _idx,_MAC,_beacon.CID,_beacon.SVC,_beacon.UUID,_beacon.time,_beacon.RSSI);
+//     }
 #ifdef USE_HOME_ASSISTANT
     if(hass_mode==2){
       MI32.option.noSummary = _noSummarySave;

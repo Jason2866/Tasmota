@@ -119,6 +119,8 @@ struct berryAdvPacket_t{
   uint8_t RSSI;
   uint8_t length;      // length of svcData
   uint8_t svcData[40]; // only a pointer to the address, size is variable
+  // the last array also contains manufacturer data if present, very likely svcData is not present
+  // format: svcData[0] = length, svcData[1...length] = payload
 };
 
 
