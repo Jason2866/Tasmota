@@ -28,18 +28,6 @@
     uint8_t hum;
     uint16_t volt; // LYWSD03 only
   };
-  // struct {
-  //   uint8_t spare;
-  //   int16_t temp;
-  //   uint16_t hum;
-  // } CGD1_HT;
-  // struct {
-  //   int16_t temp;
-  //   uint8_t spare;
-  //   uint32_t lux;
-  //   uint8_t moist;
-  //   uint16_t fert;
-  // } Flora_TLMF; // temperature, lux, moisture, fertility
 
 struct frame_crtl_t{
   uint16_t reserverd1:1;
@@ -119,7 +107,7 @@ struct berryAdvPacket_t{
   uint8_t RSSI;
   uint8_t length;      // length of svcData
   uint8_t svcData[40]; // only a pointer to the address, size is variable
-  // the last array also contains manufacturer data if present, very likely svcData is not present
+  // the last array contains manufacturer data if present, if svcData is not present
   // format: svcData[0] = length, svcData[1...length] = payload
 };
 
@@ -164,15 +152,6 @@ struct ATCPacket_t{ //and PVVX
 
 #pragma pack(0)
 
-// struct MI32connectionContext_t{
-//   NimBLEUUID serviceUUID;
-//   NimBLEUUID charUUID;
-//   char connectionType; //'r','w','s'
-//   char valueType; //'b','u','t'
-//   uint8_t slot; //sensor slot
-//   uint8_t buffer[32];
-//   uint8_t length;
-// };
 
 struct MI32connectionContextBerry_t{
   NimBLEUUID serviceUUID;
@@ -186,7 +165,6 @@ struct MI32connectionContextBerry_t{
 struct {
   uint32_t period;             // set manually in addition to TELE-period, is set to TELE-period after start
   TaskHandle_t ScanTask;
-  // MI32connectionContext_t *conCtx = nullptr;
   MI32connectionContextBerry_t *conCtx = nullptr;
   union {
     struct {
@@ -434,16 +412,16 @@ enum MI32_Commands {          // commands useable in console or rules
 enum MI32_TASK {
        MI32_TASK_SCAN = 0,
        MI32_TASK_CONN = 1,
-       MI32_TASK_TIME = 2,
-       MI32_TASK_BATT = 3,
-       MI32_TASK_UNIT = 4,
+      //  MI32_TASK_TIME = 2,
+      //  MI32_TASK_BATT = 3,
+      //  MI32_TASK_UNIT = 4,
 };
 
-enum MI32_BEACON_CMND {
-       MI32_BEACON_ON  = 0,
-       MI32_BEACON_OFF = 1,
-       MI32_BEACON_DEL = 2,
-};
+// enum MI32_BEACON_CMND {
+//        MI32_BEACON_ON  = 0,
+//        MI32_BEACON_OFF = 1,
+//        MI32_BEACON_DEL = 2,
+// };
 
 /*********************************************************************************************\
  * extended web gui
@@ -520,17 +498,5 @@ const char HTTP_MI32_POWER_WIDGET[] PROGMEM =
 
 #endif //USE_MI_EXT_GUI
 #endif // USE_WEBSERVER
-
-// settings for NimBLE-Arduino, normally this should be set in src/nimconfig.h, but who knows ...
-// #undef CONFIG_BT_NIMBLE_NVS_PERSIST
-// #define CONFIG_BT_NIMBLE_NVS_PERSIST 0
-// #undef MYNEWT_VAL_BLE_STORE_CONFIG_PERSIST
-// #define MYNEWT_VAL_BLE_STORE_CONFIG_PERSIST 0
-// #undef BLE_STORE_CONFIG_PERSIST
-// #define BLE_STORE_CONFIG_PERSIST 0
-// #undef CONFIG_BT_NIMBLE_SM_LEGACY
-// #define CONFIG_BT_NIMBLE_SM_LEGACY 0
-// #undef CONFIG_BT_NIMBLE_SM_SC
-// #define CONFIG_BT_NIMBLE_SM_SC 0
 
 #endif //USE_MI_ESP32

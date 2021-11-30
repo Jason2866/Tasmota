@@ -33,7 +33,7 @@ class BEACON : Driver
             self.add_to_result()
         end
         self.check_beacons()
-        self.check_ibeacons()
+        #self.check_ibeacons()
     end
 
     def add_to_result()

@@ -23,7 +23,7 @@
   Version yyyymmdd  Action    Description
   --------------------------------------------------------------------------------------------
   0.9.5.0 20211016  changed - major rewrite, added mi32cfg (file and command), Homekit-Bridge,
-                              extended GUI, removed BLOCK, PERIOD and PAGE
+                              extended GUI, removed BLOCK, PERIOD and PAGE, Berry-Support
   -------
   0.9.1.7 20201116  changed - small bugfixes, add BLOCK and OPTION command, send BLE scan via MQTT
   -------
@@ -274,12 +274,12 @@ void MI32AddKey(mi_bindKey_t keyMAC){
 }
 
 
-static inline int32_t _getCycleCount(void) {
-  int32_t ccount;
-  // __asm__ __volatile__("rsr %0,ccount":"=a" (ccount));
-  return micros();
-  // return ccount;
-}
+// static inline int32_t _getCycleCount(void) {
+//   int32_t ccount;
+//   // __asm__ __volatile__("rsr %0,ccount":"=a" (ccount));
+//   return micros();
+//   // return ccount;
+// }
 
 /**
  * @brief Decrypts payload in place
@@ -525,19 +525,19 @@ void MI32addHistory(uint8_t *history, float value, uint32_t type){
   // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history hour: %u"),_hour);
   switch(type){
     case 0:  //temperature
-      history[_hour] = ((uint8_t)(value + 5.0f)/4)+1; //temp
+      history[_hour] = (((uint8_t)(value + 5.0f)/4)+1)&0b10011111; //temp
       break;
     case 1: //humidity
-      history[_hour] = ((uint8_t)(value/5 ))+1; //hum
+      history[_hour] = (((uint8_t)(value/5 ))+1)&0b10011111; //hum
       break;
     case 2: //light
       if(value>100.0f) value=100.0f; //clamp it for now
-      history[_hour] = ((uint8_t)(value/5.0f))+1; //lux
+      history[_hour] = (((uint8_t)(value/5.0f))+1)&0b10011111; //lux
       // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history lux: %u in hour:%u"),history[_hour], _hour);
       break;
     case 100: // energy
       if(value == 0.0f) value = 1.0f;
-      uint8_t _watt = (uint8_t)(MI32ln(value))*2; //watt
+      uint8_t _watt = ((uint8_t)(MI32ln(value))*2)&0b10011111; //watt
       history[_hour] = _watt;
       AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history energy: %u for value:%u"),history[_hour], value); //still playing with the mapping
       break;
@@ -554,15 +554,43 @@ void MI32addHistory(uint8_t *history, float value, uint32_t type){
 uint8_t MI32fetchHistory(uint8_t *history, uint32_t hour){
     if(hour>23) {
       return 0;} //should never happen
-    return history[hour];
+    if(history[hour]&128 == 0) {
+      return 0; //invalidated data
+    }
+    return (history[hour])&0b10011111;
 }
+
+/**
+ * @brief Invalidates the history data of the following hour by setting MSB to 0, should be called at FUNC_JSON_APPEND
+ * 
+ */
+void Mi32invalidateOldHistory(){
+  uint32_t _hour = (LocalTime()%SECS_PER_DAY)/SECS_PER_HOUR;
+  static uint32_t _lastInvalidatedHour = 99;
+  if (_lastInvalidatedHour == _hour){
+    return;
+  }
+  uint32_t _nextHour = _hour>22?0:_hour+1;
+  for(auto _sensor:MIBLEsensors){
+    if(_sensor.feature.temp){
+      _sensor.temp_history[_nextHour] &= 0b00011111;
+    }
+    if(_sensor.feature.hum){
+      _sensor.hum_history[_nextHour] &= 0b00011111;
+    }
+    if(_sensor.feature.lux){
+      _sensor.lux_history[_nextHour] &= 0b00011111;
+    }
+  }
+  _lastInvalidatedHour = _hour;
+}
+
 #endif //USE_MI_EXT_GUI
 /*********************************************************************************************\
  * init NimBLE
 \*********************************************************************************************/
 
 void MI32PreInit(void) {
-  MIBLEsensors.reserve(10);
   // MIBLEscanResult.reserve(20);
   MI32.mode.init = false;
 
@@ -845,6 +873,7 @@ extern "C" {
 
 void MI32loadCfg(){
   if (TfsFileExists("/mi32cfg")){
+  MIBLEsensors.reserve(10);
   const size_t _buf_size = 2048;
   char * _filebuf = (char*)calloc(_buf_size,1);
     AddLog(LOG_LEVEL_INFO,PSTR("M32: found config file"));
@@ -2329,10 +2358,11 @@ void MI32Show(bool json)
     }
 #endif //USE_HOME_ASSISTANT
 #ifdef USE_MI_EXT_GUI
+    Mi32invalidateOldHistory();
 #ifdef USE_ENERGY_SENSOR
     MI32addHistory(MI32.energy_history,Energy.active_power[0],100); //TODO: which value??
-#endif //USE_MI_EXT_GUI
 #endif //USE_ENERGY_SENSOR
+#endif //USE_MI_EXT_GUI
     vTaskResume(MI32.ScanTask);
 #ifdef USE_WEBSERVER
     } else {
