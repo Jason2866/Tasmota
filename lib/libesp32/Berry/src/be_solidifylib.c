@@ -125,9 +125,7 @@ static void m_solidify_bvalue(bvm *vm, bvalue * value, const char *classname, co
             be_pushstring(vm, str(var_tostr(value)));
             be_toescape(vm, -1, 'u');
             logfmt("be_nested_str_literal(%s)", be_tostring(vm, -1));
-            // logfmt("be_nested_string(%s", be_tostring(vm, -1));
-            // be_pop(vm, 1);
-            // logfmt(", %i, %zu)", be_strhash(var_tostr(value)), len >= 255 ? 255 : len);
+            be_pop(vm, 1);
         }
         break;
     case BE_CLOSURE:
@@ -351,7 +349,7 @@ static void m_solidify_subclass(bvm *vm, bclass *cl, int builtins)
         logfmt("    NULL,\n");
     }
 
-    logfmt("    (be_nested_str_literal(\"%s\"))\n", class_name);
+    logfmt("    be_str_literal(\"%s\")\n", class_name);
     logfmt(");\n");
 
 }
