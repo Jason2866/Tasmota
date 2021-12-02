@@ -365,6 +365,7 @@ bool TfsDeleteDir(const char *fname) {
   return true;
 }
 
+#ifndef ESP8266
 bool TfsDeleteTree(const char *path ){
   if (!ffs_type) { return false; }
 
@@ -390,6 +391,7 @@ bool TfsDeleteTree(const char *path ){
   TfsDeleteDir( path );
   return true;   
 }
+#endif //ESP8266
 
 /*********************************************************************************************\
  * File command execute support
