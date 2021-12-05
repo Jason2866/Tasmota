@@ -554,10 +554,10 @@ void MI32addHistory(uint8_t *history, float value, uint32_t type){
 uint8_t MI32fetchHistory(uint8_t *history, uint32_t hour){
     if(hour>23) {
       return 0;} //should never happen
-    if(history[hour]&128 == 0) {
+    if(bitRead(history[hour],7) == 0) {
       return 0; //invalidated data
     }
-    return (history[hour])&0b10011111;
+    return (history[hour])&0b00011111;
 }
 
 /**
@@ -570,15 +570,15 @@ void Mi32invalidateOldHistory(){
   if (_lastInvalidatedHour == _hour){
     return;
   }
-  uint32_t _nextHour = _hour>22?0:_hour+1;
+  uint32_t _nextHour = (_hour>22)?0:_hour+1;
   for(auto _sensor:MIBLEsensors){
-    if(_sensor.feature.temp){
+    if(_sensor.feature.temp == 1){
       _sensor.temp_history[_nextHour] &= 0b00011111;
     }
-    if(_sensor.feature.hum){
+    if(_sensor.feature.hum == 1){
       _sensor.hum_history[_nextHour] &= 0b00011111;
     }
-    if(_sensor.feature.lux){
+    if(_sensor.feature.lux == 1){
       _sensor.lux_history[_nextHour] &= 0b00011111;
     }
   }
