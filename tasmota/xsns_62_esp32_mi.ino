@@ -525,19 +525,19 @@ void MI32addHistory(uint8_t *history, float value, uint32_t type){
   // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history hour: %u"),_hour);
   switch(type){
     case 0:  //temperature
-      history[_hour] = (((uint8_t)(value + 5.0f)/4)+1)&0b10011111; //temp
+      history[_hour] = (((uint8_t)(value + 5.0f)/4)+1) + 0b10000000; //temp
       break;
     case 1: //humidity
-      history[_hour] = (((uint8_t)(value/5 ))+1)&0b10011111; //hum
+      history[_hour] = (((uint8_t)(value/5 ))+1) + 0b10000000; //hum
       break;
     case 2: //light
       if(value>100.0f) value=100.0f; //clamp it for now
-      history[_hour] = (((uint8_t)(value/5.0f))+1)&0b10011111; //lux
+      history[_hour] = (((uint8_t)(value/5.0f))+1) + 0b10000000; //lux
       // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history lux: %u in hour:%u"),history[_hour], _hour);
       break;
     case 100: // energy
       if(value == 0.0f) value = 1.0f;
-      uint8_t _watt = ((uint8_t)(MI32ln(value))*2)&0b10011111; //watt
+      uint8_t _watt = ((uint8_t)(MI32ln(value))*2) + 0b10000000; //watt
       history[_hour] = _watt;
       AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history energy: %u for value:%u"),history[_hour], value); //still playing with the mapping
       break;
@@ -557,7 +557,7 @@ uint8_t MI32fetchHistory(uint8_t *history, uint32_t hour){
     if(bitRead(history[hour],7) == 0) {
       return 0; //invalidated data
     }
-    return (history[hour])&0b00011111;
+    return (history[hour]) - 0b10000000;
 }
 
 /**
@@ -573,13 +573,13 @@ void Mi32invalidateOldHistory(){
   uint32_t _nextHour = (_hour>22)?0:_hour+1;
   for(auto _sensor:MIBLEsensors){
     if(_sensor.feature.temp == 1){
-      _sensor.temp_history[_nextHour] &= 0b00011111;
+      bitClear(_sensor.temp_history[_nextHour],7);
     }
     if(_sensor.feature.hum == 1){
-      _sensor.hum_history[_nextHour] &= 0b00011111;
+      bitClear(_sensor.hum_history[_nextHour],7);
     }
     if(_sensor.feature.lux == 1){
-      _sensor.lux_history[_nextHour] &= 0b00011111;
+      bitClear(_sensor.lux_history[_nextHour],7);
     }
   }
   _lastInvalidatedHour = _hour;
