@@ -7,15 +7,18 @@ All notable changes to this project will be documented in this file.
 ### Added
 - (Internal) Support for FUNC_BUTTON_MULTI_PRESSED in (light)drivers
 - Support for GPE Multi color smart light as sold by Action in the Netherlands
+- Support for 74xx595 8-bit shift registers (#13921)
 
 ### Changed
 - (Internal) Range conversion edge values
 - NimBLE to v.1.3.3
 - MQTT TLS dual mode (CA or fingeprint) in same firmware, ``SetOption132 1`` to force fingerprint
+- Toolchains for ESP32x changed from 8.4.0-2021r1 to 8.4.0-2021r2
 
 ### Fixed
 - Tuya dimmer range issue (#13849)
-- BLE Memory leak with update NimBLE v.1.3.1 to v.1.3.3  
+- BLE Memory leak with update NimBLE v.1.3.1 to v.1.3.3
+- Compile error BLE EQ3 driver with core 2.0.x (#13948)
 
 ## [10.0.0.3] 20211130
 ### Added
