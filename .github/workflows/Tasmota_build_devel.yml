@@ -1,9 +1,9 @@
-name: Build_firmware_development_cache
+name: Build_firmware_test
 
 on:
   workflow_dispatch:  # Manually start a workflow
   push:
-    branches: development
+    branches: test
     paths-ignore:
     - '.github/**' # Ignore changes towards the .github directory
     - '**.md' # Do no build if *.md files changes
