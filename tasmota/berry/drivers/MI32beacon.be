@@ -40,7 +40,7 @@ class BEACON : Driver
         if size(self.scan_result) > 0
             for i:0..size(self.scan_result)-1
                 if self.buf[0..5] == self.scan_result[i]['MAC']
-                    print('known entry')
+                    #print('known entry')
                     return
                 end
             end
@@ -133,21 +133,9 @@ tasmota.add_driver(beacon)
 
 def scan(cmd, idx, payload, payload_json)
     if int(payload) == 0
-        beacon.scan_result = {}
+        beacon.scan_result = []
     end
     beacon.scan_timer = int(payload)
 end
 
 tasmota.add_cmd('Mi32Scan', scan)
-
-
-var svc = self.buf.get(6,2)
-var rssi = 255 - self.buf.get(8,1)
-var msg = string.format("{\"MAC\":%02X%02X%02X%02X%02X%02X,\"SVC\":%X,\"RSSI\":%i}",
-            self.buf[0],self.buf[1],self.buf[2],self.buf[3],self.buf[4],self.buf[5],svc,rssi)
-print(msg)
-
-var msg_e = string.format("{\"MAC\":%02X%02X%02X%02X%02X%02X,\"SVC\":%04X,\"CID\":%04X,\"RSSI\":%i},",
-self.scan_result[i]['MAC'][0],self.scan_result[i]['MAC'][1],self.scan_result[i]['MAC'][2],self.scan_result[i]['MAC'][3],
-self.scan_result[i]['MAC'][4],self.scan_result[i]['MAC'][5],self.scan_result[i]['SVC'],self.scan_result[i]['CID'],self.scan_result[i]['RSSI'])
-
