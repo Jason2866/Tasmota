@@ -44,7 +44,7 @@ be_define_const_str(_X3Cbutton_X20name_X3D_X27zipapply_X27_X20class_X3D_X27butto
 be_define_const_str(_X3Cfieldset_X3E_X3Cstyle_X3E_X2Ebdis_X7Bbackground_X3A_X23888_X3B_X7D_X2Ebdis_X3Ahover_X7Bbackground_X3A_X23888_X3B_X7D_X3C_X2Fstyle_X3E, "<fieldset><style>.bdis{background:#888;}.bdis:hover{background:#888;}</style>", 842307168u, 0, 77, &be_const_str_set_power);
 be_define_const_str(_X3Cinstance_X3A_X20_X25s_X28_X25s_X2C_X20_X25s_X2C_X20_X25s_X29, "<instance: %s(%s, %s, %s)", 257363333u, 0, 25, &be_const_str_MD5);
 be_define_const_str(_X3Clabel_X3EChoose_X20a_X20device_X20configuration_X3A_X3C_X2Flabel_X3E_X3Cbr_X3E, "<label>Choose a device configuration:</label><br>", 1336654704u, 0, 49, &be_const_str_bus);
-be_define_const_str(_X3Clambda_X3E, "<lambda>", 607256038u, 0, 8, &be_const_str_No_X20callback_X20available);
+be_define_const_str(_X3Clambda_X3E, "<lambda>", 607256038u, 0, 8, &be_const_str_point);
 be_define_const_str(_X3Clegend_X3E_X3Cb_X20title_X3D_X27Autoconfiguration_X27_X3E_X26nbsp_X3BCurrent_X20auto_X2Dconfiguration_X3C_X2Fb_X3E_X3C_X2Flegend_X3E, "<legend><b title='Autoconfiguration'>&nbsp;Current auto-configuration</b></legend>", 4212500780u, 0, 82, &be_const_str_get_warning_level);
 be_define_const_str(_X3Clegend_X3E_X3Cb_X20title_X3D_X27New_X20autoconf_X27_X3E_X26nbsp_X3BSelect_X20new_X20auto_X2Dconfiguration_X3C_X2Fb_X3E_X3C_X2Flegend_X3E, "<legend><b title='New autoconf'>&nbsp;Select new auto-configuration</b></legend>", 1926223891u, 0, 80, &be_const_str_get_vbus_current);
 be_define_const_str(_X3Coption_X20value_X3D_X27_X25s_X27_X3E_X25s_X3C_X2Foption_X3E, "<option value='%s'>%s</option>", 510303524u, 0, 30, &be_const_str_cb_event_closure);
@@ -55,7 +55,7 @@ be_define_const_str(_X3Cp_X3E_X3Cform_X20id_X3Dac_X20action_X3D_X27ac_X27_X20sty
 be_define_const_str(_X3Cp_X3E_X3Cform_X20id_X3Dreapply_X20style_X3D_X27display_X3A_X20block_X3B_X27_X20action_X3D_X27_X2Fac_X27_X20method_X3D_X27post_X27_X20, "<p><form id=reapply style='display: block;' action='/ac' method='post' ", 546993478u, 0, 71, &be_const_str_p1);
 be_define_const_str(_X3Cp_X3E_X3Cform_X20id_X3Dzip_X20style_X3D_X27display_X3A_X20block_X3B_X27_X20action_X3D_X27_X2Fac_X27_X20method_X3D_X27post_X27_X20, "<p><form id=zip style='display: block;' action='/ac' method='post' ", 4033622166u, 0, 67, &be_const_str_animators);
 be_define_const_str(_X3Cp_X3E_X3Csmall_X3E_X26nbsp_X3B_X28This_X20feature_X20requires_X20an_X20internet_X20connection_X29_X3C_X2Fsmall_X3E_X3C_X2Fp_X3E, "<p><small>&nbsp;(This feature requires an internet connection)</small></p>", 2719266486u, 0, 74, &be_const_str_register_obj);
-be_define_const_str(_X3Cp_X3ECurrent_X20configuration_X3A_X20_X3C_X2Fp_X3E_X3Cp_X3E_X3Cb_X3E_X25s_X3C_X2Fb_X3E_X3C_X2Fp_X3E, "<p>Current configuration: </p><p><b>%s</b></p>", 4115655761u, 0, 46, &be_const_str_cb_dispatch);
+be_define_const_str(_X3Cp_X3ECurrent_X20configuration_X3A_X20_X3C_X2Fp_X3E_X3Cp_X3E_X3Cb_X3E_X25s_X3C_X2Fb_X3E_X3C_X2Fp_X3E, "<p>Current configuration: </p><p><b>%s</b></p>", 4115655761u, 0, 46, &be_const_str_get_cb_list);
 be_define_const_str(_X3Cselect_X20name_X3D_X27zip_X27_X3E, "<select name='zip'>", 4247924536u, 0, 19, &be_const_str_find_key_i);
 be_define_const_str(_X3D, "=", 940354920u, 0, 1, &be_const_str_listdir);
 be_define_const_str(_X3D_X3C_X3E_X21, "=<>!", 2664470277u, 0, 4, &be_const_str_shared_key);
@@ -112,7 +112,6 @@ be_define_const_str(I2C_Driver, "I2C_Driver", 1714501658u, 0, 10, &be_const_str_
 be_define_const_str(LVG_X3A_X20call_X20to_X20unsupported_X20callback, "LVG: call to unsupported callback", 504176819u, 0, 33, &be_const_str__end_transmission);
 be_define_const_str(Leds, "Leds", 2709245275u, 0, 4, &be_const_str_display_X2Eini);
 be_define_const_str(MD5, "MD5", 1935726387u, 0, 3, NULL);
-be_define_const_str(No_X20callback_X20available, "No callback available", 633786138u, 0, 21, &be_const_str_point);
 be_define_const_str(None, "None", 810547195u, 0, 4, &be_const_str_day);
 be_define_const_str(OPTION_A, "OPTION_A", 1133299440u, 0, 8, &be_const_str_isnan);
 be_define_const_str(OneWire, "OneWire", 2298990722u, 0, 7, &be_const_str_is_first_time);
@@ -167,7 +166,6 @@ be_define_const_str(_archive, "_archive", 4004559404u, 0, 8, &be_const_str_isrun
 be_define_const_str(_available, "_available", 1306196581u, 0, 10, &be_const_str_setitem);
 be_define_const_str(_begin_transmission, "_begin_transmission", 2779461176u, 0, 19, NULL);
 be_define_const_str(_buffer, "_buffer", 2044888568u, 0, 7, &be_const_str_seti);
-be_define_const_str(_cb, "_cb", 4043300367u, 0, 3, &be_const_str_copy);
 be_define_const_str(_ccmd, "_ccmd", 2163421413u, 0, 5, &be_const_str_enabled);
 be_define_const_str(_class, "_class", 2732146350u, 0, 6, &be_const_str__dirty);
 be_define_const_str(_cmd, "_cmd", 3419822142u, 0, 4, &be_const_str_nan);
@@ -179,7 +177,6 @@ be_define_const_str(_end_transmission, "_end_transmission", 3237480400u, 0, 17, 
 be_define_const_str(_energy, "_energy", 535372070u, 0, 7, &be_const_str_reduce);
 be_define_const_str(_error, "_error", 1132109656u, 0, 6, NULL);
 be_define_const_str(_filename, "_filename", 1430813195u, 0, 9, NULL);
-be_define_const_str(_get_cb, "_get_cb", 1448849122u, 0, 7, &be_const_str_begin);
 be_define_const_str(_global_addr, "_global_addr", 533766721u, 0, 12, &be_const_str_add_rule);
 be_define_const_str(_global_def, "_global_def", 646007001u, 0, 11, &be_const_str_destructor_cb);
 be_define_const_str(_lvgl, "_lvgl", 2689219483u, 0, 5, NULL);
@@ -242,7 +239,7 @@ be_define_const_str(call, "call", 3018949801u, 0, 4, &be_const_str_get_coords);
 be_define_const_str(call_native, "call_native", 1389147405u, 0, 11, &be_const_str_read8);
 be_define_const_str(calldepth, "calldepth", 3122364302u, 0, 9, &be_const_str__X7Bs_X7DVBus_X20Current_X7Bm_X7D_X25_X2E1f_X20mA_X7Be_X7D);
 be_define_const_str(can_show, "can_show", 960091187u, 0, 8, &be_const_str_month);
-be_define_const_str(cb_dispatch, "cb_dispatch", 1741510499u, 0, 11, &be_const_str_offset);
+be_define_const_str(cb, "cb", 1428787088u, 0, 2, &be_const_str_get_bat_voltage);
 be_define_const_str(cb_do_nothing, "cb_do_nothing", 1488730702u, 0, 13, &be_const_str_contains);
 be_define_const_str(cb_event_closure, "cb_event_closure", 3828267325u, 0, 16, &be_const_str_onsubmit_X3D_X27return_X20confirm_X28_X22This_X20will_X20change_X20the_X20current_X20configuration_X20and_X20cause_X20a_X20restart_X2E_X22_X29_X3B_X27_X3E);
 be_define_const_str(cb_obj, "cb_obj", 1195696482u, 0, 6, NULL);
@@ -376,6 +373,7 @@ be_define_const_str(get_bat_power, "get_bat_power", 3067374853u, 0, 13, &be_cons
 be_define_const_str(get_bat_voltage, "get_bat_voltage", 706676538u, 0, 15, NULL);
 be_define_const_str(get_battery_chargin_status, "get_battery_chargin_status", 2233241571u, 0, 26, NULL);
 be_define_const_str(get_bri, "get_bri", 2041809895u, 0, 7, &be_const_str_page_autoconf_ctl);
+be_define_const_str(get_cb_list, "get_cb_list", 1605319182u, 0, 11, &be_const_str_offset);
 be_define_const_str(get_coords, "get_coords", 1044089006u, 0, 10, &be_const_str_upper);
 be_define_const_str(get_current_module_name, "get_current_module_name", 2379270740u, 0, 23, NULL);
 be_define_const_str(get_current_module_path, "get_current_module_path", 3206673408u, 0, 23, NULL);
@@ -403,7 +401,7 @@ be_define_const_str(get_width, "get_width", 3293417300u, 0, 9, &be_const_str_rea
 be_define_const_str(getbits, "getbits", 3094168979u, 0, 7, &be_const_str_has_arg);
 be_define_const_str(geti, "geti", 2381006490u, 0, 4, NULL);
 be_define_const_str(global, "global", 503252654u, 0, 6, NULL);
-be_define_const_str(gpio, "gpio", 2638155258u, 0, 4, &be_const_str_wire_scan);
+be_define_const_str(gpio, "gpio", 2638155258u, 0, 4, &be_const_str_strptime);
 be_define_const_str(group_def, "group_def", 1524213328u, 0, 9, NULL);
 be_define_const_str(h, "h", 3977000791u, 0, 1, &be_const_str_init);
 be_define_const_str(has, "has", 3988721635u, 0, 3, &be_const_str_pow);
@@ -641,6 +639,7 @@ be_define_const_str(str, "str", 3259748752u, 0, 3, NULL);
 be_define_const_str(strftime, "strftime", 187738851u, 0, 8, NULL);
 be_define_const_str(string, "string", 398550328u, 0, 6, NULL);
 be_define_const_str(strip, "strip", 4246411473u, 0, 5, NULL);
+be_define_const_str(strptime, "strptime", 1277910361u, 0, 8, &be_const_str_wire_scan);
 be_define_const_str(super, "super", 4152230356u, 0, 5, NULL);
 be_define_const_str(sys, "sys", 3277365014u, 0, 3, NULL);
 be_define_const_str(tag, "tag", 2516003219u, 0, 3, NULL);
@@ -784,7 +783,7 @@ static const bstring* const m_string_table[] = {
     (const bstring *)&be_const_str_break,
     (const bstring *)&be_const_str__X2F_X2Eautoconf,
     (const bstring *)&be_const_str_content_button,
-    (const bstring *)&be_const_str__cb,
+    (const bstring *)&be_const_str_copy,
     (const bstring *)&be_const_str_get_aps_voltage,
     (const bstring *)&be_const_str_AXP192,
     (const bstring *)&be_const_str_select,
@@ -858,7 +857,7 @@ static const bstring* const m_string_table[] = {
     (const bstring *)&be_const_str__X2C,
     (const bstring *)&be_const_str_instance_size,
     (const bstring *)&be_const_str_Animate_X20pc_X20is_X20out_X20of_X20range,
-    (const bstring *)&be_const_str_get_bat_voltage,
+    (const bstring *)&be_const_str_cb,
     (const bstring *)&be_const_str_resp_cmnd_done,
     NULL,
     (const bstring *)&be_const_str_energy_struct,
@@ -895,7 +894,7 @@ static const bstring* const m_string_table[] = {
     (const bstring *)&be_const_str_content_send_style,
     NULL,
     NULL,
-    (const bstring *)&be_const_str__get_cb,
+    (const bstring *)&be_const_str_begin,
     (const bstring *)&be_const_str_c,
     (const bstring *)&be_const_str_ins_goto,
     (const bstring *)&be_const_str__buffer,
@@ -1105,6 +1104,6 @@ static const bstring* const m_string_table[] = {
 
 static const struct bconststrtab m_const_string_table = {
     .size = 359,
-    .count = 742,
+    .count = 741,
     .table = m_string_table
 };
