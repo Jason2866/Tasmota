@@ -23,11 +23,11 @@
 \*********************************************************************************************/
 #pragma pack(1)  // byte-aligned structures to read the sensor data
 
-  struct LYWSD0x_HT_t {
-    int16_t temp;
-    uint8_t hum;
-    uint16_t volt; // LYWSD03 only
-  };
+  // struct LYWSD0x_HT_t {
+  //   int16_t temp;
+  //   uint8_t hum;
+  //   uint16_t volt; // LYWSD03 only
+  // };
 
 struct frame_crtl_t{
   uint16_t reserverd1:1;
@@ -309,27 +309,27 @@ struct mi_sensor_t{
 #endif //USE_MI_HOMEKIT
 };
 
-struct scan_entry_t {
-  uint8_t MAC[6];
-  uint16_t CID;
-  uint16_t SVC;
-  uint16_t UUID;
-  int32_t RSSI;
-};
+// struct scan_entry_t {
+//   uint8_t MAC[6];
+//   uint16_t CID;
+//   uint16_t SVC;
+//   uint16_t UUID;
+//   int32_t RSSI;
+// };
 
-struct generic_beacon_t {
-  uint8_t MAC[6];
-  uint32_t time;
-  int32_t RSSI;
-  uint16_t CID; // company identifier
-  uint16_t UUID; // the first, if more than one exists
-  uint16_t SVC;
-  bool active = false;
-};
+// struct generic_beacon_t {
+//   uint8_t MAC[6];
+//   uint32_t time;
+//   int32_t RSSI;
+//   uint16_t CID; // company identifier
+//   uint16_t UUID; // the first, if more than one exists
+//   uint16_t SVC;
+//   bool active = false;
+// };
 
-struct MAC_t {
-  uint8_t buf[6];
-};
+// struct MAC_t {
+//   uint8_t buf[6];
+// };
 
 /*********************************************************************************************\
  * constants

@@ -1131,7 +1131,7 @@ void MI32ConnectionTask(void *pvParameters){
   MI32Client->disconnect();
   DEBUG_SENSOR_LOG(PSTR("M32: requested disconnect"));
   MI32.mode.connected = 0;
-  NimBLEDevice::deleteClient(MI32Client);
+  // NimBLEDevice::deleteClient(MI32Client);
   }
   // else AddLog(LOG_LEVEL_DEBUG,PSTR("M32: could not connect"));  
   MI32StartTask(MI32_TASK_SCAN);
@@ -2085,6 +2085,7 @@ void MI32Show(bool json)
 }
 
 int ExtStopBLE(){
+      if(Settings->flag5.mi32_enable == 0) return 0;
       vTaskSuspend(MI32.ScanTask);
       NimBLEDevice::deinit(true);
 #ifdef USE_MI_HOMEKIT

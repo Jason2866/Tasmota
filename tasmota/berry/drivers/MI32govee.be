@@ -16,7 +16,6 @@ class GOVEE : Driver
         self.buf = bytes(-21)
         self.buf[0] = 20
         self.buf[1] = 0x33
-        self.buf[2] = 1
         self.cbp = tasmota.gen_cb(/-> self.cb())
         self.ble = BLE()
         self.ble.conn_cb(self.cbp,self.buf)
@@ -34,13 +33,18 @@ class GOVEE : Driver
         self.buf[20] = cs
     end
 
-    def writeBuf(payload)
+    def clr()
+        for i:2..19
+            self.buf[i] = 0
+        end
+    end
+
+    def writeBuf()
         var _mac = lamps[0]['MAC']
         print(_mac)
         self.ble.set_MAC(_mac)
         self.ble.set_svc("00010203-0405-0607-0809-0a0b0c0d1910")
         self.ble.set_chr("00010203-0405-0607-0809-0a0b0c0d2b11")
-        self.buf[3] = payload
         self.chksum()
         self.ble.run(112) #addrType: 1 (random) , op: write
     end
@@ -52,11 +56,42 @@ end
 gv = GOVEE()
 tasmota.add_driver(gv)
 
-def gv_set(cmd, idx, payload, payload_json)
+def gv_power(cmd, idx, payload, payload_json)
     if int(payload) > 1
         return 'error'
     end
-    gv.writeBuf(int(payload))
+    gv.clr()
+    gv.buf[2] = 1 # power cmd
+    gv.buf[3] = int(payload)
+    gv.writeBuf()
 end
 
-tasmota.add_cmd('govee', gv_set) # only on/off
+def gv_bright(cmd, idx, payload, payload_json)
+    if int(payload) > 255
+        return 'error'
+    end
+    gv.clr()
+    gv.buf[2] = 4 # brightness
+    gv.buf[3] = int(payload)
+    gv.writeBuf()
+end
+
+def gv_rgb(cmd, idx, payload, payload_json)
+    var rgb = bytes(payload)
+    print(rgb)
+    gv.clr()
+    gv.buf[2] = 5 # color
+    gv.buf[3] = 5 # manual
+    gv.buf[4] = rgb[0]
+    gv.buf[5] = rgb[1]
+    gv.buf[6] = rgb[2]
+    gv.buf[7] = 1
+    gv.buf[8] = 255
+    gv.buf[9] = 174
+    gv.buf[10] = 84
+    gv.writeBuf()
+end
+
+tasmota.add_cmd('gov_p', gv_power) # only on/off
+tasmota.add_cmd('gov_b', gv_bright) # brightness 0 - 255
+tasmota.add_cmd('gov_c', gv_rgb) # color 00FF00
