@@ -46,6 +46,7 @@ class GOVEE : Driver
         self.ble.set_svc("00010203-0405-0607-0809-0a0b0c0d1910")
         self.ble.set_chr("00010203-0405-0607-0809-0a0b0c0d2b11")
         self.chksum()
+        print(self.buf)
         self.ble.run(112) #addrType: 1 (random) , op: write
     end
 
@@ -85,13 +86,46 @@ def gv_rgb(cmd, idx, payload, payload_json)
     gv.buf[4] = rgb[0]
     gv.buf[5] = rgb[1]
     gv.buf[6] = rgb[2]
-    gv.buf[7] = 1
-    gv.buf[8] = 255
-    gv.buf[9] = 174
-    gv.buf[10] = 84
+    gv.buf[7] = rgb[3]
     gv.writeBuf()
 end
 
-tasmota.add_cmd('gov_p', gv_power) # only on/off
-tasmota.add_cmd('gov_b', gv_bright) # brightness 0 - 255
-tasmota.add_cmd('gov_c', gv_rgb) # color 00FF00
+def gv_scn(cmd, idx, payload, payload_json)
+    gv.clr()
+    gv.buf[2] = 5 # color
+    gv.buf[3] = 4 # scene
+    gv.buf[4] = int(payload)
+    gv.writeBuf()
+end
+
+def gv_mus(cmd, idx, payload, payload_json)
+    var rgb = bytes(payload)
+    print(rgb)
+    gv.clr()
+    gv.buf[2] = 5 # color
+    gv.buf[3] = 1 # music
+    gv.buf[4] = rgb[0]
+    gv.buf[5] = 0
+    gv.buf[6] = rgb[1]
+    gv.buf[7] = rgb[2]
+    gv.buf[8] = rgb[3]
+    gv.writeBuf()
+end
+
+
+
+tasmota.add_cmd('gpower', gv_power) # only on/off
+tasmota.add_cmd('bright', gv_bright) # brightness 0 - 255
+tasmota.add_cmd('color', gv_rgb) # white + color 0000FF00  -- does not really work.
+tasmota.add_cmd('scene', gv_scn) # scene 0 - 15
+tasmota.add_cmd('music', gv_mus) # music 00 - 0f + color 000000   -- does not work at all!!!
+
+#   POWER      = 0x01
+#   BRIGHTNESS = 0x04
+
+#   COLOR      = 0x05
+    #   MANUAL     = 0x02
+    #   MICROPHONE = 0x01
+    #   SCENES     = 0x04
+
+

@@ -63,8 +63,9 @@ struct mi_payload_t{
     uint32_t NMT; //17
     uint8_t door; //19
     struct{ //01
-      uint16_t num;
-      uint8_t longPress;
+      uint8_t num;
+      uint8_t value;
+      uint8_t type;
     }Btn;
   };
   uint8_t padding[12]; //for decryption
@@ -310,28 +311,6 @@ struct mi_sensor_t{
 #endif //USE_MI_HOMEKIT
 };
 
-// struct scan_entry_t {
-//   uint8_t MAC[6];
-//   uint16_t CID;
-//   uint16_t SVC;
-//   uint16_t UUID;
-//   int32_t RSSI;
-// };
-
-// struct generic_beacon_t {
-//   uint8_t MAC[6];
-//   uint32_t time;
-//   int32_t RSSI;
-//   uint16_t CID; // company identifier
-//   uint16_t UUID; // the first, if more than one exists
-//   uint16_t SVC;
-//   bool active = false;
-// };
-
-// struct MAC_t {
-//   uint8_t buf[6];
-// };
-
 /*********************************************************************************************\
  * constants
 \*********************************************************************************************/
@@ -357,8 +336,9 @@ void (*const MI32_Commands[])(void) PROGMEM = {&CmndMi32Key, /*&CmndMi32Time, &C
 #define MCCGQ02     13
 #define SJWS01L     14
 #define PVVX        15
+#define YLKG08      16
 
-#define MI32_TYPES    15 //count this manually
+#define MI32_TYPES    16 //count this manually
 
 const uint16_t kMI32DeviceID[MI32_TYPES]={ 0x0098, // Flora
                                   0x01aa, // MJ_HT_V1
@@ -374,7 +354,8 @@ const uint16_t kMI32DeviceID[MI32_TYPES]={ 0x0098, // Flora
                                   0x0a1c, // ATC -> this is a fake ID
                                   0x098b, // MCCGQ02
                                   0x0863, // SJWS01L
-                                  0x944a  // PVVX -> this is a fake ID
+                                  0x944a, // PVVX -> this is a fake ID
+                                  0x03b6  // YLKG08 and YLKG07 - version w/wo mains
                                   };
 
 const char kMI32DeviceType1[] PROGMEM = "Flora";
@@ -392,10 +373,11 @@ const char kMI32DeviceType12[] PROGMEM ="ATC";
 const char kMI32DeviceType13[] PROGMEM ="MCCGQ02";
 const char kMI32DeviceType14[] PROGMEM ="SJWS01L";
 const char kMI32DeviceType15[] PROGMEM ="PVVX";
+const char kMI32DeviceType16[] PROGMEM ="YLKG08";
 const char * kMI32DeviceType[] PROGMEM = {kMI32DeviceType1,kMI32DeviceType2,kMI32DeviceType3,kMI32DeviceType4,
                                           kMI32DeviceType5,kMI32DeviceType6,kMI32DeviceType7,kMI32DeviceType8,
                                           kMI32DeviceType9,kMI32DeviceType10,kMI32DeviceType11,kMI32DeviceType12,
-                                          kMI32DeviceType13,kMI32DeviceType14,kMI32DeviceType15};
+                                          kMI32DeviceType13,kMI32DeviceType14,kMI32DeviceType15,kMI32DeviceType16};
 
 /*********************************************************************************************\
  * enumerations
@@ -469,7 +451,11 @@ const char HTTP_MI32_PARENT_START[] PROGMEM =
       "<div class='box'><h2>MI32 Bridge</h2>"
           "Observing <span id='numDev'>%u</span> devices<br>"
           "Uptime: <span class='Ti'>%u</span> seconds<br>"
+#ifdef USE_MI_HOMEKIT
           "HomeKit setup code: %s<br>" //&#128994; - green circle
+#else
+          "HomeKit not enabled%s<br>" //&#128994; - green circle
+#endif //USE_MI_HOMEKIT
       "</div>";
 
 const char HTTP_MI32_WIDGET[] PROGMEM =

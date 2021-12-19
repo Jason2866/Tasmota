@@ -168,12 +168,12 @@ static NimBLEClient* MI32Client;
 \*********************************************************************************************/
 
 void MI32scanEndedCB(NimBLEScanResults results){
-  AddLog(LOG_LEVEL_DEBUG,PSTR("Scan ended"));
+  AddLog(LOG_LEVEL_DEBUG,PSTR("M32: Scan ended"));
   MI32.mode.runningScan = 0;
 }
 
 void MI32notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify){
-    AddLog(LOG_LEVEL_DEBUG,PSTR("Notified length: %u"),length);
+    AddLog(LOG_LEVEL_DEBUG,PSTR("M32: Notified length: %u"),length);
     MI32.conCtx->buffer[0] = (uint8_t)length;
     memcpy(MI32.conCtx->buffer + 1, pData, length);
     MI32.mode.triggerBerryConnCB = 1;
@@ -277,54 +277,89 @@ int MI32_decryptPacket(char * _buf, uint16_t _bufSize, uint8_t * _payload, uint3
   // int32_t start = _getCycleCount();
   mi_beacon_t *_beacon = (mi_beacon_t *)_buf;
 
-  uint8_t nonce[12];
-  uint32_t tag;
+  uint8_t nonce[13]; //v3:13, v5:12
+  uint32_t nonceLen =12; // most devices are v5
+  uint8_t tag[4] = {0};
   const unsigned char authData[1] = {0x11};
-  size_t data_len = _bufSize - 11 ; // _bufsize - frame - type - frame.counter - MAC
+  size_t dataLen = _bufSize - 11 ; // _bufsize - frame - type - frame.counter - MAC
   int ret = 0;
-
-  if(_beacon->frame.includesMAC){
-    for (uint32_t i = 0; i<6; i++){
-      nonce[i] = _beacon->MAC[i];
-    }
-    // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: has MAC"));
-    memcpy(_payload,(uint8_t*)&_beacon->capability, data_len); //special packet
-  }
-  else{
-    AddLog(LOG_LEVEL_DEBUG,PSTR("M32: has no MAC"));
-    for (uint32_t i = 0; i<6; i++){
-      nonce[i] = MIBLEsensors[_slot].MAC[5-i];
-    }
-    data_len = _bufSize -5 ;
-    memcpy(_payload,_beacon->MAC, data_len); //special packet
-  }
-  // nonce: device MAC, device type, frame cnt, ext. cnt
-  memcpy((uint8_t*)&nonce+6,(uint8_t*)&_beacon->productID,2);
-  nonce[8] = _beacon->counter;
-  memcpy((uint8_t*)&nonce+9,(uint8_t*)&_payload[data_len-7],3);
-  memcpy((uint8_t*)&tag,(uint8_t*)&_payload[data_len-4],4);
-  memcpy((uint8_t*)&tag,(uint8_t*)&_buf[_bufSize-4],4);
 
   if(MIBLEsensors[_slot].key == nullptr){
     // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: No Key found !!"));
     return -2;
   }
 
+  // uint8_t _testBuf[] = {0x58,0x30,0xb6,0x03,0x36,0x8b,0x98,0xc5,0x41,0x24,0xf8,0x8b,0xb8,0xf2,0x66,0x13,0x51,0x00,0x00,0x00,0xd6};
+  // uint8_t _testKey[] = {0xb8,0x53,0x07,0x51,0x58,0x48,0x8d,0x3d,0x3c,0x97,0x7c,0xa3,0x9a,0x5b,0x5e,0xa9};
+  // _beacon = (mi_beacon_t *)_testBuf;
+  // _bufSize = sizeof(_testBuf);
+  // dataLen = _bufSize - 11 ; // _bufsize - frame - type - frame.counter - MAC
+
+
+  uint32_t _version = (uint32_t)_beacon->frame.version;
+  AddLog(LOG_LEVEL_DEBUG,PSTR("M32: encrypted msg from %s with version:%u"),kMI32DeviceType[MIBLEsensors[_slot].type-1],_version);
+
+  if(_version == 5){
+    if(_beacon->frame.includesMAC){
+      for (uint32_t i = 0; i<6; i++){
+        nonce[i] = _beacon->MAC[i];
+      }
+      // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: has MAC"));
+      memcpy(_payload,(uint8_t*)&_beacon->capability, dataLen); //special packet
+      dataLen -= 7;
+    }
+    else{
+      AddLog(LOG_LEVEL_DEBUG,PSTR("M32: has no MAC"));
+      for (uint32_t i = 0; i<6; i++){
+        nonce[i] = MIBLEsensors[_slot].MAC[5-i];
+      }
+      dataLen = _bufSize -5 ;
+      memcpy(_payload,_beacon->MAC, dataLen); //special packet
+      dataLen -= 7;
+      AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) _payload, dataLen);
+    }
+    // nonce: device MAC, device type, frame cnt, ext. cnt
+    memcpy((uint8_t*)&nonce+6,(uint8_t*)&_beacon->productID,2);
+    nonce[8] = _beacon->counter;
+    memcpy((uint8_t*)&nonce+9,(uint8_t*)&_payload[dataLen],3);
+    // memcpy((uint8_t*)&tag,(uint8_t*)&_payload[dataLen-4],4);
+    memcpy((uint8_t*)&tag,(uint8_t*)&_buf[_bufSize-4],4);
+  }
+  else if(_version == 3){
+    // nonce:  frame_ctrl, device type, ext. cnt, frame cnt, device MAC(only first 5 bytes)
+    memcpy(_payload,(uint8_t*)&_beacon->capability, dataLen); //special packet
+    nonceLen = 13;
+    memcpy((uint8_t*)&nonce,(uint8_t*)&_beacon->frame,2);
+    memcpy((uint8_t*)&nonce+2,(uint8_t*)&_beacon->productID,2);
+    nonce[4] = _beacon->counter;
+    memcpy((uint8_t*)&nonce+5,(uint8_t*)&_buf[_bufSize-4],3);
+    for (uint32_t i = 0; i<5; i++){
+      nonce[i+8] = _beacon->MAC[i];
+    }
+    tag[0] = _buf[_bufSize-1];
+    AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) nonce, 13);
+    dataLen -= 4;
+  }
+  else{
+    AddLog(LOG_LEVEL_DEBUG,PSTR("M32: unexpected decryption version:%u"),_version); // should never happen
+  }
+
   br_aes_small_ctrcbc_keys keyCtx;
   br_aes_small_ctrcbc_init(&keyCtx, MIBLEsensors[_slot].key, 16);
+  // br_aes_small_ctrcbc_init(&keyCtx, _testKey, 16);
 
   br_ccm_context ctx;
   br_ccm_init(&ctx, &keyCtx.vtable);
-  br_ccm_reset(&ctx, nonce, sizeof(nonce), sizeof(authData), data_len, sizeof(tag));
+  br_ccm_reset(&ctx, nonce, nonceLen, sizeof(authData), dataLen, sizeof(tag));
   br_ccm_aad_inject(&ctx, authData, sizeof(authData));
   br_ccm_flip(&ctx);
-  br_ccm_run(&ctx, 0, _payload, data_len-7);
+  br_ccm_run(&ctx, 0, _payload, dataLen);
 
   ret = br_ccm_check_tag(&ctx, &tag);
   // int32_t end = _getCycleCount();
   // float enctime = (end-start)/240.0;
   // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: decrypted in %.2f mSec"),enctime);
-  AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) _payload, data_len-7);
+  AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) _payload, dataLen);
   return ret;
 }
 
@@ -423,7 +458,7 @@ uint32_t MIBLEgetSensorSlot(uint8_t (&_MAC)[6], uint16_t _type, uint8_t counter)
       _newSensor.feature.bat=1;
       _newSensor.NMT=0;
       break;
-    case YEERC:
+    case YEERC: case YLKG08:
       _newSensor.feature.Btn=1;
       _newSensor.Btn=99;
 #ifdef USE_MI_HOMEKIT
@@ -465,7 +500,7 @@ uint32_t MIBLEgetSensorSlot(uint8_t (&_MAC)[6], uint16_t _type, uint8_t counter)
       break;
     }
     switch (_type){
-      case LYWSD03MMC: case MHOC401: case MJYD2S: case MCCGQ02: case SJWS01L:
+      case LYWSD03MMC: case MHOC401: case MJYD2S: case MCCGQ02: case SJWS01L: case YLKG08:
         _newSensor.feature.needsKey = 1;
       default:
         _newSensor.feature.needsKey = 0;
@@ -1159,7 +1194,6 @@ if(_beacon->frame.includesObj == 0){
 
 int decryptRet = 0;
 if(_beacon->frame.isEncrypted){
-    AddLog(LOG_LEVEL_DEBUG,PSTR("M32: encrypted msg from %s with version:%u"),kMI32DeviceType[MIBLEsensors[_slot].type-1],(uint32_t)_beacon->frame.version);
     decryptRet = MI32_decryptPacket(_buf,_bufSize, (uint8_t*)&_payload,_slot);
   }
 else{
@@ -1187,12 +1221,29 @@ if(decryptRet<0){
   MIBLEsensors[_slot].lastTime = millis();
   switch(_payload.type){
     case 0x01:
-      MIBLEsensors[_slot].Btn=_payload.Btn.num + (_payload.Btn.longPress/2)*6;
+      if(_payload.Btn.type == 4){ //knob dimmer
+        if(_payload.Btn.num == 0){
+          if(_payload.Btn.value<128){
+            AddLog(LOG_LEVEL_DEBUG,PSTR("Rotate right: %u"),_payload.Btn.value);
+          }
+          else{
+            AddLog(LOG_LEVEL_DEBUG,PSTR("Rotate left: %u"),256 - _payload.Btn.value);
+          }
+        }
+        else if(_payload.Btn.num<128){
+            AddLog(LOG_LEVEL_DEBUG,PSTR("Rotate right: %u"),_payload.Btn.num);    
+        }
+        else{
+            AddLog(LOG_LEVEL_DEBUG,PSTR("Rotate left: %u"),256 - _payload.Btn.num);
+        }
+        return; //TODO: implement MQTT later 
+      }
+      MIBLEsensors[_slot].Btn=_payload.Btn.num + (_payload.Btn.type/2)*6;
       MIBLEsensors[_slot].eventType.Btn = 1;
       MI32.mode.shallTriggerTele = 1;
 #ifdef USE_MI_HOMEKIT
       {
-        // {uint32_t _button = _payload.Btn.num + (_payload.Btn.longPress/2)*6;
+        // {uint32_t _button = _payload.Btn.num + (_payload.Btn.type/2)*6;
         uint32_t _singleLong = 0;      
         if(MIBLEsensors[_slot].Btn>5){
           MIBLEsensors[_slot].Btn = MIBLEsensors[_slot].Btn - 6;
@@ -1562,9 +1613,15 @@ void MI32EverySecond(bool restart){
 \*********************************************************************************************/
 
 void CmndMi32Key(void) {
-  if (44 == XdrvMailbox.data_len) {  // a KEY-MAC-string
+  if (44 == XdrvMailbox.data_len || 36 == XdrvMailbox.data_len) {  // a KEY-MAC-string
     mi_bindKey_t keyMAC;
     MI32HexStringToBytes(XdrvMailbox.data,keyMAC.buf);
+    if(36 == XdrvMailbox.data_len){
+      memmove(keyMAC.buf + 6, keyMAC.buf + 10, 16);
+      const uint8_t _fillbytes[4] = {0x8d,0x3d,0x3c,0x97}; // only valid for YLKG08 and YLKG07 ??
+      memcpy(keyMAC.buf + 6,_fillbytes,4);
+      AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) keyMAC.buf, 16);
+    }
     MI32AddKey(keyMAC);
     ResponseCmndDone();
   }
@@ -1759,9 +1816,11 @@ void MI32InitGUI(void){
   WSContentSend_P(HTTP_MI32_STYLE_SVG,1,185,124,124,185,124,124);
   WSContentSend_P(HTTP_MI32_STYLE_SVG,2,151,190,216,151,190,216);
   WSContentSend_P(HTTP_MI32_STYLE_SVG,3,242,240,176,242,240,176);
-  char _setupCode[12];
 #ifdef USE_MI_HOMEKIT
   WSContentSend_P((HTTP_MI32_PARENT_START),MIBLEsensors.size(),UpTime(),MI32.hk_setup_code);
+#else
+  const char _setupCode[1] = {0};
+  WSContentSend_P((HTTP_MI32_PARENT_START),MIBLEsensors.size(),UpTime(),_setupCode);
 #endif //USE_MI_HOMEKIT
   for(uint32_t _slot = 0;_slot<MIBLEsensors.size();_slot++){
     MI32sendWidget(_slot);
