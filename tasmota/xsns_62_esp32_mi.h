@@ -165,7 +165,8 @@ struct MI32connectionContextBerry_t{
 
 struct {
   uint32_t period;             // set manually in addition to TELE-period, is set to TELE-period after start
-  TaskHandle_t ScanTask;
+  TaskHandle_t ScanTask = nullptr;
+  TaskHandle_t ConnTask = nullptr;
   MI32connectionContextBerry_t *conCtx = nullptr;
   union {
     struct {

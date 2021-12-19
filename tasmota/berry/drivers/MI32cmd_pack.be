@@ -1,5 +1,5 @@
 #-------------------------------------------------------------
- - Removed Commands as Berry functions
+ - Removed MI32Commands as Berry functions
  -------------------------------------------------------------#
 
 ble = BLE()

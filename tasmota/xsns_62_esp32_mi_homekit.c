@@ -323,7 +323,7 @@ void mi_homekit_update_value(void* handle, float value, uint32_t type){
 }
 
 void mi_homekit_stop(){
-    hap_stop(); //questionable effect
+    hap_stop();
 }
 
 #endif //USE_MI_ESP32

@@ -1052,7 +1052,7 @@ bool MI32StartConnectionTask(){
       4096,             /* Stack size in words */
       NULL,             /* Task input parameter */
       2,                /* Priority of the task */
-      NULL,             /* Task handle. */
+      &MI32.ConnTask,   /* Task handle. */
       0);               /* Core where the task should run */
       AddLog(LOG_LEVEL_DEBUG,PSTR("M32: connect operation: %u"), MI32.conCtx->operation);
       return true;
@@ -2086,12 +2086,17 @@ void MI32Show(bool json)
 
 int ExtStopBLE(){
       if(Settings->flag5.mi32_enable == 0) return 0;
-      vTaskSuspend(MI32.ScanTask);
-      NimBLEDevice::deinit(true);
+      if (MI32.ScanTask != nullptr){
+        MI32Scan->stop();
+        vTaskDelete(MI32.ScanTask);
+        AddLog(LOG_LEVEL_DEBUG,PSTR("M32: stop BLE"));
+      } 
 #ifdef USE_MI_HOMEKIT
-      void mi_homekit_stop(); //does probably nothing
+      if(MI32.mode.didStartHAP) {
+        AddLog(LOG_LEVEL_DEBUG,PSTR("M32: stop Homebridge"));
+        mi_homekit_stop();
+      }
 #endif //USE_MI_HOMEKIT
-      AddLog(LOG_LEVEL_DEBUG,PSTR("M32: stop Homebridge and BLE"));
       return 0;
 }
 
