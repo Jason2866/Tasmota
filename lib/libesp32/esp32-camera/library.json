@@ -11,8 +11,7 @@
   "platforms": "espressif32",
   "build": {
     "flags": [
-      "-Idriver/include",
-      "-Idriver/private_include"
+      "-Idriver/include"
     ],
     "includeDir": ".",
     "srcDir": ".",
