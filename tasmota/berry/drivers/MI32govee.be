@@ -16,13 +16,13 @@ class GOVEE : Driver
         self.buf = bytes(-21)
         self.buf[0] = 20
         self.buf[1] = 0x33
-        self.cbp = tasmota.gen_cb(/-> self.cb())
+        self.cbp = tasmota.gen_cb(/e-> self.cb(e))
         self.ble = BLE()
         self.ble.conn_cb(self.cbp,self.buf)
     end
 
-    def cb()
-        print('writing done!')
+    def cb(error)
+           print(error)
     end
 
     def chksum()
@@ -47,7 +47,7 @@ class GOVEE : Driver
         self.ble.set_chr("00010203-0405-0607-0809-0a0b0c0d2b11")
         self.chksum()
         print(self.buf)
-        self.ble.run(112) #addrType: 1 (random) , op: write
+        self.ble.run(112) #addrType: 1 (random) , op: 12 (write)
     end
 
     def every_second()
@@ -111,7 +111,6 @@ def gv_mus(cmd, idx, payload, payload_json)
     gv.buf[8] = rgb[3]
     gv.writeBuf()
 end
-
 
 
 tasmota.add_cmd('gpower', gv_power) # only on/off

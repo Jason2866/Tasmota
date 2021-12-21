@@ -161,6 +161,7 @@ struct MI32connectionContextBerry_t{
   uint8_t * buffer;
   uint8_t operation;
   uint8_t addrType; // 0 - 2 (for now, maybe add type 3 later)
+  int error;
   bool oneOp;
 };
 
