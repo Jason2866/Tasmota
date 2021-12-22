@@ -81,3 +81,16 @@ jobs:
         with:
           name: firmware
           path: ./build_output
+
+# Validate orthography
+  code-spell:
+    name: Check spelling
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Run codespell
+      uses: codespell-project/actions-codespell@master
+      with:
+        ignore_words_list: ESP8266,esp8266,esp,dout,DOUT,ser,ans
