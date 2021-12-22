@@ -121,7 +121,7 @@ extern "C" {
   extern bool MI32runBerryConnection(uint8_t operation);
   extern bool MI32setBerryCtxSvc(const char *Svc);
   extern bool MI32setBerryCtxChr(const char *Chr);
-  extern bool MI32setBerryCtxMAC(uint8_t *MAC);
+  extern bool MI32setBerryCtxMAC(uint8_t *MAC, uint8_t type);
 
 
   int be_BLE_reg_conn_cb(bvm *vm);
@@ -159,9 +159,13 @@ extern "C" {
   int be_BLE_set_MAC(bvm *vm);
   int be_BLE_set_MAC(bvm *vm){    
     int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc == 2 && be_isbytes(vm, 2)) {
+    if (argc > 1 && be_isbytes(vm, 2)) {
       size_t len = 6;
-      if (MI32setBerryCtxMAC((uint8_t*)be_tobytes(vm, 2, &len))) be_return(vm);
+      uint8_t type = 0;
+      if(argc == 3 && be_isint(vm, 3)){
+        type = be_toint(vm,3);
+      }
+      if (MI32setBerryCtxMAC((uint8_t*)be_tobytes(vm, 2, &len),type)) be_return(vm);
     }
     be_raise(vm, kTypeError, nullptr);
   }

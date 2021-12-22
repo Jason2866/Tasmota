@@ -114,13 +114,14 @@ class MI32AdvCallbacks: public NimBLEAdvertisedDeviceCallbacks {
       if(MI32.beAdvCB != nullptr && MI32.mode.triggerBerryAdvCB == 0){
         berryAdvPacket_t *_packet = (berryAdvPacket_t *)MI32.beAdvBuf;
         memcpy(_packet->MAC,addr,6);
+        _packet->addressType = advertisedDevice->getAddressType();
         _packet->svcUUID = 0;
         _packet->RSSI = (uint8_t)RSSI;
         _packet->length = ServiceDataLength;
         _packet->svcData[0] = 0; //guarantee it is zero!!
         if(advertisedDevice->haveManufacturerData()){
           std::string _md = advertisedDevice->getManufacturerData();
-          _packet->svcData[ServiceDataLength] = _md.size();
+          _packet->svcData[0] = _md.size();
           memcpy((_packet->svcData)+ServiceDataLength+1,_md.data(), _md.size());
         }
         MI32.mode.triggerBerryAdvCB = 1;
@@ -678,7 +679,6 @@ extern "C" {
   bool MI32runBerryConnection(uint8_t operation){
     if(MI32.conCtx != nullptr){
       MI32.conCtx->operation = operation%100;
-      MI32.conCtx->addrType = operation/100;
       AddLog(LOG_LEVEL_INFO,PSTR("M32: shall run Berry connection op: %d, addrType: %d"),MI32.conCtx->operation, MI32.conCtx->addrType);
       MI32StartConnectionTask();
       return true;
@@ -717,9 +717,11 @@ extern "C" {
     return false;
   }
 
-  bool MI32setBerryCtxMAC(uint8_t *MAC){
+  bool MI32setBerryCtxMAC(uint8_t *MAC, uint8_t type){
     if(MI32.conCtx != nullptr){
       MI32.conCtx->MAC = MAC;
+      if(type<4) MI32.conCtx->addrType = type;
+      else MI32.conCtx->addrType = 0;
       return true;
     }
     return false;

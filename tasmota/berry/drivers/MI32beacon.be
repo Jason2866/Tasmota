@@ -47,17 +47,18 @@ class BEACON : Driver
         end
         var entry = {}
         entry.insert('MAC',self.buf[0..5])
-        var svc = self.buf.get(6,2)
+        entry.insert('Type',self.buf[6])
+        var svc = self.buf.get(7,2)
         entry.insert('SVC',svc)
-        var rssi = (255 - self.buf.get(8,1)) * -1
+        var rssi = (255 - self.buf.get(9,1)) * -1
         entry.insert('RSSI',rssi)
-        var len_s =  self.buf.get(9,1)
+        var len_s =  self.buf.get(10,1)
         var len_c = 0
         if len_s == 0 && svc == 0
-            len_c = self.buf.get(10,1)
+            len_c = self.buf.get(11,1)
         end
         if len_c != 0 
-            entry.insert('CID',self.buf.get(11,2))
+            entry.insert('CID',self.buf.get(12,2))
         else
             entry.insert('CID',0)
         end
@@ -78,16 +79,16 @@ class BEACON : Driver
     end
 
     def check_ibeacons()
-        if self.buf.get(11,4) == 352452684
-            var uid = self.buf[15..30]
-            var maj = self.buf.get(31,2)
-            var min = self.buf.get(33,2)
-            var tx = self.buf.get(35,1)
+        if self.buf.get(12,4) == 352452684
+            var uid = self.buf[16..31]
+            var maj = self.buf.get(32,2)
+            var min = self.buf.get(34,2)
+            var tx = self.buf.get(36,1)
             print(uid)
             print(maj)
             print(min)
             print(tx)
-            print(self.buf[31..35])
+            print(self.buf[32..36])
         end
     end
 
@@ -105,9 +106,9 @@ class BEACON : Driver
             var msg = '{'
             for i:0..size(self.scan_result)-1
                 var entry = self.scan_result[i]
-                var msg_e = string.format("{\"MAC\":%02X%02X%02X%02X%02X%02X,\"SVC\":%04X,\"CID\":%04X,\"RSSI\":%i},",
+                var msg_e = string.format("{\"MAC\":\"%02X%02X%02X%02X%02X%02X\",\"Type\":%02X,\"SVC\":\"%04X\",\"CID\":\"%04X\",\"RSSI\":%i},",
                 entry['MAC'][0],entry['MAC'][1],entry['MAC'][2],entry['MAC'][3],
-                entry['MAC'][4],entry['MAC'][5],entry['SVC'],entry['CID'],entry['RSSI'])
+                entry['MAC'][4],entry['MAC'][5],entry['Type'],entry['SVC'],entry['CID'],entry['RSSI'])
                 msg += msg_e
             end
             msg += '}'

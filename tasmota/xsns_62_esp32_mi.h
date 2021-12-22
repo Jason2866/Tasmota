@@ -104,6 +104,7 @@ struct encPacket_t{
 
 struct berryAdvPacket_t{
   uint8_t MAC[6];
+  uint8_t addressType;
   uint16_t svcUUID;
   uint8_t RSSI;
   uint8_t length;      // length of svcData

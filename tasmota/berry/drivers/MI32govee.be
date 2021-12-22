@@ -42,12 +42,12 @@ class GOVEE : Driver
     def writeBuf()
         var _mac = lamps[0]['MAC']
         print(_mac)
-        self.ble.set_MAC(_mac)
+        self.ble.set_MAC(_mac,1) # addrType: 1 (random)
         self.ble.set_svc("00010203-0405-0607-0809-0a0b0c0d1910")
         self.ble.set_chr("00010203-0405-0607-0809-0a0b0c0d2b11")
         self.chksum()
         print(self.buf)
-        self.ble.run(112) #addrType: 1 (random) , op: 12 (write)
+        self.ble.run(12) # op: 12 (write)
     end
 
     def every_second()
@@ -83,10 +83,10 @@ def gv_rgb(cmd, idx, payload, payload_json)
     gv.clr()
     gv.buf[2] = 5 # color
     gv.buf[3] = 5 # manual
-    gv.buf[4] = rgb[0]
-    gv.buf[5] = rgb[1]
-    gv.buf[6] = rgb[2]
-    gv.buf[7] = rgb[3]
+    gv.buf[4] = rgb[3]
+    gv.buf[5] = rgb[0]
+    gv.buf[6] = rgb[1]
+    gv.buf[7] = rgb[2]
     gv.writeBuf()
 end
 
@@ -115,7 +115,7 @@ end
 
 tasmota.add_cmd('gpower', gv_power) # only on/off
 tasmota.add_cmd('bright', gv_bright) # brightness 0 - 255
-tasmota.add_cmd('color', gv_rgb) # white + color 0000FF00  -- does not really work.
+tasmota.add_cmd('color', gv_rgb) #  color 00FF0000 
 tasmota.add_cmd('scene', gv_scn) # scene 0 - 15
 tasmota.add_cmd('music', gv_mus) # music 00 - 0f + color 000000   -- does not work at all!!!
 
