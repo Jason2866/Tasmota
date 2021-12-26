@@ -22,7 +22,11 @@ class GOVEE : Driver
     end
 
     def cb(error)
-           print(error)
+        if error == 0
+            print("success!")
+            return
+        end
+        print(error)
     end
 
     def chksum()

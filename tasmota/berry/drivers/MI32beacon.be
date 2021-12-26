@@ -1,6 +1,6 @@
 beacons =[
-        {"MAC":"582D34508AF6","Timer":999},
-        {"MAC":"A4C1382AC8B3","Timer":999}
+        #{"MAC":"582D34508AF6","Timer":999},
+        #{"MAC":"A4C1382AC8B3","Timer":999}
         ]
 
 ibeacons =  [

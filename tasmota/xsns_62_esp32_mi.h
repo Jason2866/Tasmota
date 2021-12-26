@@ -381,6 +381,9 @@ const char * kMI32DeviceType[] PROGMEM = {kMI32DeviceType1,kMI32DeviceType2,kMI3
                                           kMI32DeviceType9,kMI32DeviceType10,kMI32DeviceType11,kMI32DeviceType12,
                                           kMI32DeviceType13,kMI32DeviceType14,kMI32DeviceType15,kMI32DeviceType16};
 
+const char kMI32_connErrorMsg[] PROGMEM = "no Error|could not connect|got no service|got no service|can not read|can not notify|can not write|did not write|notify time out";
+
+
 /*********************************************************************************************\
  * enumerations
 \*********************************************************************************************/

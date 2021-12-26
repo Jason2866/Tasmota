@@ -80,8 +80,7 @@ class MI32SensorCallback : public NimBLEClientCallbacks {
   }
   void onDisconnect(NimBLEClient* pclient) {
     MI32.mode.connected = 0;
-    // if (MI32.conCtx!=nullptr) delete MI32.conCtx;
-    AddLog(LOG_LEVEL_DEBUG,PSTR("disconnected"));
+    //AddLog(LOG_LEVEL_DEBUG,PSTR("disconnected"));
   }
   bool onConnParamsUpdateRequest(NimBLEClient* MI32Client, const ble_gap_upd_params* params) {
     if(params->itvl_min < 24) { /** 1.25ms units */
@@ -253,7 +252,7 @@ void MI32AddKey(mi_bindKey_t keyMAC){
     }
   }
   if(unknownMAC){
-    AddLog(LOG_LEVEL_DEBUG,PSTR("unknown MAC"));
+    AddLog(LOG_LEVEL_ERROR,PSTR("M32: unknown MAC"));
   }
 }
 
@@ -310,7 +309,7 @@ int MI32_decryptPacket(char * _buf, uint16_t _bufSize, uint8_t * _payload, uint3
       dataLen -= 7;
     }
     else{
-      AddLog(LOG_LEVEL_DEBUG,PSTR("M32: has no MAC"));
+      // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: has no MAC"));
       for (uint32_t i = 0; i<6; i++){
         nonce[i] = MIBLEsensors[_slot].MAC[5-i];
       }
@@ -507,7 +506,7 @@ uint32_t MIBLEgetSensorSlot(uint8_t (&_MAC)[6], uint16_t _type, uint8_t counter)
         _newSensor.feature.needsKey = 0;
     }
   MIBLEsensors.push_back(_newSensor);
-  AddLog(LOG_LEVEL_DEBUG,PSTR("%s: new %s at slot: %u"),D_CMND_MI32, kMI32DeviceType[_type-1],MIBLEsensors.size()-1);
+  AddLog(LOG_LEVEL_DEBUG,PSTR("M32: new %s at slot: %u"),kMI32DeviceType[_type-1],MIBLEsensors.size()-1);
   MI32.mode.shallShowStatusInfo = 1;
   return MIBLEsensors.size()-1;
 };
@@ -527,7 +526,7 @@ void MI32triggerTele(void){
  */
 void MI32StatusInfo() {
   MI32.mode.shallShowStatusInfo = 0;
-  Response_P(PSTR("{\"%s\":{\"found\":%u}}"), D_CMND_MI32, MIBLEsensors.size());
+  Response_P(PSTR("{\"M32\":{\"found\":%u}}"), MIBLEsensors.size());
   XdrvRulesProcess(0);
 }
 
@@ -558,7 +557,7 @@ void MI32addHistory(uint8_t *history, float value, uint32_t type){
       if(value == 0.0f) value = 1.0f;
       uint8_t _watt = ((uint8_t)(MI32ln(value))*2) + 0b10000000; //watt
       history[_hour] = _watt;
-      AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history energy: %u for value:%u"),history[_hour], value); //still playing with the mapping
+      // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history energy: %u for value:%u"),history[_hour], value); //still playing with the mapping
       break;
   }
 }
@@ -679,7 +678,7 @@ extern "C" {
   bool MI32runBerryConnection(uint8_t operation){
     if(MI32.conCtx != nullptr){
       MI32.conCtx->operation = operation%100;
-      AddLog(LOG_LEVEL_INFO,PSTR("M32: shall run Berry connection op: %d, addrType: %d"),MI32.conCtx->operation, MI32.conCtx->addrType);
+      AddLog(LOG_LEVEL_DEBUG,PSTR("M32: Berry connection op: %d, addrType: %d"),MI32.conCtx->operation, MI32.conCtx->addrType);
       MI32StartConnectionTask();
       return true;
     }
@@ -697,7 +696,6 @@ extern "C" {
 
   bool MI32setBerryCtxSvc(const char *Svc){
     if(MI32.conCtx != nullptr){
-      // std::string _svc  =  Svc;
       MI32.conCtx->serviceUUID = NimBLEUUID(Svc);
       AddLog(LOG_LEVEL_INFO,PSTR("M32: SVC: %s"),MI32.conCtx->serviceUUID.toString().c_str());
       // AddLog(LOG_LEVEL_INFO,PSTR("M32: SVC: %s"),Svc);
@@ -708,7 +706,6 @@ extern "C" {
 
   bool MI32setBerryCtxChr(const char *Chr){
     if(MI32.conCtx != nullptr){
-      // std::string _chr  = Chr;
       MI32.conCtx->charUUID = NimBLEUUID(Chr);
       AddLog(LOG_LEVEL_INFO,PSTR("M32: CHR: %s"),MI32.conCtx->charUUID.toString().c_str());
       // AddLog(LOG_LEVEL_INFO,PSTR("M32: CHR: %s"),Chr);
@@ -728,7 +725,6 @@ extern "C" {
   }
 
   void MI32setBerryAdvCB(void* function, uint8_t *buffer){
-    // AddLog(LOG_LEVEL_INFO,PSTR("M32: cb: %p, buf:%p"),function,buffer);
     MI32.beAdvCB = function;
     MI32.beAdvBuf = buffer;
   }
@@ -985,7 +981,7 @@ void MI32saveConfig(){
     }
   }
   else{
-    AddLog(LOG_LEVEL_INFO,PSTR("M32: nothing written to config"));
+    AddLog(LOG_LEVEL_ERROR,PSTR("M32: nothing written to config"));
   }
   free(_filebuf);
 }
@@ -1015,7 +1011,6 @@ bool MI32ConnectActiveSensor(){ // only use inside a task !!
     NimBLEAddress _address = NimBLEAddress(MI32.conCtx->MAC, MI32.conCtx->addrType);
     MI32Client = nullptr;
     if(NimBLEDevice::getClientListSize()) {
-      AddLog(LOG_LEVEL_DEBUG,PSTR("%s: found any clients in the list"),D_CMND_MI32);
       MI32Client = NimBLEDevice::getClientByPeerAddress(_address);
     }
     if (!MI32Client){
@@ -1024,13 +1019,16 @@ bool MI32ConnectActiveSensor(){ // only use inside a task !!
       MI32Client->setClientCallbacks(&MI32SensorCB , false);
       // MI32Client->setConnectionParams(12,12,0,48);
       MI32Client->setConnectTimeout(30);
-      AddLog(LOG_LEVEL_DEBUG,PSTR("%s: did create new client"),D_CMND_MI32);
+      // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: did create new client"));
+    }
+    else{
+      // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: known BLE client"));
     }
     // vTaskDelay(300/ portTICK_PERIOD_MS);
     if (!MI32Client->connect(false)) {
         MI32.mode.willConnect = 0;
         NimBLEDevice::deleteClient(MI32Client);
-        AddLog(LOG_LEVEL_DEBUG,PSTR("%s: did not connect client"),D_CMND_MI32);
+        // AddLog(LOG_LEVEL_ERROR,PSTR("M32: did not connect client"));
         return false;
     }
     return true;
@@ -1090,7 +1088,7 @@ bool MI32StartConnectionTask(){
       2,                /* Priority of the task */
       &MI32.ConnTask,   /* Task handle. */
       0);               /* Core where the task should run */
-      AddLog(LOG_LEVEL_DEBUG,PSTR("M32: connect operation: %u"), MI32.conCtx->operation);
+      // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: connect operation: %u"), MI32.conCtx->operation);
       return true;
 }
 
@@ -1106,7 +1104,7 @@ void MI32ConnectionTask(void *pvParameters){
           NimBLEDevice::deleteClient(MI32Client);
           MI32.mode.willConnect = 0;
           MI32.mode.triggerBerryConnCB = 1;
-          MI32.conCtx->error = -1; // not connected
+          MI32.conCtx->error = 1; // not connected
           MI32StartTask(MI32_TASK_SCAN);
           vTaskDelay(100/ portTICK_PERIOD_MS);
           vTaskDelete( NULL );
@@ -1116,14 +1114,14 @@ void MI32ConnectionTask(void *pvParameters){
       }
       NimBLERemoteService* pSvc = nullptr;
       NimBLERemoteCharacteristic* pChr = nullptr;
-      AddLog(LOG_LEVEL_DEBUG,PSTR("M32: will send SVC"));
+      // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: will send SVC"));
       pSvc = MI32Client->getService(MI32.conCtx->serviceUUID);
       if(pSvc) {
           pChr = pSvc->getCharacteristic(MI32.conCtx->charUUID);
-          AddLog(LOG_LEVEL_DEBUG,PSTR("M32: did chose CHR"));
+          // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: did chose CHR"));
       }
       else{
-        MI32.conCtx->error = -2; //no svc
+        MI32.conCtx->error = 2; //no svc
       }
       if (pChr){
         switch(MI32.conCtx->operation){
@@ -1135,7 +1133,7 @@ void MI32ConnectionTask(void *pvParameters){
             memcpy( MI32.conCtx->buffer + 1,_c_val,MI32.conCtx->buffer[0]);
             }
             else{
-            MI32.conCtx->error = -4; //can not read
+            MI32.conCtx->error = 4; //can not read
             }
             break;
           case 13:
@@ -1143,22 +1141,22 @@ void MI32ConnectionTask(void *pvParameters){
               if(pChr->subscribe(true,MI32notifyCB,false)) AddLog(LOG_LEVEL_DEBUG,PSTR("M32: subscribe"));
             }
             else{
-              MI32.conCtx->error = -5; //can not notify
+              MI32.conCtx->error = 5; //can not notify
             }
             break;
           case 12:
             if(pChr->canWrite()) {
               uint8_t len = MI32.conCtx->buffer[0];
-              AddLog(LOG_LEVEL_DEBUG,PSTR("M32: can write"));
+              // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: can write"));
               if(pChr->writeValue(MI32.conCtx->buffer + 1,len,true)) { // true is important !
-                AddLog(LOG_LEVEL_DEBUG,PSTR("M32: write op done"));
+                // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: write op done"));
               }
               else{
-              MI32.conCtx->error = -7; //did not write
+              MI32.conCtx->error = 7; //did not write
               }
             }
             else{
-              MI32.conCtx->error = -6; //can not write
+              MI32.conCtx->error = 6; //can not write
             }
             MI32.mode.readingDone = 1;
             break;
@@ -1167,7 +1165,7 @@ void MI32ConnectionTask(void *pvParameters){
         }
       }
       else{
-              MI32.conCtx->error = -3; //no chr
+              MI32.conCtx->error = 3; //no chr
       }
       timer = 0;
       // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: reading done: %u"), MI32.mode.readingDone);  
@@ -1176,7 +1174,7 @@ void MI32ConnectionTask(void *pvParameters){
           break;
         }
         else{
-          MI32.conCtx->error = -8; //did not read on notify - timeout
+          MI32.conCtx->error = 8; //did not read on notify - timeout
         }
         timer++;
         vTaskDelay(100/ portTICK_PERIOD_MS);
@@ -1187,7 +1185,7 @@ void MI32ConnectionTask(void *pvParameters){
   // NimBLEDevice::deleteClient(MI32Client);
   }
   else{
-    MI32.conCtx->error = -1; // not connected
+    MI32.conCtx->error = 1; // not connected
   }
   MI32.mode.connected = 0;
   MI32.mode.triggerBerryConnCB = 1;
@@ -1273,7 +1271,7 @@ if(decryptRet<0){
       }
       if(MIBLEsensors[_slot].Btn>5) break; //
       if((void**)MIBLEsensors[_slot].button_hap_service[MIBLEsensors[_slot].Btn] != nullptr){
-        AddLog(LOG_LEVEL_DEBUG,PSTR("Send Button %u:  SingleLong:%u, pointer: %x"), MIBLEsensors[_slot].Btn,_singleLong,MIBLEsensors[_slot].button_hap_service[MIBLEsensors[_slot].Btn] );
+        // AddLog(LOG_LEVEL_DEBUG,PSTR("Send Button %u:  SingleLong:%u, pointer: %x"), MIBLEsensors[_slot].Btn,_singleLong,MIBLEsensors[_slot].button_hap_service[MIBLEsensors[_slot].Btn] );
         mi_homekit_update_value(MIBLEsensors[_slot].button_hap_service[MIBLEsensors[_slot].Btn], (float)_singleLong, 0x01);
       }
       }
@@ -1441,6 +1439,7 @@ if(decryptRet<0){
         // AddLog(LOG_LEVEL_DEBUG,PSTR("motion: primary"),MIBLEsensors[_slot].lux );
       }
       else{
+        //unknown payload
         AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*)_buf,_bufSize);
       }
     break;
@@ -1460,7 +1459,7 @@ void MI32ParseATCPacket(char * _buf, uint32_t length, uint8_t addr[6], int RSSI)
     _slot = MIBLEgetSensorSlot(_packet->MAC, 0x944a, _packet->P.frameCnt); // ... and again
   }
   if(_slot==0xff) return;
-  AddLog(LOG_LEVEL_DEBUG,PSTR("%s at slot %u"), kMI32DeviceType[MIBLEsensors[_slot].type-1],_slot);
+  // AddLog(LOG_LEVEL_DEBUG,PSTR("%s at slot %u"), kMI32DeviceType[MIBLEsensors[_slot].type-1],_slot);
 
   MIBLEsensors[_slot].RSSI=RSSI;
   MIBLEsensors[_slot].lastTime = millis();
@@ -1503,7 +1502,7 @@ void MI32parseCGD1Packet(char * _buf, uint32_t length, uint8_t addr[6], int RSSI
   memcpy(_addr,addr,6);
   uint32_t _slot = MIBLEgetSensorSlot(_addr, 0x0576, 0); // This must be hard-coded, no object-id in Cleargrass-packet, we have no packet counter too
   if(_slot==0xff) return;
-  AddLog(LOG_LEVEL_DEBUG,PSTR("%s at slot %u"), kMI32DeviceType[MIBLEsensors[_slot].type-1],_slot);
+  // AddLog(LOG_LEVEL_DEBUG,PSTR("%s at slot %u"), kMI32DeviceType[MIBLEsensors[_slot].type-1],_slot);
   MIBLEsensors[_slot].RSSI=RSSI;
   MIBLEsensors[_slot].lastTime = millis();
   cg_packet_t _packet;
@@ -1594,6 +1593,9 @@ void MI32Every50mSecond(){
   if(MI32.mode.triggerBerryConnCB == 1){
     if(MI32.beConnCB != nullptr){
     void (*func_ptr)(int) = (void (*)(int))MI32.beConnCB;
+    char _message[32];
+    GetTextIndexed(_message, sizeof(_message), MI32.conCtx->error, kMI32_connErrorMsg);
+    AddLog(LOG_LEVEL_DEBUG,PSTR("M32: %s"),_message);
     func_ptr(MI32.conCtx->error);
     } 
     MI32.mode.triggerBerryConnCB = 0;
@@ -2170,11 +2172,11 @@ int ExtStopBLE(){
       if (MI32.ScanTask != nullptr){
         MI32Scan->stop();
         vTaskDelete(MI32.ScanTask);
-        AddLog(LOG_LEVEL_DEBUG,PSTR("M32: stop BLE"));
+        AddLog(LOG_LEVEL_INFO,PSTR("M32: stop BLE"));
       } 
 #ifdef USE_MI_HOMEKIT
       if(MI32.mode.didStartHAP) {
-        AddLog(LOG_LEVEL_DEBUG,PSTR("M32: stop Homebridge"));
+        AddLog(LOG_LEVEL_INFO,PSTR("M32: stop Homebridge"));
         mi_homekit_stop();
       }
 #endif //USE_MI_HOMEKIT
