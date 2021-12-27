@@ -20,9 +20,7 @@
 
 #if defined(ESP32) || defined(ESP8266)
 
-#ifndef _GNU_SOURCE
-  #define _GNU_SOURCE
-#endif
+#define _GNU_SOURCE
 
 #include "AudioFileSourceICYStream.h"
 #include <string.h>
@@ -49,6 +47,7 @@ bool AudioFileSourceICYStream::open(const char *url)
   http.addHeader("Icy-MetaData", "1");
   http.collectHeaders( hdr, 4 );
   http.setReuse(true);
+  http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
   int code = http.GET();
   if (code != HTTP_CODE_OK) {
     http.end();

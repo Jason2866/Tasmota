@@ -3,9 +3,7 @@
 #ifdef DEBUG
   #undef NDEBUG
 #else
-  #ifndef NDEBUG
-    #define NDEBUG
-  #endif
+  #define NDEBUG
 #endif
 
 /* config.h.  Generated from config.h.in by configure.  */
