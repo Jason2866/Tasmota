@@ -30,9 +30,9 @@
   // };
 
 struct frame_crtl_t{
-  uint16_t reserverd1:1;
-  uint16_t reserverd2:1;
-  uint16_t reserverd3:1;
+  uint16_t reserved1:1;
+  uint16_t reserved2:1;
+  uint16_t reserved3:1;
   uint16_t isEncrypted:1;
   uint16_t includesMAC:1;
   uint16_t includesCapability:1;
@@ -167,7 +167,7 @@ struct MI32connectionContextBerry_t{
 };
 
 struct {
-  uint32_t period;             // set manually in addition to TELE-period, is set to TELE-period after start
+  // uint32_t period;             // set manually in addition to TELE-period, is set to TELE-period after start
   TaskHandle_t ScanTask = nullptr;
   TaskHandle_t ConnTask = nullptr;
   MI32connectionContextBerry_t *conCtx = nullptr;
@@ -224,6 +224,7 @@ struct {
   void *beConnCB; 
   void *beAdvCB;
   uint8_t *beAdvBuf;
+  uint8_t infoMsg = 0;
 } MI32;
 
 struct mi_sensor_t{
@@ -382,6 +383,8 @@ const char * kMI32DeviceType[] PROGMEM = {kMI32DeviceType1,kMI32DeviceType2,kMI3
                                           kMI32DeviceType13,kMI32DeviceType14,kMI32DeviceType15,kMI32DeviceType16};
 
 const char kMI32_connErrorMsg[] PROGMEM = "no Error|could not connect|got no service|got no service|can not read|can not notify|can not write|did not write|notify time out";
+
+const char kMI32_InfoMsg[] PROGMEM = "Scan ended|Got Notification|Did connect|Did disconnect";
 
 
 /*********************************************************************************************\

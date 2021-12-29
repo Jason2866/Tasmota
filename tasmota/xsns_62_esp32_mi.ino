@@ -75,11 +75,13 @@ static BLEScan* MI32Scan;
 class MI32SensorCallback : public NimBLEClientCallbacks {
   void onConnect(NimBLEClient* pclient) {
     // AddLog(LOG_LEVEL_DEBUG,PSTR("connected %s"), kMI32DeviceType[(MIBLEsensors[MI32.conCtx->slot].type)-1]);
+    MI32.infoMsg = 3;
     MI32.mode.willConnect = 0;
     MI32.mode.connected = 1;
   }
   void onDisconnect(NimBLEClient* pclient) {
     MI32.mode.connected = 0;
+     MI32.infoMsg = 4;
     //AddLog(LOG_LEVEL_DEBUG,PSTR("disconnected"));
   }
   bool onConnParamsUpdateRequest(NimBLEClient* MI32Client, const ble_gap_upd_params* params) {
@@ -168,12 +170,14 @@ static NimBLEClient* MI32Client;
 \*********************************************************************************************/
 
 void MI32scanEndedCB(NimBLEScanResults results){
-  AddLog(LOG_LEVEL_DEBUG,PSTR("M32: Scan ended"));
+  // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: Scan ended"));
+  MI32.infoMsg = 1;
   MI32.mode.runningScan = 0;
 }
 
 void MI32notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify){
-    AddLog(LOG_LEVEL_DEBUG,PSTR("M32: Notified length: %u"),length);
+    // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: Notified length: %u"),length);
+    MI32.infoMsg = 2;
     MI32.conCtx->buffer[0] = (uint8_t)length;
     memcpy(MI32.conCtx->buffer + 1, pData, length);
     MI32.mode.triggerBerryConnCB = 1;
@@ -1018,7 +1022,7 @@ bool MI32ConnectActiveSensor(){ // only use inside a task !!
       MI32Client = NimBLEDevice::createClient(_address);
       MI32Client->setClientCallbacks(&MI32SensorCB , false);
       // MI32Client->setConnectionParams(12,12,0,48);
-      MI32Client->setConnectTimeout(30);
+      // MI32Client->setConnectTimeout(30);
       // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: did create new client"));
     }
     else{
@@ -1237,7 +1241,7 @@ if(decryptRet<0){
 //   AddLog(LOG_LEVEL_DEBUG,PSTR("M32: registered: %s"),kMI32DeviceType[MIBLEsensors[_slot].type-1]);
 // }
 
-  AddLog(LOG_LEVEL_DEBUG,PSTR("%s at slot %u with payload type: %02x"), kMI32DeviceType[MIBLEsensors[_slot].type-1],_slot,_payload.type);
+  // AddLog(LOG_LEVEL_DEBUG,PSTR("%s at slot %u with payload type: %02x"), kMI32DeviceType[MIBLEsensors[_slot].type-1],_slot,_payload.type);
   MIBLEsensors[_slot].lastTime = millis();
   switch(_payload.type){
     case 0x01:
@@ -1599,6 +1603,12 @@ void MI32Every50mSecond(){
     func_ptr(MI32.conCtx->error);
     } 
     MI32.mode.triggerBerryConnCB = 0;
+  }
+  if(MI32.infoMsg > 0){
+    char _message[32];
+    GetTextIndexed(_message, sizeof(_message), MI32.infoMsg-1, kMI32_InfoMsg);
+    AddLog(LOG_LEVEL_DEBUG,PSTR("M32: %s"),_message);
+    MI32.infoMsg = 0;
   }
 }
 
