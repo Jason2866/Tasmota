@@ -19,7 +19,7 @@ extern int lco_toint(bvm *vm);          // generic function
 extern int lv_x_member(bvm *vm);
 extern int lv_x_tostring(bvm *vm);       // generic function
 
-extern int lvs_init(bvm *vm);
+extern int lv_be_style_init(bvm *vm);
 extern int lv_x_tostring(bvm *vm);
 
 BE_EXPORT_VARIABLE extern const bclass be_class_lv_obj;
@@ -29,6 +29,21 @@ extern int lvbe_theme_create(bvm *vm);
 
 
 /* `lv_style` external functions definitions */
+extern int lvbe_style_set_flex_flow(bvm *vm);
+extern int lvbe_style_set_flex_main_place(bvm *vm);
+extern int lvbe_style_set_flex_cross_place(bvm *vm);
+extern int lvbe_style_set_flex_track_place(bvm *vm);
+extern int lvbe_style_set_flex_grow(bvm *vm);
+extern int lvbe_style_set_grid_row_dsc_array(bvm *vm);
+extern int lvbe_style_set_grid_column_dsc_array(bvm *vm);
+extern int lvbe_style_set_grid_row_align(bvm *vm);
+extern int lvbe_style_set_grid_column_align(bvm *vm);
+extern int lvbe_style_set_grid_cell_column_pos(bvm *vm);
+extern int lvbe_style_set_grid_cell_column_span(bvm *vm);
+extern int lvbe_style_set_grid_cell_row_pos(bvm *vm);
+extern int lvbe_style_set_grid_cell_row_span(bvm *vm);
+extern int lvbe_style_set_grid_cell_x_align(bvm *vm);
+extern int lvbe_style_set_grid_cell_y_align(bvm *vm);
 extern int lvbe_style_set_width(bvm *vm);
 extern int lvbe_style_set_min_width(bvm *vm);
 extern int lvbe_style_set_max_width(bvm *vm);
@@ -135,6 +150,7 @@ extern int lvbe_img_set_angle(bvm *vm);
 extern int lvbe_img_set_pivot(bvm *vm);
 extern int lvbe_img_set_zoom(bvm *vm);
 extern int lvbe_img_set_antialias(bvm *vm);
+extern int lvbe_img_set_size_mode(bvm *vm);
 extern int lvbe_img_get_src(bvm *vm);
 extern int lvbe_img_get_offset_x(bvm *vm);
 extern int lvbe_img_get_offset_y(bvm *vm);
@@ -142,6 +158,7 @@ extern int lvbe_img_get_angle(bvm *vm);
 extern int lvbe_img_get_pivot(bvm *vm);
 extern int lvbe_img_get_zoom(bvm *vm);
 extern int lvbe_img_get_antialias(bvm *vm);
+extern int lvbe_img_get_size_mode(bvm *vm);
 
 /* `lv_disp` external functions definitions */
 extern int lvbe_disp_get_scr_act(bvm *vm);
@@ -162,6 +179,7 @@ extern int lvbe_disp_dpx(bvm *vm);
 /* `lv_obj` external functions definitions */
 extern int lvbe_obj_add_event_cb(bvm *vm);
 extern int lvbe_obj_remove_event_cb(bvm *vm);
+extern int lvbe_obj_remove_event_cb_with_user_data(bvm *vm);
 extern int lvbe_obj_remove_event_dsc(bvm *vm);
 extern int lvbe_obj_create(bvm *vm);
 extern int lvbe_obj_add_flag(bvm *vm);
@@ -272,6 +290,9 @@ extern int lvbe_obj_set_style_pad_hor(bvm *vm);
 extern int lvbe_obj_set_style_pad_ver(bvm *vm);
 extern int lvbe_obj_set_style_pad_gap(bvm *vm);
 extern int lvbe_obj_set_style_size(bvm *vm);
+extern int lvbe_obj_calculate_style_text_align(bvm *vm);
+extern int lvbe_obj_get_x_aligned(bvm *vm);
+extern int lvbe_obj_get_y_aligned(bvm *vm);
 extern int lvbe_obj_get_style_width(bvm *vm);
 extern int lvbe_obj_get_style_min_width(bvm *vm);
 extern int lvbe_obj_get_style_max_width(bvm *vm);
@@ -450,23 +471,59 @@ extern int lvbe_obj_set_style_arc_opa(bvm *vm);
 extern int lvbe_obj_set_style_arc_img_src(bvm *vm);
 extern int lvbe_obj_del(bvm *vm);
 extern int lvbe_obj_clean(bvm *vm);
+extern int lvbe_obj_del_delayed(bvm *vm);
 extern int lvbe_obj_del_async(bvm *vm);
 extern int lvbe_obj_set_parent(bvm *vm);
-extern int lvbe_obj_move_foreground(bvm *vm);
-extern int lvbe_obj_move_background(bvm *vm);
+extern int lvbe_obj_swap(bvm *vm);
+extern int lvbe_obj_move_to_index(bvm *vm);
 extern int lvbe_obj_get_screen(bvm *vm);
 extern int lvbe_obj_get_disp(bvm *vm);
 extern int lvbe_obj_get_parent(bvm *vm);
 extern int lvbe_obj_get_child(bvm *vm);
 extern int lvbe_obj_get_child_cnt(bvm *vm);
-extern int lvbe_obj_get_child_id(bvm *vm);
+extern int lvbe_obj_get_index(bvm *vm);
 extern int lvbe_obj_tree_walk(bvm *vm);
+extern int lvbe_obj_set_flex_flow(bvm *vm);
+extern int lvbe_obj_set_flex_align(bvm *vm);
+extern int lvbe_obj_set_flex_grow(bvm *vm);
+extern int lvbe_obj_set_style_flex_flow(bvm *vm);
+extern int lvbe_obj_set_style_flex_main_place(bvm *vm);
+extern int lvbe_obj_set_style_flex_cross_place(bvm *vm);
+extern int lvbe_obj_set_style_flex_track_place(bvm *vm);
+extern int lvbe_obj_set_style_flex_grow(bvm *vm);
+extern int lvbe_obj_get_style_flex_flow(bvm *vm);
+extern int lvbe_obj_get_style_flex_main_place(bvm *vm);
+extern int lvbe_obj_get_style_flex_cross_place(bvm *vm);
+extern int lvbe_obj_get_style_flex_track_place(bvm *vm);
+extern int lvbe_obj_get_style_flex_grow(bvm *vm);
+extern int lvbe_obj_set_grid_dsc_array(bvm *vm);
+extern int lvbe_obj_set_grid_align(bvm *vm);
+extern int lvbe_obj_set_grid_cell(bvm *vm);
+extern int lvbe_obj_set_style_grid_row_dsc_array(bvm *vm);
+extern int lvbe_obj_set_style_grid_column_dsc_array(bvm *vm);
+extern int lvbe_obj_set_style_grid_row_align(bvm *vm);
+extern int lvbe_obj_set_style_grid_column_align(bvm *vm);
+extern int lvbe_obj_set_style_grid_cell_column_pos(bvm *vm);
+extern int lvbe_obj_set_style_grid_cell_column_span(bvm *vm);
+extern int lvbe_obj_set_style_grid_cell_row_pos(bvm *vm);
+extern int lvbe_obj_set_style_grid_cell_row_span(bvm *vm);
+extern int lvbe_obj_set_style_grid_cell_x_align(bvm *vm);
+extern int lvbe_obj_set_style_grid_cell_y_align(bvm *vm);
+extern int lvbe_obj_get_style_grid_row_align(bvm *vm);
+extern int lvbe_obj_get_style_grid_column_align(bvm *vm);
+extern int lvbe_obj_get_style_grid_cell_column_pos(bvm *vm);
+extern int lvbe_obj_get_style_grid_cell_column_span(bvm *vm);
+extern int lvbe_obj_get_style_grid_cell_row_pos(bvm *vm);
+extern int lvbe_obj_get_style_grid_cell_row_span(bvm *vm);
+extern int lvbe_obj_get_style_grid_cell_x_align(bvm *vm);
+extern int lvbe_obj_get_style_grid_cell_y_align(bvm *vm);
 
 /* `lv_group` external functions definitions */
 extern int lvbe_group_create(bvm *vm);
 extern int lvbe_group_del(bvm *vm);
 extern int lvbe_group_set_default(bvm *vm);
 extern int lvbe_group_add_obj(bvm *vm);
+extern int lvbe_group_swap_obj(bvm *vm);
 extern int lvbe_group_remove_obj(bvm *vm);
 extern int lvbe_group_remove_all_objs(bvm *vm);
 extern int lvbe_group_focus_obj(bvm *vm);
@@ -551,6 +608,7 @@ extern int lvbe_colorwheel_get_color_mode_fixed(bvm *vm);
 /* `lv_imgbtn` external functions definitions */
 extern int lvbe_imgbtn_create(bvm *vm);
 extern int lvbe_imgbtn_set_src(bvm *vm);
+extern int lvbe_imgbtn_set_state(bvm *vm);
 
 /* `lv_led` external functions definitions */
 extern int lvbe_led_create(bvm *vm);
@@ -580,9 +638,12 @@ extern int lvbe_msgbox_create(bvm *vm);
 extern int lvbe_msgbox_get_title(bvm *vm);
 extern int lvbe_msgbox_get_close_btn(bvm *vm);
 extern int lvbe_msgbox_get_text(bvm *vm);
+extern int lvbe_msgbox_get_content(bvm *vm);
 extern int lvbe_msgbox_get_btns(bvm *vm);
+extern int lvbe_msgbox_get_active_btn(bvm *vm);
 extern int lvbe_msgbox_get_active_btn_text(bvm *vm);
 extern int lvbe_msgbox_close(bvm *vm);
+extern int lvbe_msgbox_close_async(bvm *vm);
 
 /* `lv_spinbox` external functions definitions */
 extern int lvbe_spinbox_create(bvm *vm);
@@ -591,6 +652,8 @@ extern int lvbe_spinbox_set_rollover(bvm *vm);
 extern int lvbe_spinbox_set_digit_format(bvm *vm);
 extern int lvbe_spinbox_set_step(bvm *vm);
 extern int lvbe_spinbox_set_range(bvm *vm);
+extern int lvbe_spinbox_set_pos(bvm *vm);
+extern int lvbe_spinbox_set_digit_step_direction(bvm *vm);
 extern int lvbe_spinbox_get_rollover(bvm *vm);
 extern int lvbe_spinbox_get_value(bvm *vm);
 extern int lvbe_spinbox_get_step(bvm *vm);
@@ -658,7 +721,9 @@ extern int lvbe_btnmatrix_get_one_checked(bvm *vm);
 /* `lv_canvas` external functions definitions */
 extern int lvbe_canvas_create(bvm *vm);
 extern int lvbe_canvas_set_buffer(bvm *vm);
+extern int lvbe_canvas_set_px_color(bvm *vm);
 extern int lvbe_canvas_set_px(bvm *vm);
+extern int lvbe_canvas_set_px_opa(bvm *vm);
 extern int lvbe_canvas_set_palette(bvm *vm);
 extern int lvbe_canvas_get_px(bvm *vm);
 extern int lvbe_canvas_copy_buf(bvm *vm);
@@ -879,7 +944,7 @@ be_local_class(lv_style,
     NULL,
     be_nested_map(4,
     ( (struct bmapnode*) &(const bmapnode[]) {
-        { be_nested_key("init", 380752755, 4, -1), be_const_func(lvs_init) },
+        { be_nested_key("init", 380752755, 4, -1), be_const_func(lv_be_style_init) },
         { be_nested_key("tostring", -1995258651, 8, -1), be_const_func(lv_x_tostring) },
         { be_nested_key("_p", 1594591802, 2, -1), be_const_var(0) },
         { be_nested_key("member", 719708611, 6, 0), be_const_func(lv_x_member) },
