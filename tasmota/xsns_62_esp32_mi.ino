@@ -301,7 +301,7 @@ int MI32_decryptPacket(char * _buf, uint16_t _bufSize, uint8_t * _payload, uint3
 
 
   uint32_t _version = (uint32_t)_beacon->frame.version;
-  AddLog(LOG_LEVEL_DEBUG,PSTR("M32: encrypted msg from %s with version:%u"),kMI32DeviceType[MIBLEsensors[_slot].type-1],_version);
+  // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: encrypted msg from %s with version:%u"),kMI32DeviceType[MIBLEsensors[_slot].type-1],_version);
 
   if(_version == 5){
     if(_beacon->frame.includesMAC){
@@ -320,7 +320,7 @@ int MI32_decryptPacket(char * _buf, uint16_t _bufSize, uint8_t * _payload, uint3
       dataLen = _bufSize -5 ;
       memcpy(_payload,_beacon->MAC, dataLen); //special packet
       dataLen -= 7;
-      AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) _payload, dataLen);
+      // AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) _payload, dataLen);
     }
     // nonce: device MAC, device type, frame cnt, ext. cnt
     memcpy((uint8_t*)&nonce+6,(uint8_t*)&_beacon->productID,2);
@@ -341,7 +341,7 @@ int MI32_decryptPacket(char * _buf, uint16_t _bufSize, uint8_t * _payload, uint3
       nonce[i+8] = _beacon->MAC[i];
     }
     tag[0] = _buf[_bufSize-1];
-    AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) nonce, 13);
+    // AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) nonce, 13);
     dataLen -= 4;
   }
   else{
@@ -363,7 +363,7 @@ int MI32_decryptPacket(char * _buf, uint16_t _bufSize, uint8_t * _payload, uint3
   // int32_t end = _getCycleCount();
   // float enctime = (end-start)/240.0;
   // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: decrypted in %.2f mSec"),enctime);
-  AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) _payload, dataLen);
+  // AddLogBuffer(LOG_LEVEL_DEBUG,(uint8_t*) _payload, dataLen);
   return ret;
 }
 
