@@ -23,12 +23,6 @@
 \*********************************************************************************************/
 #pragma pack(1)  // byte-aligned structures to read the sensor data
 
-  // struct LYWSD0x_HT_t {
-  //   int16_t temp;
-  //   uint8_t hum;
-  //   uint16_t volt; // LYWSD03 only
-  // };
-
 struct frame_crtl_t{
   uint16_t reserved1:1;
   uint16_t reserved2:1;
@@ -149,8 +143,6 @@ struct ATCPacket_t{ //and PVVX
     }P; //PVVX
   };
 };
-
-// typedef void (*MI32CallbackNoArgs) ();                      // simple typedef for a callback
 
 #pragma pack(0)
 
@@ -384,7 +376,7 @@ const char * kMI32DeviceType[] PROGMEM = {kMI32DeviceType1,kMI32DeviceType2,kMI3
 
 const char kMI32_connErrorMsg[] PROGMEM = "no Error|could not connect|got no service|got no service|can not read|can not notify|can not write|did not write|notify time out";
 
-const char kMI32_InfoMsg[] PROGMEM = "Scan ended|Got Notification|Did connect|Did disconnect";
+const char kMI32_InfoMsg[] PROGMEM = "Scan ended|Got Notification|Did connect|Did disconnect|Start scanning";
 
 
 /*********************************************************************************************\
@@ -404,16 +396,7 @@ enum MI32_Commands {          // commands useable in console or rules
 enum MI32_TASK {
        MI32_TASK_SCAN = 0,
        MI32_TASK_CONN = 1,
-      //  MI32_TASK_TIME = 2,
-      //  MI32_TASK_BATT = 3,
-      //  MI32_TASK_UNIT = 4,
 };
-
-// enum MI32_BEACON_CMND {
-//        MI32_BEACON_ON  = 0,
-//        MI32_BEACON_OFF = 1,
-//        MI32_BEACON_DEL = 2,
-// };
 
 /*********************************************************************************************\
  * extended web gui

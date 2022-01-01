@@ -1051,7 +1051,6 @@ void MI32StartScanTask(){
     0,                /* Priority of the task */
     &MI32.ScanTask,  /* Task handle. */
     0);               /* Core where the task should run */
-    AddLog(LOG_LEVEL_DEBUG,PSTR("M32: Start scanning"));
 }
 
 void MI32ScanTask(void *pvParameters){
@@ -1065,7 +1064,8 @@ void MI32ScanTask(void *pvParameters){
   MI32Scan->setAdvertisedDeviceCallbacks(&MI32ScanCallbacks,true);
   MI32Scan->setActiveScan(false);
   MI32Scan->start(0, MI32scanEndedCB, true); // never stop scanning, will pause automatically while connecting
-
+  MI32.infoMsg = 5;
+  
   uint32_t timer = 0;
   for(;;){
     if(MI32.mode.shallClearResults){
@@ -1092,7 +1092,6 @@ bool MI32StartConnectionTask(){
       2,                /* Priority of the task */
       &MI32.ConnTask,   /* Task handle. */
       0);               /* Core where the task should run */
-      // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: connect operation: %u"), MI32.conCtx->operation);
       return true;
 }
 
