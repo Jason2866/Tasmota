@@ -1,8 +1,10 @@
+# From: https://github.com/letscontrolit/ESPEasy/blob/mega/tools/pio/post_esp32.py
+# Thanks TD-er :)
+
 Import("env")
 
 def esp32_create_factory_bin(source, target, env):
-    print("Generating factory bin for genuine esp units")
-    #offset = 0x1000
+    #print("Generating one file initial flash firmware for esp32 units")
     offset = 0x0
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}-factory.bin")
     sections = env.subst(env.get('FLASH_EXTRA_IMAGES'))
@@ -15,7 +17,7 @@ def esp32_create_factory_bin(source, target, env):
       new_file.seek(int(sect_adr,0)-offset)
       new_file.write(source.read());
       source.close()
-    
+
     firmware_name = env.subst("$BUILD_DIR/${PROGNAME}.bin")
     firmware_start = 0x10000-offset
     firmware = open(firmware_name,"rb")
