@@ -286,7 +286,6 @@ static void MI32_bridge_thread_entry(void *p)
     hap_register_event_handler(mi_hap_event_handler);
 
     hap_set_setup_code(MI32getSetupCode());
-    /* Unique four character Setup Id. Default: ES32 */
     hap_set_setup_id(CONFIG_EXAMPLE_SETUP_ID);
 
     if (hap_start() == HAP_SUCCESS){

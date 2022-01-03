@@ -211,6 +211,7 @@ struct {
 
 #ifdef USE_MI_HOMEKIT
   void *outlet_hap_service[4]; //arbitrary chosen
+  uint8_t HKinfoMsg = 0;
   char hk_setup_code[11];
 #endif //USE_MI_HOMEKIT
   void *beConnCB; 
@@ -374,21 +375,17 @@ const char * kMI32DeviceType[] PROGMEM = {kMI32DeviceType1,kMI32DeviceType2,kMI3
                                           kMI32DeviceType9,kMI32DeviceType10,kMI32DeviceType11,kMI32DeviceType12,
                                           kMI32DeviceType13,kMI32DeviceType14,kMI32DeviceType15,kMI32DeviceType16};
 
-const char kMI32_connErrorMsg[] PROGMEM = "no Error|could not connect|got no service|got no service|can not read|can not notify|can not write|did not write|notify time out";
+const char kMI32_ConnErrorMsg[] PROGMEM = "no Error|could not connect|got no service|got no characteristic|can not read|can not notify|can not write|did not write|notify time out";
 
-const char kMI32_InfoMsg[] PROGMEM = "Scan ended|Got Notification|Did connect|Did disconnect|Start scanning";
+const char kMI32_BLEInfoMsg[] PROGMEM = "Scan ended|Got Notification|Did connect|Did disconnect|Start scanning";
 
-
+const char kMI32_HKInfoMsg[] PROGMEM = "HAP core started|HAP core did not start!!|HAP controller disconnected|HAP outlet added";
 /*********************************************************************************************\
  * enumerations
 \*********************************************************************************************/
 
 enum MI32_Commands {          // commands useable in console or rules
-  // CMND_MI32_TIME,             // set LYWSD02-Time from ESP8266-time
-  // CMND_MI32_BATTERY,          // read all battery levels
-  // CMND_MI32_UNIT,             // toggles the displayed unit between C/F (LYWSD02)
   CMND_MI32_KEY,              // add bind key to a mac for packet decryption
-  // CMND_MI32_BEACON,           // add up to 4 beacons defined by their MAC addresses
   CMND_MI32_CFG,              // save config file as JSON with all sensors w/o keys to mi32cfg
   CMND_MI32_OPTION            // change driver options at runtime
   };
@@ -396,6 +393,34 @@ enum MI32_Commands {          // commands useable in console or rules
 enum MI32_TASK {
        MI32_TASK_SCAN = 0,
        MI32_TASK_CONN = 1,
+};
+
+enum MI32_ConnErrorMsg {
+       MI32_CONN_NO_ERROR = 0,
+       MI32_CONN_NO_CONNECT,
+       MI32_CONN_NO_SERVICE,
+       MI32_CONN_NO_CHARACTERISTIC,
+       MI32_CONN_CAN_NOT_READ,
+       MI32_CONN_CAN_NOT_NOTIFY,
+       MI32_CONN_CAN_NOT_WRITE,
+       MI32_CONN_DID_NOT_WRITE,
+       MI32_CONN_NOTIFY_TIMEOUT
+};
+
+
+enum MI32_BLEInfoMsg {
+       MI32_SCAN_ENDED = 1,
+       MI32_GOT_NOTIFICATION,
+       MI32_DID_CONNECT,
+       MI32_DID_DISCONNECT,
+       MI32_START_SCANNING
+};
+
+enum MI32_HKInfoMsg {
+       MI32_HAP_DID_START = 1,
+       MI32_HAP_DID_NOT_START,
+       MI32_HAP_CONTROLLER_DISCONNECTED,
+       MI32_HAP_OUTLET_ADDED
 };
 
 /*********************************************************************************************\
