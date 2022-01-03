@@ -179,7 +179,7 @@ struct {
       uint32_t triggeredTele:1;
       uint32_t shallClearResults:1;   // BLE scan results
       uint32_t shallShowStatusInfo:1; // react to amount of found sensors via RULES
-      uint32_t activeBeacon:1;
+      // uint32_t activeBeacon:1;
       uint32_t shallShowScanResult:1;
       // uint32_t shallShowBlockList:1;
       uint32_t didGetConfig:1;
@@ -191,7 +191,7 @@ struct {
   } mode;
   struct {
     uint8_t sensor;             // points to to the number 0...255
-    uint8_t beaconScanCounter;  // countdown timer in seconds
+    // uint8_t beaconScanCounter;  // countdown timer in seconds
   } state;
   struct {
     uint32_t allwaysAggregate:1; // always show all known values of one sensor in brdigemode
@@ -406,7 +406,6 @@ enum MI32_ConnErrorMsg {
        MI32_CONN_DID_NOT_WRITE,
        MI32_CONN_NOTIFY_TIMEOUT
 };
-
 
 enum MI32_BLEInfoMsg {
        MI32_SCAN_ENDED = 1,

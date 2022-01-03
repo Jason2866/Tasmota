@@ -1604,12 +1604,14 @@ void MI32Every50mSecond(){
     AddLog(LOG_LEVEL_DEBUG,PSTR("M32: %s"),_message);
     MI32.infoMsg = 0;
   }
+#ifdef USE_MI_HOMEKIT
   if(MI32.HKinfoMsg > 0){
     char _message[32];
     GetTextIndexed(_message, sizeof(_message), MI32.HKinfoMsg-1, kMI32_HKInfoMsg);
     AddLog(LOG_LEVEL_DEBUG,PSTR("M32: %s"),_message);
     MI32.HKinfoMsg = 0;
   }
+#endif //USE_MI_HOMEKIT
 }
 
 /**
