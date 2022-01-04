@@ -23,7 +23,8 @@
   Version yyyymmdd  Action    Description
   --------------------------------------------------------------------------------------------
   0.9.5.0 20211016  changed - major rewrite, added mi32cfg (file and command), Homekit-Bridge,
-                              extended GUI, removed BLOCK, PERIOD and PAGE, Berry-Support
+                              extended GUI, 
+                              removed BLOCK, PERIOD, TIME, UNIT, BATTERY and PAGE -> replaced via Berry-Support
   -------
   0.9.1.7 20201116  changed - small bugfixes, add BLOCK and OPTION command, send BLE scan via MQTT
   -------
@@ -41,6 +42,10 @@
 #if defined CONFIG_IDF_TARGET_ESP32 || defined CONFIG_IDF_TARGET_ESP32C3
 
 #ifdef USE_MI_ESP32
+
+#ifdef USE_ENERGY_SENSOR
+// #define USE_MI_ESP32_ENERGY //perpare for some GUI extensions
+#endif
 
 #define XSNS_62                    62
 
@@ -554,12 +559,14 @@ void MI32addHistory(uint8_t *history, float value, uint32_t type){
       history[_hour] = (((uint8_t)(value/5.0f))+1) + 0b10000000; //lux
       // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history lux: %u in hour:%u"),history[_hour], _hour);
       break;
+#ifdef USE_MI_ESP32_ENERGY
     case 100: // energy
       if(value == 0.0f) value = 1.0f;
       uint8_t _watt = ((uint8_t)(MI32ln(value))*2) + 0b10000000; //watt
       history[_hour] = _watt;
       // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: history energy: %u for value:%u"),history[_hour], value); //still playing with the mapping
       break;
+#endif //USE_MI_ESP32_ENERGY
   }
 }
 
@@ -664,9 +671,9 @@ void MI32Init(void) {
     MI32StartScanTask(); // Let's get started !!
   }
 #ifdef USE_MI_EXT_GUI
-#ifdef USE_ENERGY_SENSOR
+#ifdef USE_MI_ESP32_ENERGY
   MI32.energy_history = (uint8_t*) calloc(24,1);
-#endif //USE_ENERGY_SENSOR
+#endif //USE_MI_ESP32_ENERGY
 #endif //USE_MI_EXT_GUI
   return;
 }
@@ -1714,6 +1721,7 @@ bool MI32HandleWebGUIResponse(void){
   return false;
 }
 
+#ifdef USE_MI_ESP32_ENERGY
 //https://gist.github.com/LingDong-/7e4c4cae5cbbc44400a05fba65f06f23
 // used for logarithmic mapping of 0 - 3600 watts to 0-20 pixel - TaylorLog did not work as expected
 float MI32ln(float x) {
@@ -1725,6 +1733,7 @@ float MI32ln(float x) {
   x = * (float *) (&bx);
   return -1.49278+(2.11263+(-0.729104+0.10969*x)*x)*x+0.6931471806*t;
 }
+#endif //USE_MI_ESP32_ENERGY
 
 void MI32createPolyline(char *polyline, uint8_t *history){
   uint32_t _pos = 0;
@@ -1740,7 +1749,7 @@ void MI32createPolyline(char *polyline, uint8_t *history){
       // AddLog(LOG_LEVEL_DEBUG,PSTR("M32: polyline: %s"),polyline);
 }
 
-#ifdef USE_ENERGY_SENSOR
+#ifdef USE_MI_ESP32_ENERGY
 void MI32sendEnergyWidget(){
   if (Energy.current_available && Energy.voltage_available) {
     WSContentSend_P(HTTP_MI32_POWER_WIDGET,MIBLEsensors.size()+1, Energy.voltage,Energy.current[1]);
@@ -1751,7 +1760,7 @@ void MI32sendEnergyWidget(){
     WSContentSend_P(PSTR("</p></div>"));
   }
 }
-#endif //USE_ENERGY_SENSOR
+#endif //USE_MI_ESP32_ENERGY
 
 void MI32sendWidget(uint32_t slot){
   auto _sensor = MIBLEsensors[slot];
@@ -1861,9 +1870,9 @@ void MI32InitGUI(void){
   for(uint32_t _slot = 0;_slot<MIBLEsensors.size();_slot++){
     MI32sendWidget(_slot);
   }
-#ifdef USE_ENERGY_SENSOR
+#ifdef USE_MI_ESP32_ENERGY
   MI32sendEnergyWidget();
-#endif //USE_ENERGY_SENSOR
+#endif //USE_MI_ESP32_ENERGY
   WSContentSend_P(PSTR("</div>"));
   WSContentSpaceButton(BUTTON_MAIN);
   WSContentStop();
@@ -2110,9 +2119,9 @@ void MI32Show(bool json)
 #endif //USE_HOME_ASSISTANT
 #ifdef USE_MI_EXT_GUI
     Mi32invalidateOldHistory();
-#ifdef USE_ENERGY_SENSOR
+#ifdef USE_MI_ESP32_ENERGY
     MI32addHistory(MI32.energy_history,Energy.active_power[0],100); //TODO: which value??
-#endif //USE_ENERGY_SENSOR
+#endif //USE_MI_ESP32_ENERGY
 #endif //USE_MI_EXT_GUI
     vTaskResume(MI32.ScanTask);
 #ifdef USE_WEBSERVER

@@ -492,12 +492,14 @@ const char HTTP_MI32_GRAPH[] PROGMEM =
     "</svg>";
       //rgb(185, 124, 124) - red, rgb(185, 124, 124) - blue, rgb(242, 240, 176) - yellow
 
+#ifdef USE_MI_ESP32_ENERGY
 const char HTTP_MI32_POWER_WIDGET[] PROGMEM =
   "<div class='box' id='box%u'>"
    "<h2 style='margin-top:0em;'>Energy"
   "</h2>"
   "<p>" D_VOLTAGE ": %.1f " D_UNIT_VOLT "</p>"
   "<p>" D_CURRENT ": %.3f " D_UNIT_AMPERE "</p>";
+#endif //USE_MI_ESP32_ENERGY
 
 #endif //USE_MI_EXT_GUI
 #endif // USE_WEBSERVER

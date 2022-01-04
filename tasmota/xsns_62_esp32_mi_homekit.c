@@ -27,7 +27,7 @@ extern const char * MI32getSetupCode();
 extern uint32_t MI32numOfRelays();
 extern void MI32setRelayFromHK(uint32_t relay, bool onOff);
 
-static const char *TAG = "Mi Bridge";
+// static const char *TAG = "Mi Bridge";
 
 #define CONFIG_EXAMPLE_SETUP_ID "MI32"
 
@@ -46,6 +46,7 @@ static const char *TAG = "Mi Bridge";
 #define MCCGQ02     13
 #define SJWS01L     14
 #define PVVX        15
+#define YLKG08      16
 
 /*********************************************************************************************\
  * Homekit
