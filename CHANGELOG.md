@@ -4,9 +4,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - Development
 
 ## [2022.01.1]
+### Added
+- Experimental ADE7953 (Shelly EM) reset on restart (#14261)
+
 ### Changed
 - PubSubClient library from v2.8.12 to v2.8.13
 - From Semantic Versioning (SemVer) to Calendar Versioning (CalVer)
+- Set ESP32 stack size with ``#define SET_ESP32_STACK_SIZE``, added ``StackLowMark`` metrics
 
 ### Fixed
 - Intermittent exceptions and heap corruption due to PubSubClient library buffer overflow (#13700)

@@ -135,6 +135,12 @@ String GetDeviceHardware(void) {
   #include "rom/rtc.h"
 #endif
 
+// Set the Stacksize for Arduino core. Default is 8192, some builds may need a bigger one
+size_t getArduinoLoopTaskStackSize(void) {
+    return SET_ESP32_STACK_SIZE;
+}
+
+
 #include <esp_phy_init.h>
 
 #if CONFIG_IDF_TARGET_ESP32
