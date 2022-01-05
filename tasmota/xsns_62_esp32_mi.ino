@@ -141,6 +141,7 @@ class MI32AdvCallbacks: public NimBLEAdvertisedDeviceCallbacks {
     if(MI32.beAdvCB != nullptr && MI32.mode.triggerBerryAdvCB == 0){
       berryAdvPacket_t *_packet = (berryAdvPacket_t *)MI32.beAdvBuf;
       memcpy(_packet->MAC,addr,6);
+      _packet->addressType = advertisedDevice->getAddressType();
       _packet->svcUUID = UUID;
       _packet->RSSI = (uint8_t)RSSI;
       _packet->length = ServiceDataLength;
