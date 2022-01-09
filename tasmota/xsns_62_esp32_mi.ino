@@ -158,9 +158,9 @@ class MI32AdvCallbacks: public NimBLEAdvertisedDeviceCallbacks {
     else if(UUID==0x181a) { //ATC and PVVX
       MI32ParseATCPacket((char*)advertisedDevice->getServiceData(0).data(),ServiceDataLength, addr, RSSI);
     }
-    else {
-      MI32Scan->erase(advertisedDevice->getAddress());
-    }
+    // else {
+    //   MI32Scan->erase(advertisedDevice->getAddress());
+    // }
   _mutex = false;
   };
 };
@@ -804,13 +804,18 @@ extern "C" {
  */
   void MI32passHapEvent(uint32_t event){
     switch(event){
-      case 1:
-        vTaskSuspend(MI32.ScanTask);
+      case 5: //HAP_EVENT_PAIRING_STARTED
+        MI32suspendScanTask();
       default:
         vTaskResume(MI32.ScanTask);
     }
     if(event==4){
       MI32.HKinfoMsg = MI32_HAP_CONTROLLER_DISCONNECTED;
+      MI32.HKconnectedControllers--;
+    }
+    if(event==3){
+      MI32.HKinfoMsg = MI32_HAP_CONTROLLER_CONNECTED;
+      MI32.HKconnectedControllers++;
     }
   }
 
@@ -999,6 +1004,10 @@ void MI32saveConfig(){
  * Task section
 \*********************************************************************************************/
 
+void MI32suspendScanTask(void){
+  if (MI32.ScanTask != nullptr) vTaskSuspend(MI32.ScanTask);
+}
+
 void MI32StartTask(uint32_t task){
   switch(task){
     case MI32_TASK_SCAN:
@@ -1066,15 +1075,16 @@ void MI32ScanTask(void *pvParameters){
   MI32Scan->setWindow(50);
   MI32Scan->setAdvertisedDeviceCallbacks(&MI32ScanCallbacks,true);
   MI32Scan->setActiveScan(false);
+  MI32Scan->setMaxResults(0);
   MI32Scan->start(0, MI32scanEndedCB, true); // never stop scanning, will pause automatically while connecting
   MI32.infoMsg = MI32_START_SCANNING;
   
   uint32_t timer = 0;
   for(;;){
-    if(MI32.mode.shallClearResults){
-      MI32Scan->clearResults();
-      MI32.mode.shallClearResults=0;
-    }
+    // if(MI32.mode.shallClearResults){
+    //   MI32Scan->clearResults();
+    //   MI32.mode.shallClearResults=0;
+    // }
     vTaskDelay(10000/ portTICK_PERIOD_MS);
   }
   vTaskDelete( NULL );
@@ -1086,7 +1096,7 @@ bool MI32StartConnectionTask(){
     if(MI32.conCtx->buffer == nullptr) return false;
     MI32.mode.willConnect = 1;
     MI32Scan->stop();
-    vTaskSuspend(MI32.ScanTask);
+    MI32suspendScanTask();
     xTaskCreatePinnedToCore(
       MI32ConnectionTask,    /* Function to implement the task */
       "MI32ConnectionTask",  /* Name of the task */
@@ -1292,9 +1302,9 @@ if(decryptRet<0){
         DEBUG_SENSOR_LOG(PSTR("Mode 4: temp updated"));
       }
 #ifdef USE_MI_HOMEKIT
-      if(MIBLEsensors[_slot].temp_hap_service != nullptr){
+      // if(MIBLEsensors[_slot].temp_hap_service != nullptr){
         mi_homekit_update_value(MIBLEsensors[_slot].temp_hap_service, _tempFloat, 0x04);
-      }
+      // }
 #endif //USE_MI_HOMEKIT
 #ifdef USE_MI_EXT_GUI
       MI32addHistory(MIBLEsensors[_slot].temp_history, _tempFloat, 0);
@@ -1309,9 +1319,9 @@ if(decryptRet<0){
         DEBUG_SENSOR_LOG(PSTR("Mode 6: hum updated"));
       }
 #ifdef USE_MI_HOMEKIT
-      if(MIBLEsensors[_slot].hum_hap_service != nullptr){
+      // if(MIBLEsensors[_slot].hum_hap_service != nullptr){
         mi_homekit_update_value(MIBLEsensors[_slot].hum_hap_service, _tempFloat,0x06);
-      }
+      // }
 #endif //USE_MI_HOMEKIT
 #ifdef USE_MI_EXT_GUI
       MI32addHistory(MIBLEsensors[_slot].hum_history, _tempFloat, 1);
@@ -1325,9 +1335,9 @@ if(decryptRet<0){
       }
       MIBLEsensors[_slot].eventType.lux  = 1;
 #ifdef USE_MI_HOMEKIT
-      if(MIBLEsensors[_slot].light_hap_service != nullptr){
+      // if(MIBLEsensors[_slot].light_hap_service != nullptr){
         mi_homekit_update_value(MIBLEsensors[_slot].light_hap_service, (float)MIBLEsensors[_slot].lux,0x07);
-      }
+      // }
 #endif //USE_MI_HOMEKIT
 #ifdef USE_MI_EXT_GUI
       MI32addHistory(MIBLEsensors[_slot].lux_history, (float)MIBLEsensors[_slot].lux, 2);
@@ -1357,9 +1367,9 @@ if(decryptRet<0){
         MIBLEsensors[_slot].eventType.bat  = 1;
         DEBUG_SENSOR_LOG(PSTR("Mode a: bat updated"));
 #ifdef USE_MI_HOMEKIT
-        if(MIBLEsensors[_slot].bat_hap_service != nullptr){
+        // if(MIBLEsensors[_slot].bat_hap_service != nullptr){
           mi_homekit_update_value(MIBLEsensors[_slot].bat_hap_service, (float)_payload.bat,0xa);
-        }
+        // }
 #endif //USE_MI_HOMEKIT
       }
       // AddLog(LOG_LEVEL_DEBUG,PSTR("Mode a: U8: %u %%"), _payload.bat);
@@ -1388,12 +1398,12 @@ if(decryptRet<0){
       MIBLEsensors[_slot].NMT = 0;
       MI32.mode.shallTriggerTele = 1;
 #ifdef USE_MI_HOMEKIT
-      if(MIBLEsensors[_slot].motion_hap_service != nullptr){
+      // if(MIBLEsensors[_slot].motion_hap_service != nullptr){
         mi_homekit_update_value(MIBLEsensors[_slot].motion_hap_service, (float)1,0x0f);
-      }
-      if(MIBLEsensors[_slot].light_hap_service != nullptr){
+      // }
+      // if(MIBLEsensors[_slot].light_hap_service != nullptr){
         mi_homekit_update_value(MIBLEsensors[_slot].light_hap_service, (float)_payload.lux,0x07);
-      }
+      // }
 #endif //USE_MI_HOMEKIT
 #ifdef USE_MI_EXT_GUI
       MI32addHistory(MIBLEsensors[_slot].lux_history, (float)MIBLEsensors[_slot].lux, 2);
@@ -1406,10 +1416,10 @@ if(decryptRet<0){
       if(_payload.leak>0) MI32.mode.shallTriggerTele = 1;
 #ifdef USE_MI_HOMEKIT
       // AddLog(LOG_LEVEL_DEBUG,PSTR("leak: %u"),_payload.leak);
-      if(MIBLEsensors[_slot].leak_hap_service != nullptr){
+      // if(MIBLEsensors[_slot].leak_hap_service != nullptr){
         // AddLog(LOG_LEVEL_DEBUG,PSTR("update Homekit with leak"));
         mi_homekit_update_value(MIBLEsensors[_slot].leak_hap_service, (float)_payload.leak,0x14);
-      }
+      // }
 #endif //USE_MI_HOMEKIT
       break;
     case 0x17:
@@ -1424,9 +1434,9 @@ if(decryptRet<0){
       MIBLEsensors[_slot].events++;
       MI32.mode.shallTriggerTele = 1;
 #ifdef USE_MI_HOMEKIT
-      if(MIBLEsensors[_slot].door_sensor_hap_service != nullptr){
+      // if(MIBLEsensors[_slot].door_sensor_hap_service != nullptr){
         mi_homekit_update_value(MIBLEsensors[_slot].door_sensor_hap_service, (float)_payload.door,0x19);
-      }
+      // }
 #endif //USE_MI_HOMEKIT
       // AddLog(LOG_LEVEL_DEBUG,PSTR("Mode 19: %u"), _payload.door);
     break;
@@ -1438,9 +1448,9 @@ if(decryptRet<0){
         MIBLEsensors[_slot].NMT = 0;
         MI32.mode.shallTriggerTele = 1;
 #ifdef USE_MI_HOMEKIT
-        if(MIBLEsensors[_slot].motion_hap_service != nullptr){
+        // if(MIBLEsensors[_slot].motion_hap_service != nullptr){
           mi_homekit_update_value(MIBLEsensors[_slot].motion_hap_service, (float)1,0x0f);
-        }
+        // }
 #endif //USE_MI_HOMEKIT
         // AddLog(LOG_LEVEL_DEBUG,PSTR("motion: primary"),MIBLEsensors[_slot].lux );
       }
@@ -1483,15 +1493,15 @@ void MI32ParseATCPacket(char * _buf, uint32_t length, uint8_t addr[6], int RSSI)
   MIBLEsensors[_slot].eventType.tempHum  = 1;
   MIBLEsensors[_slot].eventType.bat  = 1;
 #ifdef USE_MI_HOMEKIT
-  if(MIBLEsensors[_slot].temp_hap_service != nullptr){
+  // if(MIBLEsensors[_slot].temp_hap_service != nullptr){
     mi_homekit_update_value(MIBLEsensors[_slot].temp_hap_service, MIBLEsensors.at(_slot).temp,0x04);
-  }
-  if(MIBLEsensors[_slot].temp_hap_service != nullptr){
+  // }
+  // if(MIBLEsensors[_slot].temp_hap_service != nullptr){
     mi_homekit_update_value(MIBLEsensors[_slot].hum_hap_service, MIBLEsensors.at(_slot).hum,0x06);
-  }
-  if(MIBLEsensors[_slot].temp_hap_service != nullptr){
+  // }
+  // if(MIBLEsensors[_slot].temp_hap_service != nullptr){
     mi_homekit_update_value(MIBLEsensors[_slot].bat_hap_service, (float)MIBLEsensors.at(_slot).bat,0x0a);
-  }
+  // }
 #endif //USE_MI_HOMEKIT
 #ifdef USE_MI_EXT_GUI
   bitSet(MI32.widgetSlot,_slot);
@@ -1522,9 +1532,9 @@ void MI32parseCGD1Packet(char * _buf, uint32_t length, uint8_t addr[6], int RSSI
           MIBLEsensors[_slot].eventType.temp  = 1;
           DEBUG_SENSOR_LOG(PSTR("CGD1: temp updated"));
 #ifdef USE_MI_HOMEKIT
-          if(MIBLEsensors[_slot].temp_hap_service != nullptr){
+          // if(MIBLEsensors[_slot].temp_hap_service != nullptr){
             mi_homekit_update_value(MIBLEsensors[_slot].temp_hap_service, _tempFloat,0x04);
-          }
+          // }
 #endif //USE_MI_HOMEKIT
 #ifdef USE_MI_EXT_GUI
           MI32addHistory(MIBLEsensors[_slot].temp_history, (float)MIBLEsensors[_slot].temp, 0);
@@ -1536,9 +1546,9 @@ void MI32parseCGD1Packet(char * _buf, uint32_t length, uint8_t addr[6], int RSSI
           MIBLEsensors[_slot].eventType.hum  = 1;
           DEBUG_SENSOR_LOG(PSTR("CGD1: hum updated"));
 #ifdef USE_MI_HOMEKIT
-          if(MIBLEsensors[_slot].hum_hap_service != nullptr){
+          // if(MIBLEsensors[_slot].hum_hap_service != nullptr){
             mi_homekit_update_value(MIBLEsensors[_slot].hum_hap_service, _tempFloat,0x06);
-          }
+          // }
 #endif //USE_MI_HOMEKIT
 #ifdef USE_MI_EXT_GUI
           MI32addHistory(MIBLEsensors[_slot].hum_history, (float)MIBLEsensors[_slot].hum, 1);
@@ -1690,9 +1700,6 @@ void CmndMi32Option(void){
       break;
     case 3:
       MI32.mode.didGetConfig = onOff;
-      break;
-    case 6: // to be removed!!
-      TfsDeleteTree(PSTR("/nvs/hap_ctrl"));
       break;
   }
   ResponseCmndDone();
@@ -1852,7 +1859,7 @@ void MI32sendWidget(uint32_t slot){
 }
 
 void MI32InitGUI(void){
-  vTaskSuspend(MI32.ScanTask);
+  MI32suspendScanTask();
   MI32.widgetSlot=0;
   WSContentStart_P("m32");
   WSContentSend_P(HTTP_MI32_SCRIPT_1);
@@ -1863,10 +1870,10 @@ void MI32InitGUI(void){
   WSContentSend_P(HTTP_MI32_STYLE_SVG,2,151,190,216,151,190,216);
   WSContentSend_P(HTTP_MI32_STYLE_SVG,3,242,240,176,242,240,176);
 #ifdef USE_MI_HOMEKIT
-  WSContentSend_P((HTTP_MI32_PARENT_START),MIBLEsensors.size(),UpTime(),MI32.hk_setup_code);
+  WSContentSend_P((HTTP_MI32_PARENT_START),MIBLEsensors.size(),UpTime(),MI32.hk_setup_code,MI32.HKconnectedControllers,ESP.getFreeHeap()/1024);
 #else
   const char _setupCode[1] = {0};
-  WSContentSend_P((HTTP_MI32_PARENT_START),MIBLEsensors.size(),UpTime(),_setupCode);
+  WSContentSend_P((HTTP_MI32_PARENT_START),MIBLEsensors.size(),UpTime(),_setupCode,ESP.getFreeHeap()/1024);
 #endif //USE_MI_HOMEKIT
   for(uint32_t _slot = 0;_slot<MIBLEsensors.size();_slot++){
     MI32sendWidget(_slot);
@@ -1922,10 +1929,10 @@ void MI32Show(bool json)
 #endif //USE_HOME_ASSISTANT
 
     if(!MI32.mode.triggeredTele){
-      MI32.mode.shallClearResults=1;
+      // MI32.mode.shallClearResults=1;
       if(MI32.option.noSummary) return; // no message at TELEPERIOD
       }
-    vTaskSuspend(MI32.ScanTask);
+    MI32suspendScanTask();
     for (uint32_t i = 0; i < MIBLEsensors.size(); i++) {
       if(MI32.mode.triggeredTele && MIBLEsensors[i].eventType.raw == 0) continue;
       if(MI32.mode.triggeredTele && MIBLEsensors[i].shallSendMQTT==0) continue;
@@ -2127,7 +2134,7 @@ void MI32Show(bool json)
     vTaskResume(MI32.ScanTask);
 #ifdef USE_WEBSERVER
     } else {
-      vTaskSuspend(MI32.ScanTask);
+      MI32suspendScanTask();
 
       WSContentSend_P(HTTP_MI32, MIBLEsensors.size());
 #ifdef USE_MI_HOMEKIT

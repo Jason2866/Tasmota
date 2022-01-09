@@ -28,6 +28,7 @@ extern uint32_t MI32numOfRelays();
 extern void MI32setRelayFromHK(uint32_t relay, bool onOff);
 
 // static const char *TAG = "Mi Bridge";
+static bool MIBridgeWasNeverConnected = true;
 
 #define CONFIG_EXAMPLE_SETUP_ID "MI32"
 
@@ -63,6 +64,7 @@ static int MI32_bridge_identify(hap_acc_t *ha)
 void mi_hap_event_handler(hap_event_t event, void *data)
 {
     MI32passHapEvent((uint32_t)event);
+    if(event == HAP_EVENT_CTRL_CONNECTED) MIBridgeWasNeverConnected = false;
 }
 
 static int MI32_bridge_read_callback(hap_read_data_t read_data[], int count,
@@ -96,7 +98,6 @@ static int MI32_outlets_write_callback(hap_write_data_t write_data[], int count,
  */
 static int MI32_accessory_identify(hap_acc_t *ha)
 {
-
     return HAP_SUCCESS;
 }
 
@@ -302,6 +303,8 @@ void mi_homekit_main(void){
 }
 
 void mi_homekit_update_value(void* handle, float value, uint32_t type){
+    if(handle == NULL) return;
+    if(MIBridgeWasNeverConnected) return;
     hap_val_t new_val;
     switch(type){
         case 0x01: case 0x19: case 0x0a: case 0x14: case 0xf0:
@@ -317,9 +320,9 @@ void mi_homekit_update_value(void* handle, float value, uint32_t type){
           new_val.f = value;  
     }
 	int ret = hap_char_update_val((hap_char_t *)handle, &new_val);
-    if(ret!= HAP_SUCCESS){
+    // if(ret!= HAP_SUCCESS){
         // ESP_LOGE(TAG,"error:",ret);
-    }
+    // }
 }
 
 void mi_homekit_stop(){

@@ -179,9 +179,6 @@ struct {
       uint32_t triggeredTele:1;
       uint32_t shallClearResults:1;   // BLE scan results
       uint32_t shallShowStatusInfo:1; // react to amount of found sensors via RULES
-      // uint32_t activeBeacon:1;
-      uint32_t shallShowScanResult:1;
-      // uint32_t shallShowBlockList:1;
       uint32_t didGetConfig:1;
       uint32_t didStartHAP:1;
       uint32_t triggerBerryAdvCB:1;
@@ -191,13 +188,11 @@ struct {
   } mode;
   struct {
     uint8_t sensor;             // points to to the number 0...255
-    // uint8_t beaconScanCounter;  // countdown timer in seconds
   } state;
   struct {
     uint32_t allwaysAggregate:1; // always show all known values of one sensor in brdigemode
     uint32_t noSummary:1;        // no sensor values at TELE-period
     uint32_t directBridgeMode:1; // send every received BLE-packet as a MQTT-message in real-time
-    // uint32_t holdBackFirstAutodiscovery:1; // allows to trigger it later
     uint32_t showRSSI:1;
     uint32_t ignoreBogusBattery:1;
     uint32_t minimalSummary:1;   // DEPRECATED!!
@@ -211,6 +206,7 @@ struct {
 
 #ifdef USE_MI_HOMEKIT
   void *outlet_hap_service[4]; //arbitrary chosen
+  int8_t HKconnectedControllers = 0; //should never be < 0
   uint8_t HKinfoMsg = 0;
   char hk_setup_code[11];
 #endif //USE_MI_HOMEKIT
@@ -379,7 +375,7 @@ const char kMI32_ConnErrorMsg[] PROGMEM = "no Error|could not connect|got no ser
 
 const char kMI32_BLEInfoMsg[] PROGMEM = "Scan ended|Got Notification|Did connect|Did disconnect|Start scanning";
 
-const char kMI32_HKInfoMsg[] PROGMEM = "HAP core started|HAP core did not start!!|HAP controller disconnected|HAP outlet added";
+const char kMI32_HKInfoMsg[] PROGMEM = "HAP core started|HAP core did not start!!|HAP controller disconnected|HAP controller connected|HAP outlet added";
 /*********************************************************************************************\
  * enumerations
 \*********************************************************************************************/
@@ -419,6 +415,7 @@ enum MI32_HKInfoMsg {
        MI32_HAP_DID_START = 1,
        MI32_HAP_DID_NOT_START,
        MI32_HAP_CONTROLLER_DISCONNECTED,
+       MI32_HAP_CONTROLLER_CONNECTED,
        MI32_HAP_OUTLET_ADDED
 };
 
@@ -456,7 +453,7 @@ const char HTTP_MI32_STYLE[] PROGMEM =
   ".box {flex: 0 1 335px;margin: 5px;padding: 5px;border-radius: 0.8rem;background-color: rgba(221, 221, 221, 0.2);}</style>";
 
 const char HTTP_MI32_STYLE_SVG[] PROGMEM =
-  "<svg height='0'><defs><linearGradient id='grd%u'  x1='0%%' y1='0%%' x2='0%%' y2='100%%'>"
+  "<svg height='0'><defs><linearGradient id='grd%u'  x1='0%%' y1='0%%' x2='0%%' y2='15%%'>"
   "<stop offset='0' stop-color='rgba(%u, %u, %u, 0.5)'/>"
   "<stop offset='1' stop-color='rgba(%u, %u, %u, 0)'/></linearGradient></defs></svg>"
   ;
@@ -467,10 +464,12 @@ const char HTTP_MI32_PARENT_START[] PROGMEM =
           "Observing <span id='numDev'>%u</span> devices<br>"
           "Uptime: <span class='Ti'>%u</span> seconds<br>"
 #ifdef USE_MI_HOMEKIT
-          "HomeKit setup code: %s<br>" //&#128994; - green circle
+          "HomeKit setup code: %s<br>"
+          "HAP controller connections: %d<br>"
 #else
-          "HomeKit not enabled%s<br>" //&#128994; - green circle
+          "HomeKit not enabled%s<br>"
 #endif //USE_MI_HOMEKIT
+          "Free Heap: %u kB"
       "</div>";
 
 const char HTTP_MI32_WIDGET[] PROGMEM =
