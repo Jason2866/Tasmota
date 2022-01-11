@@ -943,12 +943,14 @@
 \*********************************************************************************************/
 
 #ifndef ESP8266_1M
+  #ifndef FIRMWARE_MINICUSTOM
   #ifndef FIRMWARE_MINIMAL    // there might be a ESP32-minimal
     #define USE_UFILESYS
       #define GUI_TRASH_FILE
       #define GUI_EDIT_FILE
     #define USE_PING
   #endif // FIRMWARE_MINIMAL
+  #endif
 
   #ifdef USE_RULES
     #define USE_EXPRESSION

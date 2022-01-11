@@ -377,6 +377,7 @@ ooooo     ooo ooooo      ooo oooooooooo.   oooooooooooo oooooooooooo ooooo ooooo
 #undef USE_BERRY
 #undef USE_WEBCLIENT
 #undef USE_WEBCLIENT_HTTPS
+#undef USE_TLS
 
 // -- Optional modules ----------------------------
 #undef ROTARY_V1                                 // Disable support for MI Desk Lamp
