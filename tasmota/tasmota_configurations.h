@@ -938,6 +938,7 @@
 
 #endif  // FIRMWARE_MINICUSTOM
 
+
 #ifdef ESP32
 #include "tasmota_configurations_ESP32.h"
 #endif  // ESP32
