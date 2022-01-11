@@ -1023,6 +1023,16 @@
 #undef FIRMWARE_KNX_NO_EMULATION                // Disable tasmota-knx with KNX but without Emulation
 #undef FIRMWARE_DISPLAYS                        // Disable tasmota-display with display drivers enabled
 #undef FIRMWARE_IR                              // Disable tasmota-ir with IR full protocols activated
+#undef USE_UFILESYS
+#undef GUI_TRASH_FILE
+#undef GUI_EDIT_FILE
+#undef USE_PING
+#undef USE_AUTOCONF
+#undef USE_BERRY
+#undef USE_WEBCLIENT
+#undef USE_WEBCLIENT_HTTPS
+#undef USE_TLS
+
 
 #endif  // FIRMWARE_MINICUSTOM
 
