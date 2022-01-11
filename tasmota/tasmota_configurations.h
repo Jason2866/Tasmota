@@ -1032,7 +1032,10 @@
 #undef USE_WEBCLIENT
 #undef USE_WEBCLIENT_HTTPS
 #undef USE_TLS
+<<<<<<< HEAD
 
+=======
+>>>>>>> d8d896a8417611e3ca2d07b5b38e6e2ae31cb541
 
 #endif  // FIRMWARE_MINICUSTOM
 

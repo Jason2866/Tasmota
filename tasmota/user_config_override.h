@@ -54,6 +54,7 @@ ooooo     ooo ooooo      ooo oooooooooo.   oooooooooooo oooooooooooo ooooo ooooo
 #undef USE_BERRY
 #undef USE_WEBCLIENT
 #undef USE_WEBCLIENT_HTTPS
+#undef USE_TLS
 
 #undef USE_SUNRISE                              // Disable support for Sunrise and sunset tools (+16k)
 
