@@ -903,6 +903,7 @@
 #endif  // FIRMWARE_MINIMAL
 #endif  // ifndef FIRMWARE_MINICUSTOM
 
+
 /*********************************************************************************************\
  * [tasmota-minicustom.bin]
  * Make a small minimal custom image possible
@@ -936,8 +937,6 @@
 #undef USE_TLS
 
 #endif  // FIRMWARE_MINICUSTOM
-
-#endif  // _TASMOTA_CONFIGURATIONS_H_
 
 #ifdef ESP32
 #include "tasmota_configurations_ESP32.h"
@@ -1040,3 +1039,5 @@
 #ifdef USE_EMULATION_HUE
 #define USE_UNISHOX_COMPRESSION                // Add support for string compression
 #endif
+
+#endif  // _TASMOTA_CONFIGURATIONS_H_
