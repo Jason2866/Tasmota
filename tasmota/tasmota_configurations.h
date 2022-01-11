@@ -903,6 +903,42 @@
 #endif  // FIRMWARE_MINIMAL
 #endif  // ifndef FIRMWARE_MINICUSTOM
 
+/*********************************************************************************************\
+ * [tasmota-minicustom.bin]
+ * Make a small minimal custom image possible
+\*********************************************************************************************/
+
+#ifdef FIRMWARE_MINICUSTOM
+#define FIRMWARE_MINIMAL
+
+#undef CODE_IMAGE_STR
+#define CODE_IMAGE_STR "mini-custom"
+
+#undef FIRMWARE_LITE                            // Disable tasmota-lite with no sensors
+#undef FIRMWARE_SENSORS                         // Disable tasmota-sensors with useful sensors enabled
+#undef FIRMWARE_KNX_NO_EMULATION                // Disable tasmota-knx with KNX but without Emulation
+#undef FIRMWARE_DISPLAYS                        // Disable tasmota-display with display drivers enabled
+#undef FIRMWARE_IR                              // Disable tasmota-ir with IR full protocols activated
+#undef FIRMWARE_WEBCAM
+#undef FIRMWARE_ODROID_GO
+#undef FIRMWARE_M5STACK_CORE2
+#undef FIRMWARE_BLUETOOTH
+#undef FIRMWARE_LVGL
+#undef FIRMWARE_TASMOTA32
+#undef USE_UFILESYS
+#undef GUI_TRASH_FILE
+#undef GUI_EDIT_FILE
+#undef USE_PING
+#undef USE_AUTOCONF
+#undef USE_BERRY
+#undef USE_WEBCLIENT
+#undef USE_WEBCLIENT_HTTPS
+#undef USE_TLS
+
+#endif  // FIRMWARE_MINICUSTOM
+
+#endif  // _TASMOTA_CONFIGURATIONS_H_
+
 #ifdef ESP32
 #include "tasmota_configurations_ESP32.h"
 #endif  // ESP32
@@ -1004,39 +1040,3 @@
 #ifdef USE_EMULATION_HUE
 #define USE_UNISHOX_COMPRESSION                // Add support for string compression
 #endif
-
-/*********************************************************************************************\
- * [tasmota-minicustom.bin]
- * Make a small minimal custom image possible
-\*********************************************************************************************/
-
-#ifdef FIRMWARE_MINICUSTOM
-#define FIRMWARE_MINIMAL
-
-#undef CODE_IMAGE_STR
-#define CODE_IMAGE_STR "mini-custom"
-
-#undef FIRMWARE_LITE                            // Disable tasmota-lite with no sensors
-#undef FIRMWARE_SENSORS                         // Disable tasmota-sensors with useful sensors enabled
-#undef FIRMWARE_KNX_NO_EMULATION                // Disable tasmota-knx with KNX but without Emulation
-#undef FIRMWARE_DISPLAYS                        // Disable tasmota-display with display drivers enabled
-#undef FIRMWARE_IR                              // Disable tasmota-ir with IR full protocols activated
-#undef FIRMWARE_WEBCAM
-#undef FIRMWARE_ODROID_GO
-#undef FIRMWARE_M5STACK_CORE2
-#undef FIRMWARE_BLUETOOTH
-#undef FIRMWARE_LVGL
-#undef FIRMWARE_TASMOTA32
-#undef USE_UFILESYS
-#undef GUI_TRASH_FILE
-#undef GUI_EDIT_FILE
-#undef USE_PING
-#undef USE_AUTOCONF
-#undef USE_BERRY
-#undef USE_WEBCLIENT
-#undef USE_WEBCLIENT_HTTPS
-#undef USE_TLS
-
-#endif  // FIRMWARE_MINICUSTOM
-
-#endif  // _TASMOTA_CONFIGURATIONS_H_
