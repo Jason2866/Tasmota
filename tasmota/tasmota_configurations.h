@@ -1049,4 +1049,8 @@
   #define USE_TLS                                       // flag indicates we need to include TLS code
 #endif                                                  // USE_MQTT_TLS || USE_TELEGRAM
 
+#if(USE_MI_HOMEKIT != 1)                       //only for the .c-file
+  #undef USE_MI_HOMEKIT
+#endif //USE_MI_HOMEKIT
+
 #endif  // _TASMOTA_CONFIGURATIONS_H_
