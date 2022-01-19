@@ -1049,7 +1049,7 @@
   #define USE_TLS                              // flag indicates we need to include TLS code
 #endif                                         // USE_MQTT_TLS
 
-#if(USE_MI_HOMEKIT != 1)                       //only for the .c-file
+#if(USE_MI_HOMEKIT != 1)                       // Enable(1)/ Disable(0) Homekit, only for the .c-file
   #undef USE_MI_HOMEKIT
 #endif //USE_MI_HOMEKIT
 
