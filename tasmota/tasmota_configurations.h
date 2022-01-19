@@ -1045,9 +1045,9 @@
 #define USE_UNISHOX_COMPRESSION                // Add support for string compression
 #endif
 
-#if defined(USE_MQTT_TLS) || defined(USE_TELEGRAM)      // Enable TLS if required:
-  #define USE_TLS                                       // flag indicates we need to include TLS code
-#endif                                                  // USE_MQTT_TLS || USE_TELEGRAM
+#if defined(USE_MQTT_TLS)                      // Enable TLS if required:
+  #define USE_TLS                              // flag indicates we need to include TLS code
+#endif                                         // USE_MQTT_TLS
 
 #if(USE_MI_HOMEKIT != 1)                       //only for the .c-file
   #undef USE_MI_HOMEKIT
