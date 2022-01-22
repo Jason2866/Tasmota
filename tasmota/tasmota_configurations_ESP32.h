@@ -57,8 +57,10 @@
 #undef USE_TUYA_MCU
 #undef USE_EMULATION_HUE
 #undef USE_EMULATION_WEMO
+#undef USE_BUZZER
 #undef USE_ARILUX_RF
 #undef USE_DS18x20
+#undef USE_DHT
 #undef USE_WS2812
 #undef USE_ENERGY_SENSOR
 #undef USE_SHUTTER
