@@ -63,7 +63,7 @@
 #undef USE_ENERGY_SENSOR
 #undef USE_SHUTTER
 #undef USE_DEVICE_GROUPS
-#undef USE_BERRY                                 // Disable Berry scripting language
+//#undef USE_BERRY                                 // Disable Berry scripting language
 #undef USE_MI_ESP32                             // (ESP32 only) Disable support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
 #undef USE_BLE_ESP32
 
