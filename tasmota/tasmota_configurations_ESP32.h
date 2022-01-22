@@ -52,6 +52,7 @@
 #undef ROTARY_V1
 #undef USE_IR_REMOTE
 #undef USE_COUNTER
+#undef USE_PING
 #undef USE_ADC
 #undef USE_AC_ZERO_CROSS_DIMMER
 #undef USE_PWM_DIMMER
