@@ -51,6 +51,7 @@
 #undef USE_SERIAL_BRIDGE
 #undef ROTARY_V1
 #undef USE_IR_REMOTE
+#undef USE_COUNTER
 #undef USE_ADC
 #undef USE_AC_ZERO_CROSS_DIMMER
 #undef USE_PWM_DIMMER
@@ -61,7 +62,9 @@
 #undef USE_BUZZER
 #undef USE_ARILUX_RF
 #undef USE_DS18x20
+#undef USE_BMP
 #undef USE_DHT
+#undef USE_BH1750
 #undef USE_WS2812
 #undef USE_ENERGY_SENSOR
 #undef USE_SHUTTER
