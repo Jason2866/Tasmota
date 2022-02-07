@@ -32,7 +32,7 @@
 
 #define XSNS_127                 127
 
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32
 
 #define HALLEFFECT_SAMPLE_COUNT  32   // 32 takes about 12 mS at 80MHz CPU frequency
 
@@ -64,7 +64,7 @@ void Esp32SensorShow(bool json) {
   }
   float t = ConvertTempToFahrenheit(c);
 
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32
   int value = 0;
   if (HEData.present) {
     for (uint32_t i = 0; i < HALLEFFECT_SAMPLE_COUNT; i++) {
@@ -78,7 +78,7 @@ void Esp32SensorShow(bool json) {
     bool temperature_present = (ResponseContains_P(PSTR(D_JSON_TEMPERATURE)));
     ResponseAppend_P(PSTR(",\"ESP32\":{\"" D_JSON_TEMPERATURE "\":%*_f"), Settings->flag2.temperature_resolution, &t);
 
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32
     if (HEData.present) {
       ResponseAppend_P(PSTR(",\"" D_JSON_HALLEFFECT "\":%d"), value);
     }
@@ -91,7 +91,7 @@ void Esp32SensorShow(bool json) {
         DomoticzFloatSensor(DZ_TEMP, t);
       }
 
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32
       if (HEData.present) {
         DomoticzSensor(DZ_COUNT, value);
       }
@@ -103,7 +103,7 @@ void Esp32SensorShow(bool json) {
   } else {
     WSContentSend_Temp("ESP32", t);
 
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32
     if (HEData.present) {
       WSContentSend_P(HTTP_SNS_HALL_EFFECT, "ESP32", value);
     }
@@ -129,7 +129,7 @@ bool Xsns127(uint8_t function) {
       Esp32SensorShow(0);
       break;
 #endif  // USE_WEBSERVER
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32
     case FUNC_INIT:
       Esp32SensorInit();
       break;
