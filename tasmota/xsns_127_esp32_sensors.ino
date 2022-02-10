@@ -121,6 +121,7 @@ bool Xsns127(uint8_t function) {
   bool result = false;
 
   switch (function) {
+#ifndef CONFIG_IDF_TARGET_ESP32S3
     case FUNC_JSON_APPEND:
       Esp32SensorShow(1);
       break;
@@ -134,6 +135,7 @@ bool Xsns127(uint8_t function) {
       Esp32SensorInit();
       break;
 #endif  // CONFIG_IDF_TARGET_ESP32
+#endif  // CONFIG_IDF_TARGET_ESP32S3
   }
   return result;
 }
