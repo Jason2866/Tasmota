@@ -13,7 +13,7 @@
 // limitations under the License.
 #pragma once
 
-#if CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S3
 #include "bignum_ESP32.h"
 #elif CONFIG_IDF_TARGET_ESP32C3
 #include "bignum_ESP32_C3.h"
