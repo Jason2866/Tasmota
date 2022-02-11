@@ -12,14 +12,14 @@
 
 // #define CONFIG_IDF_TARGET_ESP32  1
 
-#if CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S3
 #define ESP_MPI_USE_MONT_EXP
 
 #define MBEDTLS_MPI_EXP_MOD_ALT
 //#define MBEDTLS_MPI_MUL_MPI_ALT
 #endif
 
-#if CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S3
 int esp_mpi_exp_mod( mbedtls_mpi *Z, const mbedtls_mpi *X, const mbedtls_mpi *Y, const mbedtls_mpi *M, mbedtls_mpi *_Rinv );
 
 /**
