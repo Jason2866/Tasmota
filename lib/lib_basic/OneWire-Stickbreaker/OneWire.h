@@ -267,13 +267,13 @@ void directModeOutput(IO_REG_TYPE pin)
         else // already validated to pins <= 33
             GPIO.enable1_w1ts.val = ((uint32_t)1 << (pin - 32));
 
-        uint32_t pinFunction((uint32_t)2 << FUN_DRV_S); // what are the drivers?
-        pinFunction |= FUN_IE; // input enable but required for output as well?
-        pinFunction |= ((uint32_t)PIN_FUNC_GPIO << MCU_SEL_S);
+//        uint32_t pinFunction((uint32_t)2 << FUN_DRV_S); // what are the drivers?
+//        pinFunction |= FUN_IE; // input enable but required for output as well?
+//        pinFunction |= ((uint32_t)PIN_FUNC_GPIO << MCU_SEL_S);
 
-        ESP_REG(DR_REG_IO_MUX_BASE + esp32_gpioMux[pin].reg) = pinFunction;
+//        ESP_REG(DR_REG_IO_MUX_BASE + esp32_gpioMux[pin].reg) = pinFunction;
 
-        GPIO.pin[pin].val = 0;
+//        GPIO.pin[pin].val = 0;
     }
 #endif
 }
