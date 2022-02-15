@@ -41,6 +41,8 @@ be_extern_native_module(webserver);
 be_extern_native_module(flash);
 be_extern_native_module(path);
 be_extern_native_module(unishox);
+be_extern_native_module(hue_ntv);
+be_extern_native_module(hue_bridge);
 be_extern_native_module(uuid);
 be_extern_native_module(animate);
 #ifdef USE_LVGL
@@ -118,6 +120,10 @@ BERRY_LOCAL const bntvmodule* const be_module_table[] = {
 #ifdef USE_LIGHT
     &be_native_module(light),
 #endif
+#if defined(USE_EMULATION) && defined(USE_EMULATION_HUE)
+    &be_native_module(hue_ntv),
+    &be_native_module(hue_bridge),
+#endif
 
     &be_native_module(uuid),
 #ifdef USE_UNISHOX_COMPRESSION
@@ -145,6 +151,7 @@ BERRY_LOCAL const bntvmodule* const be_module_table[] = {
 
 #ifdef ESP32
 extern void be_load_tasmota_ntvlib(bvm *vm);
+extern void be_load_tasmota_log_reader_class(bvm *vm);
 extern void be_load_light_state_class(bvm *vm);
 extern void be_load_wirelib(bvm *vm);
 extern void be_load_onewirelib(bvm *vm);
@@ -193,6 +200,7 @@ BERRY_API void be_load_custom_libs(bvm *vm)
 #endif
     be_load_Timer_class(vm);
     be_load_tasmota_ntvlib(vm);
+    be_load_tasmota_log_reader_class(vm);
     be_load_Driver_class(vm);
     be_load_md5_lib(vm);
     be_load_serial_lib(vm);

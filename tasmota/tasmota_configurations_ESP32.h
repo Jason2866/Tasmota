@@ -78,10 +78,16 @@
 
 #define USE_ADC
 //#undef USE_BERRY                                 // Disable Berry scripting language
-#define USE_BLE_ESP32                            // Enable new BLE driver
-#define USE_EQ3_ESP32
-#define USE_MI_ESP32                             // (ESP32 only) Add support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
-#define USE_MI_EXT_GUI                         //enable dashboard style GUI
+#if defined(USE_MI_HOMEKIT)                      // Switch between Homekit and full BLE driver
+  #define USE_MI_ESP32
+  #if(USE_MI_HOMEKIT != 1)                       // Enable(1)/ Disable(0) Homekit, only for the .c-file
+    #undef USE_MI_HOMEKIT
+  #endif // disable USE_MI_HOMEKIT
+#else
+  #define USE_BLE_ESP32                          // Enable full BLE driver
+  #define USE_EQ3_ESP32
+  #define USE_MI_ESP32                           // (ESP32 only) Add support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
+#endif // enable USE_MI_HOMEKIT
 
 #endif  // FIRMWARE_BLUETOOTH
 
@@ -123,7 +129,6 @@
 #define USE_DISPLAY_LVGL_ONLY
 
 #undef USE_DISPLAY_MODES1TO5
-#undef SHOW_SPLASH
 #undef USE_DISPLAY_LCD
 #undef USE_DISPLAY_SSD1306
 #undef USE_DISPLAY_MATRIX

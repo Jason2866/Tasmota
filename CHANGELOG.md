@@ -2,14 +2,34 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
-
-## [10.1.0.8]
+## [11.0.0.1]
 ### Added
+- ESP32 support for BLE Mi scale V1 (#13517)
+- ESP32 integrate Homekit in Bluetooth binary (#14818)
+- ESP32 Berry always enable rules
+- ESP32 Berry bootloop protection
+- ESP32 Berry virtual Alexa hue device (#14833)
 
 ### Changed
-- From Calendar Versioning (CalVer) back to Semantic Versioning (SemVer) for better major change indication and future support
+- Adafruit BusIO library from v1.0.10 to v1.11.0
+- ESP32 update the internal Berry type system to sync with Skiars Berry repository. No expected impact on code, but .bec files need to be generated again. (#14811)
+- ESP32 LVGL library from v8.1.0 to v8.2.0
+- ESP32 NimBLE library from v1.3.3 to v1.3.6
 
 ### Fixed
+- SSPM energy yesterday when zero
+- GPIO OptionE1 selection regression (#14821)
+- BL0939, BL0940 and BL0942 energy monitoring buffer miscompares resulting in wrong daily energy values regression from v9.5.0.8 (#14829)
+- Orno WE517 power meter phase 2 current reactive (#14841)
+
+## [Released]
+
+## [11.0.0] 20220212
+- Release Olivia
+
+## [10.1.0.8] 20220212
+### Changed
+- From Calendar Versioning (CalVer) back to Semantic Versioning (SemVer) for better major change indication and future support
 
 ## [2022.1.4 = 10.1.0.7] 20220205
 ### Added
@@ -124,8 +144,6 @@ All notable changes to this project will be documented in this file.
 - ESP32 Webcam exception during flashwrites
 - ESP32 LedPwmMode exception (#14073)
 - ESP32 Compile error when I2S_Audio is enabled (#14095)
-
-## [Released]
 
 ## [10.1.0] 20211208
 - Release Noelle
