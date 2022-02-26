@@ -2,7 +2,21 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
-## [11.0.0.1]
+
+## [11.0.0.3]
+### Added
+
+### Changed
+- Extent number of pulsetimers from 8 to 32 (#8266)
+- Tasmota ESP32 Arduino core to v2.0.2.3 (#14979)
+
+### Fixed
+
+## [11.0.0.2] 20220225
+### Changed
+- Enabled ethernet and Sonoff SPM in ``tasmota32.bin``
+
+## [11.0.0.1] 20220220
 ### Added
 - Command ``SspmMap 0`` to reset Sonoff SPM default mapping
 - Command ``TcpConnect <port><ip_address>`` to add client connection mode (#14874)
@@ -17,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - ESP32 update the internal Berry type system to sync with Skiars Berry repository. No expected impact on code, but .bec files need to be generated again. (#14811)
 - ESP32 LVGL library from v8.1.0 to v8.2.0
 - ESP32 NimBLE library from v1.3.3 to v1.3.6
+- Sonoff SPM increase max number of relays supported to 32 (8 SPM-4Relay modules)
 
 ### Fixed
 - SSPM energy yesterday when zero

@@ -708,6 +708,19 @@ static inline void lv_obj_move_foreground(lv_obj_t * obj)
 static inline void lv_obj_move_background(lv_obj_t * obj)
 static inline uint32_t lv_obj_get_child_id(const struct _lv_obj_t * obj)
 
+// ../../lvgl/src/misc/lv_area.h
+void lv_area_set(lv_area_t * area_p, lv_coord_t x1, lv_coord_t y1, lv_coord_t x2, lv_coord_t y2)
+inline static void lv_area_copy(lv_area_t * dest, const lv_area_t * src)
+static inline lv_coord_t lv_area_get_width(const lv_area_t * area_p)
+static inline lv_coord_t lv_area_get_height(const lv_area_t * area_p)
+void lv_area_set_width(lv_area_t * area_p, lv_coord_t w)
+void lv_area_set_height(lv_area_t * area_p, lv_coord_t h)
+uint32_t lv_area_get_size(const lv_area_t * area_p)
+void lv_area_increase(lv_area_t * area, lv_coord_t w_extra, lv_coord_t h_extra)
+void lv_area_move(lv_area_t * area, lv_coord_t x_ofs, lv_coord_t y_ofs)
+void lv_area_align(const lv_area_t * base, lv_area_t * to_align, lv_align_t align, lv_coord_t ofs_x, lv_coord_t ofs_y)
+static inline lv_coord_t lv_pct(lv_coord_t x)
+
 // ../../lvgl/src/misc/lv_color.h
 static inline uint8_t lv_color_to1(lv_color_t color)
 static inline uint8_t lv_color_to8(lv_color_t color)
@@ -735,6 +748,15 @@ static inline lv_color_t lv_color_white(void)
 static inline lv_color_t lv_color_black(void)
 lv_color_t lv_palette_lighten(lv_palette_t p, uint8_t lvl)
 lv_color_t lv_palette_darken(lv_palette_t p, uint8_t lvl)
+
+// ../../lvgl/src/misc/lv_math.h
+int16_t lv_trigo_sin(int16_t angle)
+static inline int16_t lv_trigo_cos(int16_t angle)
+uint32_t lv_bezier3(uint32_t t, uint32_t u0, uint32_t u1, uint32_t u2, uint32_t u3)
+uint16_t lv_atan2(int x, int y)
+void lv_sqrt(uint32_t x, lv_sqrt_res_t * q, uint32_t mask)
+int32_t lv_map(int32_t x, int32_t min_in, int32_t max_in, int32_t min_out, int32_t max_out)
+uint32_t lv_rand(uint32_t min, uint32_t max)
 
 // ../../lvgl/src/misc/lv_style.h
 void lv_style_init(lv_style_t * style)
