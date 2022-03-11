@@ -5,7 +5,6 @@
  * Can be eventually subclassed to handle a physical light.
  * 
  *******************************************************************/
-#ifdef USE_LIGHT
 
 #include "be_constobj.h"
 #include "be_mapping.h"
@@ -72,12 +71,10 @@ class be_class_ccronexpr (scope: global, name: ccronexpr) {
   .p, var       // pointer to cron_expr*
 
   init, ctype_func(ccronexpr_init)
-  deinit, ctype_func(ccronexpr_init)
+  // deinit, ctype_func(ccronexpr_deinit)
 
   next, ctype_func(ccronexpr_next)
   time_reached, static_ctype_func(ccronexpr_time_reached)
   now, static_ctype_func(ccronexpr_now)
 }
 @const_object_info_end */
-
-#endif // USE_LIGHT
