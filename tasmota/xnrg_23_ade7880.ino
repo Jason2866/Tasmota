@@ -291,7 +291,7 @@ void Ade7880Write(uint16_t reg, uint32_t val) {
   if (size) {
 #ifdef ADE7880_DEBUG
     char log_format[100];
-    snprintf_P(log_format, sizeof(log_format), PSTR("A78: Rd 0x%%04X 0x%%0%dX (%%d)"), size << 1);
+    snprintf_P(log_format, sizeof(log_format), PSTR("A78: Wr 0x%%04X 0x%%0%dX (%%d)"), size << 1);
     AddLog(LOG_LEVEL_DEBUG_MORE, log_format, reg, val, val);
 #endif  // ADE7880_DEBUG
     Wire.beginTransmission(ADE7880_ADDR);
@@ -306,10 +306,11 @@ void Ade7880Write(uint16_t reg, uint32_t val) {
 }
 
 bool Ade7880VerifyWrite(uint16_t reg) {
-  if (0xCA != Ade7880Read(ADE7880_LAST_OP)) {                              // Indicates the type, read (0x35) or write (0xCA), of the last successful read/write operation.
-    return false;
-  }
-  if (reg != Ade7880Read(ADE7880_LAST_ADD)) {                              // The address of the register successfully accessed during the last read/write operation.
+  uint32_t error = 0;
+  error += (0xCA != Ade7880Read(ADE7880_LAST_OP));                         // Indicates the type, read (0x35) or write (0xCA), of the last successful read/write operation.
+  error += (reg != Ade7880Read(ADE7880_LAST_ADD));                         // The address of the register successfully accessed during the last read/write operation.
+  if (error) {
+    AddLog(LOG_LEVEL_DEBUG, PSTR("A78: Write verify error"));
     return false;
   }
   return true;
@@ -335,9 +336,11 @@ int32_t Ade7880Read(uint16_t reg) {
       }
     }
 #ifdef ADE7880_DEBUG
-    char log_format[100];
-    snprintf_P(log_format, sizeof(log_format), PSTR("A78: Rd 0x%%04X 0x%%0%dX (%%d)"), size << 1);
-    AddLog(LOG_LEVEL_DEBUG_MORE, log_format, reg, response, response);
+    if ((reg != ADE7880_LAST_OP) && (reg != ADE7880_LAST_ADD)) {
+      char log_format[100];
+      snprintf_P(log_format, sizeof(log_format), PSTR("A78: Rd 0x%%04X 0x%%0%dX (%%d)"), size << 1);
+      AddLog(LOG_LEVEL_DEBUG_MORE, log_format, reg, response, response);
+    }
 #endif  // ADE7880_DEBUG
   }
 	return response;
@@ -345,11 +348,11 @@ int32_t Ade7880Read(uint16_t reg) {
 
 int32_t Ade7880ReadVerify(uint16_t reg) {
   int32_t result = Ade7880Read(reg);
-  if (0x35 != Ade7880Read(ADE7880_LAST_OP)) {                              // Indicates the type, read (0x35) or write (0xCA), of the last successful read/write operation.
-
-  }
-  if (reg != Ade7880Read(ADE7880_LAST_ADD)) {                              // The address of the register successfully accessed during the last read/write operation.
-
+  uint32_t error = 0;
+  error += (0x35 != Ade7880Read(ADE7880_LAST_OP));                         // Indicates the type, read (0x35) or write (0xCA), of the last successful read/write operation.
+  error += (reg != Ade7880Read(ADE7880_LAST_ADD));                         // The address of the register successfully accessed during the last read/write operation.
+  if (error) {
+    AddLog(LOG_LEVEL_DEBUG, PSTR("A78: Read verify error"));
   }
   return result;
 }
@@ -478,7 +481,7 @@ void Ade7880Cycle(void) {
   for (uint32_t phase = 0; phase < 3; phase++) {
     Energy.data_valid[phase] = 0;
     Energy.voltage[phase] = (float)Ade7880ReadVerify(ADE7880_AVRMS + (phase * 2)) / 10000;     // 0x43C1 - 0x0024CC94 = 241.1668 V
-    Energy.current[phase] = (float)Ade7880ReadVerify(ADE7880_AIRMS + (phase * 2)) / 1000000;   // 0x43C0 - 0x00002D6D = 0.011629 A
+    Energy.current[phase] = (float)Ade7880ReadVerify(ADE7880_AIRMS + (phase * 2)) / 100000;    // 0x43C0 - 0x00002D6D = 0.11629 A
     Energy.active_power[phase] = (float)Ade7880ReadVerify(ADE7880_AWATT + phase) / 100;        // 0xE513 - 0xFFFFF524 = -27.79 W (wrong calibration)
     Energy.apparent_power[phase] = (float)Ade7880ReadVerify(ADE7880_AVA + phase) / 100;        // 0xE519 - 0xFFFFF50D
     Energy.frequency[phase] = 256000.0f / Ade7880ReadVerify(ADE7880_APERIOD + phase);          // 0xE905 - Page 34 and based on ADE7880_FREQ_INIT

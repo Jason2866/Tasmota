@@ -251,7 +251,7 @@ typedef union {
     uint32_t influxdb_default : 1;         // bit 6  (v9.5.0.5) - Set influxdb initial defaults if 0
     uint32_t influxdb_state : 1;           // bit 7  (v9.5.0.5) - CMND_IFX - Enable influxdb support
     uint32_t sspm_display : 1;             // bit 8  (v10.0.0.4) - CMND_SSPMDISPLAY - Enable gui display of powered on relays only
-    uint32_t spare09 : 1;                  // bit 9
+    uint32_t local_ntp_server : 1;         // bit 9  (v11.0.0.4) - CMND_RTCNTPSERVER - Enable local NTP server
     uint32_t spare10 : 1;                  // bit 10
     uint32_t spare11 : 1;                  // bit 11
     uint32_t spare12 : 1;                  // bit 12
@@ -626,8 +626,8 @@ typedef struct {
   uint8_t       switchmode[MAX_SWITCHES_SET];  // 4A9
 
   uint8_t       free_4c5[5];               // 4C5
-  uint8_t       ex_interlock[4];           // 4CA MAX_INTERLOCKS = MAX_RELAYS / 2 (Legacy)
 
+  uint8_t       ds3502_state[MAX_DS3502];  // 4CA
   uint16_t      influxdb_port;             // 4CE
   power_t       interlock[MAX_INTERLOCKS_SET];  // 4D0 MAX_INTERLOCKS = MAX_RELAYS / 2
   int8_t        shutter_tilt_config[5][MAX_SHUTTERS];  //508
