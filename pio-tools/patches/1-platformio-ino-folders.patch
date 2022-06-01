@@ -1,0 +1,29 @@
+From e030e1294466743004157f65827b72c8e4752d5d Mon Sep 17 00:00:00 2001
+From: Theo Arends <11044339+arendst@users.noreply.github.com>
+Date: Tue, 31 May 2022 17:25:17 +0200
+Subject: [PATCH] Append files from any folder in src_dir starting with ino_
+ too
+
+This allows for moving files from the root to sub-folders like moving all sensor drivers to one folder called ino_xsns and other drivers to a folder called ino_xdrv. The naming is still important as the InoToCpp conversion needs files in alphabetical order.
+
+I've tested this with Tasmota andmoving the drivers into 6 different folders.
+---
+ platformio/builder/tools/pioino.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/platformio/builder/tools/pioino.py b/platformio/builder/tools/pioino.py
+index 7a95da9baa..9ba23555c9 100644
+--- a/platformio/builder/tools/pioino.py
++++ b/platformio/builder/tools/pioino.py
+@@ -230,6 +230,10 @@ def ConvertInoToCpp(env):
+     ino_nodes = env.Glob(os.path.join(src_dir, "*.ino")) + env.Glob(
+         os.path.join(src_dir, "*.pde")
+     )
++    # append files from any folder in src_dir starting with ino_ too
++    ino_nodes = ino_nodes + env.Glob(os.path.join(src_dir, "ino_*", "*.ino")) + env.Glob(
++        os.path.join(src_dir, "ino_*", "*.pde")
++    )
+     if not ino_nodes:
+         return
+     c = InoToCPPConverter(env)
+
