@@ -9,8 +9,8 @@ sitepackages_dir = "".join(site.getsitepackages())
 patchflag_path = join(sitepackages_dir, "platformio", "builder", "tools", ".patching-done")
 original_file = join(sitepackages_dir, "platformio", "builder", "tools", "pioino.py")
 patched_file = join(project_dir, "pio-tools", "patches", "1-platformio-ino-folders.patch")
-print("original_file", original_file)
-print("patched_file", patched_file)
+#print("original_file", original_file)
+#print("patched_file", patched_file)
 
 
 # patch file only if we didn't do it before
