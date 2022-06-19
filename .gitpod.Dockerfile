@@ -2,4 +2,4 @@ FROM gitpod/workspace-full
                     
 USER gitpod
 
-RUN pip3 install -U platformio
+RUN python3 -c "$(curl -fsSL https://raw.githubusercontent.com/platformio/platformio/master/scripts/get-platformio.py)"
