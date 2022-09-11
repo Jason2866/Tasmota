@@ -969,30 +969,7 @@ typedef enum {
 } FlashMode_t;
 */
 String ESP_getFlashChipMode(void) {
-#if ESP8266
   uint32_t flash_mode = ESP.getFlashChipMode();
-#else
-  #if CONFIG_IDF_TARGET_ESP32S2
-  const uint32_t spi_ctrl = REG_READ(PERIPHS_SPI_FLASH_CTRL);
-  #else
-  const uint32_t spi_ctrl = REG_READ(SPI_CTRL_REG(0));
-  #endif
-  uint32_t flash_mode;
-  /* Not all of the following constants are already defined in older versions of spi_reg.h, so do it manually for now*/
-  if (spi_ctrl & BIT(24)) { //SPI_FREAD_QIO
-      flash_mode = 0;
-  } else if (spi_ctrl & BIT(20)) { //SPI_FREAD_QUAD
-      flash_mode = 1;
-  } else if (spi_ctrl &  BIT(23)) { //SPI_FREAD_DIO
-      flash_mode = 2;
-  } else if (spi_ctrl & BIT(14)) { // SPI_FREAD_DUAL
-      flash_mode = 3;
-  } else if (spi_ctrl & BIT(13)) { //SPI_FASTRD_MODE
-      flash_mode = 4;
-  } else {
-      flash_mode = 5;
-  }
-#endif
   if (flash_mode > 5) { flash_mode = 3; }
   char stemp[6];
   return GetTextIndexed(stemp, sizeof(stemp), flash_mode, kFlashModes);
