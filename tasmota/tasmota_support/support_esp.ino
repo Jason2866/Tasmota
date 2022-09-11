@@ -61,8 +61,8 @@ uint32_t ESP_getFlashChipId(void) {
   return ESP.getFlashChipId();
 }
 
-uint32_t ESP_getFlashChipRealSize(void) {
-  return ESP.getFlashChipRealSize();
+uint32_t ESP_getFlashChipSize(void) {
+  return ESP.getFlashChipSize();
 }
 
 void ESP_Restart(void) {
@@ -556,20 +556,6 @@ int32_t ESP_getHeapFragmentation(void) {
   int32_t free_maxmem = 100 - (int32_t)(ESP_getMaxAllocHeap() * 100 / ESP_getFreeHeap());
   if (free_maxmem < 0) { free_maxmem = 0; }
   return free_maxmem;
-}
-
-uint32_t ESP_getFlashChipId(void)
-{
-//  uint32_t id = bootloader_read_flash_id();
-  uint32_t id = g_rom_flashchip.device_id;
-  id = ((id & 0xff) << 16) | ((id >> 16) & 0xff) | (id & 0xff00);
-  return id;
-}
-
-uint32_t ESP_getFlashChipRealSize(void)
-{
-  uint32_t id = (ESP_getFlashChipId() >> 16) & 0xFF;
-  return 2 << (id - 1);
 }
 
 void ESP_Restart(void) {
