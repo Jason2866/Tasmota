@@ -65,6 +65,10 @@ uint32_t ESP_getFlashChipSize(void) {
   return ESP.getFlashChipSize();
 }
 
+uint32_t ESP_getFlashChipMagicSize(void) {
+  return ESP.getFlashChipMagicSize();
+}
+
 void ESP_Restart(void) {
 //  ESP.restart();            // This results in exception 3 on restarts on core 2.3.0
   ESP.reset();
@@ -101,7 +105,7 @@ String GetDeviceHardware(void) {
 //  uint32_t efuse3 = *(uint32_t*)(0x3FF00058);
 //  uint32_t efuse4 = *(uint32_t*)(0x3FF0005C);
 
-  if (((efuse1 & (1 << 4)) || (efuse2 & (1 << 16))) && (ESP.getFlashChipRealSize() < 1048577)) {  // ESP8285 can only have 1M flash
+  if (((efuse1 & (1 << 4)) || (efuse2 & (1 << 16))) && (ESP.getFlashChipSize() < 1048577)) {  // ESP8285 can only have 1M flash
     return F("ESP8285");
   }
   return F("ESP8266EX");
@@ -312,17 +316,22 @@ extern "C" {
 #if ESP_IDF_VERSION_MAJOR > 3       // IDF 4+
   #if CONFIG_IDF_TARGET_ESP32       // ESP32/PICO-D4
     #include "esp32/rom/spi_flash.h"
+    #define ESP_FLASH_IMAGE_BASE 0x1000     // Flash offset containing magic flash size and spi mode
   #elif CONFIG_IDF_TARGET_ESP32S2   // ESP32-S2
     #include "esp32s2/rom/spi_flash.h"
+    #define ESP_FLASH_IMAGE_BASE 0x1000     // Flash offset containing magic flash size and spi mode
   #elif CONFIG_IDF_TARGET_ESP32S3   // ESP32-S3
     #include "esp32s3/rom/spi_flash.h"
+    #define ESP_FLASH_IMAGE_BASE 0x0000     // Esp32s3 is located at 0x0000
   #elif CONFIG_IDF_TARGET_ESP32C3   // ESP32-C3
     #include "esp32c3/rom/spi_flash.h"
+    #define ESP_FLASH_IMAGE_BASE 0x0000     // Esp32c3 is located at 0x0000
   #else
     #error Target CONFIG_IDF_TARGET is not supported
   #endif
 #else // ESP32 Before IDF 4.0
   #include "rom/spi_flash.h"
+  #define ESP_FLASH_IMAGE_BASE 0x1000
 #endif
 
 uint32_t EspProgramSize(const char *label) {
@@ -518,6 +527,16 @@ uint32_t ESP_getChipId(void) {
     id |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
   }
   return id;
+}
+
+bool flashRead(uint32_t offset, uint32_t *data, size_t size);
+uint32_t ESP_FlashChipMagicSize(void)
+{
+    esp_image_header_t fhdr;
+    if(flashRead(ESP_FLASH_IMAGE_BASE, (uint32_t*)&fhdr, sizeof(esp_image_header_t)) && fhdr.magic != ESP_IMAGE_HEADER_MAGIC) {
+        return 0;
+    }
+    return fhdr.spi_size;
 }
 
 uint32_t ESP_getSketchSize(void) {
