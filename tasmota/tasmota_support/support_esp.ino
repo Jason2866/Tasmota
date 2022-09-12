@@ -529,11 +529,10 @@ uint32_t ESP_getChipId(void) {
   return id;
 }
 
-bool flashRead(uint32_t offset, uint32_t *data, size_t size);
-uint32_t ESP_FlashChipMagicSize(void)
+uint32_t ESP_getFlashChipMagicSize(void)
 {
     esp_image_header_t fhdr;
-    if(flashRead(ESP_FLASH_IMAGE_BASE, (uint32_t*)&fhdr, sizeof(esp_image_header_t)) && fhdr.magic != ESP_IMAGE_HEADER_MAGIC) {
+    if(ESP.flashRead(ESP_FLASH_IMAGE_BASE, (uint32_t*)&fhdr, sizeof(esp_image_header_t)) && fhdr.magic != ESP_IMAGE_HEADER_MAGIC) {
         return 0;
     }
     return fhdr.spi_size;
