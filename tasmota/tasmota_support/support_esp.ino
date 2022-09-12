@@ -61,8 +61,8 @@ uint32_t ESP_getFlashChipId(void) {
   return ESP.getFlashChipId();
 }
 
-uint32_t ESP_getFlashChipRealSize(void) {
-  return ESP.getFlashChipRealSize();
+uint32_t ESP_getFlashChipSize(void) {
+  return ESP.getFlashChipSize();
 }
 
 void ESP_Restart(void) {
@@ -558,20 +558,6 @@ int32_t ESP_getHeapFragmentation(void) {
   return free_maxmem;
 }
 
-uint32_t ESP_getFlashChipId(void)
-{
-//  uint32_t id = bootloader_read_flash_id();
-  uint32_t id = g_rom_flashchip.device_id;
-  id = ((id & 0xff) << 16) | ((id >> 16) & 0xff) | (id & 0xff00);
-  return id;
-}
-
-uint32_t ESP_getFlashChipRealSize(void)
-{
-  uint32_t id = (ESP_getFlashChipId() >> 16) & 0xFF;
-  return 2 << (id - 1);
-}
-
 void ESP_Restart(void) {
   ESP.restart();
 }
@@ -983,30 +969,7 @@ typedef enum {
 } FlashMode_t;
 */
 String ESP_getFlashChipMode(void) {
-#if ESP8266
   uint32_t flash_mode = ESP.getFlashChipMode();
-#else
-  #if CONFIG_IDF_TARGET_ESP32S2
-  const uint32_t spi_ctrl = REG_READ(PERIPHS_SPI_FLASH_CTRL);
-  #else
-  const uint32_t spi_ctrl = REG_READ(SPI_CTRL_REG(0));
-  #endif
-  uint32_t flash_mode;
-  /* Not all of the following constants are already defined in older versions of spi_reg.h, so do it manually for now*/
-  if (spi_ctrl & BIT(24)) { //SPI_FREAD_QIO
-      flash_mode = 0;
-  } else if (spi_ctrl & BIT(20)) { //SPI_FREAD_QUAD
-      flash_mode = 1;
-  } else if (spi_ctrl &  BIT(23)) { //SPI_FREAD_DIO
-      flash_mode = 2;
-  } else if (spi_ctrl & BIT(14)) { // SPI_FREAD_DUAL
-      flash_mode = 3;
-  } else if (spi_ctrl & BIT(13)) { //SPI_FASTRD_MODE
-      flash_mode = 4;
-  } else {
-      flash_mode = 5;
-  }
-#endif
   if (flash_mode > 5) { flash_mode = 3; }
   char stemp[6];
   return GetTextIndexed(stemp, sizeof(stemp), flash_mode, kFlashModes);
