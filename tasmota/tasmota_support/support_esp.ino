@@ -542,15 +542,15 @@ uint32_t ESP_magicFlashChipSize(uint8_t byte)
 {
     switch(byte & 0x0F) {
     case 0x0: // 8 MBit (1MB)
-        return (1048576);
+        return 1048576;
     case 0x1: // 16 MBit (2MB)
-        return (2097152);
+        return 2097152;
     case 0x2: // 32 MBit (4MB)
-        return (4194304);
+        return 4194304;
     case 0x3: // 64 MBit (8MB)
-        return (8388608);
+        return 8388608;
     case 0x4: // 128 MBit (16MB)
-        return (16777216);
+        return 16777216;
     default: // fail?
         return 0;
     }
