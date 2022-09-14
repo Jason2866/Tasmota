@@ -65,10 +65,6 @@ uint32_t ESP_getFlashChipSize(void) {
   return ESP.getFlashChipSize();
 }
 
-uint32_t ESP_getFlashChipMagicSize(void) {
-  return ESP.getFlashChipMagicSize();
-}
-
 void ESP_Restart(void) {
 //  ESP.restart();            // This results in exception 3 on restarts on core 2.3.0
   ESP.reset();
@@ -168,6 +164,10 @@ String GetDeviceHardwareRevision(void) {
 // Set the Stacksize for Arduino core. Default is 8192, some builds may need a bigger one
 size_t getArduinoLoopTaskStackSize(void) {
     return SET_ESP32_STACK_SIZE;
+}
+
+uint32_t ESP_getFlashChipMagicSize(void) {
+  return ESP.getFlashChipMagicSize();
 }
 
 
