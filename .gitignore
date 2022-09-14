@@ -35,3 +35,4 @@ lib/libesp32/berry/berry
 .vscode/launch.json
 *.bak
 *.code-workspace
+platformio_override.ini
