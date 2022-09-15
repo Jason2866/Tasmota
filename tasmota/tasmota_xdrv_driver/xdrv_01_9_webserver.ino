@@ -2812,7 +2812,7 @@ void HandleUploadLoop(void) {
         if (0xE9 == upload.buf[0]) {
 #ifdef ESP8266
           uint32_t bin_flash_size = ESP.magicFlashChipSize((upload.buf[3] & 0xf0) >> 4);
-          if (bin_flash_size > ESP.getFlashChipSize()) {
+          if (bin_flash_size > ESP.getFlashChipRealSize()) {
 #else
           char tmp[16];
           WebGetArg("fsz", tmp, sizeof(tmp));                    // filesize

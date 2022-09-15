@@ -749,7 +749,7 @@ uint32_t CfgTime(void) {
 void SettingsErase(uint8_t type) {
   /*
     For Arduino core and SDK:
-    Erase only works from flash start address to SDK recognized flash end address (flashchip->chip_size = ESP_getFlashChipMagicSize).
+    Erase only works from flash start address to SDK recognized flash end address (flashchip->chip_size = ESP_getFlashChipSize).
     Addresses above SDK recognized size (up to ESP.getFlashChipRealSize) are not accessable.
     For Esptool:
     The only way to erase whole flash is esptool which uses direct SPI writes to flash.
