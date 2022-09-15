@@ -61,6 +61,10 @@ uint32_t ESP_getFlashChipId(void) {
   return ESP.getFlashChipId();
 }
 
+uint32_t ESP_getFlashChipRealSize(void) {
+  return ESP.getFlashChipRealSize();
+}
+
 uint32_t ESP_getFlashChipSize(void) {
   return ESP.getFlashChipSize();
 }
@@ -101,7 +105,7 @@ String GetDeviceHardware(void) {
 //  uint32_t efuse3 = *(uint32_t*)(0x3FF00058);
 //  uint32_t efuse4 = *(uint32_t*)(0x3FF0005C);
 
-  if (((efuse1 & (1 << 4)) || (efuse2 & (1 << 16))) && (ESP.getFlashChipSize() < 1048577)) {  // ESP8285 can only have 1M flash
+  if (((efuse1 & (1 << 4)) || (efuse2 & (1 << 16))) && (ESP.getFlashChipRealSize() < 1048577)) {  // ESP8285 can only have 1M flash
     return F("ESP8285");
   }
   return F("ESP8266EX");
@@ -161,20 +165,10 @@ String GetDeviceHardwareRevision(void) {
   #include "rom/rtc.h"
 #endif
 
-
-uint32_t ESP_getFlashChipMagicSize(void) {
-  return ESP.getFlashChipMagicSize();
-}
-
 // Set the Stacksize for Arduino core. Default is 8192, some builds may need a bigger one
 size_t getArduinoLoopTaskStackSize(void) {
     return SET_ESP32_STACK_SIZE;
 }
-
-uint32_t ESP_getFlashChipMagicSize(void) {
-  return ESP.getFlashChipMagicSize();
-}
-
 
 #include <esp_phy_init.h>
 
