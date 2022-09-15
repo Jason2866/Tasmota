@@ -161,6 +161,11 @@ String GetDeviceHardwareRevision(void) {
   #include "rom/rtc.h"
 #endif
 
+
+uint32_t ESP_getFlashChipMagicSize(void) {
+  return ESP.getFlashChipMagicSize();
+}
+
 // Set the Stacksize for Arduino core. Default is 8192, some builds may need a bigger one
 size_t getArduinoLoopTaskStackSize(void) {
     return SET_ESP32_STACK_SIZE;
