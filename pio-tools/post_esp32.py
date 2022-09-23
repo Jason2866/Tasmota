@@ -22,6 +22,8 @@ Import("env")
 
 env = DefaultEnvironment()
 platform = env.PioPlatform()
+board = env.BoardConfig()
+build_flags = env.GetProjectOption("build_flags")
 
 from genericpath import exists
 import os
@@ -35,7 +37,14 @@ import subprocess
 sys.path.append(join(platform.get_package_dir("tool-esptoolpy")))
 import esptool
 
+extra_flags = board.get("build.extra_flags", "")
+
 FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
+if "-DCORE32SOLO1" in extra_flags:
+    FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-solo1")
+elif "-DFRAMEWORK-ARDUINO-ITEAD" in build_flags:
+    FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-ITEAD")
+
 variants_dir = join(FRAMEWORK_DIR, "variants", "tasmota")
 
 def esp32_create_chip_string(chip):
