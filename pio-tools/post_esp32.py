@@ -23,7 +23,11 @@ Import("env")
 env = DefaultEnvironment()
 platform = env.PioPlatform()
 board = env.BoardConfig()
+extra_flags = board.get("build.extra_flags", "")
+extra_flags = extra_flags.replace("-D", " ")
 build_flags = env.GetProjectOption("build_flags")
+build_flags = [element.replace("-D", " ") for element in build_flags]
+build_flags = ''.join(build_flags)
 
 from genericpath import exists
 import os
@@ -37,13 +41,13 @@ import subprocess
 sys.path.append(join(platform.get_package_dir("tool-esptoolpy")))
 import esptool
 
-extra_flags = board.get("build.extra_flags", "")
-
 FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
-if "-DCORE32SOLO1" in extra_flags:
+if "CORE32SOLO1" in extra_flags:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-solo1")
-elif "-DFRAMEWORK-ARDUINO-ITEAD" in build_flags:
+    #print ("-----extra_flags----", extra_flags)
+elif "FRAMEWORK_ARDUINO_ITEAD" in build_flags:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-ITEAD")
+    #print ("-----build_flags----", build_flags)
 
 variants_dir = join(FRAMEWORK_DIR, "variants", "tasmota")
 
