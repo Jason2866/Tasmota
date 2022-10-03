@@ -20,6 +20,7 @@
 
 env = DefaultEnvironment()
 platform = env.PioPlatform()
+board_config = env.BoardConfig()
 
 from genericpath import exists
 import os
@@ -125,6 +126,8 @@ def esp32_create_combined_bin(source, target, env):
                 elif(row[0] == 'spiffs'):
                     if esp32_build_filesystem(row[4]):
                         fs_offset = int(row[3],base=16)
+                board_config.update("upload.offset_address", app_offset)
+                print ("app_offset: ", app_offset) 
 
 
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
