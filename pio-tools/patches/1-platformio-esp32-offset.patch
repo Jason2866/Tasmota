@@ -1,7 +1,3 @@
-From: Jason2866 <24528715+Jason2866@users.noreply.github.com>
-Date: Tue, 4 Oct 2022 14:03:15 +0200
-Subject: [PATCH] Tasmota firmware offset
-
 ---
  builder/main.py | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
