@@ -1,0 +1,22 @@
+From 921f9920e998597442a1257dace8df6cea8887b6 Mon Sep 17 00:00:00 2001
+From: Jason2866 <24528715+Jason2866@users.noreply.github.com>
+Date: Tue, 4 Oct 2022 14:03:15 +0200
+Subject: [PATCH] Tasmota firmware offset
+
+---
+ builder/main.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builder/main.py b/builder/main.py
+index 79168c22..fa59c72e 100644
+--- a/builder/main.py
++++ b/builder/main.py
+@@ -260,7 +260,7 @@ def __fetch_fs_size(target, source, env):
+         "ESP32_FS_IMAGE_NAME", env.get("ESP32_SPIFFS_IMAGE_NAME", filesystem)
+     ),
+ 
+-    ESP32_APP_OFFSET=board.get("upload.offset_address", "0x10000"),
++    ESP32_APP_OFFSET=board.get("upload.offset_address", "0xe0000"),
+ 
+     PROGSUFFIX=".elf"
+ )
