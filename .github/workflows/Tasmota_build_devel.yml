@@ -121,14 +121,15 @@ jobs:
         run: |
           pip install wheel
           pip install -U platformio
-          python framework_install.py
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v3
         with:
           name: firmware_safeboot
           path: ./firmware
-      - name: Display downloaded files
-        run: ls -R ./firmware/
+      - name: Display downloaded files and Install framework
+        run: |
+          ls -R ./firmware/
+          python framework_install.py
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload firmware artifacts
@@ -158,14 +159,15 @@ jobs:
         run: |
           pip install wheel
           pip install -U platformio
-          python framework_install.py
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v3
         with:
           name: firmware_safeboot
           path: ./firmware
-      - name: Display downloaded files
-        run: ls -R ./firmware/
+      - name: Display downloaded files and Install framework
+        run: |
+          ls -R ./firmware/
+          python framework_install.py
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}-${{ matrix.language }}
       - name: Upload language firmware artifacts
