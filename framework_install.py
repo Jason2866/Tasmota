@@ -23,7 +23,7 @@ with open("/home/runner/.platformio/platforms/espressif32/platform.json") as jso
         data = json.load(json_file)
         for package in data['packages']:
             if "framework-arduino" in package:
-                cmd = ("pio","platform","install","--with-package",package[version])
+                cmd = ("pio","platform","install","--with-package",package["version"])
                 print(cmd)
                 returncode = subprocess.call(cmd, shell=False)
     
