@@ -34,14 +34,14 @@ variants_dir = "/home/runner/.platformio/packages/framework-arduinoespressif32/v
 if not os.path.exists(variants_dir):
     os.makedirs(variants_dir)
 if os.path.exists(variants_dir):
-    shutil.copy(safeboot_dir, variants_dir)
+    shutil.copytree(safeboot_dir, variants_dir)
 variants_dir = "/home/runner/.platformio/packages/framework-arduino-ITEAD/variants/tasmota"
 if not os.path.exists(variants_dir):
     os.makedirs(variants_dir)
 if os.path.exists(variants_dir):
-    shutil.copy(safeboot_dir, variants_dir)
+    shutil.copytree(safeboot_dir, variants_dir)
 variants_dir = "/home/runner/.platformio/packages/framework-arduino-solo1/variants/tasmota"
 if not os.path.exists(variants_dir):
     os.makedirs(variants_dir)
 if os.path.exists(variants_dir):
-    shutil.copy(safeboot_dir, variants_dir)
+    shutil.copytree(safeboot_dir, variants_dir)
