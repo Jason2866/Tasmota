@@ -46,7 +46,7 @@ jobs:
       - name: Upload safeboot firmware artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: firmware/safeboot
+          name: firmware_safeboot
           path: ./build_output
 
   base-images:
@@ -124,7 +124,7 @@ jobs:
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v3
         with:
-          name: firmware/safeboot
+          name: firmware_safeboot
           path: ./firmware
       - name: Display downloaded files
         run: ls -R ./firmware/
@@ -160,10 +160,10 @@ jobs:
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v3
         with:
-          name: firmware
-          path: ./safeboot_firmware
+          name: firmware_safeboot
+          path: ./firmware
       - name: Display downloaded files
-        run: ls -R ./safeboot_firmware/
+        run: ls -R ./firmware/
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}-${{ matrix.language }}
       - name: Upload language firmware artifacts
@@ -177,10 +177,16 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-    - uses: actions/download-artifact@v3
+    - name: Download firmware
+      uses: actions/download-artifact@v3
       with:
         name: firmware
         path: ./mv_firmware
+    - name: Downlaod safeboot firmware
+      uses: actions/download-artifact@v3
+      with:
+          name: firmware_safeboot
+          path: ./mv_firmware
     - name: Display structure of downloaded files
       run: ls -R
       working-directory: ./mv_firmware
