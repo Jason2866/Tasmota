@@ -43,7 +43,8 @@ jobs:
           pip install -U platformio
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
-      - uses: actions/upload-artifact@v3
+      - name: Upload safeboot firmware artifacts
+        uses: actions/upload-artifact@v3
         with:
           name: firmware
           path: ./build_output
@@ -102,7 +103,8 @@ jobs:
         run: ls -R ./safeboot_firmware/
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
-      - uses: actions/upload-artifact@v3
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v3
         with:
           name: firmware
           path: ./build_output
@@ -128,7 +130,7 @@ jobs:
           pip install wheel
           pip install -U platformio
       - name: Download safeboot firmwares
-      - uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v3
         with:
           name: firmware
           path: ./safeboot_firmware
@@ -136,7 +138,8 @@ jobs:
         run: ls -R ./safeboot_firmware/
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}-${{ matrix.language }}
-      - uses: actions/upload-artifact@v3
+      - name: Upload language firmware artifacts
+        uses: actions/upload-artifact@v3
         with:
           name: firmware
           path: ./build_output
