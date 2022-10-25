@@ -48,10 +48,8 @@ jobs:
           name: firmware
           path: ./build_output
 
-
-jobs:
-  needs: safeboot-images
   base-images:
+    needs: safeboot-images
     runs-on: ubuntu-latest
     #if: github.repository == 'arendst/Tasmota'
     continue-on-error: true
