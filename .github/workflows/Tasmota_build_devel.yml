@@ -50,7 +50,6 @@ jobs:
           path: ./build_output
 
   base-images:
-    needs: safeboot-images
     runs-on: ubuntu-latest
     #if: github.repository == 'arendst/Tasmota'
     continue-on-error: true
@@ -67,6 +66,34 @@ jobs:
           - tasmota-sensors
           - tasmota-zbbridge
           - tasmota-zigbee
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: development
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          pip install wheel
+          pip install -U platformio
+      - name: Run PlatformIO
+        run: platformio run -e ${{ matrix.variant }}
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: firmware
+          path: ./build_output
+
+  base32-images:
+    needs: safeboot-images
+    runs-on: ubuntu-latest
+    #if: github.repository == 'arendst/Tasmota'
+    continue-on-error: true
+    strategy:
+      matrix:
+        variant:
           - tasmota32
           - tasmota32-zbbrdgpro
           - tasmota32-webcam
@@ -146,7 +173,7 @@ jobs:
           path: ./build_output
 
   Upload:
-    needs: [base-images, language-images]
+    needs: [base-images, base32-images, language-images]
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
