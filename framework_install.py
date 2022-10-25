@@ -28,5 +28,9 @@ with open("/home/runner/.platformio/platforms/espressif32/platform.json") as jso
                 returncode = subprocess.call(cmd, shell=False)
     
 
-
-
+safeboot_dir = "./firmware"
+variants_dir = "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota"
+if not os.path.exists(variants_dir):
+    os.mkdir(variants_dir)
+if os.path.exists(variants_dir):
+    shutil.copy(safeboot_dir, variants_dir)
