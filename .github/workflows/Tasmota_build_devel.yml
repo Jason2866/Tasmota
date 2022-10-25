@@ -46,7 +46,7 @@ jobs:
       - name: Upload safeboot firmware artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: firmware
+          name: firmware/safeboot
           path: ./build_output
 
   base-images:
@@ -124,10 +124,10 @@ jobs:
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v3
         with:
-          name: firmware
-          path: ./safeboot_firmware
+          name: firmware/safeboot
+          path: ./firmware
       - name: Display downloaded files
-        run: ls -R ./safeboot_firmware/
+        run: ls -R ./firmware/
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload firmware artifacts
@@ -214,7 +214,7 @@ jobs:
         [ ! -f ./mv_firmware/firmware/tasmota32c3*.* ] || mv ./mv_firmware/firmware/tasmota32c3*.* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/firmware/tasmota32s2*.* ] || mv ./mv_firmware/firmware/tasmota32s2*.* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/firmware/tasmota32s3*.* ] || mv ./mv_firmware/firmware/tasmota32s3*.* ./firmware/tasmota32/
-        [ ! -f ./mv_firmware/firmware/tasmota32-safeboot* ] || mv ./mv_firmware/firmware/tasmota32-safeboot* ./firmware/tasmota32/
+        [ ! -f ./mv_firmware/firmware/safeboot/tasmota32-safeboot* ] || mv ./mv_firmware/firmware/tasmota32-safeboot* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/firmware/tasmota32-* ] || mv ./mv_firmware/firmware/tasmota32-* ./firmware/tasmota32/languages/
         [ ! -f ./mv_firmware/firmware/tasmota32* ] || mv ./mv_firmware/firmware/tasmota32* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/firmware/tasmota-minimal.bin ] || rm -rf ./mv_firmware/firmware/tasmota-minimal.bin
