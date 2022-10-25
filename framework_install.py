@@ -29,7 +29,7 @@ with open("/home/runner/.platformio/platforms/espressif32/platform.json") as jso
                 returncode = subprocess.call(cmd, shell=False)
     
 
-safeboot_dir = "./firmware"
+safeboot_dir = "./firmware/firmware"
 variants_dir = "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota"
 if not os.path.exists(variants_dir):
     os.makedirs(variants_dir)
