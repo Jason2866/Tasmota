@@ -19,7 +19,7 @@ if returncode == 0:
 else:
     print("Could not install Framework!!")
     
-with open(".platformio/platforms/espressif32/platform.json") as json_file:
+with open("/home/runner/.platformio/platforms/espressif32/platform.json") as json_file:
         data = json.load(json_file)
         for package in data['packages']:
             print(package)
