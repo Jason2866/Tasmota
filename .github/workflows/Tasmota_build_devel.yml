@@ -220,7 +220,7 @@ jobs:
         [ ! -f ./mv_firmware/firmware/tasmota32c3*.* ] || mv ./mv_firmware/firmware/tasmota32c3*.* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/firmware/tasmota32s2*.* ] || mv ./mv_firmware/firmware/tasmota32s2*.* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/firmware/tasmota32s3*.* ] || mv ./mv_firmware/firmware/tasmota32s3*.* ./firmware/tasmota32/
-        [ ! -f ./mv_firmware/firmware/safeboot/tasmota32-safeboot* ] || mv ./mv_firmware/firmware/tasmota32-safeboot* ./firmware/tasmota32/
+        [ ! -f ./mv_firmware/firmware/tasmota32-safeboot* ] || mv ./mv_firmware/firmware/tasmota32-safeboot* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/firmware/tasmota32-* ] || mv ./mv_firmware/firmware/tasmota32-* ./firmware/tasmota32/languages/
         [ ! -f ./mv_firmware/firmware/tasmota32* ] || mv ./mv_firmware/firmware/tasmota32* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/firmware/tasmota-minimal.bin ] || rm -rf ./mv_firmware/firmware/tasmota-minimal.bin
