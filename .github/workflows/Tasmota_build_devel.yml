@@ -125,6 +125,7 @@ jobs:
         run: |
           pip install wheel
           pip install -U platformio
+          python framework_install.py
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v3
         with:
@@ -161,6 +162,7 @@ jobs:
         run: |
           pip install wheel
           pip install -U platformio
+          python framework_install.py
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v3
         with:
