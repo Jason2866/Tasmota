@@ -2,7 +2,7 @@ import os
 import requests
 import subprocess
 import json
-
+import shutil
 
 tasmota32_ini_url = "https://raw.githubusercontent.com/arendst/Tasmota/development/platformio_tasmota32.ini"
 print("Download ",tasmota32_ini_url)
