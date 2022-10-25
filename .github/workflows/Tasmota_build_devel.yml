@@ -41,10 +41,6 @@ jobs:
         run: |
           pip install wheel
           pip install -U platformio
-          ls
-          ls /
-          ls /home/runner
-          python framework_install.py
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload safeboot firmware artifacts
