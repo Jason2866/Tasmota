@@ -3,7 +3,7 @@ name: Build_development
 on:
   workflow_dispatch:      # Manually start a workflow
   push:
-    branches: gh_actions
+    #branches: development
     paths-ignore:
     - '.github/**'        # Ignore changes towards the .github directory
     - '**.md'             # Do no build if *.md files changes
@@ -94,7 +94,7 @@ jobs:
           pip install wheel
           pip install -U platformio
       - name: Download safeboot firmwares
-      - uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v3
         with:
           name: firmware
           path: ./safeboot_firmware
