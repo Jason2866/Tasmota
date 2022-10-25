@@ -110,6 +110,7 @@ jobs:
           path: ./build_output
 
   language-images:
+    needs: safeboot-images
     runs-on: ubuntu-latest
     #if: github.repository == 'arendst/Tasmota'
     continue-on-error: true
