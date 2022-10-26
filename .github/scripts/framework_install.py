@@ -7,7 +7,7 @@ import shutil
 #tasmota32_ini_url = "https://raw.githubusercontent.com/arendst/Tasmota/development/platformio_tasmota32.ini"
 #print("Download ",tasmota32_ini_url)
 #r = requests.get(tasmota32_ini_url, stream=True)
-with open('platformio_tasmota32.ini') as r:
+with open('/home/runner/work/Tasmota/Tasmota/platformio_tasmota32.ini') as r:
     framework = ""
     for line in r.iter_lines():
         items = line.decode('utf-8').split("=")
