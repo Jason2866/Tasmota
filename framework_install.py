@@ -13,7 +13,8 @@ for line in r.iter_lines():
     if "platform" == items[0].strip():
         framework = items[1].strip()
         print (framework)
-cmd = ("pio","platform","install", framework)
+# cmd = ("pio","platform","install", framework)
+cmd = ("pio","pkg","install","-p", framework)
 returncode = subprocess.call(cmd, shell=False)
 if returncode == 0:
     print("Framework installed ...")
