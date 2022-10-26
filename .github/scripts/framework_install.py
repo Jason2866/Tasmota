@@ -10,7 +10,7 @@ import shutil
 r = open("/home/runner/work/Tasmota/Tasmota/platformio_tasmota32.ini","r+")
 print ("Pio file: ", r.name)
 framework = ""
-for line in r.iter_lines():
+for line in r:
     items = line.decode('utf-8').split("=")
     if "platform" == items[0].strip():
         framework = items[1].strip()
