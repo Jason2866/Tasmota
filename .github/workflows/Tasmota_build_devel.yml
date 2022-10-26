@@ -1,3 +1,4 @@
+
 name: Build_development
 
 on:
@@ -18,6 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     #if: github.repository == 'arendst/Tasmota'
     continue-on-error: true
+    strategy:
+      matrix:
+        variant:
+          - tasmota32solo1-safeboot
+          - tasmota32-safeboot
+          - tasmota32c3-safeboot
+          - tasmota32c3cdc-safeboot
+          - tasmota32s2-safeboot
+          - tasmota32s2cdc-safeboot
+          - tasmota32s3-safeboot
+          - tasmota32s3cdc-safeboot
     steps:
       - uses: actions/checkout@v3
         with:
@@ -30,17 +42,6 @@ jobs:
         run: |
           pip install wheel
           pip install -U platformio
-    strategy:
-      matrix:
-        variant:
-          - tasmota32solo1-safeboot
-          - tasmota32-safeboot
-          - tasmota32c3-safeboot
-          - tasmota32c3cdc-safeboot
-          - tasmota32s2-safeboot
-          - tasmota32s2cdc-safeboot
-          - tasmota32s3-safeboot
-          - tasmota32s3cdc-safeboot
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload safeboot firmware artifacts
