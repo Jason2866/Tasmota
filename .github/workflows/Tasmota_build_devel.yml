@@ -130,7 +130,7 @@ jobs:
       - name: Display downloaded files and Install framework
         run: |
           ls -R ./firmware/
-          python /.github/scripts/framework_install.py
+          python .github/scripts/framework_install.py
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload firmware artifacts
@@ -168,7 +168,7 @@ jobs:
       - name: Display downloaded files and Install framework
         run: |
           ls -R ./firmware/
-          python /.github/scripts/framework_install.py
+          python .github/scripts/framework_install.py
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}-${{ matrix.language }}
       - name: Upload language firmware artifacts
