@@ -27,17 +27,15 @@ with open("/home/runner/.platformio/platforms/espressif32/platform.json") as jso
 
 
 safeboot_dir = "./firmware/firmware"
+
 variants_dir = "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota"
 if not os.path.exists(variants_dir):
-    #shutil.rmtree(variants_dir)
     shutil.copytree(safeboot_dir, variants_dir)
 
 variants_dir = "/home/runner/.platformio/packages/framework-arduino-ITEAD/variants/tasmota"
 if not os.path.exists(variants_dir):
-    #shutil.rmtree(variants_dir)
     shutil.copytree(safeboot_dir, variants_dir)
 
 variants_dir = "/home/runner/.platformio/packages/framework-arduino-solo1/variants/tasmota"
 if not os.path.exists(variants_dir):
-    #shutil.rmtree(variants_dir)
     shutil.copytree(safeboot_dir, variants_dir)
