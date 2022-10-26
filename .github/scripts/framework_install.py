@@ -7,16 +7,15 @@ import shutil
 #tasmota32_ini_url = "https://raw.githubusercontent.com/arendst/Tasmota/development/platformio_tasmota32.ini"
 #print("Download ",tasmota32_ini_url)
 #r = requests.get(tasmota32_ini_url, stream=True)
-with open('/home/runner/work/Tasmota/Tasmota/platformio_tasmota32.ini') as r:
-    framework = ""
-    for line in r.iter_lines():
-        items = line.decode('utf-8').split("=")
-        if "platform" == items[0].strip():
-            framework = items[1].strip()
-            print (framework)
+r = open('/home/runner/work/Tasmota/Tasmota/platformio_tasmota32.ini','r')
+framework = ""
+for line in r.iter_lines():
+    items = line.decode('utf-8').split("=")
+    if "platform" == items[0].strip():
+        framework = items[1].strip()
+        print (framework)
 # cmd = ("pio","platform","install", framework)
 cmd = ("pio","pkg","install","-p", framework)
-returncode = subprocess.call(cmd, shell=False)
 if returncode == 0:
     print("Framework installed ...")
 else:
