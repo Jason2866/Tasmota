@@ -174,6 +174,7 @@ public:
   bool setBufferSize(size_t size) {
     return true;
   }
+
   #if ESP_ARDUINO_VERSION > ESP_ARDUINO_VERSION_VAL(2, 0, 5)
   bool seekDir(long position){
     if(!_f){
