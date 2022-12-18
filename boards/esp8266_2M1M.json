@@ -21,7 +21,7 @@
   "upload": {
     "maximum_ram_size": 81920,
     "maximum_size": 995326,
-    "require_upload_port": true,
+    "require_upload_port": false,
     "resetmethod": "ck",
     "speed": 115200
   },
