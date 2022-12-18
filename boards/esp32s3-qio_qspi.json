@@ -38,7 +38,7 @@
     "flash_size": "4MB",
     "maximum_ram_size": 327680,
     "maximum_size": 4194304,
-    "require_upload_port": true,
+    "require_upload_port": false,
     "speed": 460800
   },
   "url": "https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/hw-reference/esp32s3/",
