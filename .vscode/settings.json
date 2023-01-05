@@ -1,0 +1,32 @@
+{
+    "platformio-ide.toolbar": [
+      {
+        "text": "Clean All",
+        "commands": [
+          {
+            "id": "workbench.action.tasks.runTask",
+            "args": "PlatformIO: Clean All"
+          }
+        ]
+      },
+      {
+        "text": "$(zap)",
+        "commands": [
+          {
+            "id": "platformio-ide.runPIOCoreCommand",
+            "args": "pio run -t upload"
+          }
+        ]
+      },
+      {
+        "text": "$(flame)",
+        "commands": [
+          {
+            "id": "platformio-ide.runPIOCoreCommand",
+            "args": "pio run -t erase_upload"
+          }
+        ]
+      }
+    ]
+  }
+
