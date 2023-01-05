@@ -13,8 +13,8 @@
         "text": "$(zap)",
         "commands": [
           {
-            "id": "platformio-ide.runPIOCoreCommand",
-            "args": "pio run -t upload"
+            "id": "workbench.action.tasks.runTask",
+            "args": "PlatformIO: Upload"
           }
         ]
       },
