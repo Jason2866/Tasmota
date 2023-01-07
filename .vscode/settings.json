@@ -37,7 +37,7 @@
       ]
     },
     {
-      "text": "$(terminal)",
+      "text": "$(device-desktop)",
       "commands": [
         {
           "id": "workbench.action.tasks.runTask",
