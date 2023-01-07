@@ -1,32 +1,41 @@
 {
-    "platformio-ide.toolbar": [
-      {
-        "text": "Clean All",
-        "commands": [
-          {
-            "id": "workbench.action.tasks.runTask",
-            "args": "PlatformIO: Clean All"
-          }
-        ]
-      },
-      {
-        "text": "$(zap)",
-        "commands": [
-          {
-            "id": "workbench.action.tasks.runTask",
-            "args": "PlatformIO: Upload"
-          }
-        ]
-      },
-      {
-        "text": "$(flame)",
-        "commands": [
-          {
-            "id": "platformio-ide.runPIOCoreCommand",
-            "args": "pio run -t erase_upload"
-          }
-        ]
-      }
-    ]
-  }
+  "platformio-ide.toolbar": [
+    {
+      "text": "Clean All",
+      "commands": [
+        {
+          "id": "workbench.action.tasks.runTask",
+          "args": "PlatformIO: Clean All"
+        }
+      ]
+    },
+    {
+      "text": "$(check)",
+      "commands": [
+        {
+          "id": "workbench.action.tasks.runTask",
+          "args": "PlatformIO: Build"
+        }
+      ]
+    },
+    {
+      "text": "$(zap)",
+      "commands": [
+        {
+          "id": "workbench.action.tasks.runTask",
+          "args": "PlatformIO: Upload"
+        }
+      ]
+    },
+    {
+      "text": "$(flame)",
+      "commands": [
+        {
+          "id": "platformio-ide.runPIOCoreCommand",
+          "args": "pio run -t erase_upload"
+        }
+      ]
+    }
+  ]
+}
 
