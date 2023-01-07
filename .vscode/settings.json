@@ -1,7 +1,7 @@
 {
   "platformio-ide.toolbar": [
     {
-      "text": "Clean All",
+      "text": "$(trash)",
       "commands": [
         {
           "id": "workbench.action.tasks.runTask",
@@ -35,7 +35,15 @@
           "args": "pio run -t erase_upload"
         }
       ]
+    },
+    {
+      "text": "$(terminal)",
+      "commands": [
+        {
+          "id": "workbench.action.tasks.runTask",
+          "args": "PlatformIO: Monitor"
+        }
+      ]
     }
   ]
 }
-
