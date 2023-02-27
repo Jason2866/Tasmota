@@ -4,11 +4,15 @@ platform = env.PioPlatform()
 
 from genericpath import exists
 import os
-
+import sys
 from os.path import join
+import csv
 import requests
 import shutil
 import subprocess
+
+sys.path.append(join(platform.get_package_dir("tool-esptoolpy")))
+import esptool
 
 
 FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif8266")
@@ -22,14 +26,6 @@ def esp8266_build_filesystem(fs_size):
     print("Creating filesystem with content:")
     for file in files:
         if "no_files" in file:
-            continue
-        if "http" and "://" in file:
-            response = requests.get(file)
-            if response.ok:
-                target = join(filesystem_dir,file.split(os.path.sep)[-1])
-                open(target, "wb").write(response.content)
-            else:
-                print("Failed to download: ",file)
             continue
         shutil.copy(file, filesystem_dir)
     if not os.listdir(filesystem_dir):
