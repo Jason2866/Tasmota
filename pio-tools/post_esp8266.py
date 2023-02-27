@@ -17,6 +17,7 @@ import esptool
 
 FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif8266")
 
+print ("XXXXXXXXXXXXXXXXXXXXXXXX")
 
 def esp8266_build_filesystem(fs_size):
     files = env.GetProjectOption("custom_files_upload").splitlines()
@@ -26,6 +27,14 @@ def esp8266_build_filesystem(fs_size):
     print("Creating filesystem with content:")
     for file in files:
         if "no_files" in file:
+            continue
+        if "http" and "://" in file:
+            response = requests.get(file)
+            if response.ok:
+                target = join(filesystem_dir,file.split(os.path.sep)[-1])
+                open(target, "wb").write(response.content)
+            else:
+                print("Failed to download: ",file)
             continue
         shutil.copy(file, filesystem_dir)
     if not os.listdir(filesystem_dir):
