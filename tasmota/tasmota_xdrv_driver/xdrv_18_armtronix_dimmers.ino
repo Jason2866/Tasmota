@@ -86,7 +86,7 @@ void ArmtronixRequestState(void)
 
 bool ArmtronixModuleSelected(void)
 {
-  TasmotaGlobal.devices_present++;
+  UpdateDevicesPresent(1);
   TasmotaGlobal.light_type = LT_SERIAL2;
   return true;
 }
@@ -164,7 +164,7 @@ void ArmtronixSetWifiLed(void)
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv18(uint8_t function)
+bool Xdrv18(uint32_t function)
 {
   bool result = false;
 

@@ -1,7 +1,7 @@
 /*
   xsns_75_prometheus.ino - Web based information for Tasmota
 
-  Copyright (C) 2021  Theo Arends
+  Copyright (C) 2021  @marius, @mhansen, @hansmi
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -260,19 +260,19 @@ void HandleMetrics(void) {
 #ifdef USE_ENERGY_SENSOR
   WritePromMetricDec(PSTR("energy_voltage_volts"),
     kPromMetricGauge,
-    Energy.voltage[0], Settings->flag2.voltage_resolution, nullptr);
+    Energy->voltage[0], Settings->flag2.voltage_resolution, nullptr);
   WritePromMetricDec(PSTR("energy_current_amperes"),
     kPromMetricGauge,
-    Energy.current[0], Settings->flag2.current_resolution, nullptr);
+    Energy->current[0], Settings->flag2.current_resolution, nullptr);
   WritePromMetricDec(PSTR("energy_power_active_watts"),
     kPromMetricGauge,
-    Energy.active_power[0], Settings->flag2.wattage_resolution, nullptr);
+    Energy->active_power[0], Settings->flag2.wattage_resolution, nullptr);
   WritePromMetricDec(PSTR("energy_power_kilowatts_daily"),
     kPromMetricCounter,
-    Energy.daily_sum, Settings->flag2.energy_resolution, nullptr);
+    Energy->daily_sum, Settings->flag2.energy_resolution, nullptr);
   WritePromMetricDec(PSTR("energy_power_kilowatts_total"),
     kPromMetricCounter,
-    Energy.total_sum, Settings->flag2.energy_resolution, nullptr);
+    Energy->total_sum, Settings->flag2.energy_resolution, nullptr);
 #endif
 
   for (uint32_t device = 0; device < TasmotaGlobal.devices_present; device++) {
@@ -298,7 +298,7 @@ void HandleMetrics(void) {
             JsonParserObject Object3 = value2.getObject();
             for (auto key3 : Object3) {
               const char *value = key3.getValue().getStr(nullptr);
-              if (value != nullptr && (isdigit(value[0]) || (value[0] == '-') || (value[0] == '.'))) {
+              if (value != nullptr && isdigit(value[0])) {
                 String sensor = FormatMetricName(key2.getStr());
                 String type = FormatMetricName(key3.getStr());
 
@@ -311,7 +311,7 @@ void HandleMetrics(void) {
             }
           } else {
             const char *value = value2.getStr(nullptr);
-            if (value != nullptr && (isdigit(value[0]) || (value[0] == '-') || (value[0] == '.'))) {
+            if (value != nullptr && isdigit(value[0])) {
               String sensor = FormatMetricName(key1.getStr());
               String type = FormatMetricName(key2.getStr());
               if (strcmp(type.c_str(), "totalstarttime") != 0) {  // this metric causes Prometheus of fail
@@ -336,7 +336,7 @@ void HandleMetrics(void) {
         const char *value = value1.getStr(nullptr);
         String sensor = FormatMetricName(key1.getStr());
 
-        if (value != nullptr && (isdigit(value[0]) || (value[0] == '-') || (value[0] == '.')) && strcmp(sensor.c_str(), "time") != 0) {  //remove false 'time' metric
+        if (value != nullptr && isdigit(value[0] && strcmp(sensor.c_str(), "time") != 0)) {  //remove false 'time' metric
           WritePromMetricStr(PSTR("sensors"), kPromMetricGauge, value,
             PSTR("sensor"), sensor.c_str(),
             nullptr);
@@ -352,7 +352,7 @@ void HandleMetrics(void) {
  * Interface
 \*********************************************************************************************/
 
-bool Xsns75(uint8_t function) {
+bool Xsns75(uint32_t function) {
   bool result = false;
 
   switch (function) {

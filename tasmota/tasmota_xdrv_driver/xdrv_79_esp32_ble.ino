@@ -204,7 +204,7 @@ namespace BLE_ESP32 {
 /////////////////////////////////////////////////////
 
 #define BLE_ESP32_MAXNAMELEN 32
-#define BLE_ESP32_MAXALIASLEN 20
+#define BLE_ESP32_MAXALIASLEN 32
 
 
 #define MAX_BLE_DATA_LEN 100
@@ -3583,7 +3583,7 @@ int ExtRestartBLEIfEnabled(){
   return 0;
 }
 
-bool Xdrv79(uint8_t function)
+bool Xdrv79(uint32_t function)
 {
   //if (!Settings->flag5.mi32_enable) { return false; }  // SetOption115 - Enable ESP32 BLE BLE
 
@@ -3619,6 +3619,13 @@ bool Xdrv79(uint8_t function)
       BLE_ESP32::BLEPublishDevices = 1;  // mqtt publish as 'TELE'
       break;
 
+    case FUNC_INTERRUPT_STOP:
+      ExtStopBLE();
+      break;
+/*
+    case FUNC_INTERRUPT_START:
+      break;
+*/
 #ifdef USE_WEBSERVER
     case FUNC_WEB_ADD_BUTTON:
       WSContentSend_P(BLE_ESP32::HTTP_BTN_MENU_BLE);

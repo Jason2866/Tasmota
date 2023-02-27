@@ -24,10 +24,14 @@
 
 #define XDRV_44			44
 
+#ifndef nitems
 #define nitems(_a)		(sizeof((_a)) / sizeof((_a)[0]))
+#endif
 
+#ifndef CTASSERT
 #define CTASSERT(x)		extern char  _ctassert[(x) ? 1 : -1 ]	\
 				    __attribute__((__unused__))
+#endif
 
 #define MIEL_HVAC_LOGNAME	"MiElHVAC"
 
@@ -1081,7 +1085,8 @@ miel_hvac_pre_init(void)
 		SetSerial(baudrate, TS_SERIAL_8E1);
 	}
 
-	sc->sc_device = TasmotaGlobal.devices_present++; /* claim a POWER device slot */
+  UpdateDevicesPresent(1);  /* claim a POWER device slot */
+	sc->sc_device = TasmotaGlobal.devices_present;
 
 	miel_hvac_sc = sc;
 	return;
@@ -1285,7 +1290,7 @@ static void (*const miel_hvac_cmnds[])(void) PROGMEM = {
 #endif
 };
 
-bool Xdrv44(uint8_t function) {
+bool Xdrv44(uint32_t function) {
 	bool result = false;
 	struct miel_hvac_softc *sc = miel_hvac_sc;
 

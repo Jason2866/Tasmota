@@ -52,6 +52,8 @@ uint8_t       Settings->knx_CB_param[MAX_KNX_CB]     Type of Output (set relay, 
 
 #include <esp-knx-ip.h>         // KNX Library
 
+bool knx_started = false;
+
 address_t KNX_physs_addr;  // Physical KNX address of this device
 address_t KNX_addr;        // KNX Address converter variable
 
@@ -647,58 +649,58 @@ void KNX_CB_Action(message_t const &msg, void *arg)
 #if defined(USE_ENERGY_SENSOR)      
       else if (chan->type == KNX_ENERGY_VOLTAGE) // Reply KNX_ENERGY_VOLTAGE
       {
-        knx.answer_4byte_float(msg.received_on, Energy.voltage[0]);
+        knx.answer_4byte_float(msg.received_on, Energy->voltage[0]);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.voltage[0]);
-          knx.answer_4byte_float(msg.received_on, Energy.voltage[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->voltage[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->voltage[0]);
         }
       }
       else if (chan->type == KNX_ENERGY_CURRENT) // Reply KNX_ENERGY_CURRENT
       {
-        knx.answer_4byte_float(msg.received_on, Energy.current[0]);
+        knx.answer_4byte_float(msg.received_on, Energy->current[0]);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.current[0]);
-          knx.answer_4byte_float(msg.received_on, Energy.current[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->current[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->current[0]);
         }
       }
       else if (chan->type == KNX_ENERGY_POWER) // Reply KNX_ENERGY_POWER
       {
-        knx.answer_4byte_float(msg.received_on, Energy.active_power[0]);
+        knx.answer_4byte_float(msg.received_on, Energy->active_power[0]);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.active_power[0]);
-          knx.answer_4byte_float(msg.received_on, Energy.active_power[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->active_power[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->active_power[0]);
         }
       }
       else if (chan->type == KNX_ENERGY_POWERFACTOR) // Reply KNX_ENERGY_POWERFACTOR
       {
-        knx.answer_4byte_float(msg.received_on, Energy.power_factor[0]);
+        knx.answer_4byte_float(msg.received_on, Energy->power_factor[0]);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.power_factor[0]);
-          knx.answer_4byte_float(msg.received_on, Energy.power_factor[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->power_factor[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->power_factor[0]);
         }
       }
       else if (chan->type == KNX_ENERGY_YESTERDAY) // Reply KNX_ENERGY_YESTERDAY
       {
-        knx.answer_4byte_float(msg.received_on, Energy.yesterday_sum);
+        knx.answer_4byte_float(msg.received_on, Energy->yesterday_sum);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.yesterday_sum);
-          knx.answer_4byte_float(msg.received_on, Energy.yesterday_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->yesterday_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->yesterday_sum);
         }
       }
       else if (chan->type == KNX_ENERGY_DAILY) // Reply KNX_ENERGY_DAILY
       {
-        knx.answer_4byte_float(msg.received_on, Energy.daily_sum);
+        knx.answer_4byte_float(msg.received_on, Energy->daily_sum);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.daily_sum);
-          knx.answer_4byte_float(msg.received_on, Energy.daily_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->daily_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->daily_sum);
         }
       }
       else if (chan->type == KNX_ENERGY_TOTAL) // Reply KNX_ENERGY_TOTAL
       {
-        knx.answer_4byte_float(msg.received_on, Energy.total_sum);
+        knx.answer_4byte_float(msg.received_on, Energy->total_sum);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.total_sum);
-          knx.answer_4byte_float(msg.received_on, Energy.total_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->total_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->total_sum);
         }
       }
 #endif
@@ -1298,7 +1300,7 @@ void CmndKnxCb(void)
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv11(uint8_t function)
+bool Xdrv11(uint32_t function)
 {
   bool result = false;
     switch (function) {
@@ -1328,6 +1330,15 @@ bool Xdrv11(uint8_t function)
         break;
       case FUNC_PRE_INIT:
         KNX_INIT();
+        break;
+      case FUNC_NETWORK_UP:
+        if (!knx_started && Settings->flag.knx_enabled) {  // CMND_KNX_ENABLED
+          KNXStart();
+          knx_started = true;
+        }
+        break;
+      case FUNC_NETWORK_DOWN:
+        knx_started = false;
         break;
 //      case FUNC_SET_POWER:
 //        break;

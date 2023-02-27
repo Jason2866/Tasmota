@@ -63,7 +63,8 @@ void CseReceived(void) {
   //  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23
   // F2 5A 02 F7 60 00 03 61 00 40 10 05 72 40 51 A6 58 63 10 1B E1 7F 4D 4E - F2 = Power cycle exceeds range - takes too long - No load
   // 55 5A 02 F7 60 00 03 5A 00 40 10 04 8B 9F 51 A6 58 18 72 75 61 AC A1 30 - 55 = Ok, 61 = Power not valid (load below 5W)
-  // 55 5A 02 F7 60 00 03 AB 00 40 10 02 60 5D 51 A6 58 03 E9 EF 71 0B 7A 36 - 55 = Ok, 71 = Ok
+  // 55 5A 02 F7 60 00 03 AB 00 40 10 02 60 5D 51 A6 58 03 E9 EF 71 0B 7A 36 - 55 = Ok, 71 = Ok, F1 = CF overflow, no problem
+  // 55 5A 02 F1 E8 00 07 9D 00 3F 3E 00 35 F8 50 DB 38 00 B2 A2 F1 D6 97 3E - CF overflow
 
   // 55 5A 02 DB 40 00 03 25 00 3D 18 03 8E CD 4F 0A 60 2A 56 85 61 01 02 1A - OK voltage
   // 55 5A 02 DB 40 07 17 1D 00 3D 18 03 8E CD 4F 0A 60 2B EF EA 61 01 02 2C - Wrong voltage
@@ -76,26 +77,26 @@ void CseReceived(void) {
   }
 
   // Get chip calibration data (coefficients) and use as initial defaults
-  if (HLW_UREF_PULSE == Settings->energy_voltage_calibration) {
+  if (HLW_UREF_PULSE == EnergyGetCalibration(ENERGY_VOLTAGE_CALIBRATION)) {
     long voltage_coefficient = 191200;  // uSec
     if (CSE_NOT_CALIBRATED != header) {
       voltage_coefficient = Cse.rx_buffer[2] << 16 | Cse.rx_buffer[3] << 8 | Cse.rx_buffer[4];
     }
-    Settings->energy_voltage_calibration = voltage_coefficient / CSE_UREF;
+    EnergySetCalibration(ENERGY_VOLTAGE_CALIBRATION, voltage_coefficient / CSE_UREF);
   }
-  if (HLW_IREF_PULSE == Settings->energy_current_calibration) {
+  if (HLW_IREF_PULSE == EnergyGetCalibration(ENERGY_CURRENT_CALIBRATION)) {
     long current_coefficient = 16140;  // uSec
     if (CSE_NOT_CALIBRATED != header) {
       current_coefficient = Cse.rx_buffer[8] << 16 | Cse.rx_buffer[9] << 8 | Cse.rx_buffer[10];
     }
-    Settings->energy_current_calibration = current_coefficient;
+    EnergySetCalibration(ENERGY_CURRENT_CALIBRATION, current_coefficient);
   }
-  if (HLW_PREF_PULSE == Settings->energy_power_calibration) {
+  if (HLW_PREF_PULSE == EnergyGetCalibration(ENERGY_POWER_CALIBRATION)) {
     long power_coefficient = 5364000;  // uSec
     if (CSE_NOT_CALIBRATED != header) {
       power_coefficient = Cse.rx_buffer[14] << 16 | Cse.rx_buffer[15] << 8 | Cse.rx_buffer[16];
     }
-    Settings->energy_power_calibration = power_coefficient / CSE_PREF;
+    EnergySetCalibration(ENERGY_POWER_CALIBRATION, power_coefficient / CSE_PREF);
   }
 
   uint8_t adjustement = Cse.rx_buffer[20];
@@ -104,21 +105,21 @@ void CseReceived(void) {
   Cse.power_cycle = Cse.rx_buffer[17] << 16 | Cse.rx_buffer[18] << 8 | Cse.rx_buffer[19];
   Cse.cf_pulses = Cse.rx_buffer[21] << 8 | Cse.rx_buffer[22];
 
-  if (Energy.power_on) {  // Powered on
+  if (Energy->power_on) {  // Powered on
     if (adjustement & 0x40) {  // Voltage valid
-      Energy.voltage[0] = (float)(Settings->energy_voltage_calibration * CSE_UREF) / (float)Cse.voltage_cycle;
+      Energy->voltage[0] = (float)(EnergyGetCalibration(ENERGY_VOLTAGE_CALIBRATION) * CSE_UREF) / (float)Cse.voltage_cycle;
     }
     if (adjustement & 0x10) {  // Power valid
       Cse.power_invalid = 0;
       if ((header & 0xF2) == 0xF2) {  // Power cycle exceeds range
-        Energy.active_power[0] = 0;
+        Energy->active_power[0] = 0;
       } else {
         if (0 == Cse.power_cycle_first) { Cse.power_cycle_first = Cse.power_cycle; }  // Skip first incomplete Cse.power_cycle
         if (Cse.power_cycle_first != Cse.power_cycle) {
           Cse.power_cycle_first = -1;
-          Energy.active_power[0] = (float)(Settings->energy_power_calibration * CSE_PREF) / (float)Cse.power_cycle;
+          Energy->active_power[0] = (float)(EnergyGetCalibration(ENERGY_POWER_CALIBRATION) * CSE_PREF) / (float)Cse.power_cycle;
         } else {
-          Energy.active_power[0] = 0;
+          Energy->active_power[0] = 0;
         }
       }
     } else {
@@ -126,21 +127,21 @@ void CseReceived(void) {
         Cse.power_invalid++;
       } else {
         Cse.power_cycle_first = 0;
-        Energy.active_power[0] = 0;  // Powered on but no load
+        Energy->active_power[0] = 0;  // Powered on but no load
       }
     }
     if (adjustement & 0x20) {  // Current valid
-      if (0 == Energy.active_power[0]) {
-        Energy.current[0] = 0;
+      if (0 == Energy->active_power[0]) {
+        Energy->current[0] = 0;
       } else {
-        Energy.current[0] = (float)Settings->energy_current_calibration / (float)Cse.current_cycle;
+        Energy->current[0] = (float)EnergyGetCalibration(ENERGY_CURRENT_CALIBRATION) / (float)Cse.current_cycle;
       }
     }
   } else {  // Powered off
     Cse.power_cycle_first = 0;
-    Energy.voltage[0] = 0;
-    Energy.active_power[0] = 0;
-    Energy.current[0] = 0;
+    Energy->voltage[0] = 0;
+    Energy->active_power[0] = 0;
+    Energy->current[0] = 0;
   }
 }
 
@@ -158,7 +159,7 @@ void CseSerialInput(void) {
         uint8_t checksum = 0;
         for (uint32_t i = 2; i < 23; i++) { checksum += Cse.rx_buffer[i]; }
         if (checksum == Cse.rx_buffer[23]) {
-          Energy.data_valid[0] = 0;
+          Energy->data_valid[0] = 0;
           CseReceived();
           Cse.received = false;
           return;
@@ -188,7 +189,7 @@ void CseSerialInput(void) {
 /********************************************************************************************/
 
 void CseEverySecond(void) {
-  if (Energy.data_valid[0] > ENERGY_WATCHDOG) {
+  if (Energy->data_valid[0] > ENERGY_WATCHDOG) {
     Cse.voltage_cycle = 0;
     Cse.current_cycle = 0;
     Cse.power_cycle = 0;
@@ -202,15 +203,15 @@ void CseEverySecond(void) {
       } else {
         cf_pulses = Cse.cf_pulses - Cse.cf_pulses_last_time;
       }
-      if (cf_pulses && Energy.active_power[0])  {
-        uint32_t delta = (cf_pulses * Settings->energy_power_calibration) / 36;
+      if (cf_pulses && Energy->active_power[0])  {
+        uint32_t delta = (cf_pulses * EnergyGetCalibration(ENERGY_POWER_CALIBRATION)) / 36;
         // prevent invalid load delta steps even checksum is valid (issue #5789):
         // prevent invalid load delta steps even checksum is valid but allow up to 4kW (issue #7155):
 //        if (delta <= (4000 * 1000 / 36)) {  // max load for S31/Pow R2: 4.00kW
         // prevent invalid load delta steps even checksum is valid but allow up to 5.5kW (issue #14156):
         if (delta <= (5500 * 1000 / 36)) {  // max load for Pow R3: 5.50kW
           Cse.cf_pulses_last_time = Cse.cf_pulses;
-          Energy.kWhtoday_delta[0] += delta;
+          Energy->kWhtoday_delta[0] += delta;
         }
         else {
           AddLog(LOG_LEVEL_DEBUG, PSTR("CSE: Overload"));
@@ -235,7 +236,7 @@ void CseSnsInit(void) {
       Settings->param[P_CSE7766_INVALID_POWER] = CSE_MAX_INVALID_POWER;  // SetOption39 1..255
     }
     Cse.power_invalid = Settings->param[P_CSE7766_INVALID_POWER];
-    Energy.use_overtemp = true;                 // Use global temperature for overtemp detection
+    Energy->use_overtemp = true;                 // Use global temperature for overtemp detection
   } else {
     TasmotaGlobal.energy_driver = ENERGY_NONE;
   }
@@ -254,19 +255,22 @@ void CseDrvInit(void) {
 bool CseCommand(void) {
   bool serviced = true;
 
-  if (CMND_POWERSET == Energy.command_code) {
+  if ((CMND_POWERCAL == Energy->command_code) || (CMND_VOLTAGECAL == Energy->command_code) || (CMND_CURRENTCAL == Energy->command_code)) {
+    // Service in xdrv_03_energy.ino
+  }
+  else if (CMND_POWERSET == Energy->command_code) {
     if (XdrvMailbox.data_len && Cse.power_cycle) {
-      Settings->energy_power_calibration = (unsigned long)(CharToFloat(XdrvMailbox.data) * Cse.power_cycle) / CSE_PREF;
+      XdrvMailbox.payload = (unsigned long)(CharToFloat(XdrvMailbox.data) * Cse.power_cycle) / CSE_PREF;
     }
   }
-  else if (CMND_VOLTAGESET == Energy.command_code) {
+  else if (CMND_VOLTAGESET == Energy->command_code) {
     if (XdrvMailbox.data_len && Cse.voltage_cycle) {
-      Settings->energy_voltage_calibration = (unsigned long)(CharToFloat(XdrvMailbox.data) * Cse.voltage_cycle) / CSE_UREF;
+      XdrvMailbox.payload = (unsigned long)(CharToFloat(XdrvMailbox.data) * Cse.voltage_cycle) / CSE_UREF;
     }
   }
-  else if (CMND_CURRENTSET == Energy.command_code) {
+  else if (CMND_CURRENTSET == Energy->command_code) {
     if (XdrvMailbox.data_len && Cse.current_cycle) {
-      Settings->energy_current_calibration = (unsigned long)(CharToFloat(XdrvMailbox.data) * Cse.current_cycle) / 1000;
+      XdrvMailbox.payload = (unsigned long)(CharToFloat(XdrvMailbox.data) * Cse.current_cycle) / 1000;
     }
   }
   else serviced = false;  // Unknown command
@@ -278,7 +282,7 @@ bool CseCommand(void) {
  * Interface
 \*********************************************************************************************/
 
-bool Xnrg02(uint8_t function) {
+bool Xnrg02(uint32_t function) {
   bool result = false;
 
   switch (function) {

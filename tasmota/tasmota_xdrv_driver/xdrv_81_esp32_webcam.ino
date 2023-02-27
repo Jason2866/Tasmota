@@ -191,8 +191,9 @@ bool WcPinUsed(void) {
   }
   if (!PinUsed(GPIO_WEBCAM_XCLK) || !PinUsed(GPIO_WEBCAM_PCLK) ||
       !PinUsed(GPIO_WEBCAM_VSYNC) || !PinUsed(GPIO_WEBCAM_HREF) ||
-      !PinUsed(GPIO_WEBCAM_SIOD) || !PinUsed(GPIO_WEBCAM_SIOC)) {
-    pin_used = false;
+      ((!PinUsed(GPIO_WEBCAM_SIOD) || !PinUsed(GPIO_WEBCAM_SIOC)) && !TasmotaGlobal.i2c_enabled_2)    // preferred option is to reuse and share I2Cbus 2
+      ) {
+        pin_used = false;
   }
   return pin_used;
 }
@@ -341,8 +342,14 @@ uint32_t WcSetup(int32_t fsiz) {
     config.pin_pclk = Pin(GPIO_WEBCAM_PCLK);      // PCLK_GPIO_NUM;
     config.pin_vsync = Pin(GPIO_WEBCAM_VSYNC);    // VSYNC_GPIO_NUM;
     config.pin_href = Pin(GPIO_WEBCAM_HREF);      // HREF_GPIO_NUM;
-    config.pin_sscb_sda = Pin(GPIO_WEBCAM_SIOD);  // SIOD_GPIO_NUM;
-    config.pin_sscb_scl = Pin(GPIO_WEBCAM_SIOC);  // SIOC_GPIO_NUM;
+    config.pin_sccb_sda = Pin(GPIO_WEBCAM_SIOD);  // SIOD_GPIO_NUM; - unset to use shared I2C bus 2
+    config.pin_sccb_scl = Pin(GPIO_WEBCAM_SIOC);  // SIOC_GPIO_NUM;
+    if(TasmotaGlobal.i2c_enabled_2){              // configure SIOD and SIOC as SDA,2 and SCL,2
+      config.sccb_i2c_port = 1;                   // reuse initialized bus 2, can be shared now
+      if(config.pin_sccb_sda < 0){                // GPIO_WEBCAM_SIOD must not be set to really make it happen
+        AddLog(LOG_LEVEL_INFO, PSTR("CAM: use I2C bus 2"));
+      }
+    }
     config.pin_pwdn = Pin(GPIO_WEBCAM_PWDN);       // PWDN_GPIO_NUM;
     config.pin_reset = Pin(GPIO_WEBCAM_RESET);    // RESET_GPIO_NUM;
     AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: Template pin config"));
@@ -425,7 +432,10 @@ uint32_t WcSetup(int32_t fsiz) {
 
   WcApplySettings();
 
-  AddLog(LOG_LEVEL_INFO, PSTR("CAM: Initialized"));
+  camera_sensor_info_t *info = esp_camera_sensor_get_info(&wc_s->id);
+
+  AddLog(LOG_LEVEL_INFO, PSTR("CAM: %s Initialized"), info->name);
+
 
   Wc.up = 1;
   if (psram) { Wc.up = 2; }
@@ -749,6 +759,13 @@ void HandleImage(void) {
     camera_fb_t *wc_fb = 0;
     wc_fb = esp_camera_fb_get();
     if (!wc_fb) { return; }
+    if (Wc.stream_active < 2) {
+      // fetch some more frames
+      esp_camera_fb_return(wc_fb);
+      wc_fb = esp_camera_fb_get();
+      esp_camera_fb_return(wc_fb);
+      wc_fb = esp_camera_fb_get();
+    }
     if (wc_fb->format != PIXFORMAT_JPEG) {
       bool jpeg_converted = frame2jpg(wc_fb, 80, &_jpg_buf, &_jpg_buf_len);
       if (!jpeg_converted) {
@@ -1415,7 +1432,7 @@ void WcStatsShow(void) {
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv81(uint8_t function) {
+bool Xdrv81(uint32_t function) {
   bool result = false;
 
   switch (function) {

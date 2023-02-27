@@ -66,7 +66,15 @@
  *     RuleTimer2 100
 \*********************************************************************************************/
 
-#define XDRV_10             10
+#define XDRV_10                 10
+
+#ifndef RULE_MAX_EVENTSZ
+#define RULE_MAX_EVENTSZ        100
+#endif
+
+#ifndef RULE_MAX_MQTT_EVENTSZ
+#define RULE_MAX_MQTT_EVENTSZ   256
+#endif
 
 //#define DEBUG_RULES
 
@@ -186,7 +194,7 @@ struct RULES {
   bool busy = false;
   bool no_execute = false;   // Don't actually execute rule commands
 
-  char event_data[100];
+  char event_data[RULE_MAX_EVENTSZ];
 } Rules;
 
 char rules_vars[MAX_RULE_VARS][33] = {{ 0 }};
@@ -936,7 +944,7 @@ void RulesInit(void)
 void RulesEvery50ms(void)
 {
   if ((Settings->rule_enabled || BERRY_RULES) && !Rules.busy) {  // Any rule enabled
-    char json_event[120];
+    char json_event[RULE_MAX_EVENTSZ +16];  // Add 16 chars for {"Event": .. }
 
     if (-1 == Rules.new_power) { Rules.new_power = TasmotaGlobal.power; }
     if (Rules.new_power != Rules.old_power) {
@@ -956,12 +964,8 @@ void RulesEvery50ms(void)
           RulesProcessEvent(json_event);
         }
         // Boot time SWITCHES Status
-        for (uint32_t i = 0; i < MAX_SWITCHES; i++) {
-#ifdef USE_TM1638
-          if (PinUsed(GPIO_SWT1, i) || (PinUsed(GPIO_TM1638CLK) && PinUsed(GPIO_TM1638DIO) && PinUsed(GPIO_TM1638STB))) {
-#else
-          if (PinUsed(GPIO_SWT1, i)) {
-#endif  // USE_TM1638
+        for (uint32_t i = 0; i < MAX_SWITCHES_SET; i++) {
+          if (SwitchUsed(i)) {
             snprintf_P(json_event, sizeof(json_event), PSTR("{\"%s\":{\"Boot\":%d}}"), GetSwitchText(i).c_str(), (SwitchState(i)));
             RulesProcessEvent(json_event);
           }
@@ -1152,18 +1156,21 @@ void RulesSetPower(void)
  *      true      - The message is consumed.
  *      false     - The message is not in our list.
  */
-bool RulesMqttData(void)
-{
-  if (XdrvMailbox.data_len < 1 || XdrvMailbox.data_len > 256) {
+bool RulesMqttData(void) {
+  if ((XdrvMailbox.data_len < 1) || (XdrvMailbox.data_len > RULE_MAX_MQTT_EVENTSZ)) {
     return false;
   }
   bool serviced = false;
   String sTopic = XdrvMailbox.topic;
-  String sData = XdrvMailbox.data;
+  String buData = XdrvMailbox.data;
   //AddLog(LOG_LEVEL_DEBUG, PSTR("RUL: MQTT Topic %s, Event %s"), XdrvMailbox.topic, XdrvMailbox.data);
   MQTT_Subscription event_item;
   //Looking for matched topic
+  char json_event[RULE_MAX_MQTT_EVENTSZ +32];  // Add chars for {"Event":{"<item.Event>": .. }
   for (uint32_t index = 0; index < subscriptions.size(); index++) {
+
+    String sData = buData;
+
     event_item = subscriptions.get(index);
 
     //AddLog(LOG_LEVEL_DEBUG, PSTR("RUL: Match MQTT message Topic %s with subscription topic %s"), sTopic.c_str(), event_item.Topic.c_str());
@@ -1198,8 +1205,15 @@ bool RulesMqttData(void)
         }
       }
       value.trim();
+
+/*
       //Create an new event. Cannot directly call RulesProcessEvent().
       snprintf_P(Rules.event_data, sizeof(Rules.event_data), PSTR("%s=%s"), event_item.Event.c_str(), value.c_str());
+      // 20230107 Superseded by the following code
+*/
+      bool quotes = (value[0] != '{');
+      snprintf_P(json_event, sizeof(json_event), PSTR("{\"Event\":{\"%s\":%s%s%s}}"), event_item.Event.c_str(), (quotes)?"\"":"", value.c_str(), (quotes)?"\"":"");
+      RulesProcessEvent(json_event);
     }
   }
   return serviced;
@@ -1458,19 +1472,7 @@ bool findNextVariableValue(char * &pVarname, float &value)
   } else if (sVarName.startsWith(F("TIMER"))) {
     uint32_t index = sVarName.substring(5).toInt();
     if (index > 0 && index <= MAX_TIMERS) {
-      value = Settings->timer[index -1].time;
-#if defined(USE_SUNRISE)
-      // Correct %timerN% values for sunrise/sunset timers
-      if ((1 == Settings->timer[index -1].mode) || (2 == Settings->timer[index -1].mode)) {
-        // in this context, time variable itself is merely an offset, with <720 being negative
-        value += -720 + SunMinutes(Settings->timer[index -1].mode -1);
-        if (2 == Settings->timer[index -1].mode) {
-          // To aid rule comparative statements, sunset past midnight (high lattitudes) is expressed past 24h00
-          // So sunset at 00h45 is at 24h45
-          if (value < 360) { value += 1440; }
-        }
-      }
-#endif  // USE_SUNRISE
+      value = TimerGetTimeOfDay(index -1);
     }
 #if defined(USE_SUNRISE)
   } else if (sVarName.equals(F("SUNRISE"))) {
@@ -2453,7 +2455,7 @@ float map_double(float x, float in_min, float in_max, float out_min, float out_m
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv10(uint8_t function)
+bool Xdrv10(uint32_t function)
 {
   bool result = false;
 

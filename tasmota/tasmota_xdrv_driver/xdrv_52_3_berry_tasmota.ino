@@ -158,7 +158,15 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
-  // Berry: tasmota.time_reached(timer:int) -> bool
+  // Berry: tasmota.locale() -> string
+  //
+  int32_t l_locale(struct bvm *vm);
+  int32_t l_locale(struct bvm *vm) {
+    be_pushstring(vm, D_HTML_LANGUAGE);
+    be_return(vm);
+  }
+
+  // Berry: tasmota.rtc() -> map
   //
   int32_t l_rtc(struct bvm *vm);
   int32_t l_rtc(struct bvm *vm) {
@@ -211,19 +219,25 @@ extern "C" {
     int32_t top = be_top(vm); // Get the number of arguments
     if (top == 1) {  // no argument (instance only)
       be_newobject(vm, "map");
+      be_map_insert_str(vm, "mac", WiFi.macAddress().c_str());
+      be_map_insert_bool(vm, "up", WifiHasIP());
       if (Settings->flag4.network_wifi) {
         int32_t rssi = WiFi.RSSI();
         bool show_rssi = false;
-#if LWIP_IPV6
-        String ipv6_addr = WifiGetIPv6();
+#ifdef USE_IPV6
+        String ipv6_addr = WifiGetIPv6Str();
         if (ipv6_addr != "") {
           be_map_insert_str(vm, "ip6", ipv6_addr.c_str());
           show_rssi = true;
         }
-#endif
+        ipv6_addr = WifiGetIPv6LinkLocalStr();
+        if (ipv6_addr != "") {
+          be_map_insert_str(vm, "ip6local", ipv6_addr.c_str());
+          show_rssi = true;
+        }
+#endif // USE_IPV6
         if (static_cast<uint32_t>(WiFi.localIP()) != 0) {
-          be_map_insert_str(vm, "mac", WiFi.macAddress().c_str());
-          be_map_insert_str(vm, "ip", WiFi.localIP().toString().c_str());
+          be_map_insert_str(vm, "ip", IPAddress((uint32_t)WiFi.localIP()).toString().c_str());   // quick fix for IPAddress bug
           show_rssi = true;
         }
         if (show_rssi) {
@@ -245,15 +259,39 @@ extern "C" {
     if (top == 1) {  // no argument (instance only)
       be_newobject(vm, "map");
 #ifdef USE_ETHERNET
-      if (static_cast<uint32_t>(EthernetLocalIP()) != 0) {
-        be_map_insert_str(vm, "mac", EthernetMacAddress().c_str());
-        be_map_insert_str(vm, "ip", EthernetLocalIP().toString().c_str());
+      be_map_insert_bool(vm, "up", EthernetHasIP());
+      String eth_mac = EthernetMacAddress().c_str();
+      if (eth_mac != "00:00:00:00:00:00") {
+        be_map_insert_str(vm, "mac", eth_mac.c_str());
       }
-#endif
+      if (static_cast<uint32_t>(EthernetLocalIP()) != 0) {
+        be_map_insert_str(vm, "ip", IPAddress((uint32_t)EthernetLocalIP()).toString().c_str());   // quick fix for IPAddress bug
+      }
+#ifdef USE_IPV6
+      String ipv6_addr = EthernetGetIPv6Str();
+      if (ipv6_addr != "") {
+        be_map_insert_str(vm, "ip6", ipv6_addr.c_str());
+      }
+      ipv6_addr = EthernetGetIPv6LinkLocalStr();
+      if (ipv6_addr != "") {
+        be_map_insert_str(vm, "ip6local", ipv6_addr.c_str());
+      }
+#endif // USE_IPV6
+#else // USE_ETHERNET
+      be_map_insert_bool(vm, "up", bfalse);
+#endif // USE_ETHERNET
       be_pop(vm, 1);
       be_return(vm);
     }
     be_raise(vm, kTypeError, nullptr);
+  }
+
+  // Berry: tasmota.hostname() -> string
+  //
+  int32_t l_hostname(struct bvm *vm);
+  int32_t l_hostname(struct bvm *vm) {
+    be_pushstring(vm, NetworkHostname());
+    be_return(vm);
   }
 
   static void l_push_time(bvm *vm, struct tm *t, const char *unparsed) {
@@ -320,6 +358,19 @@ extern "C" {
     if (top == 2 && be_isint(vm, 2)) {  // only 1 argument of type string accepted
       uint32_t timer = be_toint(vm, 2);
       delay(timer);
+      be_return_nil(vm); // Return
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
+  // Berry: tasmota.delay_microseconds(timer:int) -> nil
+  //
+  int32_t l_delay_microseconds(struct bvm *vm);
+  int32_t l_delay_microseconds(struct bvm *vm) {
+    int32_t top = be_top(vm); // Get the number of arguments
+    if (top == 2 && be_isint(vm, 2)) {  // only 1 argument of type string accepted
+      uint32_t timer = be_toint(vm, 2);
+      delayMicroseconds(timer);
       be_return_nil(vm); // Return
     }
     be_raise(vm, kTypeError, nullptr);
@@ -535,9 +586,9 @@ extern "C" {
   int32_t l_getswitch(bvm *vm);
   int32_t l_getswitch(bvm *vm) {
     be_newobject(vm, "list");
-    for (uint32_t i = 0; i < MAX_SWITCHES; i++) {
-      if (PinUsed(GPIO_SWT1, i)) {
-        be_pushbool(vm, Switch.virtual_state[i] == PRESSED);
+    for (uint32_t i = 0; i < MAX_SWITCHES_SET; i++) {
+      if (SwitchUsed(i)) {
+        be_pushbool(vm, SwitchGetState(i) == PRESSED);
         be_data_push(vm, -2);
         be_pop(vm, 1);
       }

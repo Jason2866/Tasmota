@@ -615,7 +615,6 @@ void MI32PreInit(void) {
   MI32.option.noSummary = 0;
   MI32.option.minimalSummary = 0;
   MI32.option.directBridgeMode = 0;
-  MI32.option.showRSSI = 1;
   MI32.option.ignoreBogusBattery = 1; // from advertisements
 
   MI32loadCfg();
@@ -640,7 +639,7 @@ void MI32Init(void) {
     }
   }
 
-  if(MI32.mode.didGetConfig){
+  if(MI32.mode.didGetConfig && !Settings->flag5.zigbee_hide_bridge_topic){ // borrow SO125 1 to turn off HomeKit
     MI32.mode.didStartHAP = 0;
   #ifdef USE_MI_HOMEKIT
     MI32getSetupCodeFromMAC(MI32.hk_setup_code);
@@ -1900,11 +1899,11 @@ void MI32createPolyline(char *polyline, uint8_t *history){
 
 #ifdef USE_MI_ESP32_ENERGY
 void MI32sendEnergyWidget(){
-  if (Energy.current_available && Energy.voltage_available) {
-    WSContentSend_P(HTTP_MI32_POWER_WIDGET,MIBLEsensors.size()+1, Energy.voltage,Energy.current[1]);
+  if (Energy->current_available && Energy->voltage_available) {
+    WSContentSend_P(HTTP_MI32_POWER_WIDGET,MIBLEsensors.size()+1, Energy->voltage,Energy->current[1]);
     char _polyline[176];
     MI32createPolyline(_polyline,MI32.energy_history);
-    WSContentSend_P(PSTR("<p>" D_POWERUSAGE ": %.1f " D_UNIT_WATT ""),Energy.active_power);
+    WSContentSend_P(PSTR("<p>" D_POWERUSAGE ": %.1f " D_UNIT_WATT ""),Energy->active_power);
     WSContentSend_P(HTTP_MI32_GRAPH,_polyline,185,124,124,_polyline,1);
     WSContentSend_P(PSTR("</p></div>"));
   }
@@ -2096,6 +2095,7 @@ void MI32Show(bool json)
     if(!MI32.mode.triggeredTele){
       if(MI32.option.noSummary) return; // no message at TELEPERIOD
       }
+    if(TasmotaGlobal.masterlog_level == LOG_LEVEL_DEBUG_MORE) return; // we want to announce sensors unlinked to the ESP, check for LOG_LEVEL_DEBUG_MORE is medium-safe
     MI32suspendScanTask();
     for (uint32_t i = 0; i < MIBLEsensors.size(); i++) {
       if(MI32.mode.triggeredTele && MIBLEsensors[i].eventType.raw == 0) continue;
@@ -2228,10 +2228,9 @@ void MI32Show(bool json)
           }
         }
       }
-      if (MI32.option.showRSSI) {
-        MI32ShowContinuation(&commaflg);
-        ResponseAppend_P(PSTR("\"RSSI\":%d"), MIBLEsensors[i].RSSI);
-      }
+      MI32ShowContinuation(&commaflg);
+      ResponseAppend_P(PSTR("\"RSSI\":%d"), MIBLEsensors[i].RSSI);
+
       ResponseJsonEnd();
 
       MIBLEsensors[i].eventType.raw = 0;
@@ -2244,7 +2243,7 @@ void MI32Show(bool json)
 #ifdef USE_MI_EXT_GUI
     Mi32invalidateOldHistory();
 #ifdef USE_MI_ESP32_ENERGY
-    MI32addHistory(MI32.energy_history,Energy.active_power[0],100); //TODO: which value??
+    MI32addHistory(MI32.energy_history,Energy->active_power[0],100); //TODO: which value??
 #endif //USE_MI_ESP32_ENERGY
 #endif //USE_MI_EXT_GUI
     vTaskResume(MI32.ScanTask);
@@ -2319,6 +2318,7 @@ int ExtStopBLE(){
         MI32Scan->stop();
         MI32.mode.deleteScanTask = 1;
         AddLog(LOG_LEVEL_INFO,PSTR("M32: stop BLE"));
+        while (MI32.mode.runningScan) yield();
       }
 #ifdef USE_MI_HOMEKIT
       if(MI32.mode.didStartHAP) {
@@ -2333,7 +2333,7 @@ int ExtStopBLE(){
  * Interface
 \*********************************************************************************************/
 
-bool Xsns62(uint8_t function)
+bool Xsns62(uint32_t function)
 {
   if (!Settings->flag5.mi32_enable) { return false; }  // SetOption115 - Enable ESP32 MI32 BLE
 
@@ -2357,11 +2357,16 @@ bool Xsns62(uint8_t function)
       MI32EverySecond(false);
       break;
     case FUNC_SAVE_BEFORE_RESTART:
+    case FUNC_INTERRUPT_STOP:
       ExtStopBLE();
       break;
     case FUNC_COMMAND:
       result = DecodeCommand(kMI32_Commands, MI32_Commands);
       break;
+/*
+    case FUNC_INTERRUPT_START:
+      break;
+*/
     case FUNC_JSON_APPEND:
       MI32Show(1);
       break;
@@ -2371,7 +2376,7 @@ bool Xsns62(uint8_t function)
       break;
 #ifdef USE_MI_EXT_GUI
       case FUNC_WEB_ADD_MAIN_BUTTON:
-        if (MI32.mode.didGetConfig) WSContentSend_P(HTTP_BTN_MENU_MI32);
+        if (Settings->flag5.mi32_enable) WSContentSend_P(HTTP_BTN_MENU_MI32);
         break;
       case FUNC_WEB_ADD_HANDLER:
         WebServer_on(PSTR("/m32"), MI32HandleWebGUI);

@@ -137,7 +137,7 @@ void PWMModulePreInit(void)
       first_device_group_is_local = false;
 
       // Back out the changes made in the light module under the assumtion we have a relay or PWM.
-      TasmotaGlobal.devices_present--;
+      UpdateDevicesPresent(-1);
       TasmotaGlobal.light_type = 0;
     }
 
@@ -790,7 +790,7 @@ void CmndPWMDimmerPWMs(void)
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv35(uint8_t function)
+bool Xdrv35(uint32_t function)
 {
   bool result = false;
 

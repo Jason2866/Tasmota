@@ -1195,7 +1195,7 @@ void SSPMHandleReceivedData(void) {
           TasmotaGlobal.power |= current_state;
 
           Sspm->old_power = TasmotaGlobal.power;
-          TasmotaGlobal.devices_present += 4;
+          UpdateDevicesPresent(4);
         }
         SSPMSendGetOps(Sspm->module_selected -1);
         break;
@@ -2631,7 +2631,7 @@ void CmndSSPMPowerOnState(void) {
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv86(uint8_t function) {
+bool Xdrv86(uint32_t function) {
   bool result = false;
 
   if (FUNC_INIT == function) {

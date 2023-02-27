@@ -3,23 +3,266 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [12.2.0.1]
+## [12.4.0.1]
 ### Added
-- DS18x20 support on up to four GPIOs by md5sum-as (#16833)
+- Matter read/write and commands (#18000)
+- Matter subscriptions (#18017, #18018)
+- Matter multi-fabric (#18019)
 
 ### Breaking Changed
+
+### Changed
+- ADC Range oversample from 2 to 32 (#17975)
+- ESP32 Framework (Core) from v2.0.6 to v2.0.7
+- Move #define OTA_URL from user_config.h to board files for better inital support (#18008)
+- Increase number of (virtual)relays and (virtual)buttons to 32
+- LibTeleinfo from v1.1.3 to v1.1.5 (#18050)
+
+### Fixed
+- SEN5X floats and units (#17961)
+- Energytotals cannot be set to negative values (#17965)
+- Undocumented support for non-sequential buttons and switches (#17967)
+- SR04 driver single pin ultrasonic sensor detection (#17966)
+- IR panasonic protocol regression from v12.0.2.4 (#18013)
+- EnergyTotal divided twice during minimal upgrade step regression from v12.3.1.3 (#18024)
+
+### Removed
+
+## [Released]
+
+## [12.4.0] 20230216
+- Release Peter
+
+## [12.3.1.6] 20230216
+### Added
+- ESP32 preliminary support for Matter protocol, milestone 1 (commissioning) by Stephan Hadinger
+- Basic support for Shelly Pro 4PM
+- Command ``DhtDelay<sensor> <high_delay>,<low_delay>`` to allow user control over high and low delay in microseconds (#17944)
+- Berry `int64.fromstring()` to convert a string to an int64 (#17953)
+
+### Breaking Changed
+- TM1638 button and led support are handled as virtual switches and relays (#11031)
+
+### Changed
+- Dht driver from v6 to v7
+- LVGL allow access to `lv.LAYOUT_GRID` and `lv.LAYOUT_FLEX` (#17948)
+- TuyaMcu support of virtual switches
+
+### Fixed
+- ESP8266 Fix TLS SNI which would prevent AWS IoT connection (#17936)
+- TuyaMcu exception 3 regression from v12.3.1.4
+
+## [12.3.1.5] 20230208
+### Added
+- ESP32 support for eigth energy phases/channels
+- ESP32 command ``EnergyCols 1..8`` to change number of GUI columns
+- ESP32 command ``EnergyDisplay 1..3`` to change GUI column presentation
+- Support for SEN5X gas and air quality sensor by Tyeth Gundry (#17736)
+- Berry add ``mdns`` advanced features and query
+- ESP32 support for Biomine BioPDU 625x12 (#17857)
+
+### Breaking Changed
+- Berry energy_ctypes changed with new energy driver
+- Berry energy_ctypes fixed accordingly
+
+### Changed
+- Energy refactoring preparing for ESP32 phase/channel extension
+
+### Fixed
+- ADE7953 when calibration data for second channel is used regression from v12.2.0.2
+- Shelly Pro 1/2 relay click at restart regression from v12.3.1.4
+- Zigbee extend plug-in modifiers to 16 bits
+- Broken I2C priority regression from v12.3.1.3 (#17810)
+- Energy usage and return migrated too small (/10000) regression from v12.3.1.3
+
+## [12.3.1.4] 20230127
+### Added
+- Berry ``crypto.EC_P256`` ECDSA signature (required by Matter protocol)
+- Berry add up flag to ``tasmota.wifi()`` and ``tasmota.eth()``, always return MAC
+
+## [12.3.1.3] 20230115
+### Added
+- Support for PCA9632 4-channel 8-bit PWM driver as light driver by Pascal Heinrich (#17557)
+- Berry `bytes()` now evaluates to `false` if empty
+- Berry ``crypto.AES_CCM`` (required by Matter protocol)
+- ESP32 support for BMPxxx sensors on two I2C busses (#17643)
+- Berry add implicit ``_class`` parameter to static methods
+
+### Changed
+- Energy totals max supported value from +/-21474.83647 to +/-2147483.647 kWh
+- Removed delays in TasmotaSerial and TasmotaModbus Tx enable switching
+- Increase rule event buffer from 100 to 256 characters (#16943)
+- All calls to atof() into CharToFloat() reducing code size by 8k
+- Keep webserver enabled on command ``upload``
+
+### Fixed
+- Energy dummy switched voltage and power regression from v12.2.0.2
+- Orno WE517 modbus serial config 8E1 setting (#17545)
+- No IP address shown when in AP mode regression from v12.3.1.1 (#17599)
+- Rename ``tasmota4M.bin`` to ``tasmota-4M.bin`` to solve use of ``tasmota-minimal.bin`` (#17674)
+- DNS lookup for ``upload`` from ota server using http regression from v12.3.1.1
+
+## [12.3.1.2] 20221231
+### Added
+- Berry crypto add ``EC_P256`` and ``PBKDF2_HMAC_SHA256`` algorithms required by Matter protocol
+- Berry crypto add ``random`` to generate series of random bytes
+- Berry crypto add ``HKDF_HMAC_SHA256``
+- Support for up to 3 single phase modbus energy monitoring device using generic Energy Modbus driver
+- Berry crypto add ``SPAKE2P_Matter`` for Matter support
+- Support for IPv6 only networks on Ethernet (not yet Wifi)
+- Support for TM1650 display as used in some clocks by Stefan Oskamp (#17594)
+
+### Changed
+- ESP32 Framework (Core) from v2.0.5.4 to v2.0.6 (IPv6 support)
+- Tasmota OTA scripts now support both unzipped and gzipped file uploads (#17378)
+- NTP default servers to dual-stack (IPv4/IPv6)
+- Revert TuyaMcu rewrite by btsimonh as lack of support
+
+### Fixed
+- Shutter default motorstop set to 0 (#17403)
+- Shutter default tilt configuration (#17484)
+- Modbus transmit enable GPIO enabled once during write buffer
+- ESP8266 set GPIO's to input on power on fixing relay spikes (#17531)
+
+## [12.3.1.1] 20221221
+### Added
+- Support for IPv6 DNS records (AAAA) and IPv6 ``Ping`` for ESP32 and ESP8266 (#17417)
+- Berry support for ``crypto.SHA256`` (#17430)
+- Support for RGB displays (#17414)
+- Berry add crypto AES_CTR, HDMAC_SHA256, MD5
+
+### Changed
+- ESP32 Framework (Core) from v2.0.5.3 to v2.0.5.4 (IPv6 support)
+
+## [12.3.1] 20221216
+- Release Percy
+
+## [12.3.0.1] 20221216
+### Changed
+- ESP32 initial otaurl from http to https
+
+### Fixed
+- ESP8266 zigbee exception 3 regression from v12.3.0 (#17397)
+
+## [12.3.0] 20221215
+- Release Percy
+
+## [12.2.0.6] 20221215
+### Added
+- Serial Modbus transmit enable GPIOs to all modbus energy drivers and modbus bridge (#17247)
+- Berry crypto module, with AES_GCM by default and EC_CC25519 optional
+- IPv6 support for Ethernet (ESP32)
+- Support for ME007-ULS narrow FoV ultrasonic distance sensor by Mathias Buder (#17376)
+
+### Changed
+- TasmotaSerial library from v3.5.0 to v3.6.0
+- Removed leading spaces on commands ``(S)SerialSend1 to 6`` but keep on duplicate commands ``(S)SerialSend11 to 16`` (#16723)
+- MQTT now uses Tasmota's DNS resolver instead of LWIP (#17387)
+- Shutter bug fixes and functionality upgrade (#17380)
+
+### Fixed
+- TasmotaSerial ``read(buffer, size)`` regression from v9.3.0
+- RCSwitch exception 0/6 on some protocols (#17285)
+- ESP32 exception 28 when RtcNtpServer is enabled on restart (#17338)
+- Analog MQ exception 28 on restart (#17271)
+- ESP32 fix ``Ping`` (#17373)
+
+## [12.2.0.5] 20221129
+### Added
+- ESP32 DS18x20 parasitic power usage when defining W1_PARASITE_POWER (#17112)
+- Optional define ``SERIAL_BRIDGE_BUFFER_SIZE`` to set Serial Bridge internal buffer size (Default ESP8266 = 256, ESP32 = 800)
+- Command ``SSerialBuffer 256..SERIAL_BRIDGE_BUFFER_SIZE`` to change serial bridge rx buffer size (#17120)
+- Command ``SetOption35 0..255`` to skip number of received messages in Serial Bridge (default 0) (#17140)
+- Teleinfo TEMPO (BBR) contract (#17160)
+- Support for HLK-LD2410 24GHz smart wave motion sensor
+- Berry ``mdns`` module (#17202)
+- IPv6 preview for ESP32, also working for ESP8266
+
+### Changed
+- Serial Bridge default internal serial rx buffer size from 64 to 256 (#17120)
+- Accept filename extensions to GUI file upload input fields (#16875)
+- AC PWM dimmer lineair power distribution (#17177)
+
+### Fixed
+- ModbusBridge baudrates over 76500 baud (#17106)
+
+### Removed
+- Accept filename extensions to GUI file upload input fields as not functional in some browsers (#16875)
+
+## [12.2.0.4] 20221117
+### Added
+- Support for Plantower PMSx003T AQI models with temperature and humidity (#16971)
+- Support for Dingtian x595/x165 shift register based relay boards by Barbudor (#17032)
+- New ``FUNC_NETWORK_UP`` and ``FUNC_NETWORK_DOWN`` events
+- WS2812 and Light ArtNet DMX control over UDP port 6454 (#17059)
+- Command ``SwitchMode 16`` sending only MQTT message on inverted switch change (#17028)
+- Support for HMC5883L 3-Axis Digital Compass sensor by Andreas Achtzehn (#17069)
+- Berry add ``udp->close()`` method (#17094)
+- Command ``RgxClients`` for range extender clients list (#17048)
+- Command ``RgxPort [tcp|udp], gateway_port, client_mac, client_port`` for range extender port forwardings (#17092)
+
+### Changed
+- Reverted Flash Mode back from ``DIO`` to ``DOUT`` for ESP8266/ESP8285 (#17019)
+- ESP32 Framework (Core) from v2.0.5.2 to v2.0.5.3 (#17034)
+- TuyaMcu rewrite by btsimonh (#17051)
+- WS2812 sends signal to only ``Pixels`` leds instead of sending to 512 leds (#17055)
+- Zigbee improved Aqara plug support and completed cluster 0x0702 (#17073)
+- ESP32 LVGL library from v8.3.2 to v8.3.3 (no functional change)
+
+### Fixed
+- SenseAir S8 module detection (#17033)
+
+## [12.2.0.3] 20221109
+### Added
+- Support for BP1658CJ RGBCW led bulbs like Orein OS0100411267 by Cossid (#17011)
+
+### Breaking Changed
+- Redesign distance sensors VL53LXX, TOF10120, HRXL and DYP to use cm instead of mm (#17021)
+
+### Changed
+- Default Flash Mode changed from ``DOUT`` to ``DIO`` for ESP8266/ESP8285
+
+## [12.2.0.2] 20221107
+### Added
+- Support for Digital Addressable Lighting Interface (DALI) by Andrei Kazmirtsuk (#16938)
+- Support for two phase power calibration using commands ``PowerSet2``, ``VoltageSet2`` and ``CurrentSet2``
+- Support for NTAG2xx tags read and write on PN532 NFC reader (#16939)
+- Berry ``bytes().reverse()`` method (#16977)
+- ESP32 Support for DMX ArtNet Led matrix animations (#16984)
+- Command ``SetOption47 1..255`` to delay power on relay state in seconds reducing power surge. ``SO47 1`` delays until network connected. ``SO47 2`` delays until mqtt connected
+- ESP32 DMX ArtNet optimization to avoid any object allocation and avoid garbage collector pauses
+- Berry add ``dyn`` class
+
+### Changed
+- Move some persistent data (PowerLow)
+- ESP32 Framework (Core) from v2.0.5 to v2.0.5.2
+- ADE7953 monitoring from instant power to accumulated energy (#16941)
+
+### Fixed
+- Deduplicate code and fix %timer n% rule regression from v12.2.0 (#16914)
+- Serial initialization for baudrate and config (#16970)
+- ModbusBridge buffer overflow (#16979)
+- Default serial bridge configuration from 5N1 to 8N1 regression from v10.1.0.3
+
+### Removed
+- Define ``USE_PN532_DATA_RAW`` from NFC reader (#16939)
+
+## [12.2.0.1] 20221026
+### Added
+- DS18x20 support on up to four GPIOs by md5sum-as (#16833)
+- Berry add `bytes().setbytes()` (#16892)
+- Support for Shelly Pro 1/1PM and 2/2PM (#16773)
+- Add Zigbee router firmware for Sonoff ZBBridgePro (#16900)
+- Prepare for DMX ArtNet support on ESP32
 
 ### Changed
 - DS18x20 ``DS18Alias`` to ``DS18Sens`` (#16833)
 - Compiling with reduced boards manifests in favour of Autoconfig (#16848)
 - Add NeoPool ``NPFiltration 2`` toggle cmnd (#16859)
+- ESP32 NimBLE library from v1.4.0 to v1.4.1 (#16775)
 
 ### Fixed
 - BP5758D red channel corruption regression from v12.1.1.6 (#16850)
-
-### Removed
-
-## [Released]
 
 ## [12.2.0] 20221017
 - Release Patrick

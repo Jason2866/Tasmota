@@ -27,12 +27,15 @@ extern int l_strptime(bvm *vm);
 extern int l_memory(bvm *vm);
 extern int l_wifi(bvm *vm);
 extern int l_eth(bvm *vm);
+extern int l_hostname(bvm *vm);
 extern int l_yield(bvm *vm);
 extern int l_delay(bvm *vm);
+extern int l_delay_microseconds(bvm *vm);
 extern int l_scaleuint(bvm *vm);
 extern int l_logInfo(bvm *vm);
 extern int l_save(bvm *vm);
 extern int t_random_byte(bvm *vm);
+extern int l_locale(bvm *vm);
 
 extern int l_read_sensors(bvm *vm);
 
@@ -100,11 +103,14 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     memory, func(l_memory)
     wifi, func(l_wifi)
     eth, func(l_eth)
+    hostname, func(l_hostname)
     yield, func(l_yield)
     delay, func(l_delay)
+    delay_microseconds, func(l_delay_microseconds)
     scale_uint, func(l_scaleuint)
     log, func(l_logInfo)
     save, func(l_save)
+    locale, func(l_locale)
 
     read_sensors, func(l_read_sensors)
 
