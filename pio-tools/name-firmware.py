@@ -1,8 +1,10 @@
 Import("env")
+platform = env.PioPlatform()
 
 import shutil
 import pathlib
 import tasmotapiolib
+from os.path import join
 
 
 def bin_map_copy(source, target, env):
@@ -28,5 +30,31 @@ def bin_map_copy(source, target, env):
     shutil.move(tasmotapiolib.get_source_map_path(env), map_file)
     if env["PIOPLATFORM"] == "espressif32":
         shutil.copy(factory, one_bin_file)
+
+        board = env.BoardConfig()
+        upload_speed = join(str(board.get("upload.speed", "115200")))
+        mcu = board.get("build.mcu", "esp32")
+        env.AutodetectUploadPort()
+        upload_port = join(env.get("UPLOAD_PORT"))
+        python_exe = join(env["PYTHONEXE"])
+        esptool = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
+        factory_image = join(one_bin_file)
+        cmd_factory_flash = python_exe + " " + esptool + " --chip " + mcu + " --port " + upload_port + " --baud " + upload_speed + " write_flash 0x0 " + factory_image
+        print ("UploadCmd: ", cmd_factory_flash)
+        env["INTEGRATION_EXTRA_DATA"].update({"cmd_factory_flash": cmd_factory_flash})
+        #integr_data = env.get("INTEGRATION_EXTRA_DATA")
+        #cmd_flash_data = integr_data.get("cmd_factory_flash", "")
+        cmd_flash_data = env.get("INTEGRATION_EXTRA_DATA").get("cmd_factory_flash", "")
+        print ("INTEGRATION_EXTRA_DATA: ", cmd_flash_data)
+
+env.AddCustomTarget(
+    name="pioenv",
+    dependencies=None,
+    actions=[
+        env.get("INTEGRATION_EXTRA_DATA").get("cmd_factory_flash", "")
+    ],
+    title="Core Env",
+    description="Show PlatformIO Core and Python versions"
+)
 
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", bin_map_copy)
