@@ -327,19 +327,20 @@ def upload_factory(*args, **kwargs):
     esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
     upload_speed = join(str(board.get("upload.speed", "115200")))
     upload_port = join(env.get("UPLOAD_PORT", "none"))
+    cur_env = (env["PIOENV"])
     if "none" in upload_port:
         env.AutodetectUploadPort()
         upload_port = join(env.get("UPLOAD_PORT", "none"))
-    if "tasmota" in env.subst("$BUILD_DIR"):
-        #factory_file = join(env.subst("$BUILD_DIR"),"firmware.factory.bin")
-        factory_file = join(env.subst("$BUILD_DIR"),"firmware%s" % (".bin" if mcu == "esp8266" else (".factory.bin")))
+    if "tasmota" in cur_env:
+        firm_name = cur_env + "%s" % (".bin" if mcu == "esp8266" else (".factory.bin"))
+        target_firm = join(env.subst("$PROJECT_DIR"), "build_output","firmware",firm_name)
         esptoolpy_flags = [
                 "--chip", mcu,
                 "--port", upload_port,
                 "--baud", upload_speed,
                 "write_flash",
                 "0x0",
-                factory_file
+                target_firm
         ]
         esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
         print("Flash firmware at address 0x0")
