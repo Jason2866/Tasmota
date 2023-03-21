@@ -256,8 +256,10 @@ def get_fs_type_start_and_length():
 
 def download_fs(fs_info: FSInfo):
     esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
-    env.AutodetectUploadPort()
-    upload_port = join(env.get("UPLOAD_PORT"))
+    upload_port = join(env.get("UPLOAD_PORT", "none"))
+    if "none" in upload_port:
+        env.AutodetectUploadPort()
+        upload_port = join(env.get("UPLOAD_PORT", "none"))
     fs_file = join(env["PROJECT_DIR"], f"downloaded_fs_{hex(fs_info.start)}_{hex(fs_info.length)}.bin")
     esptoolpy_flags = [
             "--chip", mcu,
