@@ -17,17 +17,7 @@
       },
       {
         "text": "Upload",
-        "tooltip": "PlatformIO: Upload",
-        "commands": [
-          {
-            "id": "platformio-ide.runPIOCoreCommand",
-            "args": "pio run -t nobuild -t upload -e ${command:platformio-ide.activeEnvironment}"
-          }
-        ]
-      },
-      {
-        "text": "Factory",
-        "tooltip": "PlatformIO: Flash Factory firmware (no build)",
+        "tooltip": "PlatformIO: Flash firmware (NO build run)",
         "commands": [
           {
             "id": "platformio-ide.runPIOCoreCommand",
