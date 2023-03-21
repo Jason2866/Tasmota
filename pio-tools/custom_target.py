@@ -328,12 +328,12 @@ def upload_factory(*args, **kwargs):
     upload_speed = join(str(board.get("upload.speed", "115200")))
     upload_port = join(env.get("UPLOAD_PORT", "none"))
     cur_env = (env["PIOENV"])
+    firm_name = cur_env + "%s" % (".bin" if mcu == "esp8266" else (".factory.bin"))
+    target_firm = join(env.subst("$PROJECT_DIR"), "build_output","firmware",firm_name)
     if "none" in upload_port:
         env.AutodetectUploadPort()
         upload_port = join(env.get("UPLOAD_PORT", "none"))
     if "tasmota" in cur_env:
-        firm_name = cur_env + "%s" % (".bin" if mcu == "esp8266" else (".factory.bin"))
-        target_firm = join(env.subst("$PROJECT_DIR"), "build_output","firmware",firm_name)
         esptoolpy_flags = [
                 "--chip", mcu,
                 "--port", upload_port,
