@@ -208,6 +208,7 @@ enum UserSelectablePins {
   GPIO_BIOPDU_PZEM0XX_TX, GPIO_BIOPDU_PZEM016_RX, GPIO_BIOPDU_BIT, // Biomine BioPDU 625x12
   GPIO_MCP23XXX_INT, GPIO_MCP23SXX_CS,  // MCP23xxx Int and SPI Chip select
   GPIO_PCF8574_INT,                     // PCF8574 interrupt
+  GPIO_ESPILIGHT_TX, GPIO_ESPILIGHT_RX, //ESPiLight PINs
   GPIO_LOX_O2_RX,                       // LOX-O2 RX
   GPIO_SENSOR_END };
 
@@ -464,6 +465,7 @@ const char kSensorNames[] PROGMEM =
   D_SENSOR_BIOPDU_PZEM0XX_TX "|" D_SENSOR_BIOPDU_PZEM016_RX "|" D_SENSOR_BIOPDU_BIT "|"
   D_SENSOR_MCP23XXX_INT "|" D_SENSOR_MCP23SXX_CS "|"
   D_SENSOR_PCF8574_INT "|"
+  D_SENSOR_ESPILIGHT_TX "|" D_SENSOR_ESPILIGHT_RX "|"
   D_SENSOR_LOX_O2_RX "|"
   ;
 
@@ -813,6 +815,14 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_TFMINIPLUS_TX),            // TFmini Plus TX pin
   AGPIO(GPIO_TFMINIPLUS_RX),            // TFmini Plus RX pin
 #endif
+#ifdef USE_SMARTRC
+  AGPIO(GPIO_CC1101_GDO0),              // CC1101 pin for TX
+  AGPIO(GPIO_CC1101_GDO2),              // CC1101 pin for RX
+#endif
+#ifdef USE_ESPILIGHT
+  AGPIO(GPIO_ESPILIGHT_TX),               // RF transmitter
+  AGPIO(GPIO_ESPILIGHT_RX),               // RF receiver
+#endif
 
 /*-------------------------------------------------------------------------------------------*\
  * Energy sensors
@@ -1060,7 +1070,7 @@ const uint16_t kGpioNiceList[] PROGMEM = {
   AGPIO(GPIO_DEEPSLEEP),
 #endif
 #ifdef USE_KEELOQ
-  AGPIO(GPIO_CC1101_GDO0),              // CC1101 pin for RX
+  AGPIO(GPIO_CC1101_GDO0),              // CC1101 pin for TX
   AGPIO(GPIO_CC1101_GDO2),              // CC1101 pin for RX
 #endif
 #ifdef USE_HRXL

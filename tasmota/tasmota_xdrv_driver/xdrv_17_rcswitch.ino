@@ -205,8 +205,15 @@ void CmndRfSend(void)
     mySwitch.setRepeatTransmit(repeat);
     if (!bits) { bits = 24; }         // Default 24 bits
     if (data) {
+#ifdef USE_SMARTRC
+      ELECHOUSE_cc1101.setCCMode(0);
+      ELECHOUSE_cc1101.SetTx();
+#endif
       mySwitch.send(data, bits);
       ResponseCmndDone();
+#ifdef USE_SMARTRC
+      smartRCreconfigure();
+#endif
     } else {
       error = true;
     }
