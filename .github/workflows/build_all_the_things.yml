@@ -91,7 +91,7 @@ jobs:
       - name: Matter Berry Code
         run: |
           ls
-          cd ../berry_matter
+          cd lib/libesp32/berry_matter
           ls
           ../berry/berry -s -g solidify_all.be
       - uses: actions/upload-artifact@v3
