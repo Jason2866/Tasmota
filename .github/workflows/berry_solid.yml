@@ -23,8 +23,3 @@ jobs:
           ../berry/berry -s -g solidify_all.be
           cd lib/libesp32/berry_matter
           ../berry/berry -s -g solidify_all.be
-      - name: Upload Berry Matter solidified code
-      - uses: actions/upload-artifact@v3
-        with:
-          name: berry_matter
-          path: ./lib/libesp32/berry_matter/src/solidify
