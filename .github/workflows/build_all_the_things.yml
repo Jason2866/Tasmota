@@ -85,10 +85,7 @@ jobs:
         run: |
           cd lib/libesp32/berry
           make
-          cd ../
-          ls
-          cd berry_tasmota
-          ls
+          cd ../berry_tasmota
           ./solidify_all.be
           cd ../
       - uses: actions/upload-artifact@v3
