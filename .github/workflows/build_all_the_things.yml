@@ -87,11 +87,12 @@ jobs:
           make
           cd ../berry_tasmota
           ../berry/berry -s -g solidify_all.be
+          ls ./berry_tasmota/src/solidify
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
           name: berry_tasmota
-          path: ./berry_tasmota
+          path: ./berry_tasmota/src/solidify
       - name: Matter Berry Code
         run: |
           cd ../berry_matter
@@ -100,7 +101,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: berry_matter
-          path: ./berry_matter
+          path: ./berry_matter/src/solidify
 
 
   base-images:
