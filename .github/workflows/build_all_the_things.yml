@@ -16,6 +16,58 @@ on:
       - '**.ini'
       - '.github/workflows/build_all_the_things.yml'
 
+  be_solidify:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Make Berry and Tasmota Berry code
+        run: |
+          cd lib/libesp32/berry
+          make
+          cd ../berry_tasmota
+          ../berry/berry -s -g solidify_all.be
+      - name: Matter Berry Code
+        run: |
+          cd lib/libesp32/berry_matter
+          ../berry/berry -s -g solidify_all.be
+      - uses: actions/upload-artifact@v3
+        with:
+          name: berry_matter
+          path: ./lib/libesp32/berry_matter/src/solidify
+      - uses: actions/upload-artifact@v3
+        with:
+          name: berry_tasmota
+          path: ./lib/libesp32/berry_tasmota/src/solidify
+
+  push_solidified:
+    name: Commit changed solidified Berry code
+    needs: be_solidify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Remove old solidified code
+        run: |
+          rm ./lib/libesp32/berry_tasmota/src/solidify/*
+          rm ./lib/libesp32/berry_tasmota/src/solidify/*
+      - name: Download solidified Berry code
+        uses: actions/download-artifact@v3
+        with:
+          name: berry_matter
+          path: ./lib/libesp32/berry_matter/src/solidify
+        uses: actions/download-artifact@v3
+        with:
+          name: berry_tasmota
+          path: ./lib/libesp32/berry_tasmota/src/solidify
+      - name: Move new solidified code back in folder
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Solidified Code updated
+
+
 jobs:
   os-check-win:
     runs-on: windows-2019
@@ -72,35 +124,6 @@ jobs:
         with:
           name: firmware
           path: ./build_output
-
-  be_solidify:
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-      - name: Make Berry and Tasmota Berry code
-        run: |
-          cd lib/libesp32/berry
-          make
-          cd ../berry_tasmota
-          ../berry/berry -s -g solidify_all.be
-      - name: Matter Berry Code
-        run: |
-          cd lib/libesp32/berry_matter
-          ../berry/berry -s -g solidify_all.be
-      - uses: actions/upload-artifact@v3
-        with:
-          name: berry_matter
-          path: ./lib/libesp32/berry_matter/src/solidify
-      - uses: actions/upload-artifact@v3
-        with:
-          name: berry_tasmota
-          path: ./lib/libesp32/berry_tasmota/src/solidify
-
-
 
   base-images:
     needs: be_solidify
