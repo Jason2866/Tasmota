@@ -84,23 +84,22 @@ jobs:
       - name: Make Berry and Tasmota Berry code
         run: |
           cd lib/libesp32/berry
-          gcc --version
           make
           cd ../berry_tasmota
           ../berry/berry -s -g solidify_all.be
-          cd ../
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
-          name: be_tasmota
+          name: berry_tasmota
           path: ./berry_tasmota
-      - name: Make Tasmota Matter Code
+      - name: Matter Berry Code
         run: |
-          cd berry_matter
+          cd ../berry_matter
           ../berry/berry -s -g solidify_all.be
+        shell: bash
       - uses: actions/upload-artifact@v3
         with:
-          name: be_matter
+          name: berry_matter
           path: ./berry_matter
 
 
