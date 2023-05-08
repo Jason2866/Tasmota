@@ -17,6 +17,7 @@ concurrency:
 jobs:
   be_solidify:
     runs-on: ubuntu-20.04
+    if: github.repository == 'arendst/Tasmota'
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
@@ -45,6 +46,7 @@ jobs:
   push_solidified:
     needs: be_solidify
     runs-on: ubuntu-latest
+    if: github.repository == 'arendst/Tasmota'
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
