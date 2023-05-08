@@ -105,7 +105,7 @@ jobs:
   base-images:
     needs: be_solidify
     runs-on: ubuntu-latest
-    #if: github.repository == 'arendst/Tasmota'
+    if: github.repository == 'arendst/Tasmota'
     strategy:
       fail-fast: true
       matrix:
