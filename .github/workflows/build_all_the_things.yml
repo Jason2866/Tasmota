@@ -16,7 +16,10 @@ on:
       - '**.ini'
       - '.github/workflows/build_all_the_things.yml'
 
+jobs:
+
   be_solidify:
+    name: Generate solidified Berry code
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
@@ -67,8 +70,6 @@ on:
         with:
           commit_message: Solidified Code updated
 
-
-jobs:
   os-check-win:
     runs-on: windows-2019
     if: github.repository == 'arendst/Tasmota'
