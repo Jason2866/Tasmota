@@ -94,6 +94,7 @@ jobs:
           path: ./src/solidify
       - name: Matter Berry Code
         run: |
+          ls
           cd ../berry_matter
           ls
           ../berry/berry -s -g solidify_all.be
