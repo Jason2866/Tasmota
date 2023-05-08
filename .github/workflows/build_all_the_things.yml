@@ -3,7 +3,7 @@ name: Tasmota CI
 on:
   workflow_dispatch:
   pull_request:
-    branches: development
+    branches:
     paths:
       - '**.c'
       - '**.cpp'
@@ -73,9 +73,39 @@ jobs:
           name: firmware
           path: ./build_output
 
-  base-images:
+  be_solidify:
     runs-on: ubuntu-latest
-    if: github.repository == 'arendst/Tasmota'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Make Berry and Tasmota Berry code
+        run: |
+          cd lib/libesp32/berry
+          make
+          cd ../berry_tasmota ./solidify_all.be
+          cd ../
+      - uses: actions/upload-artifact@v3
+      - name: Upload solidified Tasmota Berry code
+        with:
+          name: be_tasmota
+          path: ./berry_tasmota
+      - name: Make Tasmota Matter Code
+        run: |
+          cd berry_matter ./solidify_all.be
+      - uses: actions/upload-artifact@v3
+      - name: Upload solidified Matter Berry code
+        with:
+          name: be_matter
+          path: ./berry_matter
+
+
+  base-images:
+    needs: be_solidify
+    runs-on: ubuntu-latest
+    #if: github.repository == 'arendst/Tasmota'
     strategy:
       fail-fast: true
       matrix:
