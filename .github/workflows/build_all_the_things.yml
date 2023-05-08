@@ -88,14 +88,10 @@ jobs:
           cd ../berry_tasmota
           ../berry/berry -s -g solidify_all.be
           ls -R
-      - uses: actions/upload-artifact@v3
-        with:
-          name: berry_tasmota
-          path: ./src/solidify
       - name: Matter Berry Code
         run: |
           ls
-          cd lib/libesp32/berry/berry_matter
+          cd ../berry_matter
           ls
           ../berry/berry -s -g solidify_all.be
       - uses: actions/upload-artifact@v3
