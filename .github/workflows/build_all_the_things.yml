@@ -2,8 +2,8 @@ name: Tasmota CI
 
 on:
   workflow_dispatch:
-  #pull_request:
-    branches:
+  pull_request:
+    branches: gh_solidify
     paths:
       - '**.c'
       - '**.cpp'
@@ -90,7 +90,7 @@ jobs:
           cd ../
           chmod -R 777 berry/
           cd berry_tasmota
-          ./solidify_all.be
+          ../berry/berry -s -g solidify_all.be
           cd ../
         shell: bash
       - uses: actions/upload-artifact@v3
