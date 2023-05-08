@@ -95,6 +95,7 @@ jobs:
       - name: Matter Berry Code
         run: |
           cd ../berry_matter
+          ls
           ../berry/berry -s -g solidify_all.be
       - uses: actions/upload-artifact@v3
         with:
