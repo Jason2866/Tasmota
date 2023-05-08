@@ -87,16 +87,16 @@ jobs:
           make
           cd ../berry_tasmota ./solidify_all.be
           cd ../
-      - name: Upload solidified Tasmota Berry code
+      #- name: Upload solidified Tasmota Berry code
       - uses: actions/upload-artifact@v3
         with:
           name: be_tasmota
           path: ./berry_tasmota
-      - name: Make Tasmota Matter Code
+      #- name: Make Tasmota Matter Code
         run: |
           cd berry_matter ./solidify_all.be
       - uses: actions/upload-artifact@v3
-      - name: Upload solidified Matter Berry code
+      #- name: Upload solidified Matter Berry code
         with:
           name: be_matter
           path: ./berry_matter
