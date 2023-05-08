@@ -87,7 +87,7 @@ jobs:
           make
           cd ../berry_tasmota
           ../berry/berry -s -g solidify_all.be
-          ls ./berry_tasmota/src/solidify
+          ls src/solidify
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
