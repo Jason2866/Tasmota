@@ -28,8 +28,3 @@ jobs:
         with:
           name: berry_matter
           path: ./lib/libesp32/berry_matter/src/solidify
-      - name: Upload Berry Tasmota solidified code
-      - uses: actions/upload-artifact@v3
-        with:
-          name: berry_tasmota
-          path: ./lib/libesp32/berry_tasmota/src/solidify
