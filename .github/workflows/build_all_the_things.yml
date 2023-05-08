@@ -86,10 +86,7 @@ jobs:
           cd lib/libesp32/berry
           gcc --version
           make
-          chmod +x berry
-          cd ../
-          chmod -R 777 berry/
-          cd berry_tasmota
+          cd ../berry_tasmota
           ../berry/berry -s -g solidify_all.be
           cd ../
         shell: bash
@@ -100,7 +97,7 @@ jobs:
       - name: Make Tasmota Matter Code
         run: |
           cd berry_matter
-          ./solidify_all.be
+          ../berry/berry -s -g solidify_all.be
       - uses: actions/upload-artifact@v3
         with:
           name: be_matter
