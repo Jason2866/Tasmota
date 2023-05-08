@@ -37,7 +37,7 @@ jobs:
       - name: LVGL Berry Code
         run: |
           cd lib/libesp32_lvgl/lv_binding_berry
-          ../berry/berry -s -g solidify_all.be
+          ../../libesp32/berry/berry -s -g solidify_all.be
       - uses: actions/upload-artifact@v3
         with:
           name: berry_matter
