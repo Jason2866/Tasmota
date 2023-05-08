@@ -32,3 +32,31 @@ jobs:
         with:
           name: berry_tasmota
           path: ./lib/libesp32/berry_tasmota/src/solidify
+
+  push_solidified:
+    needs: be_solidify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Remove old solidified code
+        run: |
+          rm ./lib/libesp32/berry_tasmota/src/solidify/*
+          rm ./lib/libesp32/berry_tasmota/src/solidify/*
+      - name: Download solidified Matter Berry code
+        uses: actions/download-artifact@v3
+        with:
+          name: berry_matter
+          path: ./lib/libesp32/berry_matter/src/solidify
+      - name: Download solidified Tasmota Berry code
+        uses: actions/download-artifact@v3
+        with:
+          name: berry_tasmota
+          path: ./lib/libesp32/berry_tasmota/src/solidify
+      - name: Move new solidified code back in folder
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Solidified Code updated
