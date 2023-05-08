@@ -85,7 +85,8 @@ jobs:
         run: |
           cd lib/libesp32/berry
           make
-          cd ../berry_tasmota ./solidify_all.be
+          cd ../berry_tasmota
+          ./solidify_all.be
           cd ../
       - uses: actions/upload-artifact@v3
         with:
@@ -93,7 +94,8 @@ jobs:
           path: ./berry_tasmota
       - name: Make Tasmota Matter Code
         run: |
-          cd berry_matter ./solidify_all.be
+          cd berry_matter
+          ./solidify_all.be
       - uses: actions/upload-artifact@v3
         with:
           name: be_matter
