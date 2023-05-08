@@ -87,8 +87,8 @@ jobs:
           make
           cd ../berry_tasmota ./solidify_all.be
           cd ../
-      - uses: actions/upload-artifact@v3
       - name: Upload solidified Tasmota Berry code
+      - uses: actions/upload-artifact@v3
         with:
           name: be_tasmota
           path: ./berry_tasmota
