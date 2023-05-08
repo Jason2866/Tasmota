@@ -47,11 +47,14 @@ jobs:
           path: ./lib/libesp32/berry_tasmota/src/solidify
 
   push_solidified:
-    name: Commit changed solidified Berry code
     needs: be_solidify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
       - name: Remove old solidified code
         run: |
           rm ./lib/libesp32/berry_tasmota/src/solidify/*
