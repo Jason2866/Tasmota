@@ -92,7 +92,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: berry_tasmota
-          path: ./berry_tasmota/src/solidify
+          path: ./src/solidify
       - name: Matter Berry Code
         run: |
           cd ../berry_matter
@@ -101,7 +101,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: berry_matter
-          path: ./berry_matter/src/solidify
+          path: ./src/solidify
 
 
   base-images:
