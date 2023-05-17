@@ -100,11 +100,11 @@
  * flash led = gpio 4
  * red led = gpio 33
  * optional rtsp url: rtsp://xxx.xxx.xxx.xxx:8554/mjpeg/1
- * 
+ *
  * SH 2023-05-14 - added mutex for many webcam functions - this is to prevent multi-threaded access to the camera functions, which 
  * can case error 0x105 upon re-init.
  * Errors 0x103 and 0xffffffff could indicate CAM_PWDN incorrect.
- * 
+ *
  * I2C use: if USE_I2C is enabled, you can set GPIO26 to I2c_SDA/2 and GPIO27 to I2C_SCL/2, and then use the shared I2C bus 2.
  * Then you can use cmd i2cscan2 to check for camera presence.
  */
@@ -337,7 +337,7 @@ uint32_t WcSetup(int32_t fsiz) {
   Wc.stream_active = 0;
 
   if (fsiz < 0) {
-    if (Wc.up){    
+    if (Wc.up){
       esp_camera_deinit();
       AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: Deinit fsiz %d"), fsiz);
       Wc.up = 0;
@@ -428,11 +428,14 @@ uint32_t WcSetup(int32_t fsiz) {
     config.frame_size = FRAMESIZE_UXGA;
     config.jpeg_quality = 10;
     config.fb_count = 2;
+    config.grab_mode = CAMERA_GRAB_LATEST;
+    config.fb_location = CAMERA_FB_IN_PSRAM;
     AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: PSRAM found"));
   } else {
     config.frame_size = FRAMESIZE_VGA;
     config.jpeg_quality = 12;
     config.fb_count = 1;
+    config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
     config.fb_location = CAMERA_FB_IN_DRAM;
     AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: PSRAM not found"));
   }
