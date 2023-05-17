@@ -426,17 +426,22 @@ uint32_t WcSetup(int32_t fsiz) {
   bool psram = UsePSRAM();
   if (psram) {
     config.frame_size = FRAMESIZE_UXGA;
-    config.jpeg_quality = 10;
-    config.fb_count = 2;
-    config.grab_mode = CAMERA_GRAB_LATEST;
     config.fb_location = CAMERA_FB_IN_PSRAM;
+    config.grab_mode = CAMERA_GRAB_LATEST;
+    #if CONFIG_IDF_TARGET_ESP32S3
+    config.jpeg_quality = 8;
+    config.fb_count = 4;
+    #else
+    config.jpeg_quality = 10;
+    config.fb_count = 3;
+    #endif
     AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: PSRAM found"));
   } else {
     config.frame_size = FRAMESIZE_VGA;
+    config.fb_location = CAMERA_FB_IN_DRAM;
+    config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
     config.jpeg_quality = 12;
     config.fb_count = 1;
-    config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
-    config.fb_location = CAMERA_FB_IN_DRAM;
     AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: PSRAM not found"));
   }
 
