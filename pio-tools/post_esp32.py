@@ -70,8 +70,6 @@ def patch_partitions_bin(size_string):
         print("New partition hash:",result.digest().hex())
 
 def esp32_detect_flashsize():
-    if github_actions:
-        return "4MB",False
     if not "upload" in COMMAND_LINE_TARGETS:
         return "4MB",False
     esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")

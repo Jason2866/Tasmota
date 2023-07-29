@@ -9,11 +9,8 @@ env = DefaultEnvironment()
 platform = env.PioPlatform()
 
 if "upload" in COMMAND_LINE_TARGETS:
-    github_actions = os.getenv('GITHUB_ACTIONS')
 
     def esp32_detect_flashsize():
-        if github_actions:
-            return "4MB",False
         esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
         esptoolpy_flags = ["flash_id"]
         esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
