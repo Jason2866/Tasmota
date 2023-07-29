@@ -74,19 +74,9 @@ def patch_partitions_bin(size_string):
 def esp32_detect_flashsize():
     if not "upload" in COMMAND_LINE_TARGETS:
         return "4MB",False
-    esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
-    esptoolpy_flags = ["flash_id"]
-    esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
     try:
-        output = subprocess.run(esptoolpy_cmd, capture_output=True).stdout.splitlines()
-        for l in output:
-            if l.decode().startswith("Detected flash size: "):
-                size = (l.decode().split(": ")[1])
-                print("Did get flash size:",size)
-                return size, True
-        return "4MB",False
-    except subprocess.CalledProcessError as exc:
-        print("Did get chip info failed with " + str(exc))
+        return env.get("TASMOTA_flash_size"),True
+    except:
         return "4MB",False
 
 def esp32_create_chip_string(chip):

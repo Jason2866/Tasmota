@@ -1,5 +1,3 @@
-from genericpath import exists
-import os
 from os.path import join
 import subprocess
 from SCons.Script import COMMAND_LINE_TARGETS
@@ -41,3 +39,5 @@ if "upload" in COMMAND_LINE_TARGETS:
     env.BoardConfig().update("upload.flash_size",size)
 
     env.BoardConfig().update("upload.maximum_size", new_maximum_size)
+
+    env.Replace(TASMOTA_flash_size=size)
