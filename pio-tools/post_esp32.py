@@ -30,6 +30,7 @@ import requests
 import shutil
 import subprocess
 import codecs
+from SCons.Script import COMMAND_LINE_TARGETS
 
 sys.path.append(join(platform.get_package_dir("tool-esptoolpy")))
 import esptool
@@ -70,6 +71,8 @@ def patch_partitions_bin(size_string):
 
 def esp32_detect_flashsize():
     if github_actions:
+        return "4MB",False
+    if not "upload" in COMMAND_LINE_TARGETS:
         return "4MB",False
     esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
     esptoolpy_flags = ["flash_id"]
