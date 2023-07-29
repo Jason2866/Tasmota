@@ -1,6 +1,8 @@
 # From: https://github.com/letscontrolit/ESPEasy/blob/mega/tools/pio/post_esp32.py
 # Thanks TD-er :)
 
+# Thanks @staars for safeboot and auto resizing LittleFS code and enhancements
+
 # Combines separate bin files with their respective offsets into a single file
 # This single file must then be flashed to an ESP32 node with 0 offset.
 #
