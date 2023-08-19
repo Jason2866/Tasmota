@@ -28,10 +28,12 @@ License along with NeoPixel.  If not, see
 
 #include <Arduino.h>
 
-// ESP32C3 I2S is not supported yet 
+// ESP32C3 I2S is not supported yet
 #if !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C2) && !defined(CONFIG_IDF_TARGET_ESP32C6)
-
+#if !defined(ARDUINO_ARCH_ESP8266)
 #include "soc/gpio_periph.h"
+#endif
+
 static inline uint32_t getCycleCount(void)
 {
     uint32_t ccount;
