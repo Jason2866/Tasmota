@@ -34,7 +34,6 @@ License along with NeoPixel.  If not, see
 #include "soc/gpio_periph.h"
 #endif
 
-#include "soc/gpio_periph.h"
 static inline uint32_t getCycleCount(void)
 {
     uint32_t ccount;
