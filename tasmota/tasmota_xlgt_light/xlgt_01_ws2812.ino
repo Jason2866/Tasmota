@@ -96,7 +96,7 @@ typedef CONCAT3(NEO_FEATURE_NEO,NEO_FEATURE_TYPE,NEO_FEATURE_FEATURE) selectedNe
 #define CONCAT6(A,B,C,D,E,F)    CONCAT6_(A,B,C,D,E,F)   // ensures expansion first, see https://stackoverflow.com/questions/3221896/how-can-i-guarantee-full-macro-expansion-of-a-parameter-before-paste
 #define CONCAT6_(A,B,C,D,E,F)    A ## B ## C ## D ## E ## F
 
-#define NEO_NEO x        Neo
+#define NEO_NEO         Neo
 
 #ifdef ESP32
   #define NEO_CHIP      Esp32

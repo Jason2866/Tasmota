@@ -239,16 +239,16 @@
 
 #define USE_LIGHT                                 // Disable support for lights
 
-#ifdef NO_NEOPIXEL
-#undef USE_WS2812
-#endif
-
 #ifndef SOC_RMT_SUPPORTED
 #undef USE_WS2812
 #endif
 
 #ifdef CONFIG_IDF_TARGET_ESP32C2
 #define USE_WS2812
+#endif
+
+#ifdef NO_NEOPIXEL
+#undef USE_WS2812
 #endif
 
 #define USE_DS18x20                              // Enable DS18x20 sensor
