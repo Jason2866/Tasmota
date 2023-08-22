@@ -96,7 +96,7 @@ typedef CONCAT3(NEO_FEATURE_NEO,NEO_FEATURE_TYPE,NEO_FEATURE_FEATURE) selectedNe
 #define CONCAT6(A,B,C,D,E,F)    CONCAT6_(A,B,C,D,E,F)   // ensures expansion first, see https://stackoverflow.com/questions/3221896/how-can-i-guarantee-full-macro-expansion-of-a-parameter-before-paste
 #define CONCAT6_(A,B,C,D,E,F)    A ## B ## C ## D ## E ## F
 
-#define NEO_NEO         Neo
+#define NEO_NEO x        Neo
 
 #ifdef ESP32
   #define NEO_CHIP      Esp32
@@ -147,6 +147,8 @@ typedef CONCAT3(NEO_FEATURE_NEO,NEO_FEATURE_TYPE,NEO_FEATURE_FEATURE) selectedNe
 
 #if defined(ESP8266) && defined(USE_WS2812_DMA)
 typedef CONCAT6(NEO_NEO,NEO_CHIP,NEO_PROTO,NEO_INV,NEO_HW,Method)   selectedNeoSpeedType;
+#elif defined(CONFIG_IDF_TARGET_ESP32C2)
+typedef NeoEsp32SpiN800KbpsMethod   selectedNeoSpeedType;
 #else // Dma : different naming scheme
 typedef CONCAT6(NEO_NEO,NEO_CHIP,NEO_PROTO,NEO_HW,NEO_INV,Method)   selectedNeoSpeedType;
 #endif
