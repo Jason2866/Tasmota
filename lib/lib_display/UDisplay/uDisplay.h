@@ -5,6 +5,10 @@
 #include <renderer.h>
 #include <Wire.h>
 #include <SPI.h>
+#if ESP_IDF_VERSION_MAJOR >= 5
+#include "soc/gpio_periph.h"
+#endif //ESP_IDF_VERSION_MAJOR >= 5
+
 
 #ifdef ESP32
 #ifdef CONFIG_IDF_TARGET_ESP32S3

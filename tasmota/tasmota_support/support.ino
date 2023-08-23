@@ -1591,6 +1591,10 @@ void TemplateGpios(myio *gp)
 /*
 #if defined(ESP32) && CONFIG_IDF_TARGET_ESP32C3
     dest[i] = src[i];
+#elif  defined(CONFIG_IDF_TARGET_ESP32C6)
+    if (10 == i) { j = 12; }    // skip 10-11
+    dest[j] = src[i];
+    j++;
 #elif defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     if (22 == i) { j = 33; }    // skip 22-32
     dest[j] = src[i];

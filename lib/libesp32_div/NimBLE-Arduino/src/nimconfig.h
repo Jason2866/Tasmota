@@ -153,7 +153,7 @@
 #define CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE 4096
 #endif
 
-#ifndef CONFIG_BT_NIMBLE_ROLE_CENTRAL // means for Tasmota: nimble was already embedded into the Arduino framework
+#ifndef CONFIG_BT_NIMBLE_ROLE_CENTRAL // means for Tasmota: nimble was already embedded into the framework
 
 /* This section should not be altered */
 #ifndef CONFIG_BT_NIMBLE_ROLE_CENTRAL_DISABLED
@@ -287,6 +287,7 @@
 #endif
 
 #if !defined(CONFIG_IDF_TARGET_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32S3)
+#if !defined(CONFIG_IDF_TARGET_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32S3)
 #define CONFIG_IDF_TARGET_ESP32 1
 #endif
 
@@ -328,10 +329,13 @@
 
 #endif //CONFIG_BT_NIMBLE_ROLE_CENTRAL
 
+#endif //CONFIG_BT_NIMBLE_ROLE_CENTRAL
+
 /* Enables the use of Arduino String class for attribute values */
 #if defined __has_include
 #  if __has_include (<Arduino.h>)
 #    define NIMBLE_CPP_ARDUINO_STRING_AVAILABLE
 #  endif
 #endif
+
 
