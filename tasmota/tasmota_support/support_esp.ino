@@ -227,10 +227,10 @@ String GetCodeCores(void) {
   #define ESP32_ARCH              "esp32s2"
 #elif CONFIG_IDF_TARGET_ESP32S3
   #define ESP32_ARCH              "esp32s3"
-#elif CONFIG_IDF_TARGET_ESP32C3
-  #define ESP32_ARCH              "esp32c3"
 #elif CONFIG_IDF_TARGET_ESP32C2
   #define ESP32_ARCH              "esp32c2"
+#elif CONFIG_IDF_TARGET_ESP32C3
+  #define ESP32_ARCH              "esp32c3"
 #elif CONFIG_IDF_TARGET_ESP32C6
   #define ESP32_ARCH              "esp32c6"
 #else
@@ -250,10 +250,10 @@ String GetCodeCores(void) {
     #include "esp32s2/rom/rtc.h"
   #elif CONFIG_IDF_TARGET_ESP32S3  // ESP32-S3
     #include "esp32s3/rom/rtc.h"
+  #elif CONFIG_IDF_TARGET_ESP32C2  // ESP32-C2
+    #include "esp32c2/rom/rtc.h"
   #elif CONFIG_IDF_TARGET_ESP32C3  // ESP32-C3
     #include "esp32c3/rom/rtc.h"
-  #elif CONFIG_IDF_TARGET_ESP32C2  // ESP32-C3
-    #include "esp32c2/rom/rtc.h"
   #elif CONFIG_IDF_TARGET_ESP32C6  // ESP32-C6
     #include "esp32c6/rom/rtc.h"
   #else
@@ -420,6 +420,7 @@ extern "C" {
 #include "esp_image_format.h"
 }
 #include "esp_system.h"
+#include "esp_flash.h"
 #if ESP_IDF_VERSION_MAJOR > 3       // IDF 4+
   #if CONFIG_IDF_TARGET_ESP32       // ESP32/PICO-D4
     #include "esp32/rom/spi_flash.h"
@@ -430,11 +431,11 @@ extern "C" {
   #elif CONFIG_IDF_TARGET_ESP32S3   // ESP32-S3
     #include "esp32s3/rom/spi_flash.h"
     #define ESP_FLASH_IMAGE_BASE 0x0000     // Esp32s3 is located at 0x0000
-  #elif CONFIG_IDF_TARGET_ESP32C3   // ESP32-C3
-    #include "esp32c3/rom/spi_flash.h"
-    #define ESP_FLASH_IMAGE_BASE 0x0000     // Esp32c3 is located at 0x0000
   #elif CONFIG_IDF_TARGET_ESP32C2   // ESP32-C2
     #include "esp32c2/rom/spi_flash.h"
+    #define ESP_FLASH_IMAGE_BASE 0x0000     // Esp32c2 is located at 0x0000
+  #elif CONFIG_IDF_TARGET_ESP32C3   // ESP32-C3
+    #include "esp32c3/rom/spi_flash.h"
     #define ESP_FLASH_IMAGE_BASE 0x0000     // Esp32c3 is located at 0x0000
   #elif CONFIG_IDF_TARGET_ESP32C6   // ESP32-C6
     #include "esp32c6/rom/spi_flash.h"
@@ -580,7 +581,7 @@ int32_t EspPartitionMmap(uint32_t action) {
 // ESP32 specific
 //
 
-#ifndef CONFIG_IDF_TARGET_ESP32C6
+#ifdef CONFIG_IDF_TARGET_ESP32
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 
@@ -588,8 +589,7 @@ void DisableBrownout(void) {
   // https://github.com/espressif/arduino-esp32/issues/863#issuecomment-347179737
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);  // Disable brownout detector
 }
-#endif
-
+#endif  // ESP32
 
 //
 // ESP32 Alternatives
@@ -648,11 +648,13 @@ uint32_t ESP_getChipId(void) {
   return id;
 }
 
-uint32_t ESP_getFlashChipMagicSize(void)
-{
+uint32_t ESP_getFlashChipMagicSize(void) {
     esp_image_header_t fhdr;
-    if(ESP.flashRead(ESP_FLASH_IMAGE_BASE, (uint32_t*)&fhdr.magic, sizeof(esp_image_header_t)) && fhdr.magic != ESP_IMAGE_HEADER_MAGIC) {
-        return 0;
+//    if(ESP.flashRead(ESP_FLASH_IMAGE_BASE, (uint32_t*)&fhdr.magic, sizeof(esp_image_header_t)) && fhdr.magic != ESP_IMAGE_HEADER_MAGIC) {
+//      return 0;
+//    }
+    if (esp_flash_read(esp_flash_default_chip, (void*)&fhdr, ESP_FLASH_IMAGE_BASE, sizeof(esp_image_header_t)) && fhdr.magic != ESP_IMAGE_HEADER_MAGIC) {
+      return 0;
     }
     return ESP_magicFlashChipSize(fhdr.spi_size);
 }

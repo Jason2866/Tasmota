@@ -536,8 +536,7 @@ bool SettingsConfigRestore(void) {
     valid_settings = (0 == settings_buffer[0xF36]);  // Settings->config_version
 #endif  // ESP8266
 #ifdef ESP32
-
-#ifdef CONFIG_IDF_TARGET_ESP32S3
+#if CONFIG_IDF_TARGET_ESP32S3
     valid_settings = (2 == settings_buffer[0xF36]);  // Settings->config_version ESP32S3
 #elif CONFIG_IDF_TARGET_ESP32S2
     valid_settings = (3 == settings_buffer[0xF36]);  // Settings->config_version ESP32S2
@@ -960,7 +959,7 @@ void SettingsDefaultSet2(void) {
 //  Settings->config_version = 0;  // ESP8266 (Has been 0 for long time)
 #endif  // ESP8266
 #ifdef ESP32
-#ifdef CONFIG_IDF_TARGET_ESP32S3
+#if CONFIG_IDF_TARGET_ESP32S3
   Settings->config_version = 2;  // ESP32S3
 #elif CONFIG_IDF_TARGET_ESP32S2
   Settings->config_version = 3;  // ESP32S2
@@ -1528,7 +1527,7 @@ void SettingsDelta(void) {
       Settings->config_version = 0;  // ESP8266 (Has been 0 for long time)
 #endif  // ESP8266
 #ifdef ESP32
-#ifdef CONFIG_IDF_TARGET_ESP32S3
+#if CONFIG_IDF_TARGET_ESP32S3
       Settings->config_version = 2;  // ESP32S3
 #elif CONFIG_IDF_TARGET_ESP32S2
       Settings->config_version = 3;  // ESP32S2

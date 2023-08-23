@@ -32,7 +32,11 @@
 bool lmt01_initialized = false;
 float lmt01_temperature = NAN;
 
-static void LMT01_countPulse(void);
+volatile int lmt01_pulseCount = 0;
+
+static void IRAM_ATTR LMT01_countPulse(void) {
+  lmt01_pulseCount++;
+}
 
 void LMT01_Init(void) {
   if (PinUsed(GPIO_LMT01)) {
@@ -40,12 +44,6 @@ void LMT01_Init(void) {
     attachInterrupt(Pin(GPIO_LMT01), LMT01_countPulse, FALLING);
     lmt01_initialized = true;
   }
-}
-
-volatile int lmt01_pulseCount = 0;
-
-static void IRAM_ATTR LMT01_countPulse(void) {
-  lmt01_pulseCount++;
 }
 
 void LMT01_GetTemperature(void) {

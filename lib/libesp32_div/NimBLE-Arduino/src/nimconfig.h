@@ -287,6 +287,7 @@
 #endif
 
 #if !defined(CONFIG_IDF_TARGET_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32S3)
+#if !defined(CONFIG_IDF_TARGET_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32S3)
 #define CONFIG_IDF_TARGET_ESP32 1
 #endif
 
@@ -328,10 +329,13 @@
 
 #endif //CONFIG_BT_NIMBLE_ROLE_CENTRAL
 
+#endif //CONFIG_BT_NIMBLE_ROLE_CENTRAL
+
 /* Enables the use of Arduino String class for attribute values */
 #if defined __has_include
 #  if __has_include (<Arduino.h>)
 #    define NIMBLE_CPP_ARDUINO_STRING_AVAILABLE
 #  endif
 #endif
+
 

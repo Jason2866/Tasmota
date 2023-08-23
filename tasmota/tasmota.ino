@@ -401,11 +401,11 @@ TSettings* Settings = nullptr;
 
 void setup(void) {
 #ifdef ESP32
+#ifdef CONFIG_IDF_TARGET_ESP32
 #ifdef DISABLE_ESP32_BROWNOUT
   DisableBrownout();      // Workaround possible weak LDO resulting in brownout detection during Wifi connection
 #endif  // DISABLE_ESP32_BROWNOUT
 
-#ifdef CONFIG_IDF_TARGET_ESP32
   // restore GPIO16/17 if no PSRAM is found
   #if ESP_IDF_VERSION_MAJOR < 5       // TODO for esp-idf 5
   if (!FoundPSRAM()) {

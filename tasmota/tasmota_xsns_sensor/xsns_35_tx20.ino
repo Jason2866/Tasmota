@@ -165,8 +165,7 @@ uint32_t tx2x_last_available = 0;
 uint32_t tx23_stage = 0;
 #endif  // USE_TX23_WIND_SENSOR
 
-static void IRAM_ATTR TX2xStartRead(void)
-{
+static void IRAM_ATTR TX2xStartRead(void) {
   /**
    * La Crosse TX20 Anemometer datagram every 2 seconds
    * 0-0 11011 0011 111010101111 0101 1100 000101010000 0-0 - Received pin data at 1200 uSec per bit
@@ -279,11 +278,12 @@ static void IRAM_ATTR TX2xStartRead(void)
   }
 #endif  // USE_TX23_WIND_SENSOR
 
+#ifdef ESP8266
   // Must clear this bit in the interrupt register,
   // it gets set even when interrupts are disabled
   #if defined(ESP8266) // ToDo: check with ESP32 MCUs
   GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, 1 << Pin(GPIO_TX2X_TXD_BLACK));
-  #endif // ESP8266
+#endif
 }
 
 bool Tx2xAvailable(void)

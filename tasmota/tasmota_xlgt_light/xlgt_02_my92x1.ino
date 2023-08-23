@@ -42,7 +42,6 @@ extern "C" {
 }
 #endif
 
-
 void LightDiPulse(uint8_t times)
 {
   for (uint32_t i = 0; i < times; i++) {
