@@ -238,12 +238,17 @@
 #undef USE_SONOFF_D1                             // Disable support for Sonoff D1 Dimmer (+0k7 code)
 #undef USE_SHELLY_DIMMER                         // Disable support for Shelly Dimmer (+3k code)
 
+#ifdef S3_DISPLAY
+#undef USE_LIGHT
+#undef USE_WS2812
+#undef USE_LVGL_MAX_SLEEP
+#define USE_LVGL_MAX_SLEEP  0
+#endif
+
+
+#ifndef S3_DISPLAY
 #define USE_LIGHT
 #define USE_WS2812
-
-#ifdef NO_NEOPIXEL
-#undef USE_WS2812
-#endif
 
 #define USE_DS18x20                              // Enable DS18x20 sensor
 
@@ -303,6 +308,21 @@
 #define USE_DS1624
 */
 
+#define USE_COUNTER
+#define USE_SERIAL_BRIDGE                        // Add support for software Serial Bridge console Tee (+2k code)
+#define USE_ETHERNET
+
+#endif  // not S3_DISPLAY
+
+#undef USE_ENERGY_SENSOR                         // Disable energy sensors
+#undef USE_IR_REMOTE                             // Disable IR driver
+#undef USE_AC_ZERO_CROSS_DIMMER                  // API for timers has changed with IDF 5.x
+
+#define USE_TLS
+#define USE_WEBSERVER
+#define USE_WEBCLIENT
+#define USE_WEBCLIENT_HTTPS
+
 #define USE_I2S
 #define USE_SPI
 #define USE_LVGL
@@ -322,20 +342,6 @@
 #define USE_MLX90614
 #define USE_UNIVERSAL_DISPLAY
 #define USE_DISPLAY_LVGL_ONLY
-
-#define USE_COUNTER
-#undef USE_ENERGY_SENSOR                         // Disable energy sensors
-
-#undef USE_IR_REMOTE                             // Disable IR driver
-
-#undef USE_AC_ZERO_CROSS_DIMMER                  // API for timers has changed with IDF 5.x
-
-#define USE_TLS
-#define USE_WEBSERVER
-#define USE_WEBCLIENT
-#define USE_WEBCLIENT_HTTPS
-#define USE_SERIAL_BRIDGE                        // Add support for software Serial Bridge console Tee (+2k code)
-#define USE_ETHERNET
 
 #ifdef USE_WT32_ETH01
   #undef ETH_TYPE
