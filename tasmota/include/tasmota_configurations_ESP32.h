@@ -238,15 +238,6 @@
 #undef USE_SONOFF_D1                             // Disable support for Sonoff D1 Dimmer (+0k7 code)
 #undef USE_SHELLY_DIMMER                         // Disable support for Shelly Dimmer (+3k code)
 
-#ifdef S3_DISPLAY
-#undef USE_LIGHT
-#undef USE_WS2812
-#undef USE_LVGL_MAX_SLEEP
-#define USE_LVGL_MAX_SLEEP  0
-#endif
-
-
-#ifndef S3_DISPLAY
 #define USE_LIGHT
 #define USE_WS2812
 
@@ -311,8 +302,6 @@
 #define USE_COUNTER
 #define USE_SERIAL_BRIDGE                        // Add support for software Serial Bridge console Tee (+2k code)
 #define USE_ETHERNET
-
-#endif  // not S3_DISPLAY
 
 #undef USE_ENERGY_SENSOR                         // Disable energy sensors
 #undef USE_IR_REMOTE                             // Disable IR driver
