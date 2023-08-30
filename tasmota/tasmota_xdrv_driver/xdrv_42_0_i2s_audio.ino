@@ -68,7 +68,9 @@
 #include "AudioGeneratorAAC.h"
 
 #ifdef ESP32
+#if ESP_IDF_VERSION_MAJOR < 5
 #include <driver/i2s.h>
+#endif //ESP_IDF_VERSION_MAJOR < 5
 #endif
 
 #undef AUDIO_PWR_ON

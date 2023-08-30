@@ -20,7 +20,14 @@
 
 #pragma once
 #ifdef ESP32
+#if ESP_IDF_VERSION_MAJOR < 5 
 #include <driver/i2s.h>
+#else
+#include "driver/i2s_std.h"
+#include "driver/i2s_types.h"
+#define I2S_MCLK_MULTIPLE_DEFAULT 0 //ignore this in the API call
+#undef I2S_PIN_NO_CHANGE
+#endif //ESP_IDF_VERSION_MAJOR < 5
 #endif
 #include "AudioOutput.h"
 
@@ -77,4 +84,8 @@ class AudioOutputI2S : public AudioOutput
     int8_t mclkPin;
     uint8_t mcmult;
     uint32_t mclk_freq;
+  #if ESP_IDF_VERSION_MAJOR >= 5
+    i2s_std_config_t std_cfg;
+    i2s_chan_handle_t tx_chan;
+  #endif
 };
