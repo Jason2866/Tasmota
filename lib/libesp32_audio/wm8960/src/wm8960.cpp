@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <string.h>
 #include "esp_log.h"
+#include "rom/ets_sys.h"
 #include "wm8960.h"
 
 static TwoWire *ws8960wire;
