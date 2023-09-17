@@ -337,6 +337,7 @@ class AudioOutputI2S : public AudioOutput
 uint32_t I2sMicInit(uint8_t spkr) {
   esp_err_t err = ESP_OK;
   i2s_slot_mode_t slot_mode = (audio_i2s.Settings->rx.slot_mode == 0) ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO;
+  gpio_num_t _CLK;
 
   if(audio_i2s.rx_handle == nullptr){
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
@@ -344,7 +345,7 @@ uint32_t I2sMicInit(uint8_t spkr) {
     switch (audio_i2s.Settings->rx.mode){
       case 1:
           {
-          gpio_num_t _CLK = (gpio_num_t)Pin(GPIO_I2S_WS,1); //legacy setting for Core2, might be wrong
+          _CLK = (gpio_num_t)Pin(GPIO_I2S_WS,1); //legacy setting for Core2, might be wrong
           if(_CLK == -1){
             _CLK =  (gpio_num_t)Pin(GPIO_I2S_WS); //fallback to other port, might be wrong
           }
@@ -362,7 +363,7 @@ uint32_t I2sMicInit(uint8_t spkr) {
         };
         pdm_rx_cfg.slot_cfg.slot_mask = (i2s_pdm_slot_mask_t)audio_i2s.Settings->rx.slot_mask;
         err = i2s_channel_init_pdm_rx_mode(audio_i2s.rx_handle, &pdm_rx_cfg);}
-        AddLog(LOG_LEVEL_DEBUG, PSTR("I2S: RX channel in PDM mode with 16 bit width on %i channel(s) initialized with err code: %u"),slot_mode, err);
+        AddLog(LOG_LEVEL_DEBUG, PSTR("I2S: RX channel in PDM mode, CLK: %i, DIN: %i, 16 bit width, %i channel(s), err code: %u"),_CLK, Pin(GPIO_I2S_DIN), slot_mode, err);
         break;
       default: // same as 0
           {        
@@ -373,7 +374,7 @@ uint32_t I2sMicInit(uint8_t spkr) {
               .mclk = (gpio_num_t)Pin(GPIO_I2S_MCLK),
               .bclk = (gpio_num_t)Pin(GPIO_I2S_BCLK),
               .ws   = (gpio_num_t)Pin(GPIO_I2S_WS),
-              .dout = (gpio_num_t)Pin(GPIO_I2S_DOUT),
+              .dout = I2S_GPIO_UNUSED,
               .din  = (gpio_num_t)Pin(GPIO_I2S_DIN),
               .invert_flags = {
                   .mclk_inv = false,
@@ -592,9 +593,10 @@ void I2SSettingsSave(void) {
 \*********************************************************************************************/
 
 void I2sCheckCfg(void){
-  bool useDuplexMode = (Pin(GPIO_I2S_DIN) != -1 && Pin(GPIO_I2S_DOUT) != -1); // din and dout must be configured on port 0 for duplex
+  bool useDuplexMode = ((Pin(GPIO_I2S_DIN) != -1) && (Pin(GPIO_I2S_DOUT) != -1)); // din and dout must be configured on port 0 for duplex
+  AddLog(LOG_LEVEL_DEBUG, PSTR("I2S: DIN %i , DOUT %i"),Pin(GPIO_I2S_DIN),Pin(GPIO_I2S_DOUT) );
   if(useDuplexMode){
-    if(audio_i2s.Settings->rx.mode == 1 ||audio_i2s.Settings->tx.mode == 1 ){
+    if(audio_i2s.Settings->rx.mode == 1 || audio_i2s.Settings->tx.mode == 1 ){
       useDuplexMode = false;
       AddLog(LOG_LEVEL_DEBUG, PSTR("I2S: PDM forbids full duplex mode"));
     }
