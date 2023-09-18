@@ -222,6 +222,11 @@ class AudioOutputI2S : public AudioOutput
 
   bool begin(){
     if(tx_is_enabled) return true;
+    if(i2sOn == false){
+      if(audio_i2s.Settings->sys.duplex == 0 && audio_i2s.Settings->sys.rx == 1){
+      this->startI2SChannel();
+    }
+    }
     int result = i2s_channel_enable(tx_chan);
     if(result != 0){
        AddLog(LOG_LEVEL_INFO,PSTR("I2S: Could not enable i2s_channel: %i"), result);
@@ -232,6 +237,10 @@ class AudioOutputI2S : public AudioOutput
   }
   bool stop(){
     i2s_channel_disable(tx_chan);
+    if(audio_i2s.Settings->sys.duplex == 0 && audio_i2s.Settings->sys.rx == 1){
+      i2s_del_channel(tx_chan);
+      i2sOn = false;
+    }
     tx_is_enabled = false;
     return true;
   }
@@ -334,10 +343,14 @@ class AudioOutputI2S : public AudioOutput
 \*********************************************************************************************/
 
 
-uint32_t I2sMicInit(uint8_t spkr) {
+uint32_t I2sMicInit(uint8_t enable) {
   esp_err_t err = ESP_OK;
   i2s_slot_mode_t slot_mode = (audio_i2s.Settings->rx.slot_mode == 0) ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO;
   gpio_num_t _CLK;
+
+  if(audio_i2s.Settings->sys.duplex == 1 && audio_i2s.rx_handle != nullptr){
+    return 0; // no need to en- or disable when in full duplex mode and already initialized
+  }
 
   if(audio_i2s.rx_handle == nullptr){
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
@@ -388,9 +401,18 @@ uint32_t I2sMicInit(uint8_t spkr) {
           AddLog(LOG_LEVEL_DEBUG, PSTR("I2S: RX channel in standard mode with 16 bit width on %i channel(s) initialized"),slot_mode);
       break;
     }
-    err = i2s_channel_enable(audio_i2s.rx_handle);
-  }
 
+  }
+  if(enable == 0){
+    int _err = i2s_channel_disable(audio_i2s.rx_handle);
+    i2s_del_channel(audio_i2s.rx_handle);
+    audio_i2s.rx_handle = nullptr;
+    AddLog(LOG_LEVEL_DEBUG, PSTR("I2S: RX channel disable: %i"),_err);
+  }
+  else{
+    err = i2s_channel_enable(audio_i2s.rx_handle);
+    AddLog(LOG_LEVEL_DEBUG, PSTR("I2S: RX channel enable: %i"),err);
+  }
   return err;
 }
 
@@ -540,6 +562,7 @@ int32_t I2sRecordShine(char *path) {
   if (audio_i2s.use_stream) {
     stack = 8000;
   }
+  I2sMicInit(1);
 
   err = xTaskCreatePinnedToCore(I2sMicTask, "MIC", stack, NULL, 3, &audio_i2s.mic_task_handle, 1);
 
@@ -636,7 +659,7 @@ bool I2sPinInit(void) {
   I2sCheckCfg();
 
   if(audio_i2s.Settings->sys.rx == 1 && audio_i2s.Settings->sys.duplex == 0){
-    result += I2sMicInit(1);
+    result += I2sMicInit(0);
   }
 
   if(audio_i2s.Settings->sys.tx == 1){
