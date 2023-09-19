@@ -31,6 +31,7 @@
  #include "es7243e.h"
 
 
+
 static const char *TAG = "DRV7243E";
 static TwoWire *es7243e_wire;
 
