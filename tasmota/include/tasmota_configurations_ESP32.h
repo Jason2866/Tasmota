@@ -303,7 +303,7 @@
 #define USE_SERIAL_BRIDGE                        // Add support for software Serial Bridge console Tee (+2k code)
 
 #undef USE_ENERGY_SENSOR                         // Disable energy sensors
-#define USE_IR_REMOTE                             // Disable IR driver
+#undef USE_IR_REMOTE                             // Disable IR driver
 #undef USE_AC_ZERO_CROSS_DIMMER                  // API for timers has changed with IDF 5.x
 
 #define USE_TLS
