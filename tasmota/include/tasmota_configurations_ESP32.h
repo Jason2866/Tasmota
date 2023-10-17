@@ -290,7 +290,7 @@
 #define USE_I2S
 #define USE_SPI
 
-#ifndef ESP32C2
+#ifdef ESP32_4M
   #define USE_LVGL
   #define USE_LVGL_HASPMOTA
   #define USE_LVGL_FREETYPE
@@ -310,7 +310,7 @@
   #define USE_DISPLAY_LVGL_ONLY
 
   #define USE_ETHERNET
-#endif // ESP32C2
+#endif // ESP32_4M
 
 #ifdef USE_WT32_ETH01
   #undef ETH_TYPE
