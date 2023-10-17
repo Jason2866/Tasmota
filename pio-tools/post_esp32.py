@@ -228,8 +228,9 @@ def esp32_create_combined_bin(source, target, env):
 
     # "main" firmware to app0 - mandatory, except we just built a new safeboot bin locally
     if("safeboot" not in firmware_name):
-        print(f" - {hex(app_offset)} | {firmware_name}")
-        cmd += [hex(app_offset), firmware_name]
+        #print(f" - {hex(app_offset)} | {firmware_name}")
+        #cmd += [hex(app_offset), firmware_name]
+        print("off")
 
     else:
         print("Upload new safeboot binary only")
