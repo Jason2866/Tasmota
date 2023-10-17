@@ -147,17 +147,16 @@ sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
 firmware_name = env.subst("$BUILD_DIR/${PROGNAME}.bin")
 chip = env.get("BOARD_MCU")
 tasmota_platform = esp32_create_chip_string(chip)
+# The offset from begin of the file where the app0 partition starts
+# This is defined in the partition .csv file
+# factory_offset = -1      # error code value - currently unused
+app_offset = 0x10000     # default value for "old" scheme
+fs_offset = -1           # error code value
+flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
 
 if "safeboot" not in tasmota_platform:
     def esp32_create_combined_bin(source, target, env):
         print("Generating combined binary for serial flashing")
-        # The offset from begin of the file where the app0 partition starts
-        # This is defined in the partition .csv file
-        # factory_offset = -1      # error code value - currently unused
-        app_offset = 0x10000     # default value for "old" scheme
-        fs_offset = -1           # error code value
-        flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
-
         with open(env.BoardConfig().get("build.partitions")) as csv_file:
             print("Read partitions from ",env.BoardConfig().get("build.partitions"))
             csv_reader = csv.reader(csv_file, delimiter=',')
