@@ -259,7 +259,7 @@ def esp32_create_combined_bin(source, target, env):
             print("Will use custom upload command for flashing operation to add file system defined for this build target.")
 
     else:
-    print("Upload new safeboot binary only")
+        print("Upload new safeboot binary only")
     
     esptool.main(cmd)
 
