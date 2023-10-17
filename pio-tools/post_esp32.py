@@ -138,6 +138,7 @@ def esp32_fetch_safeboot_bin(tasmota_platform):
 def esp32_copy_new_safeboot_bin(tasmota_platform,new_local_safeboot_fw):
     print("Copy new local safeboot firmware to variants dir -> using it for further flashing operations")
     safeboot_fw_name = join(variants_dir, tasmota_platform + "-safeboot.bin")
+    print("safe boot fw name: " + safeboot_fw_name)
     if os.path.exists(variants_dir):
         shutil.copy(new_local_safeboot_fw, safeboot_fw_name)
 
@@ -190,7 +191,7 @@ def esp32_create_combined_bin(source, target, env):
     if not os.path.exists(variants_dir):
         os.makedirs(variants_dir)
     if("safeboot" in firmware_name):
-        print("Env name: " + tasmota_platform + "firmware_name: " + firmware_name)
+        print("Env name: " + tasmota_platform + "|| firmware_name: " + firmware_name)
         esp32_copy_new_safeboot_bin(tasmota_platform,firmware_name)
     else:
         esp32_fetch_safeboot_bin(tasmota_platform)
