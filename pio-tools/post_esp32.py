@@ -221,10 +221,10 @@ def esp32_create_combined_bin(source, target, env):
     ]
 
     print("    Offset | File")
-    for section in sections:
-        sect_adr, sect_file = section.split(" ", 1)
-        print(f" -  {sect_adr} | {sect_file}")
-        cmd += [sect_adr, sect_file]
+    #for section in sections:
+        #sect_adr, sect_file = section.split(" ", 1)
+        #print(f" -  {sect_adr} | {sect_file}")
+        #cmd += [sect_adr, sect_file]
 
     # "main" firmware to app0 - mandatory, except we just built a new safeboot bin locally
     if("safeboot" not in firmware_name):
