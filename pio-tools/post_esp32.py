@@ -144,6 +144,12 @@ def esp32_copy_new_safeboot_bin(tasmota_platform,new_local_safeboot_fw):
 
 def esp32_create_combined_bin(source, target, env):
     #print("Generating combined binary for serial flashing")
+    new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
+    sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
+    firmware_name = env.subst("$BUILD_DIR/${PROGNAME}.bin")
+    chip = env.get("BOARD_MCU")
+    tasmota_platform = esp32_create_chip_string(chip)
+    
     if "safeboot" not in tasmota_platform:
 
         # The offset from begin of the file where the app0 partition starts
@@ -178,12 +184,6 @@ def esp32_create_combined_bin(source, target, env):
                         if esp32_build_filesystem(partition_size):
                            fs_offset = int(row[3],base=16)
 
-
-    new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
-    sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
-    firmware_name = env.subst("$BUILD_DIR/${PROGNAME}.bin")
-    chip = env.get("BOARD_MCU")
-    tasmota_platform = esp32_create_chip_string(chip)
 
     if "-DUSE_USB_CDC_CONSOLE" in env.BoardConfig().get("build.extra_flags") and "cdc" not in tasmota_platform:
         tasmota_platform += "cdc"
