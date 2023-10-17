@@ -83,7 +83,7 @@ def esp32_detect_flashsize():
 def esp32_create_chip_string(chip):
     tasmota_platform = env.subst("$BUILD_DIR").split(os.path.sep)[-1]
     tasmota_platform = tasmota_platform.split('-')[0]
-    print("Env name: " + tasmota_platform)
+    #print("Env name: " + tasmota_platform)
     if 'tasmota' + chip[3:] not in tasmota_platform: # quick check for a valid name like 'tasmota' + '32c3'
         print('Unexpected naming conventions in this build environment -> Undefined behavior for further build process!!')
         print("Expected build environment name like 'tasmota32-whatever-you-want'")
@@ -190,6 +190,7 @@ def esp32_create_combined_bin(source, target, env):
     if not os.path.exists(variants_dir):
         os.makedirs(variants_dir)
     if("safeboot" in firmware_name):
+        print("Env name: " + tasmota_platform + "firmware_name: " + firmware_name)
         esp32_copy_new_safeboot_bin(tasmota_platform,firmware_name)
     else:
         esp32_fetch_safeboot_bin(tasmota_platform)
