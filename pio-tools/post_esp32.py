@@ -144,38 +144,39 @@ def esp32_copy_new_safeboot_bin(tasmota_platform,new_local_safeboot_fw):
 
 def esp32_create_combined_bin(source, target, env):
     #print("Generating combined binary for serial flashing")
+    if "safeboot" not in tasmota_platform:
 
-    # The offset from begin of the file where the app0 partition starts
-    # This is defined in the partition .csv file
-    # factory_offset = -1      # error code value - currently unused
-    app_offset = 0x10000     # default value for "old" scheme
-    fs_offset = -1           # error code value
-    flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
+        # The offset from begin of the file where the app0 partition starts
+        # This is defined in the partition .csv file
+        # factory_offset = -1      # error code value - currently unused
+        app_offset = 0x10000     # default value for "old" scheme
+        fs_offset = -1           # error code value
+        flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
 
-    with open(env.BoardConfig().get("build.partitions")) as csv_file:
-        print("Read partitions from ",env.BoardConfig().get("build.partitions"))
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        line_count = 0
-        for row in csv_reader:
-            if line_count == 0:
-                print(f'{",  ".join(row)}')
-                line_count += 1
-            else:
-                print(f'{row[0]}   {row[1]}   {row[2]}   {row[3]}   {row[4]}')
-                line_count += 1
-                if(row[0] == 'app0'):
-                    app_offset = int(row[3],base=16)
-                # elif(row[0] == 'factory'):
-                #     factory_offset = int(row[3],base=16)
-                elif(row[0] == 'spiffs'):
-                    partition_size = row[4]
-                    if flash_size_was_overridden:
-                        print(f"Will override fixed FS partition size from {env.BoardConfig().get('build.partitions')}: {partition_size} ...")
-                        partition_size =  hex(int(flash_size_from_esp.split("MB")[0]) * 0x100000 - int(row[3],base=16))
-                        print(f"... with computed maximum size from connected {env.get('BOARD_MCU')}: {partition_size}")
-                        patch_partitions_bin(partition_size)
-                    if esp32_build_filesystem(partition_size):
-                        fs_offset = int(row[3],base=16)
+        with open(env.BoardConfig().get("build.partitions")) as csv_file:
+            print("Read partitions from ",env.BoardConfig().get("build.partitions"))
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            line_count = 0
+            for row in csv_reader:
+                if line_count == 0:
+                   print(f'{",  ".join(row)}')
+                   line_count += 1
+                else:
+                    print(f'{row[0]}   {row[1]}   {row[2]}   {row[3]}   {row[4]}')
+                    line_count += 1
+                    if(row[0] == 'app0'):
+                        app_offset = int(row[3],base=16)
+                    # elif(row[0] == 'factory'):
+                    #     factory_offset = int(row[3],base=16)
+                    elif(row[0] == 'spiffs'):
+                        partition_size = row[4]
+                        if flash_size_was_overridden:
+                            print(f"Will override fixed FS partition size from {env.BoardConfig().get('build.partitions')}: {partition_size} ...")
+                            partition_size =  hex(int(flash_size_from_esp.split("MB")[0]) * 0x100000 - int(row[3],base=16))
+                            print(f"... with computed maximum size from connected {env.get('BOARD_MCU')}: {partition_size}")
+                            patch_partitions_bin(partition_size)
+                        if esp32_build_filesystem(partition_size):
+                           fs_offset = int(row[3],base=16)
 
 
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
