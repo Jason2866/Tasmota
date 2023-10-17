@@ -151,7 +151,7 @@ def esp32_create_combined_bin(source, target, env):
     tasmota_platform = esp32_create_chip_string(chip)
     
     if "safeboot" not in tasmota_platform:
-
+        print("Generating combined binary for serial flashing")
         # The offset from begin of the file where the app0 partition starts
         # This is defined in the partition .csv file
         # factory_offset = -1      # error code value - currently unused
