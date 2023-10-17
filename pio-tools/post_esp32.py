@@ -258,7 +258,7 @@ def esp32_create_combined_bin(source, target, env):
                 )
                 print("Will use custom upload command for flashing operation to add file system defined for this build target.")
 
-    # print('Using esptool.py arguments: %s' % ' '.join(cmd))
+    print('Using esptool.py arguments: %s' % ' '.join(cmd))
 
     esptool.main(cmd)
 
