@@ -221,46 +221,47 @@ def esp32_create_combined_bin(source, target, env):
     ]
 
     print("    Offset | File")
-    #for section in sections:
-        #sect_adr, sect_file = section.split(" ", 1)
-        #print(f" -  {sect_adr} | {sect_file}")
-        #cmd += [sect_adr, sect_file]
+    for section in sections:
+        sect_adr, sect_file = section.split(" ", 1)
+        print(f" -  {sect_adr} | {sect_file}")
+        cmd += [sect_adr, sect_file]
 
     # "main" firmware to app0 - mandatory, except we just built a new safeboot bin locally
     if("safeboot" not in firmware_name):
-        #print(f" - {hex(app_offset)} | {firmware_name}")
-        #cmd += [hex(app_offset), firmware_name]
-        print("off")
+        print(f" - {hex(app_offset)} | {firmware_name}")
+        cmd += [hex(app_offset), firmware_name]
 
     else:
         print("Upload new safeboot binary only")
-        upload_port = env.subst("$UPLOAD_PORT")
-        if("upload-tasmota.php" not in upload_port) and (fs_offset != -1):
-            fs_bin = join(env.subst("$BUILD_DIR"),"littlefs.bin")
-            if exists(fs_bin):
-                before_reset = env.BoardConfig().get("upload.before_reset", "default_reset")
-                after_reset = env.BoardConfig().get("upload.after_reset", "hard_reset")
-                print(f" - {hex(fs_offset)}| {fs_bin}")
-                cmd += [hex(fs_offset), fs_bin]
-                env.Replace(
-                UPLOADERFLAGS=[
-                "--chip", chip,
-                "--port", '"$UPLOAD_PORT"',
-                "--baud", "$UPLOAD_SPEED",
-                "--before", before_reset,
-                "--after", after_reset,
-                "write_flash", "-z",
-                "--flash_mode", "${__get_board_flash_mode(__env__)}",
-                "--flash_freq", "${__get_board_f_flash(__env__)}",
-                "--flash_size", flash_size
-                ],
-                UPLOADCMD='"$PYTHONEXE" "$UPLOADER" $UPLOADERFLAGS ' + " ".join(cmd[7:])
-                )
-                print("Will use custom upload command for flashing operation to add file system defined for this build target.")
 
-    print('Using esptool.py arguments: %s' % ' '.join(cmd))
+#    if(fs_offset != -1):
+    upload_port = env.subst("$UPLOAD_PORT")
+    if("upload-tasmota.php" not in upload_port) and (fs_offset != -1):
+        fs_bin = join(env.subst("$BUILD_DIR"),"littlefs.bin")
+        if exists(fs_bin):
+            before_reset = env.BoardConfig().get("upload.before_reset", "default_reset")
+            after_reset = env.BoardConfig().get("upload.after_reset", "hard_reset")
+            print(f" - {hex(fs_offset)}| {fs_bin}")
+            cmd += [hex(fs_offset), fs_bin]
+            env.Replace(
+            UPLOADERFLAGS=[
+            "--chip", chip,
+            "--port", '"$UPLOAD_PORT"',
+            "--baud", "$UPLOAD_SPEED",
+            "--before", before_reset,
+            "--after", after_reset,
+            "write_flash", "-z",
+            "--flash_mode", "${__get_board_flash_mode(__env__)}",
+            "--flash_freq", "${__get_board_f_flash(__env__)}",
+            "--flash_size", flash_size
+            ],
+            UPLOADCMD='"$PYTHONEXE" "$UPLOADER" $UPLOADERFLAGS ' + " ".join(cmd[7:])
+            )
+            print("Will use custom upload command for flashing operation to add file system defined for this build target.")
 
-    esptool.main(cmd)
+    # print('Using esptool.py arguments: %s' % ' '.join(cmd))
+    if("safeboot" not in firmware_name):
+        esptool.main(cmd)
 
 
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", esp32_create_combined_bin)
