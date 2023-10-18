@@ -234,9 +234,8 @@ def esp32_create_combined_bin(source, target, env):
     else:
         print("Upload new safeboot binary only")
 
-#    if(fs_offset != -1):
-    upload_port = env.subst("$UPLOAD_PORT")
-    if("upload-tasmota.php" not in upload_port) and (fs_offset != -1):
+    uploader = env.subst("$UPLOADER")
+    if("esptool" in uploader) and (fs_offset != -1):
         fs_bin = join(env.subst("$BUILD_DIR"),"littlefs.bin")
         if exists(fs_bin):
             before_reset = env.BoardConfig().get("upload.before_reset", "default_reset")
