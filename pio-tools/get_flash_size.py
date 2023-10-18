@@ -6,7 +6,8 @@ Import("env")
 env = DefaultEnvironment()
 platform = env.PioPlatform()
 
-if "upload" in COMMAND_LINE_TARGETS:
+uploader = env.subst("$UPLOADER")
+if("upload" in COMMAND_LINE_TARGETS) and ("esptool" in uploader):
 
     def esp32_detect_flashsize():
         esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
