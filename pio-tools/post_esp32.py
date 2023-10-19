@@ -91,6 +91,7 @@ def esp32_detect_flashsize():
                     old_maximum_size = env.BoardConfig().get("upload.maximum_size")
                     print("old_maximum_size: ", old_maximum_size)
                     new_maximum_size = int(size.split("MB")[0]) * 0x100000
+                    print("new_maximum_size: ", new_maximum_size)
                     if new_maximum_size > old_maximum_size:
                         env.BoardConfig().update("upload.flash_size",size)
                         env.BoardConfig().update("upload.maximum_size", new_maximum_size)
@@ -192,7 +193,7 @@ def esp32_create_combined_bin(source, target, env):
                     print("upload_maximum_size: ", upload_maximum_size)
                     partition_size =  hex(upload_maximum_size - int(row[3],base=16))
                     print("partition_size: ", partition_size)
-                    if not "4MB" in upload_maximum_mb:
+                    if (not "4MB" in upload_maximum_mb) and (not "" in upload_maximum_mb):
                         patch_partitions_bin(partition_size)
 
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
@@ -207,7 +208,7 @@ def esp32_create_combined_bin(source, target, env):
 
     if not os.path.exists(variants_dir):
         os.makedirs(variants_dir)
-    if("safeboot" in firmware_name):
+    if "safeboot" in firmware_name:
         esp32_copy_new_safeboot_bin(tasmota_platform,firmware_name)
     else:
         esp32_fetch_safeboot_bin(tasmota_platform)
@@ -244,7 +245,7 @@ def esp32_create_combined_bin(source, target, env):
         cmd += [sect_adr, sect_file]
 
     # "main" firmware to app0 - mandatory, except we just built a new safeboot bin locally
-    if("safeboot" not in firmware_name):
+    if "safeboot" not in firmware_name:
         print(f" - {hex(app_offset)} | {firmware_name}")
         cmd += [hex(app_offset), firmware_name]
 
