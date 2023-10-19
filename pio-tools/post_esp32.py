@@ -89,6 +89,7 @@ def esp32_detect_flashsize():
                     print("Did get flash size:",size)
                     old_flash_size = env.BoardConfig().get("upload.flash_size")
                     old_maximum_size = env.BoardConfig().get("upload.maximum_size")
+                    print("old_maximum_size: ", old_maximum_size)
                     new_maximum_size = int(size.split("MB")[0]) * 0x100000
                     if new_maximum_size > old_maximum_size:
                         env.BoardConfig().update("upload.flash_size",size)
@@ -186,7 +187,7 @@ def esp32_create_combined_bin(source, target, env):
                 elif(row[0] == 'spiffs'):
                     partition_size = row[4]
                     upload_maximum_mb = env.BoardConfig().get("upload.maximum_size","4MB")
-                    print("Board get max upload: ", upload_maximum_mb)
+                    print("Board get max upload mb: ", upload_maximum_mb)
                     upload_maximum_size = int(upload_maximum_mb.split("MB")[0]) * 0x100000
                     partition_size =  hex(upload_maximum_size - int(row[3],base=16))
                     patch_partitions_bin(partition_size)
