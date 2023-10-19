@@ -192,7 +192,7 @@ def esp32_create_combined_bin(source, target, env):
                     print("upload_maximum_size: ", upload_maximum_size)
                     partition_size =  hex(upload_maximum_size - int(row[3],base=16))
                     print("partition_size: ", partition_size)
-                    if not "4MB" in upload_maximum_mb
+                    if not "4MB" in upload_maximum_mb:
                         patch_partitions_bin(partition_size)
 
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
