@@ -187,12 +187,13 @@ def esp32_create_combined_bin(source, target, env):
                 elif(row[0] == 'spiffs'):
                     partition_size = row[4]
                     upload_maximum_mb = env.BoardConfig().get("upload.flash_size","")
-                    print("Board get max upload mb: ", upload_maximum_mb)
+                    #print("Board get max upload mb: ", upload_maximum_mb)
                     upload_maximum_size = int(upload_maximum_mb.split("MB")[0]) * 0x100000
                     print("upload_maximum_size: ", upload_maximum_size)
                     partition_size =  hex(upload_maximum_size - int(row[3],base=16))
                     print("partition_size: ", partition_size)
-                    patch_partitions_bin(partition_size)
+                    if not "4MB" in upload_maximum_mb
+                        patch_partitions_bin(partition_size)
 
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
     sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
