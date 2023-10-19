@@ -78,8 +78,26 @@ def esp32_detect_flashsize():
     if not "esptool" in uploader: 
         return "4MB",False
     else:
-        size = env.get("TASMOTA_flash_size") # todo move function from script get_flash_size
-        return size,True
+        esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
+        esptoolpy_flags = ["flash_id"]
+        esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
+        try:
+            output = subprocess.run(esptoolpy_cmd, capture_output=True).stdout.splitlines()
+            for l in output:
+                if l.decode().startswith("Detected flash size: "):
+                    size = (l.decode().split(": ")[1])
+                    print("Did get flash size:",size)
+                    old_flash_size = env.BoardConfig().get("upload.flash_size")
+                    old_maximum_size = env.BoardConfig().get("upload.maximum_size")
+                    new_maximum_size = int(size.split("MB")[0]) * 0x100000
+                    if new_maximum_size > old_maximum_size:
+                        env.BoardConfig().update("upload.flash_size",size)
+                        env.BoardConfig().update("upload.maximum_size", new_maximum_size)
+                    return size, True
+            return "4MB",False
+        except subprocess.CalledProcessError as exc:
+            print("Did get chip info failed with " + str(exc))
+            return "4MB",False
 
 def esp32_create_chip_string(chip):
     tasmota_platform = env.subst("$BUILD_DIR").split(os.path.sep)[-1]
@@ -149,8 +167,7 @@ def esp32_create_combined_bin(source, target, env):
     # factory_offset = -1      # error code value - currently unused
     app_offset = 0x10000     # default value for "old" scheme
     fs_offset = -1           # error code value
-    flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
-
+    esp32_detect_flashsize()
     with open(env.BoardConfig().get("build.partitions")) as csv_file:
         print("Read partitions from ",env.BoardConfig().get("build.partitions"))
         csv_reader = csv.reader(csv_file, delimiter=',')
@@ -168,14 +185,10 @@ def esp32_create_combined_bin(source, target, env):
                 #     factory_offset = int(row[3],base=16)
                 elif(row[0] == 'spiffs'):
                     partition_size = row[4]
-                    if flash_size_was_overridden:
-                        print(f"Will override fixed FS partition size from {env.BoardConfig().get('build.partitions')}: {partition_size} ...")
-                        partition_size =  hex(int(flash_size_from_esp.split("MB")[0]) * 0x100000 - int(row[3],base=16))
-                        print(f"... with computed maximum size from connected {env.get('BOARD_MCU')}: {partition_size}")
-                        patch_partitions_bin(partition_size)
-                    if esp32_build_filesystem(partition_size):
-                        fs_offset = int(row[3],base=16)
-
+                    upload_maximum_mb = env.BoardConfig().get("upload.maximum_size","4MB")
+                    upload_maximum_size = int(upload_maximum_mb.split("MB")[0]) * 0x100000
+                    partition_size =  hex(upload_maximum_size - int(row[3],base=16))
+                    patch_partitions_bin(partition_size)
 
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
     sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
@@ -195,8 +208,6 @@ def esp32_create_combined_bin(source, target, env):
         esp32_fetch_safeboot_bin(tasmota_platform)
 
     flash_size = env.BoardConfig().get("upload.flash_size", "4MB")
-    if flash_size_was_overridden:
-        flash_size = flash_size_from_esp
     flash_freq = env.BoardConfig().get("build.f_flash", "40000000L")
     flash_freq = str(flash_freq).replace("L", "")
     flash_freq = str(int(int(flash_freq) / 1000000)) + "m"
