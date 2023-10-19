@@ -72,12 +72,13 @@ def patch_partitions_bin(size_string):
         print("New partition hash:",result.digest().hex())
 
 def esp32_detect_flashsize():
+    uploader = env.subst("$UPLOADER")
     if not "upload" in COMMAND_LINE_TARGETS:
         return "4MB",False
-    size = env.get("TASMOTA_flash_size")
-    if size == None:
+    if not "esptool" in uploader: 
         return "4MB",False
     else:
+        size = env.get("TASMOTA_flash_size") # todo move function from script get_flash_size
         return size,True
 
 def esp32_create_chip_string(chip):
