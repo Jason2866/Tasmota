@@ -169,7 +169,7 @@ def esp32_create_combined_bin(source, target, env):
     # factory_offset = -1      # error code value - currently unused
     app_offset = 0x10000     # default value for "old" scheme
     fs_offset = -1           # error code value
-    esp32_detect_flashsize()
+    flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
     with open(env.BoardConfig().get("build.partitions")) as csv_file:
         print("Read partitions from ",env.BoardConfig().get("build.partitions"))
         csv_reader = csv.reader(csv_file, delimiter=',')
@@ -190,7 +190,7 @@ def esp32_create_combined_bin(source, target, env):
                     upload_maximum_mb = env.BoardConfig().get("upload.flash_size","")
                     #print("Board get max upload mb: ", upload_maximum_mb)
                     print("upload_maximum_size: ", upload_maximum_size)
-                    if upload_maximum_mb not in ("4MB", "2MB", ""):
+                    if flash_size_was_overridden:
                         upload_maximum_size = int(upload_maximum_mb.split("MB")[0]) * 0x100000
                         partition_size =  hex(upload_maximum_size - int(row[3],base=16))
                         print("partition_size: ", partition_size)
