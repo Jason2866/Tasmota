@@ -195,7 +195,7 @@ def esp32_create_combined_bin(source, target, env):
                         print(f"Will override fixed FS partition size from {env.BoardConfig().get('build.partitions')}: {partition_size} ...")
                         upload_maximum_size = int(upload_maximum_mb.split("MB")[0]) * 0x100000
                         partition_size =  hex(upload_maximum_size - int(row[3],base=16))
-                        print("partition_size: ", partition_size)
+                        print(f"... with computed maximum size from connected {env.get('BOARD_MCU')}: {partition_size}")
                         patch_partitions_bin(partition_size)
                     if esp32_build_filesystem(partition_size):
                         fs_offset = int(row[3],base=16)
