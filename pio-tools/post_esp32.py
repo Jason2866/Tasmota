@@ -197,7 +197,7 @@ def esp32_create_combined_bin(source, target, env):
                         patch_partitions_bin(partition_size)
                     if esp32_build_filesystem(partition_size):
                         fs_offset = int(row[3],base=16)
-                        
+
 
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
     sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
