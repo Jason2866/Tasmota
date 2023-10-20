@@ -190,10 +190,10 @@ def esp32_create_combined_bin(source, target, env):
                     partition_size = row[4]
                     upload_maximum_mb = env.BoardConfig().get("upload.flash_size","")
                     #print("Board get max upload mb: ", upload_maximum_mb)
-                    print("upload_maximum_size: ", upload_maximum_size)
                     if flash_size_was_overridden:
                         print(f"Will override fixed FS partition size from {env.BoardConfig().get('build.partitions')}: {partition_size} ...")
                         upload_maximum_size = int(upload_maximum_mb.split("MB")[0]) * 0x100000
+                        print("upload_maximum_size: ", upload_maximum_size)
                         partition_size =  hex(upload_maximum_size - int(row[3],base=16))
                         print(f"... with computed maximum size from connected {env.get('BOARD_MCU')}: {partition_size}")
                         patch_partitions_bin(partition_size)
