@@ -87,17 +87,14 @@ def esp32_detect_flashsize():
                 if l.decode().startswith("Detected flash size: "):
                     size = (l.decode().split(": ")[1])
                     print("Did get flash size:", size)
-                    get_flash_size = env.BoardConfig().get("upload.flash_size")
-                    #print("get_flash_size: ", get_flash_size)
-                    stored_flash_size = int(get_flash_size.split("MB")[0]) * 0x100000
+                    stored_flash_size_mb = env.BoardConfig().get("upload.flash_size")
+                    stored_flash_size = int(stored_flash_size_mb.split("MB")[0]) * 0x100000
                     print("Boards entry flash size: ", stored_flash_size)
-                    #old_maximum_size = env.BoardConfig().get("upload.maximum_size")
-                    #print("old_maximum_size: ", old_maximum_size)
-                    new_maximum_size = int(size.split("MB")[0]) * 0x100000
-                    print("new_maximum_size: ", new_maximum_size)
-                    if new_maximum_size > stored_flash_size:
+                    detected_flash_size = int(size.split("MB")[0]) * 0x100000
+                    print("Connected device flash size: ", detected_flash_size)
+                    if detected_flash_size > stored_flash_size:
                         env.BoardConfig().update("upload.flash_size", size)
-                        env.BoardConfig().update("upload.maximum_size", new_maximum_size)
+                        env.BoardConfig().update("upload.maximum_size", detected_flash_size)
                         return size, True
             return "4MB",False
         except subprocess.CalledProcessError as exc:
