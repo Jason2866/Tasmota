@@ -94,7 +94,6 @@ def esp32_detect_flashsize():
                     #print("Connected device flash size: ", detected_flash_size)
                     if detected_flash_size > stored_flash_size:
                         env.BoardConfig().update("upload.flash_size", size)
-                        env.BoardConfig().update("upload.maximum_size", detected_flash_size)
                         return size, True
             return "4MB",False
         except subprocess.CalledProcessError as exc:
