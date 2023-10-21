@@ -75,7 +75,7 @@ def esp32_detect_flashsize():
     uploader = env.subst("$UPLOADER")
     if not "upload" in COMMAND_LINE_TARGETS:
         return "4MB",False
-    if not "esptool" in uploader: 
+    if not "esptool" in uploader:
         return "4MB",False
     else:
         esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
@@ -86,16 +86,19 @@ def esp32_detect_flashsize():
             for l in output:
                 if l.decode().startswith("Detected flash size: "):
                     size = (l.decode().split(": ")[1])
-                    print("Did get flash size:",size)
-                    old_flash_size = env.BoardConfig().get("upload.flash_size")
-                    old_maximum_size = env.BoardConfig().get("upload.maximum_size")
-                    print("old_maximum_size: ", old_maximum_size)
+                    print("Did get flash size:", size)
+                    get_flash_size = env.BoardConfig().get("upload.flash_size")
+                    print("get_flash_size: ", get_flash_size)
+                    stored_flash_size = int(get_flash_size.split("MB")[0]) * 0x100000
+                    print("stored_flash_size: ", stored_flash_size)
+                    #old_maximum_size = env.BoardConfig().get("upload.maximum_size")
+                    #print("old_maximum_size: ", old_maximum_size)
                     new_maximum_size = int(size.split("MB")[0]) * 0x100000
                     print("new_maximum_size: ", new_maximum_size)
-                    if new_maximum_size > old_maximum_size:
-                        env.BoardConfig().update("upload.flash_size",size)
+                    if new_maximum_size > stored_flash_size:
+                        env.BoardConfig().update("upload.flash_size", size)
                         env.BoardConfig().update("upload.maximum_size", new_maximum_size)
-                    return size, True
+                        return size, True
             return "4MB",False
         except subprocess.CalledProcessError as exc:
             print("Did get chip info failed with " + str(exc))
