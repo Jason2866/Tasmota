@@ -88,9 +88,9 @@ def esp32_detect_flashsize():
                     size = (l.decode().split(": ")[1])
                     print("Did get flash size:", size)
                     get_flash_size = env.BoardConfig().get("upload.flash_size")
-                    print("get_flash_size: ", get_flash_size)
+                    #print("get_flash_size: ", get_flash_size)
                     stored_flash_size = int(get_flash_size.split("MB")[0]) * 0x100000
-                    print("stored_flash_size: ", stored_flash_size)
+                    print("Boards entry flash size: ", stored_flash_size)
                     #old_maximum_size = env.BoardConfig().get("upload.maximum_size")
                     #print("old_maximum_size: ", old_maximum_size)
                     new_maximum_size = int(size.split("MB")[0]) * 0x100000
