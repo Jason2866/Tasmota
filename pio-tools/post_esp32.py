@@ -55,6 +55,7 @@ else:
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota")
 
 variants_dir = join(FRAMEWORK_DIR, "variants", "tasmota")
+flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
 
 def patch_partitions_bin(size_string):
     partition_bin_path = join(env.subst("$BUILD_DIR"),"partitions.bin")
@@ -162,13 +163,11 @@ def esp32_copy_new_safeboot_bin(tasmota_platform,new_local_safeboot_fw):
 
 def esp32_create_combined_bin(source, target, env):
     #print("Generating combined binary for serial flashing")
-
     # The offset from begin of the file where the app0 partition starts
     # This is defined in the partition .csv file
     # factory_offset = -1      # error code value - currently unused
     app_offset = 0x10000     # default value for "old" scheme
     fs_offset = -1           # error code value
-    flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
 
     with open(env.BoardConfig().get("build.partitions")) as csv_file:
         print("Read partitions from ",env.BoardConfig().get("build.partitions"))
