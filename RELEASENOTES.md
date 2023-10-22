@@ -112,17 +112,21 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 ## Changelog v13.2.0.1
 ### Added
-- Experimental support for ESP32-C2 and ESP32-C6 using Arduino core v3
+- Command ``GpioRead`` to show input state [#19810](https://github.com/arendst/Tasmota/issues/19810)
 - I2C bus2 support to iAQ core sensor [#19799](https://github.com/arendst/Tasmota/issues/19799)
 - I2C bus2 support to HTU temperature and humidity sensor
 - I2C bus2 support to BH1750 ambient light sensor
 - I2C bus2 support to ADS1115 A/D Converter
 - I2C bus2 support to SHTxX temperature and humidity sensor
 - I2C bus2 support to HYTxxx temperature and humidity sensor
+- I2C bus2 support to SI1145/6/7 Ultra violet index and light sensor
+- I2C bus2 support to LM75AD temperature sensor
+- Experimental support for ESP32-C2 and ESP32-C6 using Arduino core v3
 
 ### Breaking Changed
 
 ### Changed
+- Matter Light0 now accept a Relay number [#19809](https://github.com/arendst/Tasmota/issues/19809)
 
 ### Fixed
 - NeoPool filtration mode display [#19801](https://github.com/arendst/Tasmota/issues/19801)

@@ -11,12 +11,15 @@ All notable changes to this project will be documented in this file.
 - I2C bus2 support to ADS1115 A/D Converter
 - I2C bus2 support to SHTxX temperature and humidity sensor
 - I2C bus2 support to HYTxxx temperature and humidity sensor
+- I2C bus2 support to SI1145/6/7 Ultra violet index and light sensor
+- I2C bus2 support to LM75AD temperature sensor
+- Command ``GpioRead`` to show input state (#19810)
 
 ### Breaking Changed
 
 ### Changed
 - Prepare I2C drivers for bus2 support
-- Matter Light0 now accept a Relay number
+- Matter Light0 now accept a Relay number (#19809)
 
 ### Fixed
 - NeoPool filtration mode display (#19801)
