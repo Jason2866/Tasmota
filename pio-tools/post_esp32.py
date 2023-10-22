@@ -55,22 +55,6 @@ else:
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota")
 
 variants_dir = join(FRAMEWORK_DIR, "variants", "tasmota")
-flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
-
-def patch_partitions_bin(size_string):
-    partition_bin_path = join(env.subst("$BUILD_DIR"),"partitions.bin")
-    with open(partition_bin_path, 'r+b') as file:
-        binary_data = file.read(0xb0)
-        import hashlib
-        bin_list = list(binary_data)
-        size = codecs.decode(size_string[2:], 'hex_codec') # 0xc50000 -> [c5,00,00]
-        bin_list[0x8a] = size[0]
-        bin_list[0x8b] = size[1]
-        result = hashlib.md5(bytes(bin_list[0:0xa0]))
-        partition_data = bytes(bin_list) + result.digest()
-        file.seek(0)
-        file.write(partition_data)
-        print("New partition hash:",result.digest().hex())
 
 def esp32_detect_flashsize():
     uploader = env.subst("$UPLOADER")
@@ -90,9 +74,7 @@ def esp32_detect_flashsize():
                     print("Did get flash size:", size)
                     stored_flash_size_mb = env.BoardConfig().get("upload.flash_size")
                     stored_flash_size = int(stored_flash_size_mb.split("MB")[0]) * 0x100000
-                    #print("Boards entry flash size: ", stored_flash_size)
                     detected_flash_size = int(size.split("MB")[0]) * 0x100000
-                    #print("Connected device flash size: ", detected_flash_size)
                     if detected_flash_size > stored_flash_size:
                         env.BoardConfig().update("upload.flash_size", size)
                         return size, True
@@ -100,6 +82,23 @@ def esp32_detect_flashsize():
         except subprocess.CalledProcessError as exc:
             print("Did get chip info failed with " + str(exc))
             return "4MB",False
+
+flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
+
+def patch_partitions_bin(size_string):
+    partition_bin_path = join(env.subst("$BUILD_DIR"),"partitions.bin")
+    with open(partition_bin_path, 'r+b') as file:
+        binary_data = file.read(0xb0)
+        import hashlib
+        bin_list = list(binary_data)
+        size = codecs.decode(size_string[2:], 'hex_codec') # 0xc50000 -> [c5,00,00]
+        bin_list[0x8a] = size[0]
+        bin_list[0x8b] = size[1]
+        result = hashlib.md5(bytes(bin_list[0:0xa0]))
+        partition_data = bytes(bin_list) + result.digest()
+        file.seek(0)
+        file.write(partition_data)
+        print("New partition hash:",result.digest().hex())
 
 def esp32_create_chip_string(chip):
     tasmota_platform = env.subst("$BUILD_DIR").split(os.path.sep)[-1]
@@ -213,9 +212,6 @@ def esp32_create_combined_bin(source, target, env):
         esp32_fetch_safeboot_bin(tasmota_platform)
 
     flash_size = env.BoardConfig().get("upload.flash_size", "4MB")
-    if flash_size_was_overridden:
-        flash_size = flash_size_from_esp
-    print("Flash size: ", flash_size)
     flash_freq = env.BoardConfig().get("build.f_flash", "40000000L")
     flash_freq = str(flash_freq).replace("L", "")
     flash_freq = str(int(int(flash_freq) / 1000000)) + "m"
@@ -278,7 +274,7 @@ def esp32_create_combined_bin(source, target, env):
             )
             print("Will use custom upload command for flashing operation to add file system defined for this build target.")
 
-    print('Using esptool.py arguments: %s' % ' '.join(cmd))
+    #print('Using esptool.py arguments: %s' % ' '.join(cmd))
     if("safeboot" not in firmware_name):
         esptool.main(cmd)
 
