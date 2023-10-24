@@ -218,6 +218,7 @@
 #define USE_LIGHT
 #define USE_WS2812
 
+#ifdef ESP32_4M
 #define USE_DS18x20                              // Enable DS18x20 sensor
 
 #define USE_I2C
@@ -275,6 +276,7 @@
 #define USE_DHT12                              // [I2cDriver41] Enable DHT12 humidity and temperature sensor (I2C address 0x5C) (+0k7 code)
 #define USE_DS1624
 */
+#endif // ESP32_4M
 
 #define USE_COUNTER
 #define USE_SERIAL_BRIDGE                        // Add support for software Serial Bridge console Tee (+2k code)
