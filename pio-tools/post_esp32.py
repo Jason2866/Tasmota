@@ -16,7 +16,7 @@
 # -  0x1000 | ~\.platformio\packages\framework-arduinoespressif32\tools\sdk\esp32\bin\bootloader_dout_40m.bin
 # -  0x8000 | ~\Tasmota\.pio\build\<env name>\partitions.bin
 # -  0xe000 | ~\.platformio\packages\framework-arduinoespressif32\tools\partitions\boot_app0.bin
-# - 0x10000 | ~\.platformio/packages/framework-arduinoespressif32/variants/tasmota/\<env name>-safeboot.bin
+# - 0x10000 | ~\Tasmota\<variants_dir>/<env name>-safeboot.bin
 # - 0xe0000 | ~\Tasmota\.pio\build\<env name>/firmware.bin
 # - 0x3b0000| ~\Tasmota\.pio\build\<env name>/littlefs.bin
 
@@ -54,7 +54,13 @@ else:
     if github_actions and os.path.exists("./firmware/firmware"):
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota")
 
-variants_dir = join(FRAMEWORK_DIR, "variants", "tasmota")
+#variants_dir = join(FRAMEWORK_DIR, "variants", "tasmota")
+variants_dir = env.BoardConfig().get("build.variants_dir", "")
+print("variants folder:", variants_dir)
+sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
+print("---- sections: ", sections)
+#  env.BoardConfig().update("upload.flash_size", size)
+#print(env.Dump())
 
 def esp32_detect_flashsize():
     uploader = env.subst("$UPLOADER")
@@ -274,8 +280,8 @@ def esp32_create_combined_bin(source, target, env):
             )
             print("Will use custom upload command for flashing operation to add file system defined for this build target.")
 
-    #print('Using esptool.py arguments: %s' % ' '.join(cmd))
     if("safeboot" not in firmware_name):
+        print('Using esptool.py arguments: %s' % ' '.join(cmd))
         esptool.main(cmd)
 
 
