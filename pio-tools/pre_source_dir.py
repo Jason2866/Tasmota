@@ -29,6 +29,4 @@ if env["PIOPLATFORM"] == "espressif32":
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
     mcu_build_variant_path = join(FRAMEWORK_DIR, "variants", mcu_build_variant, "pins_arduino.h")
     custom_variant_build = join(env.subst("$PROJECT_DIR"), variants_dir , mcu_build_variant, "pins_arduino.h")
-    print("mcu_build_variant_path: ", mcu_build_variant_path)
-    print("custom_variant_build: ", custom_variant_build)
     shutil.copy(mcu_build_variant_path, custom_variant_build)
