@@ -54,13 +54,8 @@ else:
     if github_actions and os.path.exists("./firmware/firmware"):
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota")
 
-#variants_dir = join(FRAMEWORK_DIR, "variants", "tasmota")
 variants_dir = env.BoardConfig().get("build.variants_dir", "")
-print("variants folder:", variants_dir)
 sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
-print("---- sections: ", sections)
-#  env.BoardConfig().update("upload.flash_size", size)
-#print(env.Dump())
 
 def esp32_detect_flashsize():
     uploader = env.subst("$UPLOADER")
