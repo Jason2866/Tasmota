@@ -37,28 +37,29 @@ from SCons.Script import COMMAND_LINE_TARGETS
 sys.path.append(join(platform.get_package_dir("tool-esptoolpy")))
 import esptool
 
+variants_dir = env.BoardConfig().get("build.variants_dir", "")
+sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
+
+# Copy safeboots firmwares in place when running in Github
 github_actions = os.getenv('GITHUB_ACTIONS')
 extra_flags = ''.join([element.replace("-D", " ") for element in env.BoardConfig().get("build.extra_flags", "")])
 build_flags = ''.join([element.replace("-D", " ") for element in env.GetProjectOption("build_flags")])
-
-variants_dir = env.BoardConfig().get("build.variants_dir", "")
-sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
 
 if "CORE32SOLO1" in extra_flags or "FRAMEWORK_ARDUINO_SOLO1" in build_flags:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-solo1")
     if github_actions and os.path.exists("./firmware/firmware"):
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduino-solo1/variants/tasmota")
-        shutil.copytree("./firmware/firmware", "./variants")
+        shutil.copytree("./firmware/firmware", variants_dir, dirs_exist_ok=True)
 elif "CORE32ITEAD" in extra_flags or "FRAMEWORK_ARDUINO_ITEAD" in build_flags:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-ITEAD")
     if github_actions and os.path.exists("./firmware/firmware"):
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduino-ITEAD/variants/tasmota")
-        shutil.copytree("./firmware/firmware", "./variants")
+        shutil.copytree("./firmware/firmware", variants_dir, dirs_exist_ok=True)
 else:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
     if github_actions and os.path.exists("./firmware/firmware"):
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota")
-        shutil.copytree("./firmware/firmware", "./variants")
+        shutil.copytree("./firmware/firmware", variants_dir, dirs_exist_ok=True)
 
 def esp32_detect_flashsize():
     uploader = env.subst("$UPLOADER")
