@@ -38,7 +38,9 @@ sys.path.append(join(platform.get_package_dir("tool-esptoolpy")))
 import esptool
 
 variants_dir = env.BoardConfig().get("build.variants_dir", "")
+variant = env.BoardConfig().get("build.variant", "")
 sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
+chip = env.get("BOARD_MCU")
 
 # Copy safeboots firmwares in place when running in Github
 github_actions = os.getenv('GITHUB_ACTIONS')
@@ -63,6 +65,10 @@ else:
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota")
         if variants_dir:
             shutil.copytree("./firmware/firmware", variants_dir, dirs_exist_ok=True)
+
+if not variants_dir:
+    variants_dir = join(FRAMEWORK_DIR, "variants", "tasmota")
+    env.BoardConfig().update("build.variants_dir", variants_dir)
 
 def esp32_detect_flashsize():
     uploader = env.subst("$UPLOADER")
@@ -204,7 +210,6 @@ def esp32_create_combined_bin(source, target, env):
 
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
     firmware_name = env.subst("$BUILD_DIR/${PROGNAME}.bin")
-    chip = env.get("BOARD_MCU")
     tasmota_platform = esp32_create_chip_string(chip)
 
     if "-DUSE_USB_CDC_CONSOLE" in env.BoardConfig().get("build.extra_flags") and "cdc" not in tasmota_platform:
