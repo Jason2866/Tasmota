@@ -20,15 +20,3 @@ env.AddMethod(FindInoNodes)
 tasmota_flash_mode = "-DCONFIG_TASMOTA_FLASHMODE_" + (env.BoardConfig().get("build.flash_mode", "dio")).upper()
 env.Append(CXXFLAGS=[tasmota_flash_mode])
 print(tasmota_flash_mode)
-
-if env["PIOPLATFORM"] == "espressif32":
-    # Copy pins_arduino.h to variants folder
-    board_config = env.BoardConfig()
-    mcu_build_variant = board_config.get("build.variant", "").lower()
-    variants_dir = board_config.get("build.variants_dir", "")
-    if variants_dir:
-        FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
-        mcu_build_variant_path = join(FRAMEWORK_DIR, "variants", mcu_build_variant, "pins_arduino.h")
-        custom_variant_build = join(env.subst("$PROJECT_DIR"), variants_dir , mcu_build_variant, "pins_arduino.h")
-        os.makedirs(join(env.subst("$PROJECT_DIR"), variants_dir , mcu_build_variant), exist_ok=True)
-        shutil.copy(mcu_build_variant_path, custom_variant_build)
