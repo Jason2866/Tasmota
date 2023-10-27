@@ -20,6 +20,7 @@ unpacked_fs
 unpacked_boards
 tasmota/user_config_override.h
 variants
+variants3
 build
 build_output/*
 firmware.map

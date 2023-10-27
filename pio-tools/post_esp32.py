@@ -41,21 +41,24 @@ github_actions = os.getenv('GITHUB_ACTIONS')
 extra_flags = ''.join([element.replace("-D", " ") for element in env.BoardConfig().get("build.extra_flags", "")])
 build_flags = ''.join([element.replace("-D", " ") for element in env.GetProjectOption("build_flags")])
 
+variants_dir = env.BoardConfig().get("build.variants_dir", "")
+sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
+
 if "CORE32SOLO1" in extra_flags or "FRAMEWORK_ARDUINO_SOLO1" in build_flags:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-solo1")
     if github_actions and os.path.exists("./firmware/firmware"):
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduino-solo1/variants/tasmota")
+        shutil.copytree("./firmware/firmware", "./variants")
 elif "CORE32ITEAD" in extra_flags or "FRAMEWORK_ARDUINO_ITEAD" in build_flags:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-ITEAD")
     if github_actions and os.path.exists("./firmware/firmware"):
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduino-ITEAD/variants/tasmota")
+        shutil.copytree("./firmware/firmware", "./variants")
 else:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
     if github_actions and os.path.exists("./firmware/firmware"):
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota")
-
-variants_dir = env.BoardConfig().get("build.variants_dir", "")
-sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
+        shutil.copytree("./firmware/firmware", "./variants")
 
 def esp32_detect_flashsize():
     uploader = env.subst("$UPLOADER")
@@ -196,7 +199,6 @@ def esp32_create_combined_bin(source, target, env):
 
 
     new_file_name = env.subst("$BUILD_DIR/${PROGNAME}.factory.bin")
-    sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
     firmware_name = env.subst("$BUILD_DIR/${PROGNAME}.bin")
     chip = env.get("BOARD_MCU")
     tasmota_platform = esp32_create_chip_string(chip)
