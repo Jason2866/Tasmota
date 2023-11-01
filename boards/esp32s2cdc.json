@@ -16,10 +16,6 @@
     "wifi"
   ],
   "debug": {
-    "default_tool": "esp-builtin",
-    "onboard_tools": [
-      "esp-builtin"
-    ],
     "openocd_target": "esp32s2.cfg"
   },
   "frameworks": [
