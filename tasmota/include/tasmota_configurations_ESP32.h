@@ -214,16 +214,27 @@
 #undef FIRMWARE_LVGL
 #undef FIRMWARE_TASMOTA32
 
+#define USE_TLS
+#define USE_WEBSERVER
+#define USE_WEBCLIENT
+#define USE_WEBCLIENT_HTTPS
 
 // -- Optional modules ----------------------------
 #undef USE_SHUTTER                               // Disable Shutter support for up to 4 shutter with different motortypes (+6k code)
+#undef USE_AC_ZERO_CROSS_DIMMER                  // API for timers has changed with IDF 5.x
 
+#define USE_I2S
+#define USE_SPI
+
+#define USE_COUNTER
+#define USE_SERIAL_BRIDGE                        // Add support for software Serial Bridge console Tee (+2k code)
+#define USE_IR_REMOTE                            // Enable IR driver
 #define USE_LIGHT
 #define USE_WS2812
 
 #ifdef ESP32_4M
-#define USE_DS18x20                              // Enable DS18x20 sensor
 
+#define USE_DS18x20                              // Enable DS18x20 sensor
 #define USE_I2C
 /*
 #define USE_SHT                                // [I2cDriver8] Enable SHT1X sensor (+1k4 code)
@@ -279,23 +290,6 @@
 #define USE_DHT12                              // [I2cDriver41] Enable DHT12 humidity and temperature sensor (I2C address 0x5C) (+0k7 code)
 #define USE_DS1624
 */
-#endif // ESP32_4M
-
-#define USE_COUNTER
-#define USE_SERIAL_BRIDGE                        // Add support for software Serial Bridge console Tee (+2k code)
-
-#undef USE_IR_REMOTE                             // Disable IR driver
-#undef USE_AC_ZERO_CROSS_DIMMER                  // API for timers has changed with IDF 5.x
-
-#define USE_TLS
-#define USE_WEBSERVER
-#define USE_WEBCLIENT
-#define USE_WEBCLIENT_HTTPS
-
-#define USE_I2S
-#define USE_SPI
-
-#ifdef ESP32_4M
   #define USE_LVGL
   #define USE_LVGL_HASPMOTA
   #define USE_LVGL_FREETYPE
