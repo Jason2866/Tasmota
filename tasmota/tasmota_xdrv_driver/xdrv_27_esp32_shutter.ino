@@ -674,11 +674,21 @@ void ShutterInit(void)
       Shutter[i].tilt_target_pos        = Shutter[i].tilt_real_pos = ShutterSettings.shutter_tilt_pos[i];
       Shutter[i].tilt_velocity          = Shutter[i].tilt_config[2] > 0 ? ((Shutter[i].tilt_config[1] - Shutter[i].tilt_config[0]) / Shutter[i].tilt_config[2]) + 1  : 1;
       Shutter[i].close_velocity_max     = ShutterGlobal.open_velocity_max*Shutter[i].open_time / Shutter[i].close_time;
-      Shutter[i].min_realPositionChange = 2 * tmax(ShutterGlobal.open_velocity_max, Shutter[i].close_velocity_max);
       Shutter[i].min_TiltChange         = 2 * Shutter[i].tilt_velocity;
 
+      //servo can make any movement without time restriction
+      Shutter[i].min_realPositionChange = 2 * tmax(ShutterGlobal.open_velocity_max, Shutter[i].close_velocity_max);
+      switch (ShutterGlobal.position_mode) {
+        case SHT_PWM_VALUE:
+          Shutter[i].min_realPositionChange = 0;
+        break;
+        case SHT_COUNTER:
+          Shutter[i].min_realPositionChange = SHT_DIV_ROUND(Shutter[i].min_realPositionChange, Shutter[i].motordelay);
+        break;
+      }
+
       AddLog(LOG_LEVEL_DEBUG, PSTR("SHT: Shtr%d min realpos_chg: %d, min tilt_chg %d"), i+1, Shutter[i].min_realPositionChange, Shutter[i].min_TiltChange);
-      AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("SHT: Shtr%d Openvel %d, Closevel: %d"), i+1, ShutterGlobal.open_velocity_max, Shutter[i].close_velocity_max);
+      AddLog(LOG_LEVEL_DEBUG, PSTR("SHT: Shtr%d Openvel %d, Closevel: %d"), i+1, ShutterGlobal.open_velocity_max, Shutter[i].close_velocity_max);
       AddLog(LOG_LEVEL_DEBUG, PSTR("SHT: Shtr%d Init. Pos %d, Inv %d, Locked %d, Endstop enab %d, webButt inv %d, Motordel: %d"),
         i+1,  Shutter[i].real_position,
         (ShutterSettings.shutter_options[i] & 1) ? 1 : 0, (ShutterSettings.shutter_options[i] & 2) ? 1 : 0, (ShutterSettings.shutter_options[i] & 4) ? 1 : 0, (ShutterSettings.shutter_options[i] & 8) ? 1 : 0, Shutter[i].motordelay);
@@ -804,10 +814,7 @@ void ShutterPowerOff(uint8_t i)
   // Store current PWM value to ensure proper position after reboot.
   switch (ShutterGlobal.position_mode) {
     case SHT_PWM_VALUE:
-      Shutter[i].pwm_value = SHT_DIV_ROUND((ShutterSettings.shutter_pwmrange[1][i]-ShutterSettings.shutter_pwmrange[0][i]) * Shutter[i].target_position , Shutter[i].open_max)+ShutterSettings.shutter_pwmrange[0][i];
-      //analogWrite(Pin(GPIO_PWM1, i), Shutter[i].pwm_value);
       TasmotaGlobal.pwm_value[i] = Shutter[i].pwm_value;
-      AddLog(LOG_LEVEL_DEBUG, PSTR("SHT: PWM final %d"),Shutter[i].pwm_value);
       pwm_apply = true;
       char scmnd[20];
   #ifdef SHUTTER_CLEAR_PWM_ONSTOP
@@ -984,16 +991,14 @@ void ShutterRtc50mS(void)
         case SHT_PWM_VALUE:
           ShutterUpdateVelocity(i);
           Shutter[i].real_position += Shutter[i].direction > 0 ? Shutter[i].pwm_velocity : (Shutter[i].direction < 0 ? -Shutter[i].pwm_velocity : 0);
-          Shutter[i].pwm_value      = SHT_DIV_ROUND((ShutterSettings.shutter_pwmrange[1][i]-ShutterSettings.shutter_pwmrange[0][i]) * Shutter[i].real_position , Shutter[i].open_max)+ShutterSettings.shutter_pwmrange[0][i];
+          Shutter[i].pwm_value       = SHT_DIV_ROUND((ShutterSettings.shutter_pwmrange[1][i] - ShutterSettings.shutter_pwmrange[0][i]) * Shutter[i].real_position , Shutter[i].open_max) + ShutterSettings.shutter_pwmrange[0][i];
           TasmotaGlobal.pwm_value[i] = Shutter[i].pwm_value;
-          //analogWritePhase(Pin(GPIO_PWM1, i), Shutter[i].pwm_value, 0);
-          //analogWriteFreq(200,Pin(GPIO_PWM1, i));
           pwm_apply = true;
         break;
 
         case SHT_COUNTER:
           if (Shutter[i].accelerator) {
-            AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("SHT: Accelerator i=%d -> %d"),i, Shutter[i].accelerator);
+            //AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("SHT: Accelerator i=%d -> %d"),i, Shutter[i].accelerator);
             ShutterUpdateVelocity(i);
             digitalWrite(Pin(GPIO_PWM1, i), LOW);
             analogWriteFreq(Shutter[i].pwm_velocity,Pin(GPIO_PWM1, i));
