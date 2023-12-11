@@ -58,7 +58,7 @@ class LittleFSInfo(FSInfo):
     def __repr__(self):
         return f"FS type {self.fs_type} Start {hex(self.start)} Len {self.length} Page size {self.page_size} Block size {self.block_size} Tool: {self.tool}"
     def get_extract_cmd(self, input_file, output_dir):
-        return [self.tool, "-b", str(self.block_size), "-p", str(self.page_size), "--unpack", output_dir, input_file]
+        return [self.tool, "-b", str(self.block_size), "-s", str(self.length), "-p", str(self.page_size), "--unpack", output_dir, input_file]
 
 
 class SPIFFSInfo(FSInfo):
@@ -305,8 +305,6 @@ def display_fs(extracted_dir):
     print("Extracted " + str(file_count) + " file(s) from filesystem.")
 
 def command_download_fs(*args, **kwargs):
-    print("Entrypoint")
-    #print(env.Dump())
     get_partition_table()
     info = get_fs_type_start_and_length()
     print("Parsed FS info: " + str(info))
