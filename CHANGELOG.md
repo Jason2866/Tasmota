@@ -3,7 +3,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [13.2.0.3]
+## [13.3.0.1]
+### Added
+- Support for Sonoff Basic R4 Magic Switch (#20247)
+- Support for CST816S touch interface (#20213)
+- NeoPool hydrolysis FL1 and Redox flag (#20258)
+
+### Breaking Changed
+- Refactoring of Berry `animate` module for WS2812 Leds (#20236)
+
+### Changed
+
+### Fixed
+- Matter Contact sensor was not triggering any update (#20232)
+- CVE-2021-36603 Cross Site Scripting (XSS) vulnerability (#12221)
+
+### Removed
+
+## [Released]
+
+## [13.3.0] 20231213
+- Release Quinlan
+
+## [13.2.0.3] 20231213
 ### Added
 - DeepSleep support through TIMERS (#20117)
 - Command ``WebCanvas linear-gradient(#F02 7%,#F93,#FF4,#082,#00F,#708 93%)`` to set GUI canvas
@@ -20,8 +42,6 @@ All notable changes to this project will be documented in this file.
 - TUYA state machine (in TUYA v1) (#20110)
 - ESP32 Neopixel flicker for Core3/IDF5 (#20196)
 - HASPmota `bar` fixed `val` attribute (#20208)
-
-### Removed
 
 ## [13.2.0.2] 20231130
 ### Added
@@ -87,8 +107,6 @@ All notable changes to this project will be documented in this file.
 - Compile USE_PID (#19890)
 - ESP32 I2C allow bus2 support when bus1 is not enabled
 - ESP32 IR receive with Arduino Core 3 (#19904)
-
-## [Released]
 
 ## [13.2.0] 20231019
 - Release Quincy

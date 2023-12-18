@@ -1,13 +1,8 @@
-# class Leds_animator
-
-#@ solidify:Leds_animator,weak
-
-# for solidification
-class Leds_frame end
+# class Animate_core
 
 ##########################################################################################
 #
-# class Leds_animator
+# class Animate_core
 #
 # Simple framework to orchestrate all the animations for a led strip or led matrix
 #
@@ -15,7 +10,8 @@ class Leds_frame end
 # This version uses `fast_loop` for up to 5ms animation time (200 Hz)
 #
 ##########################################################################################
-class Leds_animator
+#@ solidify:Animate_core,weak
+class Animate_core
   var strip         # neopixelbus object
   var pixel_count   # number of pixels in the strip
   var bri           # brightness of the animation, 0..100, default 50
@@ -26,8 +22,8 @@ class Leds_animator
   static var FAST_LOOP_MIN = 20
   var fast_loop_next  # next time-stamp for fast_loop
   # cb for animation
-  var animate_object  # object called at each tick
-  var animate_method  # method of object called at each tick
+  var obj             # object called at each tick
+  var mth             # method of object called at each tick
   # frame ojects
   var frame           # Leds_frame frame object
   var layer           # Leds_frame for layer on top of frame
@@ -35,6 +31,8 @@ class Leds_animator
   var back_color      # background color RRGGBB
 
   def init(strip, bri)
+    import animate
+
     self.strip = strip
     if (bri == nil)   bri = 50    end
     self.bri = bri      # percentage of brightness 0..100
@@ -44,11 +42,18 @@ class Leds_animator
     self.painters = []
     #
     self.clear()        # clear all leds first
-    self.frame = Leds_frame(self.pixel_count)
-    self.layer = Leds_frame(self.pixel_count)
+    self.frame = animate.frame(self.pixel_count)
+    self.layer = animate.frame(self.pixel_count)
     #
     self.fast_loop_cb = def() self.fast_loop() end
     self.back_color = 0x000000
+    #
+    self.set_current()
+  end
+
+  # set this animate.core as the current animator for configuration
+  def set_current()
+    global._cur_anim = self       # declare the current animate.core for painters and animators to register
   end
 
   # cb
@@ -62,11 +67,37 @@ class Leds_animator
   end
 
   def add_animator(anim)
-    self.animators.push(anim)
+    if self.animators.find(anim) == nil
+      self.animators.push(anim)
+    end
   end
 
+  # remove a specific animator
+  # remove all animators if no parameter or nil
+  # silently ignores if the animator can't be found
+  def remove_animator(anim)
+    var animators = self.animators
+    if (anim != nil)
+      animators.remove(animators.find(anim))
+    else
+      animators.clear()
+    end
+  end
+
+  def remove_painter(p)
+    var painters = self.painters
+    if (p != nil)
+      painters.remove(painters.find(p))
+    else
+      painters.clear()
+    end
+  end
+
+
   def add_painter(painter)
-    self.painters.push(painter)
+    if self.painters.find(painter) == nil
+      self.painters.push(painter)
+    end
   end
 
   def clear()
@@ -104,8 +135,8 @@ class Leds_animator
   end
 
   def set_cb(obj, method)
-    self.animate_object = obj
-    self.animate_method = method
+    self.obj = obj
+    self.mth = method
   end
 
   def fast_loop()
@@ -139,8 +170,8 @@ class Leds_animator
         i += 1
       end
       # tirgger animate and display
-      var obj = self.animate_object
-      var mth = self.animate_method
+      var obj = self.obj
+      var mth = self.mth
       if (obj && mth)
         mth(obj)
       end
