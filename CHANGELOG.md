@@ -13,10 +13,12 @@ All notable changes to this project will be documented in this file.
 - Refactoring of Berry `animate` module for WS2812 Leds (#20236)
 
 ### Changed
+- Support syslog updates every sleep or every second if `#define SYSLOG_UPDATE_SECOND` (#20260)
 
 ### Fixed
 - Matter Contact sensor was not triggering any update (#20232)
 - CVE-2021-36603 Cross Site Scripting (XSS) vulnerability (#12221)
+- ESP32 piezo ceramic buzzer doesn't buzz (#20118)
 
 ### Removed
 
