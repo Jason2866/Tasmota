@@ -3,7 +3,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [13.3.0.1]
+## [13.3.0.2]
+### Added
+- HASPmota type `chart` (#20372)
+- Berry add support for `tcpclientasync` in `tcpserver` (#20401)
+- Berry add `tasmota.urlbecload(url:string) -> bool` (#20412)
+- GPIO Viewer to see realtime GPIO states. Enable with define USE_GPIO_VIEWER
+- Berry `gpio.read_pwm` and `gpio.read_pwm_resolution` (#20414)
+- Berry `gpio.get_pin_type` and `gpio.ger_pin_type_index` (#20415)
+- Berry `gpio.read_pwm` and `gpio.read_pwm_resolution` (#20414)
+- Berry GPIO viewer initial version using async webserver (#20416)
+- Berry add `string` to `bytes()` (#20420)
+- Berry button to dynamically load GPIO Viewer with Berry backend (#20424)
+- Berry `debug_panel.tapp` to display real-time heap and wifi rssi
+
+### Breaking Changed
+
+### Changed
+- Renamed button "Consoles" to "Tools"
+
+### Fixed
+
+### Removed
+
+
+## [13.3.0.1] 20240101
 ### Added
 - Support for Sonoff Basic R4 Magic Switch (#20247)
 - Support for CST816S touch interface (#20213)
@@ -11,8 +35,8 @@ All notable changes to this project will be documented in this file.
 - Matter support for password for remote Tasmota devices (#20296)
 - Display of active drivers using command ``status 4``
 - ESP32 used UART information
-- HASPmota added `haspmota.page_show()` to change page (#20333)
-- Berry added `introspect.set()` for class attributes (#20339)
+- HASPmota `haspmota.page_show()` to change page (#20333)
+- Berry `introspect.set()` for class attributes (#20339)
 - Support negative power on BL0942 using index 5..8 (#20322)
 
 ### Breaking Changed
@@ -31,8 +55,6 @@ All notable changes to this project will be documented in this file.
 - Support for Domoticz floor/room topics. Regression from v12.0.1 (#20299)
 - Berry claiming UART0 if needed (#20324)
 - LVGL fix type for lv_imgbtn (#20354)
-
-### Removed
 
 ## [Released]
 
