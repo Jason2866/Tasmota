@@ -15,14 +15,24 @@ All notable changes to this project will be documented in this file.
 - Berry GPIO viewer initial version using async webserver (#20416)
 - Berry add `string` to `bytes()` (#20420)
 - Berry button to dynamically load GPIO Viewer with Berry backend (#20424)
-- Berry `debug_panel.tapp` to display real-time heap and wifi rssi
+- Berry `debug_panel.tapp` to display real-time heap and wifi rssi (#20436)
+- Berry `webserver.header` to read browser sent headers (#20447)
+- Berry provide lightweight options for `tasmota.wifi/eth/memory/rtc` (#20448)
+- Berry `tasmota.webcolor` (#20454)
+- Support for pipsolar inverter (#20408)
 
 ### Breaking Changed
 
 ### Changed
 - Renamed button "Consoles" to "Tools"
+- ESP32 platform update from 2023.12.00 to 2024.01.00 (#20445)
+- Header `Host` is now collected by Webserver (#20446)
+- Webcam tweaks (#20451)
+- ESP8266 platform update from 2023.04.00 to 2024.01.00 (#20467)
+- ESP8266 Framework (Arduino Core) from v2.7.4.9 to v2.7.5 (#20467)
 
 ### Fixed
+- ESP32 Zigbee Aqara attributes (#20452)
 
 ### Removed
 
@@ -44,6 +54,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Support syslog updates every sleep or every second if `#define SYSLOG_UPDATE_SECOND` (#20260)
+- ESP32 platform update from 2023.11.01 to 2023.12.00 (#20298)
 - Moved Berry animate to its own `berry_animate` lib (#20309)
 - Relax checks of Partition Wizard for newest Shelly (#20349)
 
@@ -95,6 +106,7 @@ All notable changes to this project will be documented in this file.
 - Matter update hierarchy of plugins (#19915)
 - NeoPool ``NPHydrolysis`` percent and unit (#19924)
 - Thermostat JSON index from 0 to 1 (#20011)
+- ESP32 platform update from 2023.11.00 to 2023.11.01 (#20087)
 
 ### Fixed
 - Scripter timer issue (#19914)

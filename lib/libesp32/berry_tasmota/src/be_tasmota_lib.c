@@ -56,6 +56,8 @@ extern int l_respAppend(bvm *vm);
 extern int l_webSend(bvm *vm);
 extern int l_webSendDecimal(bvm *vm);
 
+extern int l_webcolor(bvm *vm);
+
 extern int l_getlight(bvm *vm);
 extern int l_setlight(bvm *vm);
 extern int l_getpower(bvm *vm);
@@ -111,14 +113,14 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     get_option, func(l_getoption)
     millis, func(l_millis)
     time_reached, func(l_timereached)
-    rtc, func(l_rtc)
+    rtc, static_func(l_rtc)
     rtc_utc, func(l_rtc_utc)
     time_dump, func(l_time_dump)
     strftime, func(l_strftime)
     strptime, func(l_strptime)
-    memory, func(l_memory)
-    wifi, func(l_wifi)
-    eth, func(l_eth)
+    memory, static_func(l_memory)
+    wifi, static_func(l_wifi)
+    eth, static_func(l_eth)
     hostname, func(l_hostname)
     yield, func(l_yield)
     delay, func(l_delay)
@@ -143,6 +145,7 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     response_append, func(l_respAppend)
     web_send, func(l_webSend)
     web_send_decimal, func(l_webSendDecimal)
+    webcolor, static_func(l_webcolor)
 
     get_power, func(l_getpower)
     set_power, func(l_setpower)
