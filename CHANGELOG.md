@@ -13,10 +13,13 @@ All notable changes to this project will be documented in this file.
 - ESP32 MI BLE support for Xiaomi LYWSD02MMC (#20381)
 - LVGL option to add `lv.keyboard` extra widget (#20496)
 - GUI sensor separators (#20495)
+- Command ``TimedPower<index> <milliseconds>[,ON|OFF|TOGGLE|BLINK]`` executes ``Power<index> [ON|OFF|TOGGLE|BLINK] `` and after <millisecond> executes ``Power<index> [OFF|ON|TOGGLE|OFF]``
 
 ### Breaking Changed
 
 ### Changed
+- ESP32 platform update from 2024.01.00 to 2024.01.01 (#20508)
+- IP stack compatible with new Core3 IPv6 implementation (#20509)
 
 ### Fixed
 - Scripter memory leak in `>w x` (#20473)
