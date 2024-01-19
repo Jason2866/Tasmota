@@ -146,6 +146,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Berry provide lightweight options for `tasmota.wifi/eth/memory/rtc` [#20448](https://github.com/arendst/Tasmota/issues/20448)
 - Berry `tasmota.webcolor` [#20454](https://github.com/arendst/Tasmota/issues/20454)
 - Berry `debug.caller` [#20470](https://github.com/arendst/Tasmota/issues/20470)
+- Berry solidification of strings longer than 255 bytes [#20529](https://github.com/arendst/Tasmota/issues/20529)
 - LVGL `lv.str_arr` [#20480](https://github.com/arendst/Tasmota/issues/20480)
 - LVGL option to add `lv.keyboard` extra widget [#20496](https://github.com/arendst/Tasmota/issues/20496)
 - HASPmota `haspmota.page_show()` to change page [#20333](https://github.com/arendst/Tasmota/issues/20333)
@@ -173,9 +174,11 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Scripter memory leak in `>w x` (#20473)[#20473](https://github.com/arendst/Tasmota/issues/20473)
 - Zigbee ramdom crash in main page (#20481)[#20473](https://github.com/arendst/Tasmota/issues/20481)
 - ESP32 piezo ceramic buzzer doesn't buzz [#20118](https://github.com/arendst/Tasmota/issues/20118)
+- ESP32 shutter exception 6 (divide by zero) on ``ShutterMode 4`` [#20524](https://github.com/arendst/Tasmota/issues/20524)
 - ESP32 Zigbee Aqara attributes [#20452](https://github.com/arendst/Tasmota/issues/20452)
 - LVGL fix type for lv_imgbtn [#20354](https://github.com/arendst/Tasmota/issues/20354)
 - Berry claiming UART0 if needed [#20324](https://github.com/arendst/Tasmota/issues/20324)
 - Matter Contact sensor was not triggering any update [#20232](https://github.com/arendst/Tasmota/issues/20232)
 
 ### Removed
+- Max number of 30 backlog entries

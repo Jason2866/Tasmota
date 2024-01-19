@@ -535,6 +535,27 @@ void ResetTimedCmnd(const char *command) {
   }
 }
 
+void ShowTimedCmnd(const char *command) {
+  bool found = false;
+  uint32_t now = millis();
+  Response_P(PSTR("{\"%s\":"), XdrvMailbox.command);
+  for (uint32_t i = 0; i < MAX_TIMED_CMND; i++) {
+    if (TasmotaGlobal.timed_cmnd[i].time != 0) {
+      if (!strncmp(command, TasmotaGlobal.timed_cmnd[i].command.c_str(), strlen(command))) {
+        // Stored command starts with command
+        ResponseAppend_P(PSTR("%s"), (found) ? "," : "[");
+        found = true;
+        ResponseAppend_P(PSTR("{\"" D_JSON_REMAINING "\":%d,\"" D_JSON_COMMAND "\":\"%s\"}"), TasmotaGlobal.timed_cmnd[i].time - now, TasmotaGlobal.timed_cmnd[i].command.c_str());
+      }
+    }
+  }
+  if (found) {
+    ResponseAppend_P(PSTR("]}"));
+  } else {
+    ResponseAppend_P(PSTR("\"" D_JSON_EMPTY "\"}"));
+  }
+}
+
 void LoopTimedCmnd(void) {
   uint32_t now = millis();
   for (uint32_t i = 0; i < MAX_TIMED_CMND; i++) {
@@ -559,14 +580,7 @@ void CmndBacklog(void) {
     }
 
     char *blcommand = strtok(XdrvMailbox.data, ";");
-#ifdef SUPPORT_IF_STATEMENT
-    while ((blcommand != nullptr) && (backlog.size() < MAX_BACKLOG))
-#else
-    uint32_t bl_pointer = (!TasmotaGlobal.backlog_pointer) ? MAX_BACKLOG -1 : TasmotaGlobal.backlog_pointer;
-    bl_pointer--;
-    while ((blcommand != nullptr) && (TasmotaGlobal.backlog_index != bl_pointer))
-#endif
-    {
+    while (blcommand != nullptr) {
       // Ignore semicolon (; = end of single command) between brackets {}
       char *next = strchr(blcommand, '\0') +1;  // Prepare for next ;
       while ((next != nullptr) && (ChrCount(blcommand, "{") != ChrCount(blcommand, "}"))) {  // Check for valid {} pair
@@ -585,17 +599,7 @@ void CmndBacklog(void) {
       }
       // Do not allow command Reset in backlog
       if ((*blcommand != '\0') && (strncasecmp_P(blcommand, PSTR(D_CMND_RESET), strlen(D_CMND_RESET)) != 0))  {
-#ifdef SUPPORT_IF_STATEMENT
-        if (backlog.size() < MAX_BACKLOG) {
-          backlog.add(blcommand);
-        }
-#else
-        TasmotaGlobal.backlog[TasmotaGlobal.backlog_index] = blcommand;
-        TasmotaGlobal.backlog_index++;
-        if (TasmotaGlobal.backlog_index >= MAX_BACKLOG) {
-          TasmotaGlobal.backlog_index = 0;
-        }
-#endif
+        backlog.add(blcommand);
       }
       blcommand = strtok(nullptr, ";");
     }
@@ -604,11 +608,7 @@ void CmndBacklog(void) {
     TasmotaGlobal.backlog_timer = millis();
   } else {
     bool blflag = BACKLOG_EMPTY;
-#ifdef SUPPORT_IF_STATEMENT
     backlog.clear();
-#else
-    TasmotaGlobal.backlog_pointer = TasmotaGlobal.backlog_index;
-#endif
     ResponseCmndChar(blflag ? PSTR(D_JSON_EMPTY) : PSTR(D_JSON_ABORTED));
   }
 }
@@ -755,7 +755,7 @@ void CmndTimedPower(void) {
   /*
   Allow timed power changes on a 50ms granularity
   TimedPower<index> <milliseconds>[,0|1|2|3]
-  TimedPower                 - Clear active power timers
+  TimedPower                 - Show remaining timers
   TimedPower 2000            - Turn power1 on and then off after 2 seconds
   TimedPower1                - Clear active Power1 timers
   TimedPower1 0              - Stop timer and perform timed action
@@ -764,7 +764,7 @@ void CmndTimedPower(void) {
   TimedPower2 2000,0|off     - Turn power2 off and then on after 2 seconds
   TimedPower1 2200,1|on      - Turn power1 on and then off after 2.2 seconds
   TimedPower2 2000,2|toggle  - Toggle power2 and then toggle again after 2 seconds
-  TimedPower2 2500,3|blink   - Blink power2 and then turn off after 2.5 seconds
+  TimedPower2 2500,3|blink   - Blink power2 and then stop blink after 2.5 seconds
   */
   if ((XdrvMailbox.index >= 0) && (XdrvMailbox.index <= TasmotaGlobal.devices_present)) {
     if (XdrvMailbox.data_len > 0) {
@@ -779,7 +779,7 @@ void CmndTimedPower(void) {
         }
         start_state &= 0x03;                    // POWER_OFF, POWER_ON, POWER_TOGGLE, POWER_BLINK
       }
-      const uint8_t end_state[] = { POWER_ON, POWER_OFF, POWER_TOGGLE, POWER_OFF };
+      const uint8_t end_state[] = { POWER_ON, POWER_OFF, POWER_TOGGLE, POWER_BLINK_STOP };
       char cmnd[CMDSZ];
       snprintf_P(cmnd, sizeof(cmnd), PSTR(D_CMND_POWER "%d %d"), XdrvMailbox.index, end_state[start_state]);
       if (SetTimedCmnd(time, cmnd)) {           // Skip if no more timers left (MAX_TIMED_CMND)
@@ -788,7 +788,9 @@ void CmndTimedPower(void) {
       }
     } else {
       if (!XdrvMailbox.usridx) {
-        ResetTimedCmnd(D_CMND_POWER);           // Remove all POWER timed command
+//        ResetTimedCmnd(D_CMND_POWER);           // Remove all POWER timed command
+        ShowTimedCmnd(D_CMND_POWER);            // Show remaining timers
+        return;
       } else {
         char cmnd[CMDSZ];
         snprintf_P(cmnd, sizeof(cmnd), PSTR(D_CMND_POWER "%d"), XdrvMailbox.index);
