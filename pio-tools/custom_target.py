@@ -2,8 +2,8 @@
 # 29th December 2020
 # License: Apache
 # Expanded from functionality provided by PlatformIO's espressif32 and espressif8266 platforms, credited below.
-# This script provides functions to download the filesystem (SPIFFS or LittleFS) from a running ESP32 / ESP8266
-# over the serial bootloader using esptool.py, and mklittlefs / mkspiffs for extracting.
+# This script provides functions to download the filesystem (LittleFS) from a running ESP32 / ESP8266
+# over the serial bootloader using esptool.py, and mklittlefs for extracting.
 # run by either using the VSCode task "Custom" -> "Download Filesystem"
 # or by doing 'pio run -t downloadfs' (with optional '-e <environment>') from the commandline.
 # output will be saved, by default, in the "unpacked_fs" of the project.
@@ -22,10 +22,6 @@ Import("env")
 platform = env.PioPlatform()
 board = env.BoardConfig()
 mcu = board.get("build.mcu", "esp32")
-# Hack for using mklittlefs instead of mkspiffs -> needed since littlefs is not supported with this for ESP32
-if env["PIOPLATFORM"] == "espressif32":
-    #print("Replace MKSPIFFSTOOL with mklittlefs")
-    env.Replace( MKSPIFFSTOOL=platform.get_package_dir("tool-mklittlefs") + '/mklittlefs' )
 
 
 class FSType(Enum):
@@ -49,9 +45,6 @@ class FSInfo:
 class LittleFSInfo(FSInfo):
     def __init__(self, start, length, page_size, block_size):
         if env["PIOPLATFORM"] == "espressif32":
-            #for ESP32: retrieve and evaluate, e.g. to mkspiffs_espressif32_arduino
-            self.tool = env.subst(env["MKSPIFFSTOOL"])
-        else:
             self.tool = env["MKFSTOOL"] # from mkspiffs package
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
         super().__init__(FSType.LITTLEFS, start, length, page_size, block_size)
@@ -64,11 +57,8 @@ class LittleFSInfo(FSInfo):
 class SPIFFSInfo(FSInfo):
     def __init__(self, start, length, page_size, block_size):
         if env["PIOPLATFORM"] == "espressif32":
-            #for ESP32: retrieve and evaluate, e.g. to mkspiffs_espressif32_arduino
-            self.tool = env.subst(env["MKSPIFFSTOOL"])
-        else:
             self.tool = env["MKFSTOOL"] # from mkspiffs package
-        self.tool = join(platform.get_package_dir("tool-mkspiffs"), self.tool)
+        self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
         super().__init__(FSType.SPIFFS, start, length, page_size, block_size)
     def __repr__(self):
         return f"FS type {self.fs_type} Start {hex(self.start)} Len {self.length} Page size {self.page_size} Block size {self.block_size} Tool: {self.tool}"
@@ -223,8 +213,8 @@ def get_fs_type_start_and_length():
         return SPIFFSInfo(env["SPIFFS_START"], env["SPIFFS_SIZE"], env["SPIFFS_PAGE"], env["SPIFFS_BLOCK"])
     elif platform == "espressif8266":
         print("Retrieving filesystem info for ESP8266.")
-        filesystem = board.get("build.filesystem", "spiffs")
-        if filesystem not in ("spiffs", "littlefs"):
+        filesystem = board.get("build.filesystem", "littlefs")
+        if filesystem not in ("littlefs"):
             print("Unrecognized board_build.filesystem option '" + str(filesystem) + "'.")
             env.Exit(1)
         # fetching sizes is the same for all filesystems
@@ -233,10 +223,7 @@ def get_fs_type_start_and_length():
         print("FS_END: " + hex(env["FS_END"]))
         print("FS_PAGE: " + hex(env["FS_PAGE"]))
         print("FS_BLOCK: " + hex(env["FS_BLOCK"]))
-        if filesystem == "spiffs":
-            print("Recognized SPIFFS filesystem.")
-            return SPIFFSInfo(env["FS_START"], env["FS_END"] - env["FS_START"], env["FS_PAGE"], env["FS_BLOCK"])
-        elif filesystem == "littlefs":
+        if filesystem == "littlefs":
             print("Recognized LittleFS filesystem.")
             return LittleFSInfo(env["FS_START"], env["FS_END"] - env["FS_START"], env["FS_PAGE"], env["FS_BLOCK"])
         else:
@@ -307,8 +294,6 @@ def display_fs(extracted_dir):
     print("Extracted " + str(file_count) + " file(s) from filesystem.")
 
 def command_download_fs(*args, **kwargs):
-    #print("Entrypoint")
-    #print(env.Dump())
     get_partition_table()
     info = get_fs_type_start_and_length()
     print("Parsed FS info: " + str(info))
