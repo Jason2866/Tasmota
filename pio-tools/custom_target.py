@@ -44,8 +44,7 @@ class FSInfo:
 
 class LittleFSInfo(FSInfo):
     def __init__(self, start, length, page_size, block_size):
-        if env["PIOPLATFORM"] == "espressif32":
-            self.tool = env["MKFSTOOL"] # from mkspiffs package
+        self.tool = env["MKFSTOOL"]
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
         super().__init__(FSType.LITTLEFS, start, length, page_size, block_size)
     def __repr__(self):
@@ -56,8 +55,7 @@ class LittleFSInfo(FSInfo):
 
 class SPIFFSInfo(FSInfo):
     def __init__(self, start, length, page_size, block_size):
-        if env["PIOPLATFORM"] == "espressif32":
-            self.tool = env["MKFSTOOL"] # from mkspiffs package
+        self.tool = env["MKFSTOOL"]
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
         super().__init__(FSType.SPIFFS, start, length, page_size, block_size)
     def __repr__(self):
