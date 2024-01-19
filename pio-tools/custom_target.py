@@ -48,7 +48,7 @@ class LittleFSInfo(FSInfo):
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
         super().__init__(FSType.LITTLEFS, start, length, page_size, block_size)
     def __repr__(self):
-        return f"FS type {self.fs_type} Start {hex(self.start)} Len {self.length} Page size {self.page_size} Block size {self.block_size} Tool: {self.tool}"
+        return f"{self.fs_type} Start {hex(self.start)} Len {self.length} Page size {self.page_size} Block size {self.block_size}"
     def get_extract_cmd(self, input_file, output_dir):
         return [self.tool, "-b", str(self.block_size), "-s", str(self.length), "-p", str(self.page_size), "--unpack", output_dir, input_file]
 
@@ -59,7 +59,7 @@ class SPIFFSInfo(FSInfo):
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
         super().__init__(FSType.SPIFFS, start, length, page_size, block_size)
     def __repr__(self):
-        return f"FS type {self.fs_type} Start {hex(self.start)} Len {self.length} Page size {self.page_size} Block size {self.block_size} Tool: {self.tool}"
+        return f"{self.fs_type} Start {hex(self.start)} Len {self.length} Page size {self.page_size} Block size {self.block_size}"
     def get_extract_cmd(self, input_file, output_dir):
         return f'"{self.tool}" -b {self.block_size} -p {self.page_size} --unpack "{output_dir}" "{input_file}"'
 
@@ -157,15 +157,15 @@ def esp8266_get_esptoolpy_reset_flags(resetmethod):
 ## Script interface functions
 def parse_partition_table(content):
     entries = [e for e in content.split(b'\xaaP') if len(e) > 0]
-    print("Partition data:")
+    #print("Partition data:")
     for entry in entries:
         type = entry[1]
         if type in [0x82,0x83]: # SPIFFS or LITTLEFS
             offset = int.from_bytes(entry[2:5], byteorder='little', signed=False)
             size = int.from_bytes(entry[6:9], byteorder='little', signed=False)
-            print("type:",hex(type))
-            print("address:",hex(offset))
-            print("size:",hex(size))
+            #print("type:",hex(type))
+            #print("address:",hex(offset))
+            #print("size:",hex(size))
             env["SPIFFS_START"] = offset
             env["SPIFFS_SIZE"] = size
             env["SPIFFS_PAGE"] = int("0x100", 16)
@@ -191,8 +191,8 @@ def get_partition_table():
             fs_file
     ]
     esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
-    print("Executing flash download command to read partition table.")
-    print(esptoolpy_cmd)
+    #print("Executing flash download command to read partition table.")
+    #print(esptoolpy_cmd)
     try:
         returncode = subprocess.call(esptoolpy_cmd, shell=False)
     except subprocess.CalledProcessError as exc:
@@ -205,7 +205,7 @@ def get_fs_type_start_and_length():
     platform = env["PIOPLATFORM"]
     if platform == "espressif32":
         print(f"Retrieving filesystem info for {mcu}.")
-        print("Partition file: " + str(env.subst("$PARTITIONS_TABLE_CSV")))
+        #print("Partition file: " + str(env.subst("$PARTITIONS_TABLE_CSV")))
         # esp32_fetch_spiffs_size(env)
         get_partition_table()
         return SPIFFSInfo(env["SPIFFS_START"], env["SPIFFS_SIZE"], env["SPIFFS_PAGE"], env["SPIFFS_BLOCK"])
@@ -249,8 +249,8 @@ def download_fs(fs_info: FSInfo):
             fs_file
     ]
     esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
-    print("Executing flash download command.")
-    print(esptoolpy_cmd)
+    print("Download filesystem image")
+    #print(esptoolpy_cmd)
     try:
         returncode = subprocess.call(esptoolpy_cmd, shell=False)
         # print("Launched download of filesystem binary.")
@@ -276,10 +276,10 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
         os.makedirs(unpack_dir)
 
     cmd = fs_info.get_extract_cmd(downloaded_file, unpack_dir)
-    print("Executing extraction command: " + str(cmd))
+    print("Unpack files from filesystem image")
+    #print("Extraction command: " + str(cmd))
     try:
         returncode = subprocess.call(cmd, shell=True)
-        print("Unpacked filesystem.")
         return (True, unpack_dir)
     except subprocess.CalledProcessError as exc:
         print("Unpacking filesystem failed with " + str(exc))
@@ -294,7 +294,6 @@ def display_fs(extracted_dir):
 def command_download_fs(*args, **kwargs):
     get_partition_table()
     info = get_fs_type_start_and_length()
-    print("Parsed FS info: " + str(info))
     download_ok, downloaded_file = download_fs(info)
     # print("Download was okay: " + str(download_ok) + ". File at: "+ str(downloaded_file)) # this is wrong
     unpack_ok, unpacked_dir = unpack_fs(info, downloaded_file)
