@@ -280,7 +280,6 @@ def display_fs(extracted_dir):
     print("Extracted " + str(file_count) + " file(s) from filesystem.")
 
 def command_download_fs(*args, **kwargs):
-    get_partition_table()
     info = get_fs_type_start_and_length()
     download_ok, downloaded_file = download_fs(info)
     # print("Download was okay: " + str(download_ok) + ". File at: "+ str(downloaded_file)) # this is wrong
