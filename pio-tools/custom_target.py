@@ -142,18 +142,6 @@ def esp8266_fetch_fs_size(env):
 
         env[k] = _value
 
-def esp8266_get_esptoolpy_reset_flags(resetmethod):
-    # no dtr, no_sync
-    resets = ("no_reset_no_sync", "soft_reset")
-    if resetmethod == "nodemcu":
-        # dtr
-        resets = ("default_reset", "hard_reset")
-    elif resetmethod == "ck":
-        # no dtr
-        resets = ("no_reset", "soft_reset")
-
-    return ["--before", resets[0], "--after", resets[1]]
-
 ## Script interface functions
 def parse_partition_table(content):
     entries = [e for e in content.split(b'\xaaP') if len(e) > 0]
