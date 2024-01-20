@@ -50,7 +50,7 @@ class LittleFSInfo(FSInfo):
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
         super().__init__(FSType.LITTLEFS, start, length, page_size, block_size)
     def __repr__(self):
-        return f"{self.fs_type} Start {hex(self.start)} Len {self.length} Page size {self.page_size} Block size {self.block_size}"
+        return f"{self.fs_type} Start {hex(self.start)} Len {hex(self.length)} Page size {hex(self.page_size)} Block size {hex(self.block_size)}"
     def get_extract_cmd(self, input_file, output_dir):
         return [self.tool, "-b", str(self.block_size), "-s", str(self.length), "-p", str(self.page_size), "--unpack", output_dir, input_file]
 
@@ -61,7 +61,7 @@ class SPIFFSInfo(FSInfo):
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
         super().__init__(FSType.SPIFFS, start, length, page_size, block_size)
     def __repr__(self):
-        return f"{self.fs_type} Start {hex(self.start)} Len {self.length} Page size {self.page_size} Block size {self.block_size}"
+        return f"{self.fs_type} Start {hex(self.start)} Len {hex(self.length)} Page size {hex(self.page_size)} Block size {hex(self.block_size)}"
     def get_extract_cmd(self, input_file, output_dir):
         return f'"{self.tool}" -b {self.block_size} -p {self.page_size} --unpack "{output_dir}" "{input_file}"'
 
@@ -89,8 +89,6 @@ def _parse_size(value):
 def _parse_ld_sizes(ldscript_path):
     assert ldscript_path
     result = {}
-    # get flash size from board's manifest
-    result['flash_size'] = int(env.BoardConfig().get("upload.maximum_size", 0))
     # get flash size from LD script path
     match = re.search(r"\.flash\.(\d+[mk]).*\.ld", ldscript_path)
     if match:
@@ -219,10 +217,10 @@ def get_fs_type_start_and_length():
             env.Exit(1)
         # fetching sizes is the same for all filesystems
         esp8266_fetch_fs_size(env)
-        print("FS_START: " + hex(env["FS_START"]))
-        print("FS_END: " + hex(env["FS_END"]))
-        print("FS_PAGE: " + hex(env["FS_PAGE"]))
-        print("FS_BLOCK: " + hex(env["FS_BLOCK"]))
+        #print("FS_START: " + hex(env["FS_START"]))
+        #print("FS_SIZE: " + hex(env["FS_END"] - env["FS_START"]))
+        #print("FS_PAGE: " + hex(env["FS_PAGE"]))
+        #print("FS_BLOCK: " + hex(env["FS_BLOCK"]))
         if filesystem == "littlefs":
             print("Recognized LittleFS filesystem.")
             return LittleFSInfo(env["FS_START"], env["FS_END"] - env["FS_START"], env["FS_PAGE"], env["FS_BLOCK"])
