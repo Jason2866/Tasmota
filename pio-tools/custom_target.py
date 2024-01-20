@@ -160,36 +160,34 @@ def parse_partition_table(content):
             env["SPIFFS_BLOCK"] = int("0x1000", 16)
 
 def get_partition_table():
-    platform = env["PIOPLATFORM"]
-    if platform == "espressif32":
-        esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
+    esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
+    upload_port = join(env.get("UPLOAD_PORT", "none"))
+    download_speed = join(str(board.get("download.speed", "115200")))
+    if "none" in upload_port:
+        env.AutodetectUploadPort()
         upload_port = join(env.get("UPLOAD_PORT", "none"))
-        download_speed = join(str(board.get("download.speed", "115200")))
-        if "none" in upload_port:
-            env.AutodetectUploadPort()
-            upload_port = join(env.get("UPLOAD_PORT", "none"))
-        fs_file = join(env["PROJECT_DIR"], "partition_table_from_flash.bin")
-        esptoolpy_flags = [
-                "--chip", mcu,
-                "--port", upload_port,
-                "--baud",  download_speed,
-                "--before", "default_reset",
-                "--after", "hard_reset",
-                "read_flash",
-                "0x8000",
-                "0x1000",
-                fs_file
-        ]
-        esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
-        #print("Executing flash download command to read partition table.")
-        #print(esptoolpy_cmd)
-        try:
-            returncode = subprocess.call(esptoolpy_cmd, shell=False)
-        except subprocess.CalledProcessError as exc:
-            print("Downloading failed with " + str(exc))
-        with open(fs_file, mode="rb") as file:
-            content = file.read()
-            parse_partition_table(content)
+    fs_file = join(env["PROJECT_DIR"], "partition_table_from_flash.bin")
+    esptoolpy_flags = [
+            "--chip", mcu,
+            "--port", upload_port,
+            "--baud",  download_speed,
+            "--before", "default_reset",
+            "--after", "hard_reset",
+            "read_flash",
+            "0x8000",
+            "0x1000",
+            fs_file
+    ]
+    esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
+    #print("Executing flash download command to read partition table.")
+    #print(esptoolpy_cmd)
+    try:
+        returncode = subprocess.call(esptoolpy_cmd, shell=False)
+    except subprocess.CalledProcessError as exc:
+        print("Downloading failed with " + str(exc))
+    with open(fs_file, mode="rb") as file:
+        content = file.read()
+        parse_partition_table(content)
 
 def get_fs_type_start_and_length():
     platform = env["PIOPLATFORM"]
