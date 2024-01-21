@@ -178,8 +178,6 @@ def get_partition_table():
             fs_file
     ]
     esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
-    #print("Executing flash download command to read partition table.")
-    #print(esptoolpy_cmd)
     try:
         returncode = subprocess.call(esptoolpy_cmd, shell=False)
     except subprocess.CalledProcessError as exc:
@@ -192,8 +190,6 @@ def get_fs_type_start_and_length():
     platform = env["PIOPLATFORM"]
     if platform == "espressif32":
         print(f"Retrieving filesystem info for {mcu}.")
-        #print("Partition file: " + str(env.subst("$PARTITIONS_TABLE_CSV")))
-        # esp32_fetch_spiffs_size(env)
         get_partition_table()
         return ESP32_FS_Info(env["FS_START"], env["FS_SIZE"], env["FS_PAGE"], env["FS_BLOCK"])
     elif platform == "espressif8266":
@@ -237,10 +233,8 @@ def download_fs(fs_info: FSInfo):
     ]
     esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
     print("Download filesystem image")
-    #print(esptoolpy_cmd)
     try:
         returncode = subprocess.call(esptoolpy_cmd, shell=False)
-        # print("Launched download of filesystem binary.")
         return (True, fs_file)
     except subprocess.CalledProcessError as exc:
         print("Downloading failed with " + str(exc))
@@ -250,7 +244,6 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
     # by writing custom_unpack_dir = some_dir in the platformio.ini, one can
     # control the unpack directory
     unpack_dir = env.GetProjectOption("custom_unpack_dir", "unpacked_fs")
-    #unpack_dir = "unpacked_fs"
     if not os.path.exists(downloaded_file):
         print(f"ERROR: {downloaded_file} with filesystem not found, maybe download failed due to download_speed setting being too high.")
         assert(0)
@@ -264,7 +257,6 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
 
     cmd = fs_info.get_extract_cmd(downloaded_file, unpack_dir)
     print("Unpack files from filesystem image")
-    #print("Extraction command: " + str(cmd))
     try:
         returncode = subprocess.call(cmd, shell=True)
         return (True, unpack_dir)
@@ -281,7 +273,6 @@ def display_fs(extracted_dir):
 def command_download_fs(*args, **kwargs):
     info = get_fs_type_start_and_length()
     download_ok, downloaded_file = download_fs(info)
-    # print("Download was okay: " + str(download_ok) + ". File at: "+ str(downloaded_file)) # this is wrong
     unpack_ok, unpacked_dir = unpack_fs(info, downloaded_file)
     if unpack_ok is True:
         display_fs(unpacked_dir)
