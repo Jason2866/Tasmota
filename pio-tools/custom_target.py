@@ -27,7 +27,6 @@ mcu = board.get("build.mcu", "esp32")
 
 
 class FSType(Enum):
-    SPIFFS="spiffs"
     LITTLEFS="littlefs"
     FATFS="fatfs"
 
@@ -44,7 +43,7 @@ class FSInfo:
     def get_extract_cmd(self, input_file, output_dir):
         raise NotImplementedError()
 
-class LittleFSInfo(FSInfo):
+class ESP8266_FS_Info(FSInfo):
     def __init__(self, start, length, page_size, block_size):
         self.tool = env["MKFSTOOL"]
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
@@ -55,11 +54,11 @@ class LittleFSInfo(FSInfo):
         return [self.tool, "-b", str(self.block_size), "-s", str(self.length), "-p", str(self.page_size), "--unpack", output_dir, input_file]
 
 
-class SPIFFSInfo(FSInfo):
+class ESP32_FS_Info(FSInfo):
     def __init__(self, start, length, page_size, block_size):
         self.tool = env["MKFSTOOL"]
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
-        super().__init__(FSType.SPIFFS, start, length, page_size, block_size)
+        super().__init__(FSType.LITTLEFS, start, length, page_size, block_size)
     def __repr__(self):
         return f"{self.fs_type} Start {hex(self.start)} Len {hex(self.length)} Page size {hex(self.page_size)} Block size {hex(self.block_size)}"
     def get_extract_cmd(self, input_file, output_dir):
@@ -196,7 +195,7 @@ def get_fs_type_start_and_length():
         #print("Partition file: " + str(env.subst("$PARTITIONS_TABLE_CSV")))
         # esp32_fetch_spiffs_size(env)
         get_partition_table()
-        return SPIFFSInfo(env["SPIFFS_START"], env["SPIFFS_SIZE"], env["SPIFFS_PAGE"], env["SPIFFS_BLOCK"])
+        return ESP32_FS_Info(env["SPIFFS_START"], env["SPIFFS_SIZE"], env["SPIFFS_PAGE"], env["SPIFFS_BLOCK"])
     elif platform == "espressif8266":
         print("Retrieving filesystem info for ESP8266.")
         filesystem = board.get("build.filesystem", "littlefs")
@@ -211,7 +210,7 @@ def get_fs_type_start_and_length():
         #print("FS_BLOCK: " + hex(env["FS_BLOCK"]))
         if filesystem == "littlefs":
             print("Recognized LittleFS filesystem.")
-            return LittleFSInfo(env["FS_START"], env["FS_END"] - env["FS_START"], env["FS_PAGE"], env["FS_BLOCK"])
+            return ESP8266_FS_Info(env["FS_START"], env["FS_END"] - env["FS_START"], env["FS_PAGE"], env["FS_BLOCK"])
         else:
             print("Unrecongized configuration.")
     pass
