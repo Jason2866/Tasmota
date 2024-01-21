@@ -153,10 +153,10 @@ def parse_partition_table(content):
             #print("type:",hex(type))
             #print("address:",hex(offset))
             #print("size:",hex(size))
-            env["SPIFFS_START"] = offset
-            env["SPIFFS_SIZE"] = size
-            env["SPIFFS_PAGE"] = int("0x100", 16)
-            env["SPIFFS_BLOCK"] = int("0x1000", 16)
+            env["FS_START"] = offset
+            env["FS_SIZE"] = size
+            env["FS_PAGE"] = int("0x100", 16)
+            env["FS_BLOCK"] = int("0x1000", 16)
 
 def get_partition_table():
     esptoolpy = join(platform.get_package_dir("tool-esptoolpy") or "", "esptool.py")
@@ -195,7 +195,7 @@ def get_fs_type_start_and_length():
         #print("Partition file: " + str(env.subst("$PARTITIONS_TABLE_CSV")))
         # esp32_fetch_spiffs_size(env)
         get_partition_table()
-        return ESP32_FS_Info(env["SPIFFS_START"], env["SPIFFS_SIZE"], env["SPIFFS_PAGE"], env["SPIFFS_BLOCK"])
+        return ESP32_FS_Info(env["FS_START"], env["FS_SIZE"], env["FS_PAGE"], env["FS_BLOCK"])
     elif platform == "espressif8266":
         print("Retrieving filesystem info for ESP8266.")
         filesystem = board.get("build.filesystem", "littlefs")
