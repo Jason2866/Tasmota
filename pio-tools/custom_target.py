@@ -43,7 +43,7 @@ class FSInfo:
     def get_extract_cmd(self, input_file, output_dir):
         raise NotImplementedError()
 
-class ESP8266_FS_Info(FSInfo):
+class FS_Info(FSInfo):
     def __init__(self, start, length, page_size, block_size):
         self.tool = env["MKFSTOOL"]
         self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
@@ -51,18 +51,7 @@ class ESP8266_FS_Info(FSInfo):
     def __repr__(self):
         return f"{self.fs_type} Start {hex(self.start)} Len {hex(self.length)} Page size {hex(self.page_size)} Block size {hex(self.block_size)}"
     def get_extract_cmd(self, input_file, output_dir):
-        return [self.tool, "-b", str(self.block_size), "-s", str(self.length), "-p", str(self.page_size), "--unpack", output_dir, input_file]
-
-
-class ESP32_FS_Info(FSInfo):
-    def __init__(self, start, length, page_size, block_size):
-        self.tool = env["MKFSTOOL"]
-        self.tool = join(platform.get_package_dir("tool-mklittlefs"), self.tool)
-        super().__init__(FSType.LITTLEFS, start, length, page_size, block_size)
-    def __repr__(self):
-        return f"{self.fs_type} Start {hex(self.start)} Len {hex(self.length)} Page size {hex(self.page_size)} Block size {hex(self.block_size)}"
-    def get_extract_cmd(self, input_file, output_dir):
-        return f'"{self.tool}" -b {self.block_size} -p {self.page_size} --unpack "{output_dir}" "{input_file}"'
+        return f'"{self.tool}" -b {self.block_size} -s {self.length} -p {self.page_size} --unpack "{output_dir}" "{input_file}"'
 
 # SPIFFS helpers copied from ESP32, https://github.com/platformio/platform-espressif32/blob/develop/builder/main.py
 # Copyright 2014-present PlatformIO <contact@platformio.org>
@@ -191,7 +180,7 @@ def get_fs_type_start_and_length():
     if platform == "espressif32":
         print(f"Retrieving filesystem info for {mcu}.")
         get_partition_table()
-        return ESP32_FS_Info(env["FS_START"], env["FS_SIZE"], env["FS_PAGE"], env["FS_BLOCK"])
+        return FS_Info(env["FS_START"], env["FS_SIZE"], env["FS_PAGE"], env["FS_BLOCK"])
     elif platform == "espressif8266":
         print("Retrieving filesystem info for ESP8266.")
         filesystem = board.get("build.filesystem", "littlefs")
@@ -206,7 +195,7 @@ def get_fs_type_start_and_length():
         #print("FS_BLOCK: " + hex(env["FS_BLOCK"]))
         if filesystem == "littlefs":
             print("Recognized LittleFS filesystem.")
-            return ESP8266_FS_Info(env["FS_START"], env["FS_END"] - env["FS_START"], env["FS_PAGE"], env["FS_BLOCK"])
+            return FS_Info(env["FS_START"], env["FS_END"] - env["FS_START"], env["FS_PAGE"], env["FS_BLOCK"])
         else:
             print("Unrecongized configuration.")
     pass
