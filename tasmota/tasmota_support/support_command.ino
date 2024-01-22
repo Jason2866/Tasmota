@@ -251,6 +251,10 @@ void CmndWifiTest(void)
 
 #endif  // not defined FIRMWARE_MINIMAL_ONLY
 
+void ResponseCmnd(void) {
+  Response_P(PSTR("{\"%s\":"), XdrvMailbox.command);
+}
+
 void ResponseCmndNumber(int value) {
   Response_P(S_JSON_COMMAND_NVALUE, XdrvMailbox.command, value);
 }
@@ -523,7 +527,8 @@ void CmndBacklog(void) {
         char* temp = (char*)malloc(strlen(blcommand)+1);
         if (temp != nullptr) {
           strcpy(temp, blcommand);
-          backlog.add(temp);
+          char* &elem = backlog.addToLast();
+          elem = temp;
         }
       }
       blcommand = strtok(nullptr, ";");
@@ -533,8 +538,9 @@ void CmndBacklog(void) {
     TasmotaGlobal.backlog_timer = millis();
   } else {
     bool blflag = BACKLOG_EMPTY;
-    while (backlog.size()) {
-      free(backlog.pop());
+    for (auto &elem : backlog) {
+      free(elem);
+      backlog.remove(&elem);
     }
     ResponseCmndChar(blflag ? PSTR(D_JSON_EMPTY) : PSTR(D_JSON_ABORTED));
   }
@@ -694,7 +700,7 @@ void ResetTimedCmnd(const char *command) {
 void ShowTimedCmnd(const char *command) {
   bool found = false;
   uint32_t now = millis();
-  Response_P(PSTR("{\"%s\":"), XdrvMailbox.command);
+  ResponseCmnd();     // {"TimedPower":
   for (auto &elem : timed_cmnd) {
     if (strncmp(command, elem.command, strlen(command)) == 0) {  // StartsWith
       ResponseAppend_P(PSTR("%s{\"" D_JSON_REMAINING "\":%d,\"" D_JSON_COMMAND "\":\"%s\"}"),
