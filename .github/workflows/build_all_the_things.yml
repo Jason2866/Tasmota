@@ -47,7 +47,7 @@ jobs:
           path: ./build_output
 
   os-check-mac:
-    runs-on: macOS-12
+    runs-on: macos-14
     if: github.repository == 'arendst/Tasmota'
     strategy:
       fail-fast: true
@@ -59,11 +59,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
       - name: Install dependencies
         run: |
           pip install wheel
-          #python -m pip install --upgrade pip
+          python -m pip install --upgrade pip --disable-pip-version-check --no-warn-script-location --root-user-action=ignore
           pip install -U platformio
           #platformio upgrade --dev
           #platformio update
