@@ -1,5 +1,5 @@
 tasks:
-  - command: pip3 install -U platformio pip
+  - command: pip install -U platformio &$ pip install --upgrade pip
 
 image:
   file: .gitpod.Dockerfile
