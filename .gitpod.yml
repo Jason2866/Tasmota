@@ -1,5 +1,5 @@
 tasks:
-  - command: pip install -U platformio &$ pip install --upgrade pip
+  - command: pip install -U platformio &$ pio run -t clean -e tasmota
 
 image:
   file: .gitpod.Dockerfile
