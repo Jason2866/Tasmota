@@ -1,10 +1,9 @@
 tasks:
-  - command: pip3 install -U platformio
+  - command: pip3 install -U platformio pip
 
 image:
   file: .gitpod.Dockerfile
 
 vscode:
   extensions:
-    - platformio.platformio-ide
     - shardulm94.trailing-spaces
