@@ -11,7 +11,7 @@
 			]
 		}
 	},
-    "unwantedRecommendations": [
-        "ms-vscode.cpptools-extension-pack"
-    ]
+	"unwantedRecommendations": [
+        	"ms-vscode.cpptools-extension-pack"
+    	]
 }
