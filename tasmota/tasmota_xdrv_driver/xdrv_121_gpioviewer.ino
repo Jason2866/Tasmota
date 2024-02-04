@@ -13,31 +13,40 @@
  * Resources:
  *       GPIO Viewer: https://github.com/thelastoutpostworkshop/gpio_viewer
  * Server Sent Event: https://github.com/esp8266/Arduino/issues/7008
+ *    Tasmota hosted: https://ota.tasmota.com/tasmota/release-13.4.0/gpio_viewer_1_5/
+ * 
+ * Supported commands:
+ *   GvViewer               - Show current viewer state
+ *   GvViewer 0             - Turn viewer off
+ *   GvViewer 1             - Turn viewer on
+ *   GvViewer 2             - Toggle viewer state
+ *   GvSampling             - Show current sampling interval in milliseconds
+ *   GvSampling 1           - Select default sampling interval (GV_SAMPLING_INTERVAL)
+ *   GvSampling 20 .. 1000  - Set sampling interval
+ *   GvPort                 - Show current port
+ *   GvPort 1               - Select default port (GV_PORT)
+ *   GvPort 5557            - Set port
+ *   GvUrl                  - Show current url
+ *   GvUrl 1                - Select default url (GV_BASE_URL)
+ *   GvUrl https://thelastoutpostworkshop.github.io/microcontroller_devkit/gpio_viewer_1_5/
 \*********************************************************************************************/
 
 #define XDRV_121              121
 
 //#define GV_INPUT_DETECTION                 // Report type of digital input
-
 #define GV_USE_ESPINFO                     // Provide ESP info
-#ifdef ESP32
-#ifndef GV_USE_ESPINFO
-#define GV_USE_ESPINFO                     // Provide ESP info
-#endif
-#endif
 
 #ifndef GV_PORT
-#define GV_PORT               5557         // SSE webserver port
+#define GV_PORT               5557         // [GvPort] SSE webserver port
 #endif
 #ifndef GV_SAMPLING_INTERVAL
 #define GV_SAMPLING_INTERVAL  100          // [GvSampling] milliseconds - Use Tasmota Scheduler (100) or Ticker (20..99,101..1000)
 #endif
+#ifndef GV_BASE_URL
+#define GV_BASE_URL           "https://thelastoutpostworkshop.github.io/microcontroller_devkit/gpio_viewer_1_5/"  // [GvUrl]
+#endif
 
 #define GV_KEEP_ALIVE         1000         // milliseconds - If no activity after this do a heap size event anyway
-
-#ifndef GV_BASE_URL
-#define GV_BASE_URL           "https://thelastoutpostworkshop.github.io/microcontroller_devkit/gpio_viewer_1_5/"
-#endif
 
 const char *GVRelease = "1.5.0";
 
@@ -71,8 +80,8 @@ typedef struct {
   uint32_t lastSentWithNoActivity;
   uint32_t freeHeap;
   uint32_t freePSRAM;
-  uint32_t sampling;
-  uint32_t init_done;
+  uint16_t sampling;
+  uint16_t init_done;
   uint16_t port;
   bool mutex;
   bool sse_ready;
@@ -82,7 +91,7 @@ WiFiClient GVWebClient;
 
 #ifdef GV_INPUT_DETECTION
 
-int GetPinMode(uint8_t pin) {
+int GetPinMode(uint32_t pin) {
 #ifdef ESP8266  
   if (pin > MAX_GPIO_PIN -2) { return -1; }                // Skip GPIO16 and Analog0
 #endif  // ESP8266
@@ -101,15 +110,17 @@ int GetPinMode(uint8_t pin) {
 
 #endif  // GV_INPUT_DETECTION
 
-void GVInit(void) {
+bool GVInit(void) {
   if (!GV) {
     GV = (tGV*)calloc(sizeof(tGV), 1);
     if (GV) {
       GV->sampling = (GV_SAMPLING_INTERVAL < 20) ? 20 : GV_SAMPLING_INTERVAL;
       GV->baseUrl = GV_BASE_URL;
       GV->port = GV_PORT;
+      return true;
     }
   }
+  return false;
 }
 
 void GVStop(void) {
@@ -436,10 +447,10 @@ void (* const GVCommand[])(void) PROGMEM = {
 void CmndGvViewer(void) {
   /* GvViewer    - Show current viewer state
      GvViewer 0  - Turn viewer off
-     GvViewer 1  - Turn viewer On
+     GvViewer 1  - Turn viewer on
      GvViewer 2  - Toggle viewer state
   */
-  GVInit();
+  if (!GVInit()) { return; }
   if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 2)) {
     uint32_t state = XdrvMailbox.payload;
     if (2 == state) {                      // Toggle
@@ -461,22 +472,23 @@ void CmndGvViewer(void) {
 
 void CmndGvSampling(void) {
   /* GvSampling             - Show current sampling interval
+     GvSampling 1           - Set default sampling interval
      GvSampling 20 .. 1000  - Set sampling interval
   */
-  GVInit();
-  if ((XdrvMailbox.payload >= 20) && (XdrvMailbox.payload <= 1000)) {
+  if (!GVInit()) { return; }
+  if ((SC_DEFAULT == XdrvMailbox.payload) || ((XdrvMailbox.payload >= 20) && (XdrvMailbox.payload <= 1000))) {
     GVCloseEvent();                        // Stop current updates
-    GV->sampling = XdrvMailbox.payload;    // 20 - 1000 milliseconds
+    GV->sampling = (SC_DEFAULT == XdrvMailbox.payload) ? GV_SAMPLING_INTERVAL : XdrvMailbox.payload;  // 20 - 1000 milliseconds
   }
   ResponseCmndNumber(GV->sampling);
 }
 
 void CmndGvPort(void) {
-  /* GvPort      - Show vurrent port
+  /* GvPort      - Show current port
      GvPort 1    - Select default port
      GvPort 5557 - Set port
   */
-  GVInit();
+  if (!GVInit()) { return; }
   if ((XdrvMailbox.payload > 0) && (XdrvMailbox.payload < 65536)) {
     GVCloseEvent();                        // Stop current updates
     GV->port = (SC_DEFAULT == XdrvMailbox.payload) ? GV_PORT : XdrvMailbox.payload;
@@ -489,7 +501,7 @@ void CmndGvUrl(void) {
      GvUrl 1     - Select default url
      GvUrl https://thelastoutpostworkshop.github.io/microcontroller_devkit/gpio_viewer_1_5/
   */
-  GVInit();
+  if (!GVInit()) { return; }
   if (XdrvMailbox.data_len > 0) {
     GVCloseEvent();                        // Stop current updates
     GV->baseUrl = (SC_DEFAULT == XdrvMailbox.payload) ? GV_BASE_URL : XdrvMailbox.data;
@@ -511,7 +523,7 @@ void GVSetupAndStart(void) {
 
   AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HTTP D_GPIO_VIEWER));
 
-  GVInit();
+  if (!GVInit()) { return; }
   GVBegin();                               // Start WebServer
 
   char redirect[100];
