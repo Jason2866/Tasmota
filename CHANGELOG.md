@@ -3,13 +3,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [13.3.0.4]
+## [13.3.0.5]
+### Added
+
+### Breaking Changed
+- ESP32 LVGL library from v8.3.11 to v9.0.0, some small breaking changes in C, none in HASPmota (#20659)
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [13.3.0.4] 20240205
 ### Added
 - HASPmota support for `min` and `max` attribute in `slider` (#20582)
 - ESP32-C3 support for GPIO11 (#18350)
 - ESP32 support for Shelly Plus Add-On using DS18x20 or DHT11/AM2301/DHT21/DHT22/AM2302/AM2321/SI7021 on GPIO0/1 (#20580)
 - ESP32 MI32 Legacy initial support for sensors using BTHOME packet format (#20625)
 - Berry `introspect.contains` and `bytes.addfloat` (#20635)
+- Matter add human readable names for TimeSync cluster (#20666)
 
 ### Breaking Changed
 - Matter aggregator relocated to endpoint 1 for Google compatibility, may break existing associations (#20654)
@@ -25,9 +38,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Berry C mapping, raise an error if too many arguments are sent (#20604)
-- Matter fixed error when removing device from Google Home
-
-### Removed
+- Matter error when removing device from Google Home (#20665)
+- Matter exception when fabrics is not initialized (#20667)
 
 ## [13.3.0.3] 20240122
 ### Added

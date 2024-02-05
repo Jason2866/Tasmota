@@ -116,7 +116,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 [Complete list](BUILDS.md) of available feature and sensors.
 
-## Changelog v13.3.0.4
+## Changelog v13.3.0.5
 ### Added
 - Command ``TimedPower<index> <milliseconds>[,ON|OFF|TOGGLE|BLINK]`` executes ``Power<index> [ON|OFF|TOGGLE|BLINK] `` and after <millisecond> executes ``Power<index> [OFF|ON|TOGGLE|OFF]``
 - Display of active drivers using command ``status 4``
@@ -160,8 +160,10 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - HASPmota type `chart` [#20372](https://github.com/arendst/Tasmota/issues/20372)
 - HASPmota support for `min` and `max` attribute in `slider` [#20582](https://github.com/arendst/Tasmota/issues/20582)
 - Matter support for password for remote Tasmota devices [#20296](https://github.com/arendst/Tasmota/issues/20296)
+- Matter add human readable names for TimeSync cluster [#20666](https://github.com/arendst/Tasmota/issues/20666)
 
 ### Breaking Changed
+- ESP32 LVGL library from v8.3.11 to v9.0.0, some small breaking changes in C, none in HASPmota [#20659](https://github.com/arendst/Tasmota/issues/20659)
 - Refactoring of Berry `animate` module for WS2812 Leds [#20236](https://github.com/arendst/Tasmota/issues/20236)
 - Matter aggregator relocated to endpoint 1 for Google compatibility, may break existing associations [#20654](https://github.com/arendst/Tasmota/issues/20654)
 
@@ -201,6 +203,8 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Berry C mapping, raise an error if too many arguments are sent [#20604](https://github.com/arendst/Tasmota/issues/20604)
 - Matter Contact sensor was not triggering any update [#20232](https://github.com/arendst/Tasmota/issues/20232)
 - Matter support for Alexa [#20545](https://github.com/arendst/Tasmota/issues/20545)
+- Matter error when removing device from Google Home [#20665](https://github.com/arendst/Tasmota/issues/20665)
+- Matter exception when fabrics is not initialized [#20667](https://github.com/arendst/Tasmota/issues/20667)
 
 ### Removed
 - Max number of 30 backlog entries
