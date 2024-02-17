@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 
 ## [13.4.0.1]
 ### Added
+- HASPmota `p<x>b<y>.delete` to delete an object (#20735)
+- LVGL and HASPmota typicons font (#20742)
+- HASPmota more attributes (#20744)
 
 ### Breaking Changed
 
@@ -12,8 +15,11 @@ All notable changes to this project will be documented in this file.
 - ESP32 Core3 SPI ethernet support for all models
 - Berry class `int64` made immutable (#20727)
 - LVGL make lv_touch_3_buttons more responsive (#20728)
+- HASPmota fix and improve demo with pixel-perfect fonts (#20734)
+- NeoPool webUI pH alarms (4 & 5) completed (#20743)
 
 ### Fixed
+- ESP32 PWM activity on unconfigured PWM GPIOs (#20732)
 
 ### Removed
 
