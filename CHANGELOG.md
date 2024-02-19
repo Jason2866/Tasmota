@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 - HASPmota `p<x>b<y>.delete` to delete an object (#20735)
 - LVGL and HASPmota typicons font (#20742)
 - HASPmota more attributes (#20744)
+- QMC5883l check for overflow and scale reading (#20643)
+- TasMesh support for LWT messages (#20392)
+- Show calculated heat index if temperature and humidity is available with ``#define USE_HEAT_INDEX`` (#4771)
 
 ### Breaking Changed
 
@@ -20,6 +23,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - ESP32 PWM activity on unconfigured PWM GPIOs (#20732)
+- Shutter inverted using internal commands (#20752)
 
 ### Removed
 

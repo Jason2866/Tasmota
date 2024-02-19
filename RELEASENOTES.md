@@ -118,6 +118,9 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 ## Changelog v13.4.0.1
 ### Added
+- Show calculated heat index if temperature and humidity is available with ``#define USE_HEAT_INDEX`` [#4771](https://github.com/arendst/Tasmota/issues/4771)
+- TasMesh support for LWT messages [#20392](https://github.com/arendst/Tasmota/issues/20392)
+- QMC5883l check for overflow and scale reading [#20643](https://github.com/arendst/Tasmota/issues/20643)
 - HASPmota `p<x>b<y>.delete` to delete an object [#20735](https://github.com/arendst/Tasmota/issues/20735)
 - LVGL and HASPmota typicons font [#20742](https://github.com/arendst/Tasmota/issues/20742)
 
@@ -132,6 +135,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - HASPmota more attributes [#20744](https://github.com/arendst/Tasmota/issues/20744)
 
 ### Fixed
+- Shutter inverted using internal commands [#20752](https://github.com/arendst/Tasmota/issues/20752)
 - ESP32 PWM activity on unconfigured PWM GPIOs [#20732](https://github.com/arendst/Tasmota/issues/20732)
 
 ### Removed
