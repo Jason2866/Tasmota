@@ -302,7 +302,8 @@ def esp32_create_combined_bin(source, target, env):
         try:
             esptool.main(cmd)
         except:
-            print("\u001b[31;1m************ Generating the Tasmota factory image failed *************\u001b[31;1m")
+            print(
+                "\u001b[31;1m************ Generating the Tasmota factory image failed *************\u001b[31;1m")
             print("*   Probably unusual naming convention in this build environment     *")
             print("* Expected build environment name like 'tasmota32-whatever-you-want' *")
 
