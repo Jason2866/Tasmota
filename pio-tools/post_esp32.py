@@ -298,10 +298,9 @@ def esp32_create_combined_bin(source, target, env):
             print("Will use custom upload command for flashing operation to add file system defined for this build target.")
 
     if("safeboot" not in firmware_name):
-        #print('Using esptool.py arguments: %s' % ' '.join(cmd))
         try:
-            #esptool.main(cmd)
-            output = subprocess.DEVNULL(esptool.main(cmd), shell=False)
+            print('Using esptool.py arguments: %s' % ' '.join(cmd))
+            esptool.main(cmd)
         except:
             print()
             print()
