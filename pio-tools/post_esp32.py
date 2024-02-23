@@ -299,7 +299,11 @@ def esp32_create_combined_bin(source, target, env):
 
     if("safeboot" not in firmware_name):
         #print('Using esptool.py arguments: %s' % ' '.join(cmd))
-        esptool.main(cmd)
-
+        try:
+            esptool.main(cmd)
+        except:
+            print("\u001b[31;1m************ Generating the Tasmota factory image failed *************\u001b[31;1m")
+            print("*   Probably unusual naming convention in this build environment     *")
+            print("* Expected build environment name like 'tasmota32-whatever-you-want' *")
 
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", esp32_create_combined_bin)
