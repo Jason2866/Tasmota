@@ -300,7 +300,9 @@ def esp32_create_combined_bin(source, target, env):
     if("safeboot" not in firmware_name):
         #print('Using esptool.py arguments: %s' % ' '.join(cmd))
         try:
-            esptool.main(cmd)
+            #esptool.main(cmd)
+            #output = subprocess.run(esptoolpy_cmd, capture_output=True).stdout.splitlines()
+            subprocess.call(esptool.main(cmd), shell=False)
         except:
             print("")
             print("")
