@@ -301,8 +301,7 @@ def esp32_create_combined_bin(source, target, env):
         #print('Using esptool.py arguments: %s' % ' '.join(cmd))
         try:
             #esptool.main(cmd)
-            #output = subprocess.run(esptoolpy_cmd, capture_output=True).stdout.splitlines()
-            output = subprocess.run(esptool.main(cmd), capture_output=True).stdout.splitlines()
+            output = subprocess.run(esptool.main(cmd), shell=False, capture_output=False)
         except:
             print()
             print()
