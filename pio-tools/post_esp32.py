@@ -304,10 +304,10 @@ def esp32_create_combined_bin(source, target, env):
             #output = subprocess.run(esptoolpy_cmd, capture_output=True).stdout.splitlines()
             output = subprocess.run(esptool.main(cmd), capture_output=True).stdout.splitlines()
         except:
-            print("")
-            print("")
-            print("\u001b[31;1m************ Generating the Tasmota factory image failed *************")
-            print("*   Probably unusual naming convention in this build environment     *")
-            print("* Expected build environment name like 'tasmota32-whatever-you-want' *\u001b[31;1m")
+            print()
+            print()
+            print("\033[31m************ Generating the Tasmota factory image failed *************")
+            print("\033[31m*   Probably unusual naming convention in this build environment     *")
+            print("\033[31m* Expected build environment name like 'tasmota32-whatever-you-want' *\033[0m")
 
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", esp32_create_combined_bin)
