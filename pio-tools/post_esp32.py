@@ -136,13 +136,12 @@ def esp32_create_chip_string(chip):
         tasmota_platform += "cdc"
         print("WARNING: board definition uses CDC configuration, but environment name does not -> adding 'cdc' to environment name")
         print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
-    if ("solo1" in tasmota_platform_org or "CORE32SOLO1" in extra_flags or "FRAMEWORK_ARDUINO_SOLO1" in build_flags) and "tasmota32solo1" not in tasmota_platform_org:
+    if ("CORE32SOLO1" in extra_flags or "FRAMEWORK_ARDUINO_SOLO1" in build_flags) and "tasmota32solo1" not in tasmota_platform_org:
         print("Unexpected naming convention in this build environment:", tasmota_platform_org)
         print("Expected build environment name like 'tasmota32solo1-whatever-you-want'")
-        tasmota_platform_org = tasmota_platform_org.replace("solo1", "").replace("32", "").replace("tasmota", "tasmota32solo1")
-        tasmota_platform = tasmota_platform_org.split('-')[0]
-        print("WARNING: Changed environment name to:", tasmota_platform_org.replace("-", ""))
+        #tasmota_platform_org = tasmota_platform_org.replace("solo1", "").replace("32", "").replace("tasmota", "tasmota32solo1")
         print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
+        tasmota_platform = "tasmota32solo1"
     return tasmota_platform
 
 def esp32_build_filesystem(fs_size):
