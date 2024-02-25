@@ -241,6 +241,7 @@ class Matter_IM
       attr_name = attr_name ? " (" + attr_name + ")" : ""
 
       # Special case to report unsupported item, if pi==nil
+      ctx.status = nil                # reset status, just in case
       var res = (pi != nil) ? pi.read_attribute(session, ctx, self.tlv_solo) : nil
       var found = true                # stop expansion since we have a value
       var a1_raw_or_list              # contains either a bytes() buffer to append, or a list of bytes(), or nil
@@ -290,9 +291,13 @@ class Matter_IM
           end
         end
       else
-        tasmota.log(format("MTR: >Read_Attr (%6i) %s%s - IGNORED", session.local_session_id, str(ctx), attr_name), 3)
+        if !no_log
+          tasmota.log(format("MTR: >Read_Attr (%6i) %s%s - IGNORED", session.local_session_id, str(ctx), attr_name), 3)
+        end
         # ignore if content is nil and status is undefined
-        found = false
+        if direct
+          found = false
+        end
       end
 
       # a1_raw_or_list if either nil, bytes(), of list(bytes())
@@ -828,7 +833,7 @@ class Matter_IM
       tasmota.log(f"MTR: >Subscribe (%6i) event_requests_size={size(query.event_requests)}", 3)
     end
 
-    var ret = self._inner_process_read_request(msg.session, query, msg, false #-no_log-#)
+    var ret = self._inner_process_read_request(msg.session, query, msg, true #-no_log-#)
     # ret is of type `Matter_ReportDataMessage`
     ret.subscription_id = sub.subscription_id     # enrich with subscription id TODO
     self.send_subscribe_response(msg, ret, sub)
