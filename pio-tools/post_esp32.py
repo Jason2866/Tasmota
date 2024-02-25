@@ -306,4 +306,5 @@ def esp32_create_combined_bin(source, target, env):
         #print('Using esptool.py arguments: %s' % ' '.join(cmd))
         esptool.main(cmd)
 
+
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", esp32_create_combined_bin)
