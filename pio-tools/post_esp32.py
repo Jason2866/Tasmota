@@ -129,7 +129,7 @@ def esp32_create_chip_string(chip):
     tasmota_platform_org = env.subst("$BUILD_DIR").split(os.path.sep)[-1]
     tasmota_platform = tasmota_platform_org.split('-')[0]
     if "tasmota" + chip[3:] not in tasmota_platform: # quick check for a valid name like 'tasmota' + '32c3'
-        print("Unexpected naming convention in this build environment: ", tasmota_platform_org)
+        print("Unexpected naming convention in this build environment:", tasmota_platform_org)
         print("Expected build environment name like 'tasmota32-whatever-you-want'")
         print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
     if "-DUSE_USB_CDC_CONSOLE" in env.BoardConfig().get("build.extra_flags") and "cdc" not in tasmota_platform:
@@ -137,9 +137,11 @@ def esp32_create_chip_string(chip):
         print("WARNING: board definition uses CDC configuration, but environment name does not -> adding 'cdc' to environment name")
         print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
     if "solo1" in tasmota_platform_org and "tasmota32solo1" not in tasmota_platform_org:
-        print("Unexpected naming convention in this build environment: ", tasmota_platform_org)
+        print("Unexpected naming convention in this build environment:", tasmota_platform_org)
         print("Expected build environment name like 'tasmota32solo1-whatever-you-want'")
-        tasmota_platform_org = tasmota_platform_org.replace("solo1", "tasmota32solo1")
+        tasmota_platform_org = tasmota_platform_org.replace("solo1", "")
+        tasmota_platform_org = tasmota_platform_org.replace("32", "")
+        tasmota_platform_org = tasmota_platform_org.replace("tasmota", "tasmota32solo1")
         tasmota_platform = tasmota_platform_org.split('-')[0]
         print("WARNING: Changed environment name to:", tasmota_platform_org)
         print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
