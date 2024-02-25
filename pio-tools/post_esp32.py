@@ -139,9 +139,9 @@ def esp32_create_chip_string(chip):
     if "solo1" in tasmota_platform_org and "tasmota32solo1" not in tasmota_platform_org:
         print("Unexpected naming convention in this build environment:", tasmota_platform_org)
         print("Expected build environment name like 'tasmota32solo1-whatever-you-want'")
-        tasmota_platform_org = tasmota_platform_org.replace("solo1", "")
-        tasmota_platform_org = tasmota_platform_org.replace("32", "")
-        tasmota_platform_org = tasmota_platform_org.replace("tasmota", "tasmota32solo1")
+        tasmota_platform_org = tasmota_platform_org.replace("solo1", "").replace("32", "").replace("tasmota", "tasmota32solo1")
+        #tasmota_platform_org = tasmota_platform_org.replace("32", "")
+        #tasmota_platform_org = tasmota_platform_org.replace("tasmota", "tasmota32solo1")
         tasmota_platform = tasmota_platform_org.split('-')[0]
         print("WARNING: Changed environment name to:", tasmota_platform_org.replace("-", ""))
         print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
