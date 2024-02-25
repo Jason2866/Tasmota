@@ -143,7 +143,7 @@ def esp32_create_chip_string(chip):
         tasmota_platform_org = tasmota_platform_org.replace("32", "")
         tasmota_platform_org = tasmota_platform_org.replace("tasmota", "tasmota32solo1")
         tasmota_platform = tasmota_platform_org.split('-')[0]
-        print("WARNING: Changed environment name to:", tasmota_platform_org)
+        print("WARNING: Changed environment name to:", tasmota_platform_org.replace("-", ""))
         print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
     return tasmota_platform
 
