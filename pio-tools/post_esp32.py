@@ -128,10 +128,11 @@ def patch_partitions_bin(size_string):
 def esp32_create_chip_string(chip):
     tasmota_platform_org = env.subst("$BUILD_DIR").split(os.path.sep)[-1]
     tasmota_platform = tasmota_platform_org.split('-')[0]
-    if "tasmota" + chip[3:] not in tasmota_platform: # quick check for a valid name like 'tasmota' + '32c3'
+    if "tasmota" + chip[3:] not in tasmota_platform: # check + fix for a valid name like 'tasmota' + '32c3'
         print("Unexpected naming convention in this build environment:", tasmota_platform_org)
         print("Expected build environment name like 'tasmota32-whatever-you-want'")
         print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
+        tasmota_platform = "tasmota" + chip[3:]
     if "-DUSE_USB_CDC_CONSOLE" in env.BoardConfig().get("build.extra_flags") and "cdc" not in tasmota_platform:
         tasmota_platform += "cdc"
         print("WARNING: board definition uses CDC configuration, but environment name does not -> adding 'cdc' to environment name")
