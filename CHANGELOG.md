@@ -3,16 +3,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [13.4.0.1]
+## [13.4.0.2]
 ### Added
+
+### Breaking Changed
+
+### Changed
+
+### Fixed
+
+### Removed
+
+
+## [13.4.0.1] 20240229
+### Added
+- Experimental support for LoRa
 - HASPmota `p<x>b<y>.delete` to delete an object (#20735)
 - LVGL and HASPmota typicons font (#20742)
 - HASPmota more attributes (#20744)
 - QMC5883l check for overflow and scale reading (#20643)
 - TasMesh support for LWT messages (#20392)
 - Show calculated heat index if temperature and humidity is available with ``#define USE_HEAT_INDEX`` (#4771)
-
-### Breaking Changed
+- Berry add explicit error log when memory allocation fails (#20807)
+- Support for AMS5915/AMS6915 temperature and pressure sensors (#20814)
+- IR support data larger than 64 bits (#20831)
 
 ### Changed
 - ESP32 Core3 SPI ethernet support for all models
@@ -20,13 +34,14 @@ All notable changes to this project will be documented in this file.
 - LVGL make lv_touch_3_buttons more responsive (#20728)
 - HASPmota fix and improve demo with pixel-perfect fonts (#20734)
 - NeoPool webUI pH alarms (4 & 5) completed (#20743)
-- Matter reduce memory usage when reading with wildcards
+- Matter reduce memory usage when reading with wildcards (#20809)
+- Prevent shutter MQTT broadcast with activated ShutterLock
 
 ### Fixed
 - ESP32 PWM activity on unconfigured PWM GPIOs (#20732)
 - Shutter inverted using internal commands (#20752)
-
-### Removed
+- HASPmota PSRAM memory leak (#20818)
+- Berry Memory leak in `import re` (#20823)
 
 ## [Released]
 

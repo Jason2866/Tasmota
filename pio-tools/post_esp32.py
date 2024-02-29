@@ -32,6 +32,7 @@ import requests
 import shutil
 import subprocess
 import codecs
+from colorama import Fore, Back, Style
 from SCons.Script import COMMAND_LINE_TARGETS
 
 sys.path.append(join(platform.get_package_dir("tool-esptoolpy")))
@@ -102,7 +103,7 @@ def esp32_detect_flashsize():
                         return size, True
             return "4MB",False
         except subprocess.CalledProcessError as exc:
-            print("Did get chip info failed with " + str(exc))
+            print(Fore.YELLOW + "Did get chip info failed with " + str(exc))
             return "4MB",False
 
 flash_size_from_esp, flash_size_was_overridden = esp32_detect_flashsize()
@@ -128,19 +129,23 @@ def patch_partitions_bin(size_string):
 def esp32_create_chip_string(chip):
     tasmota_platform_org = env.subst("$BUILD_DIR").split(os.path.sep)[-1]
     tasmota_platform = tasmota_platform_org.split('-')[0]
-    if "tasmota" + chip[3:] not in tasmota_platform: # quick check for a valid name like 'tasmota' + '32c3'
-        print("Unexpected naming convention in this build environment:", tasmota_platform_org)
-        print("Expected build environment name like 'tasmota32-whatever-you-want'")
-        print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
+    if ("CORE32SOLO1" in extra_flags or "FRAMEWORK_ARDUINO_SOLO1" in build_flags) and "tasmota32solo1" not in tasmota_platform_org:
+        print(Fore.YELLOW + "Unexpected naming convention in this build environment:" + Fore.RED, tasmota_platform_org)
+        print(Fore.YELLOW + "Expected build environment name like " + Fore.GREEN + "'tasmota32solo1-whatever-you-want'")
+        print(Fore.YELLOW + "Please correct your actual build environment, to avoid undefined behavior in build process!!")
+        tasmota_platform = "tasmota32solo1"
+        return tasmota_platform
+    if "tasmota" + chip[3:] not in tasmota_platform: # check + fix for a valid name like 'tasmota' + '32c3'
+        tasmota_platform = "tasmota" + chip[3:]
+        if "-DUSE_USB_CDC_CONSOLE" not in env.BoardConfig().get("build.extra_flags"):
+            print(Fore.YELLOW + "Unexpected naming convention in this build environment:" + Fore.RED, tasmota_platform_org)
+            print(Fore.YELLOW + "Expected build environment name like " + Fore.GREEN + "'tasmota" + chip[3:] + "-whatever-you-want'")
+            print(Fore.YELLOW + "Please correct your actual build environment, to avoid undefined behavior in build process!!")
     if "-DUSE_USB_CDC_CONSOLE" in env.BoardConfig().get("build.extra_flags") and "cdc" not in tasmota_platform:
         tasmota_platform += "cdc"
-        print("WARNING: board definition uses CDC configuration, but environment name does not -> adding 'cdc' to environment name")
-        print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
-    if ("CORE32SOLO1" in extra_flags or "FRAMEWORK_ARDUINO_SOLO1" in build_flags) and "tasmota32solo1" not in tasmota_platform_org:
-        print("Unexpected naming convention in this build environment:", tasmota_platform_org)
-        print("Expected build environment name like 'tasmota32solo1-whatever-you-want'")
-        print("Please correct your actual build environment, to avoid undefined behavior in build process!!")
-        tasmota_platform = "tasmota32solo1"
+        print(Fore.YELLOW + "Board definition uses CDC configuration, but environment name does not -> fix by adding 'cdc'")
+        print(Fore.YELLOW + "Expected build environment name like " + Fore.GREEN + "'tasmota" + chip[3:] + "cdc-whatever-you-want'")
+        print(Fore.YELLOW + "Please correct your actual build environment, to avoid undefined behavior in build process!!")
     return tasmota_platform
 
 def esp32_build_filesystem(fs_size):
@@ -161,7 +166,7 @@ def esp32_build_filesystem(fs_size):
                     print("Renaming",(file.split(os.path.sep)[-1]).split(" ")[0],"to",file.split(" ")[1])
                 open(target, "wb").write(response.content)
             else:
-                print("Failed to download: ",file)
+                print(Fore.RED + "Failed to download: ",file)
             continue
         if os.path.isdir(file):
             shutil.copytree(file, filesystem_dir, dirs_exist_ok=True)

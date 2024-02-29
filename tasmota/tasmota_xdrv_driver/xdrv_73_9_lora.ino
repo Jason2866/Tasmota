@@ -49,6 +49,19 @@ void LoraInput(void) {
   MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_TELE, PSTR("LoRaReceived"));
 }
 
+void LoraDefaults(void) {
+  Lora.frequency = TAS_LORA_FREQUENCY;
+  Lora.bandwidth = TAS_LORA_BANDWIDTH;
+  Lora.spreading_factor = TAS_LORA_SPREADING_FACTOR;
+  Lora.coding_rate = TAS_LORA_CODING_RATE;
+  Lora.sync_word = TAS_LORA_SYNC_WORD;
+  Lora.output_power = TAS_LORA_OUTPUT_POWER;
+  Lora.preamble_length = TAS_LORA_PREAMBLE_LENGTH;
+  Lora.current_limit = TAS_LORA_CURRENT_LIMIT;
+  Lora.implicit_header = TAS_LORA_HEADER;
+  Lora.crc_bytes = TAS_LORA_CRC_BYTES;
+}
+
 void LoraInit(void) {
   if ((SPI_MOSI_MISO == TasmotaGlobal.spi_enabled) &&
       (PinUsed(GPIO_LORA_CS)) && (PinUsed(GPIO_LORA_RST))) {
@@ -59,13 +72,18 @@ void LoraInit(void) {
     SPI.begin(Pin(GPIO_SPI_CLK), Pin(GPIO_SPI_MISO), Pin(GPIO_SPI_MOSI), -1);
 #endif // ESP32
 
+    Lora.enableInterrupt = true;
+    LoraDefaults();
+
     char hardware[20];
+    strcpy_P(hardware, PSTR("Not"));
     if (false) {
     }
 #ifdef USE_LORA_SX127X
     else if (PinUsed(GPIO_LORA_DI0)) {
       // SX1276, RFM95W
       if (LoraInitSx127x()) {
+        Lora.Config = &LoraConfigSx127x;
         Lora.Available = &LoraAvailableSx127x;
         Lora.Receive = &LoraReceiveSx127x;
         Lora.Send = &LoraSendSx127x;
@@ -75,21 +93,18 @@ void LoraInit(void) {
     }
 #endif  // USE_LORA_SX127X
 #ifdef USE_LORA_SX126X
-    else if (LoraInitSx126x()) {
+    else if (PinUsed(GPIO_LORA_DI1) && PinUsed(GPIO_LORA_BUSY)) {
       // SX1262, LilyGoT3S3
-      Lora.Available = &LoraAvailableSx126x;
-      Lora.Receive = &LoraReceiveSx126x;
-      Lora.Send = &LoraSendSx126x;
-      strcpy_P(hardware, PSTR("SX126x"));
-      Lora.present = true;
+      if (LoraInitSx126x()) {
+        Lora.Config = &LoraConfigSx126x;
+        Lora.Available = &LoraAvailableSx126x;
+        Lora.Receive = &LoraReceiveSx126x;
+        Lora.Send = &LoraSendSx126x;
+        strcpy_P(hardware, PSTR("SX126x"));
+        Lora.present = true;
+      }
     }
 #endif  // USE_LORA_SX126X
-    else {
-      strcpy_P(hardware, PSTR("Not"));
-    }
-    if (Lora.present) {
-      Lora.enableInterrupt = true;
-    }
     AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: %s initialized"), hardware);
   }
 }
@@ -99,27 +114,33 @@ void LoraInit(void) {
 \*********************************************************************************************/
 
 #define D_CMND_LORASEND   "Send"
+#define D_CMND_LORACONFIG "Config"
 
 const char kLoraCommands[] PROGMEM = "LoRa|"  // Prefix
-  D_CMND_LORASEND;
+  D_CMND_LORASEND "|" D_CMND_LORACONFIG;
 
 void (* const LoraCommand[])(void) PROGMEM = {
-  &CmndLoraSend };
+  &CmndLoraSend, &CmndLoraConfig };
 
 void CmndLoraSend(void) {
   // LoRaSend "Hello Tiger"     - Send "Hello Tiger\n"
+  // LoRaSend                   - Set to text decoding
   // LoRaSend1 "Hello Tiger"    - Send "Hello Tiger\n"
   // LoRaSend2 "Hello Tiger"    - Send "Hello Tiger"
   // LoRaSend3 "Hello Tiger"    - Send "Hello Tiger\f"
-  // LoRaSend4 = LoraSend2
+  // LoRaSend4                  - Set to binary decoding
+  // LoRaSend4 "Hello Tiger"    - Send "Hello Tiger" and set to binary decoding
   // LoRaSend5 "AA004566"       - Send "AA004566" as hex values
   // LoRaSend6 "72,101,108,108" - Send decimals as hex values
 //  if (XdrvMailbox.index > 9) { XdrvMailbox.index -= 10; }                   // Allows leading spaces (not supported - See support_command/CommandHandler)
   if ((XdrvMailbox.index > 0) && (XdrvMailbox.index <= 6)) {
     Lora.raw = (XdrvMailbox.index > 3);                                     // Global flag set even without data
     if (XdrvMailbox.data_len > 0) {
-      char data[LORA_MAX_PACKET_LENGTH];
+      char data[LORA_MAX_PACKET_LENGTH] = { 0 };
       uint32_t len = (XdrvMailbox.data_len < LORA_MAX_PACKET_LENGTH -1) ? XdrvMailbox.data_len : LORA_MAX_PACKET_LENGTH -2;
+#ifdef USE_LORA_DEBUG
+      AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: Len %d, Send %*_H"), len, len + 2, XdrvMailbox.data);
+#endif
       if (1 == XdrvMailbox.index) {                                         // "Hello Tiger\n"
         memcpy(data, XdrvMailbox.data, len);
         data[len++] = '\n';
@@ -166,6 +187,46 @@ void CmndLoraSend(void) {
       ResponseCmndDone();
     }
   }
+}
+
+void CmndLoraConfig(void) {
+  // LoRaConfig                                       - Show all parameters
+  // LoRaConfig 1                                     - Set default parameters
+  // LoRaConfig {"Frequency":868.0,"Bandwidth":125.0} - Enter float parameters
+  // LoRaConfig {"SyncWord":18}                       - Enter decimal parameter (=0x12)
+  if (XdrvMailbox.data_len > 0) {
+    if (XdrvMailbox.payload == 1) {
+      LoraDefaults();
+      Lora.Config();
+    } else {
+      JsonParser parser(XdrvMailbox.data);
+      JsonParserObject root = parser.getRootObject();
+      if (root) { 
+        Lora.frequency = root.getFloat(PSTR(D_JSON_FREQUENCY), Lora.frequency);
+        Lora.bandwidth = root.getFloat(PSTR(D_JSON_BANDWIDTH), Lora.bandwidth);
+        Lora.spreading_factor = root.getUInt(PSTR(D_JSON_SPREADING_FACTOR), Lora.spreading_factor);
+        Lora.coding_rate = root.getUInt(PSTR(D_JSON_CODINGRATE4), Lora.coding_rate);
+        Lora.sync_word = root.getUInt(PSTR(D_JSON_SYNCWORD), Lora.sync_word);
+        Lora.output_power = root.getUInt(PSTR(D_JSON_OUTPUT_POWER), Lora.output_power);
+        Lora.preamble_length = root.getUInt(PSTR(D_JSON_PREAMBLE_LENGTH), Lora.preamble_length);
+        Lora.current_limit = root.getFloat(PSTR(D_JSON_CURRENT_LIMIT), Lora.current_limit);
+        Lora.implicit_header = root.getUInt(PSTR(D_JSON_IMPLICIT_HEADER), Lora.implicit_header);
+        Lora.crc_bytes = root.getUInt(PSTR(D_JSON_CRC_BYTES), Lora.crc_bytes);
+        Lora.Config();
+      }
+    }
+  }
+  ResponseCmnd();  // {"LoRaConfig":
+  ResponseAppend_P(PSTR("{\"" D_JSON_FREQUENCY "\":%1_f"), &Lora.frequency);             // xxx.x MHz
+  ResponseAppend_P(PSTR(",\"" D_JSON_BANDWIDTH "\":%1_f"), &Lora.bandwidth);             // xxx.x kHz
+  ResponseAppend_P(PSTR(",\"" D_JSON_SPREADING_FACTOR "\":%d"), Lora.spreading_factor);
+  ResponseAppend_P(PSTR(",\"" D_JSON_CODINGRATE4 "\":%d"), Lora.coding_rate);
+  ResponseAppend_P(PSTR(",\"" D_JSON_SYNCWORD "\":%d"), Lora.sync_word);
+  ResponseAppend_P(PSTR(",\"" D_JSON_OUTPUT_POWER "\":%d"), Lora.output_power);          // dBm
+  ResponseAppend_P(PSTR(",\"" D_JSON_PREAMBLE_LENGTH "\":%d"), Lora.preamble_length);    // symbols
+  ResponseAppend_P(PSTR(",\"" D_JSON_CURRENT_LIMIT "\":%1_f"), &Lora.current_limit);     // xx.x mA (Overcurrent Protection - OCP)
+  ResponseAppend_P(PSTR(",\"" D_JSON_IMPLICIT_HEADER "\":%d"), Lora.implicit_header);    // 0 = explicit
+  ResponseAppend_P(PSTR(",\"" D_JSON_CRC_BYTES "\":%d}}"), Lora.crc_bytes);              // bytes
 }
 
 /*********************************************************************************************\
