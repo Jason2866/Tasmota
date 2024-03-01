@@ -46,6 +46,9 @@ void LoraOnCadDoneSx127x(boolean signalDetected) {
 
 // this function is called when a complete packet is received by the module
 void LoraOnReceiveSx127x(int packet_size) {
+#ifdef USE_LORA_DEBUG
+  AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: Packet size %d"), packet_size);
+#endif    
   if (0 == packet_size) { return; }        // if there's no packet, return
   if (!Lora.enableInterrupt) { return; }   // check if the interrupt is enabled
   Lora.packet_size = packet_size;          // we got a packet, set the flag
@@ -65,9 +68,9 @@ int LoraReceiveSx127x(char* data) {
       data[packet_size++] = sdata;
     }
   }
-  packet_size = (Lora.sendFlag) ? 0 : +1;
+//  if (Lora.sendFlag) { packet_size = 0; }
+//  Lora.sendFlag = false;
 
-  Lora.sendFlag = false;
   Lora.packet_size = 0;                    // reset flag
   Lora.enableInterrupt = true;             // we're ready to receive more packets, enable interrupt service routine
 
@@ -79,10 +82,10 @@ int LoraReceiveSx127x(char* data) {
   return packet_size;
 }
 
-bool LoraSendSx127x(char* data, uint32_t len) {
-  Lora.sendFlag = true;
+bool LoraSendSx127x(uint8_t* data, uint32_t len) {
+//  Lora.sendFlag = true;
   LoRa.beginPacket(Lora.implicit_header);  // start packet
-  LoRa.write((uint8_t*)data, len);         // send message
+  LoRa.write(data, len);         // send message
   LoRa.endPacket();                        // finish packet and send it
   LoRa.receive();                          // go back into receive mode
   return true;
