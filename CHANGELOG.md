@@ -14,9 +14,11 @@ All notable changes to this project will be documented in this file.
 - LVGL remove embedded typicons font
 
 ### Changed
+- LVGL optimize fonts and add icons
 
 ### Fixed
 - Berry bug when parsing ternary operator (#20839)
+- HASPmota fix widgets line, btnmatrix, qrcode, bar, checkbox
 
 ### Removed
 
