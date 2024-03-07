@@ -15,6 +15,7 @@
 //#define USE_LORA_DEBUG
 
 #define LORA_MAX_PACKET_LENGTH     252    // Max packet length allowed (keeping room for control bytes)
+#define TAS_LORA_REMOTE_COMMAND   0x17    // Header defining remote LoRaCommand
 
 #ifndef TAS_LORA_FREQUENCY
 #define TAS_LORA_FREQUENCY         868.0  // Allowed values range from 150.0 to 960.0 MHz
@@ -51,7 +52,7 @@ struct {
   bool (* Config)(void);
   bool (* Available)(void);
   int (* Receive)(char*);
-  bool (* Send)(char*, uint32_t);
+  bool (* Send)(uint8_t*, uint32_t);
   float rssi;
   float snr;
   float frequency;                     // 868.0 MHz
