@@ -3,3 +3,7 @@ tasks:
 
 image:
   file: .gitpod.Dockerfile
+
+vscode:
+  extensions:
+    - shardulm94.trailing-spaces
