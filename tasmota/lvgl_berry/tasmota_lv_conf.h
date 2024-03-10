@@ -366,7 +366,8 @@
 /*Montserrat fonts with ASCII range and some symbols using bpp = 4
  *https://fonts.google.com/specimen/Montserrat*/
 #define LV_FONT_MONTSERRAT_8  0
-#define LV_FONT_MONTSERRAT_10 1       // TASMOTA
+#define LV_FONT_MONTSERRAT_10 0
+#define LV_FONT_MONTSERRAT_TASMOTA_10 1       // TASMOTA
 #define LV_FONT_MONTSERRAT_12 0
 #define LV_FONT_MONTSERRAT_14 0
 #define LV_FONT_MONTSERRAT_TASMOTA_14 1
@@ -428,6 +429,7 @@
                                   LV_FONT_DECLARE(robotocondensed_regular_40_latin1) \
                                   LV_FONT_DECLARE(robotocondensed_regular_44_latin1) \
                                   LV_FONT_DECLARE(robotocondensed_regular_48_latin1) \
+                                  LV_FONT_DECLARE(lv_font_icons_10) \
                                   LV_FONT_DECLARE(lv_font_icons_12) \
                                   LV_FONT_DECLARE(lv_font_icons_14) \
                                   LV_FONT_DECLARE(lv_font_icons_16) \
@@ -440,6 +442,7 @@
                                 //   LV_FONT_DECLARE(montserrat_tasmota_20) \
                                 //   LV_FONT_DECLARE(typicons24) \
 
+#define FONT_ICONS_10 1
 #define FONT_ICONS_12 1
 #define FONT_ICONS_14 0
 #define FONT_ICONS_16 0
