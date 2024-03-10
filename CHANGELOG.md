@@ -9,11 +9,12 @@ All notable changes to this project will be documented in this file.
 - HASPmota support for spangroup (styled text) (#20852)
 - HASPmota support for led (#20857)
 - HASPmota improve arc and img (#20894)
-- Berry add `string.starstwith`, `string.endswith` and `%q` format
+- Berry add `string.startswith`, `string.endswith` and `%q` format
 
 ### Breaking Changed
 - Drop support for old (insecure) fingerprint format (#20842)
 - LVGL remove embedded typicons font (#20872)
+- LVGL remove `textarea` and `spinbox` from binaries
 
 ### Changed
 - LVGL optimize fonts and add icons (#20880)
