@@ -163,7 +163,8 @@ class lvh_root
   # I.e. ends with `color` (to not conflict with attributes containing `color_<x>`)
   #################################################################################
   def is_color_attribute(t)
-    return self._page._oh.re_color_suffix.search(str(t))
+    import string
+    return string.endswith(str(t), "color")
   end
 
   #- remove trailing NULL chars from a bytes buffer before converting to string -#
@@ -199,7 +200,6 @@ class lvh_root
       # parse_hex(string) -> int
       # skip any `#` prefix, or `0x` and `0X` prefix
       import string
-      s = string.toupper(s)   # turn to uppercase
       var val = 0
       for i:0..size(s)-1
         var c = s[i]
@@ -209,6 +209,8 @@ class lvh_root
     
         if c >= "A" && c <= "F"
           val = (val << 4) | string.byte(c) - 55
+        elif c >= "a" && c <= "f"
+          val = (val << 4) | string.byte(c) - 87
         elif c >= "0" && c <= "9"
           val = (val << 4) | string.byte(c) - 48
         end
@@ -257,7 +259,6 @@ class lvh_root
       end
     elif type(t) == 'string'
       import string
-      import re
       # look for 'A:name.font' style font file name
       var drive_split = string.split(t, ':', 1)
       var fn_split = string.split(t, '-')
@@ -271,7 +272,7 @@ class lvh_root
         sz = int(fn_split[-1])
         name = fn_split[0..-2].concat('-')    # rebuild the font name
       end
-      if re.match(".*\\.ttf$", name)
+      if string.endswith(name, ".ttf", true)
         # ttf font
         name = string.split(name, ':')[-1]      # remove A: if any
         is_ttf = true
@@ -1803,7 +1804,7 @@ end
 #################################################################################
 class lvh_btn : lvh_obj         static var _lv_class = lv.btn         end
 class lvh_checkbox : lvh_obj    static var _lv_class = lv.checkbox    end
-class lvh_textarea : lvh_obj    static var _lv_class = lv.textarea    end
+# class lvh_textarea : lvh_obj    static var _lv_class = lv.textarea    end
 # special case for scr (which is actually lv_obj)
 class lvh_scr : lvh_obj         static var _lv_class = nil            end    # no class for screen
 
@@ -1973,7 +1974,6 @@ class HASPmota
   var lvh_page_cur_idx                  # (int) current page index number
   # regex patterns
   var re_page_target                    # compiled regex for action `p<number>`
-  var re_color_suffix                   # compiled regex for detecting a color
   # specific event_cb handling for less memory usage since we are registering a lot of callbacks
   var event                             # try to keep the event object around and reuse it
   var event_cb                          # the low-level callback for the closure to be registered
@@ -2004,7 +2004,7 @@ class HASPmota
 	static lvh_arc = lvh_arc
  	# static lvh_linemeter = lvh_linemeter
  	# static lvh_gauge = lvh_gauge
-	static lvh_textarea = lvh_textarea    # additional?
+	# static lvh_textarea = lvh_textarea    # additional?
   static lvh_led = lvh_led
   static lvh_spangroup = lvh_spangroup
   static lvh_span = lvh_span
@@ -2018,7 +2018,6 @@ class HASPmota
     self.fix_lv_version()
     import re
     self.re_page_target = re.compile("p\\d+")
-    self.re_color_suffix = re.compile("color$")
     # nothing to put here up to now
   end
 
@@ -2483,7 +2482,7 @@ def solidify_haspmota()
     "page", "obj", "scr",
     "btn", "switch", "checkbox",
     "label", "spinner", "line", "img", "roller", "btnmatrix",
-    "bar", "slider", "arc", "textarea", "led", "dropdown",
+    "bar", "slider", "arc", #- "textarea", -# "led", "dropdown",
     "qrcode", "chart", "spangroup", "span",
     # new internal names
     "button", "image", "buttonmatrix",
