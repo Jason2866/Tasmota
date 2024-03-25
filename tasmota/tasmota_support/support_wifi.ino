@@ -231,7 +231,7 @@ void WifiBegin(uint8_t flag, uint8_t channel) {
     WiFi.setPhyMode(WiFiPhyMode_t(Wifi.phy_mode));  // 1-B/2-BG/3-BGN
   }
 #endif
-  if (!WiFi.getAutoConnect()) { WiFi.setAutoConnect(true); }
+  if (!WiFi.getAutoReconnect()) { WiFi.setAutoReconnect(true); }
 //  WiFi.setAutoReconnect(true);
   switch (flag) {
   case 0:  // AP1
