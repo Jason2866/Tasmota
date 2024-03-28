@@ -18,8 +18,8 @@
  *  which makes the use of single fixed frequency and spreadingfactor hardware like
  *  SX127x (LiliGo T3, M5 LoRa868 or RFM95W) or SX126x (LiLiGo T3S3) a challenge.
  * This driver uses one fixed frequency and spreadingfactor trying to tell the End-Device to do
- *  the same. In some cases the End-Device needs to be (serial) configured to use a single
- *  channel and fixed datarate.
+ *  the same using Over The Air Activation (OTAA). In some cases the End-Device needs to be
+ *  (serial) configured to use a single channel and fixed datarate.
  * 
  * To be able to do this:
  *  - Tasmota needs a filesystem to store persistent data (#define USE_UFILESYS)
@@ -152,13 +152,10 @@ void LoraWanTickerSend(void) {
   if (1 == Lorawan.send_buffer_step) {
     Lorawan.rx = true;                                // Always send during RX1
     Lora.receive_time = 0;                            // Reset receive timer
-    LoraWan_Send.attach_ms(TAS_LORAWAN_RECEIVE_DELAY2, LoraWanTickerSend);  // Retry after 1000 ms
+    LoraWan_Send.once_ms(TAS_LORAWAN_RECEIVE_DELAY2, LoraWanTickerSend);  // Retry after 1000 ms
   }
   if (Lorawan.rx) {                                   // If received in RX1 do not resend in RX2
     LoraSend(Lorawan.send_buffer, Lorawan.send_buffer_len, true);
-  }
-  if (Lorawan.send_buffer_step <= 0) {
-    LoraWan_Send.detach();
   }
 }
 
@@ -166,7 +163,7 @@ void LoraWanSendResponse(uint8_t* buffer, size_t len, uint32_t lorawan_delay) {
   memcpy(Lorawan.send_buffer, buffer, sizeof(Lorawan.send_buffer));
   Lorawan.send_buffer_len = len;
   Lorawan.send_buffer_step = 2;
-  LoraWan_Send.attach_ms(lorawan_delay - TimePassedSince(Lora.receive_time), LoraWanTickerSend);
+  LoraWan_Send.once_ms(lorawan_delay - TimePassedSince(Lora.receive_time), LoraWanTickerSend);
 }
 
 /*-------------------------------------------------------------------------------------------*/
@@ -391,6 +388,7 @@ bool LoraWanInput(uint8_t* data, uint32_t packet_size) {
     // 40    412E0100  80     2500         0A     6A6FEFD6A16B0C7AC37B  5F95FABC  - decrypt using AppSKey
     // 80    412E0100  80     2A00         0A     A58EF5E0D1DDE03424F0  6F2D56FA  - decrypt using AppSKey
     // 80    412E0100  80     2B00         0A     8F2F0D33E5C5027D57A6  F67C9DFE  - decrypt using AppSKey
+    // 80    909AE100  00     0800         0A     EEC4A52568A346A8684E  F2D4BF05
     // 40    412E0100  A0     1800         00     0395                  2C94B1D8  - FCtrl ADR support, Ack, FPort = 0 -> MAC commands, decrypt using NwkSKey
     // 40    412E0100  A0     7800         00     78C9                  A60D8977  - FCtrl ADR support, Ack, FPort = 0 -> MAC commands, decrypt using NwkSKey
     // 40    F3F51700  20     0100         00     2A7C                  407036A2  - FCtrl No ADR support, Ack, FPort = 0 -> MAC commands, decrypt using NwkSKey, response after LinkADRReq
@@ -508,6 +506,13 @@ bool LoraWanInput(uint8_t* data, uint32_t packet_size) {
         }
 
         if (payload_len) {
+          // Unique parameters:
+          // node
+          // LoraSettings.end_node[node].DevEUIh
+          // LoraSettings.end_node[node].DevEUIl
+          // FPort
+          // payload_len
+          // payload_decrypted[]
           if (bitRead(LoraSettings.flags, TAS_LORAWAN_DECODE_ENABLED) &&
               (0x00161600 == LoraSettings.end_node[node].DevEUIh)) {     // MerryIoT
             if (120 == FPort) {                                          // MerryIoT door/window Sensor (DW10)

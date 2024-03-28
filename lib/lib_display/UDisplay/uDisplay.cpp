@@ -687,6 +687,19 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
     ep_mode = 2;
   }
 
+
+#ifdef USE_ESP32_S3
+void UfsCheckSDCardInit(void);
+
+  if (spec_init == _UDSP_SPI) {
+    // special case, assuming sd card and display on same spi bus
+    // end spi in case it was running
+    SPI.end();
+    // reininit SD card
+    UfsCheckSDCardInit();
+  }
+#endif
+
 #ifdef UDSP_DEBUG
   Serial.printf("Device : %s\n", dname);
   Serial.printf("xs : %d\n", gxs);
@@ -699,6 +712,9 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
     Serial.printf("CLK : %d\n", spi_clk);
     Serial.printf("MOSI: %d\n", spi_mosi);
     Serial.printf("DC  : %d\n", spi_dc);
+    Serial.printf("TS_CS: %d\n", ut_spi_cs);
+    Serial.printf("TS_RST: %d\n", ut_reset);
+    Serial.printf("TS_IRQ: %d\n", ut_irq);
     Serial.printf("BPAN: %d\n", bpanel);
     Serial.printf("RES : %d\n", reset);
     Serial.printf("MISO: %d\n", spi_miso);
@@ -1728,6 +1744,9 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 
   if (interface == _UDSP_RGB) {
   #ifdef USE_ESP32_S3
+    if (lvgl_param.swap_color) {
+      color = color << 8 | color >> 8;
+    }
     if (cur_rot > 0) {
       while (h--) {
         drawPixel_RGB(x , y , color);
@@ -1798,6 +1817,9 @@ void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
 
   if (interface == _UDSP_RGB) {
 #ifdef USE_ESP32_S3
+    if (lvgl_param.swap_color) {
+      color = color << 8 | color >> 8;
+    }
     if (cur_rot > 0) {
       while (w--) {
         drawPixel_RGB(x , y , color);
@@ -2387,6 +2409,9 @@ void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
 
 #ifdef USE_ESP32_S3
   if (interface == _UDSP_RGB) {
+    if (lvgl_param.swap_color) {
+      color = color << 8 | color >> 8;
+    }
     drawPixel_RGB(x, y, color);
     return;
   }
@@ -2743,6 +2768,14 @@ void uDisplay::ut_trans(char **sp, uint8_t **code) {
       // cmp and set
       *ut_code++ = UT_CPR;
       *ut_code++ = ut_par(&cp, 0);
+     } else if (!strncmp(cp, "CPM", 3)) {
+      // cmp multiple and set
+      *ut_code++ = UT_CPM;
+      uint8_t num = ut_par(&cp, 0);
+      *ut_code++ = num;
+      for (uint32_t cnt = 0; cnt < num; cnt++) {
+        *ut_code++ = ut_par(&cp, 0);
+      }
      } else if (!strncmp(cp, "CP", 2)) {
       // cmp and set
       *ut_code++ = UT_CP;
@@ -2977,6 +3010,16 @@ uint16_t wval;
         // compare
         iob = *ut_code++;
         result = (iob == ut_array[0]);
+        break;
+
+      case UT_CPM:
+        // compare multiple
+        len = *ut_code++;
+        result = 0;
+        for (uint32_t cnt = 0; cnt < len; cnt++) {
+          iob = *ut_code++;
+          result |= (iob == ut_array[0]);
+        }
         break;
 
       case UT_CPR:
