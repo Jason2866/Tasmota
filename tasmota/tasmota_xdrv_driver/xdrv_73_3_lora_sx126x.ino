@@ -3,7 +3,7 @@
 
   SPDX-FileCopyrightText: 2024 Theo Arends
 
-  SPDX-License-Identifier: GPL-3.0-only
+  SPDX-License-Identifier: GPL-3.0-only                                                                                 
 */
 
 #ifdef USE_SPI
@@ -26,131 +26,122 @@
  * - Lora_DI1
 \*********************************************************************************************/
 
+//#define USE_LORA_SX126X_DEBUG
+
 #include <RadioLib.h>
 SX1262 LoRaRadio = nullptr;               // Select LoRa support
 
-void LoraOnReceiveSx126x(void) {
-  if (!Lora.enableInterrupt) { return; }  // check if the interrupt is enabled
+bool LoraSx126xBusy(void) {
+  // This is not consistently implemented in the used library
+  uint32_t timeout;
+  SetNextTimeInterval(timeout, 100);
+  while ((1 == digitalRead(Pin(GPIO_LORA_BUSY))) && !TimeReached(timeout)) {
+    delay(0);
+  }
+  return TimeReached(timeout);
+}
+
+/*********************************************************************************************/
+
+void IRAM_ATTR LoraSx126xOnInterrupt(void) {
+  // This is called after EVERY type of enabled interrupt so chk for valid receivedFlag in LoraAvailableSx126x()
+  if (!Lora.sendFlag && !Lora.receivedFlag && !Lora.receive_time) {
+    Lora.receive_time = millis();
+  }
   Lora.receivedFlag = true;               // we got a packet, set the flag
 }
 
-bool LoraAvailableSx126x(void) {
-  return (Lora.receivedFlag);             // check if the flag is set
-}
+bool LoraSx126xAvailable(void) {
+  if (Lora.sendFlag) {
+    Lora.receivedFlag = false;            // Reset receive flag as it was caused by send interrupt
 
-int LoraReceiveSx126x(char* data) {
-  Lora.enableInterrupt = false;           // disable the interrupt service routine while processing the data
-  Lora.receivedFlag = false;              // reset flag
-
-  int packet_size = 0;
-  int state = LoRaRadio.readData((uint8_t*)data, LORA_MAX_PACKET_LENGTH -1);
-  if (RADIOLIB_ERR_NONE == state) { 
-    if (!Lora.sendFlag) {
-      packet_size = LoRaRadio.getPacketLength();
-#ifdef USE_LORA_DEBUG
-      AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: Packet %d, Rcvd %32_H"), packet_size, data);
-#endif
+    uint32_t time = millis();
+    int state = LoRaRadio.startReceive();  // Put module back to listen mode
+    Lora.sendFlag = false;
+    if (state != RADIOLIB_ERR_NONE) {
+      AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("S6X: Rcvd (%d) restarted (%d)"), time, state);
     }
   }
-  else if (RADIOLIB_ERR_CRC_MISMATCH == state) {
-    // packet was received, but is malformed
-    AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: CRC error"));
-  }
-  else {
-    // some other error occurred
-    AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: Receive error %d"), state);
-  }
+  else if (Lora.receivedFlag) {
+    uint32_t irq_stat = LoRaRadio.getIrqStatus();
 
-  LoRaRadio.startReceive();               // put module back to listen mode
-  Lora.sendFlag = false;
-  Lora.enableInterrupt = true;            // we're ready to receive more packets, enable interrupt service routine
+#ifdef USE_LORA_SX126X_DEBUG
+    if (irq_stat != 0) {
+      AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("S6X: Flag (%d) irq %04X"), millis(), irq_stat);
+    }
+#endif  // USE_LORA_SX126X_DEBUG
 
-  Lora.rssi = LoRaRadio.getRSSI();
-  Lora.snr = LoRaRadio.getSNR();
+    if (0 == (irq_stat & RADIOLIB_SX126X_IRQ_RX_DONE)) {
+      Lora.receivedFlag = false;          // Reset receive flag
+    }
+  }
+  return (Lora.receivedFlag);             // Check if the receive flag is set
+}
+
+int LoraSx126xReceive(char* data) {
+  Lora.receivedFlag = false;              // Reset flag
+  int packet_size = LoRaRadio.getPacketLength();
+  int state = LoRaRadio.readData((uint8_t*)data, TAS_LORA_MAX_PACKET_LENGTH -1);
+  // LoRaWan downlink frames are sent without CRC, which will raise error on SX126x. We can ignore that error
+  if (RADIOLIB_ERR_CRC_MISMATCH == state) {
+    state = RADIOLIB_ERR_NONE;
+    AddLog(LOG_LEVEL_DEBUG, PSTR("S6X: Ignoring CRC error"));
+  }
+  if (RADIOLIB_ERR_NONE == state) { 
+    Lora.rssi = LoRaRadio.getRSSI();
+    Lora.snr = LoRaRadio.getSNR();
+  } else {
+    packet_size = 0;                      // Some other error occurred
+    AddLog(LOG_LEVEL_DEBUG, PSTR("S6X: Receive error %d"), state);
+  }
   return packet_size;
 }
 
-bool LoraSendSx126x(uint8_t* data, uint32_t len) {
-  Lora.sendFlag = true;
-#ifdef USE_LORA_DEBUG
-  AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: Len %d, Send %*_H"), len, len + 2, data);
-#endif
-/*
-  int state = LoRaRadio.startTransmit(data, len);
-  return (RADIOLIB_ERR_NONE == state);
-*/
-  // https://learn.circuit.rocks/battery-powered-lora-sensor-node
-  uint32_t retry_CAD = 0;
-  uint32_t retry_send = 0;
-  bool send_success = false;
-  while (!send_success) {
-#ifdef USE_LORA_DEBUG
-    time_t lora_time = millis();
-#endif
-    // Check 200ms for an opportunity to send
-    while (LoRaRadio.scanChannel() != RADIOLIB_CHANNEL_FREE) {
-      retry_CAD++;
-      if (retry_CAD == 20) {
-        // LoRa channel is busy too long, give up
-#ifdef USE_LORA_DEBUG
-        AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: Channel is too busy, give up"));
-#endif
-        retry_send++;
-        break;
-      }
-    }
-#ifdef USE_LORA_DEBUG
-    AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: CAD finished after %ldms tried %d times"), (millis() - lora_time), retry_CAD);
-#endif
-    if (retry_CAD < 20) {
-      // Channel is free, start sending
-#ifdef USE_LORA_DEBUG
-      lora_time = millis();
-#endif
-      int status = LoRaRadio.transmit(data, len);
-#ifdef USE_LORA_DEBUG
-      AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: Transmit finished after %ldms with status %d"), (millis() - lora_time), status);
-#endif
-      if (status == RADIOLIB_ERR_NONE) {
-        send_success = true;
-      }
-      else {
-        retry_send++;
-      }
-    }
-    if (retry_send == 3) {
-#ifdef USE_LORA_DEBUG
-      AddLog(LOG_LEVEL_DEBUG, PSTR("LOR: Failed 3 times to send data, giving up"));
-#endif
-      send_success = true;
-    }
+bool LoraSx126xSend(uint8_t* data, uint32_t len, bool invert) {
+  int state1 = RADIOLIB_ERR_NONE;
+  int state2 = RADIOLIB_ERR_NONE;
+  if (invert) {
+    LoRaRadio.standby();
+    state1 = LoRaRadio.invertIQ(true);
+    LoraSx126xBusy();
   }
-  return send_success;
+  int state = LoRaRadio.transmit(data, len);
+  Lora.sendFlag = true;                   // Use this flag as LoRaRadio.transmit enable send interrupt
+  if (invert) {
+    LoraSx126xBusy();
+    state2 = LoRaRadio.invertIQ(false);
+    LoRaRadio.standby();
+  }
+  if (state != RADIOLIB_ERR_NONE || state1 != RADIOLIB_ERR_NONE || state2 != RADIOLIB_ERR_NONE) {
+    AddLog(LOG_LEVEL_DEBUG, PSTR("S6X: Send error %d %d %d"), state1, state, state2);
+  }
+  return (RADIOLIB_ERR_NONE == state);
 }
 
-bool LoraConfigSx126x(void) {
-  LoRaRadio.setCodingRate(Lora.coding_rate);
-  LoRaRadio.setSyncWord(Lora.sync_word);
-  LoRaRadio.setPreambleLength(Lora.preamble_length);
-  LoRaRadio.setCurrentLimit(Lora.current_limit);
-  LoRaRadio.setCRC(Lora.crc_bytes);
-  LoRaRadio.setSpreadingFactor(Lora.spreading_factor);
-  LoRaRadio.setBandwidth(Lora.bandwidth);
-  LoRaRadio.setFrequency(Lora.frequency);
-  LoRaRadio.setOutputPower(Lora.output_power);
-  if (Lora.implicit_header) { 
-    LoRaRadio.implicitHeader(Lora.implicit_header);
+bool LoraSx126xConfig(void) {
+  LoRaRadio.setCodingRate(LoraSettings.coding_rate);
+  LoRaRadio.setSyncWord(LoraSettings.sync_word);
+  LoRaRadio.setPreambleLength(LoraSettings.preamble_length);
+  LoRaRadio.setCurrentLimit(LoraSettings.current_limit);
+  LoRaRadio.setCRC(LoraSettings.crc_bytes);
+  LoRaRadio.setSpreadingFactor(LoraSettings.spreading_factor);
+  LoRaRadio.setBandwidth(LoraSettings.bandwidth);
+  LoRaRadio.setFrequency(LoraSettings.frequency);
+  LoRaRadio.setOutputPower(LoraSettings.output_power);
+  if (LoraSettings.implicit_header) { 
+    LoRaRadio.implicitHeader(LoraSettings.implicit_header);
   } else { 
     LoRaRadio.explicitHeader();
   }
+  LoRaRadio.invertIQ(false);
   return true;
 }
 
-bool LoraInitSx126x(void) {
+bool LoraSx126xInit(void) {
   LoRaRadio = new Module(Pin(GPIO_LORA_CS), Pin(GPIO_LORA_DI1), Pin(GPIO_LORA_RST), Pin(GPIO_LORA_BUSY));
-  if (RADIOLIB_ERR_NONE == LoRaRadio.begin(Lora.frequency)) {
-    LoraConfigSx126x();
-    LoRaRadio.setDio1Action(LoraOnReceiveSx126x);
+  if (RADIOLIB_ERR_NONE == LoRaRadio.begin(LoraSettings.frequency)) {
+    LoraSx126xConfig();
+    LoRaRadio.setDio1Action(LoraSx126xOnInterrupt);
     if (RADIOLIB_ERR_NONE == LoRaRadio.startReceive()) {
       return true;
     }
