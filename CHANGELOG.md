@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 ## [13.4.0.3]
 ### Added
 - Zigbee support for attributes of type `uint48` used by energy monitoring (#20992)
-- Support for EU863-870 LoRaWanBridge
+- Support for single channel EU863-870 LoRaWanBridge (#17790)
 - Support Azure iothub direct method (#21013)
 - Added GPIO for SPI for Universal Touch Screen (#21025)
 - Berry added `close()` to class `serial` (#21042)
@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - ESP32 LVGL library from v9.0.0 to v9.1.0 (#21008)
 - berry.exe (pre-compiled for Windows) updated to latest Berry patches (#21024)
 - Some `display.ini` to utouch (#21029)
+- ESP32 WiFi phy modes 11n and 11ax represented as HT20, HT40 and HE20 (#19350)
 
 ### Fixed
 - BTHome, prep BLE5 (#20989)
@@ -29,7 +30,6 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 - Berry `print "a"` syntax no longer supported (#21048)
-
 
 ## [13.4.0.2] 20240318
 ### Added
