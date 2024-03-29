@@ -118,17 +118,17 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 ## Changelog v13.4.0.3
 ### Added
-- Support for LoRa and EU863-870 LoRaWanBridge
-- Support for AMS5915/AMS6915 temperature and pressure sensors [#20814](https://github.com/arendst/Tasmota/issues/20814)
-- Support Azure iothub direct method [#21013](https://github.com/arendst/Tasmota/issues/21013)
 - Support for calculated heat index if temperature and humidity is available with ``#define USE_HEAT_INDEX`` [#4771](https://github.com/arendst/Tasmota/issues/4771)
-- Support IR data larger than 64 bits [#20831](https://github.com/arendst/Tasmota/issues/20831)
+- Support for LoRa and single channel EU863-870 LoRaWanBridge [#17790](https://github.com/arendst/Tasmota/issues/17790)
+- Support for AMS5915/AMS6915 temperature and pressure sensors [#20814](https://github.com/arendst/Tasmota/issues/20814)
 - Support for LWT messages in TasMesh [#20392](https://github.com/arendst/Tasmota/issues/20392)
+- Support IR data larger than 64 bits [#20831](https://github.com/arendst/Tasmota/issues/20831)
 - Support for MCP23S08 [#20971](https://github.com/arendst/Tasmota/issues/20971)
 - Support for ESP32-S3 120Mhz [#20973](https://github.com/arendst/Tasmota/issues/20973)
-- QMC5883l check for overflow and scale reading [#20643](https://github.com/arendst/Tasmota/issues/20643)
-- Support GPIO configuration for SPI for Universal Touch Screen [#21025](https://github.com/arendst/Tasmota/issues/21025)
+- Support Azure iothub direct method [#21013](https://github.com/arendst/Tasmota/issues/21013)
+- Support SPI GPIO configuration for Universal Touch Screen [#21025](https://github.com/arendst/Tasmota/issues/21025)
 - Zigbee support for attributes of type `uint48` used by energy monitoring [#20992](https://github.com/arendst/Tasmota/issues/20992)
+- QMC5883l check for overflow and scale reading [#20643](https://github.com/arendst/Tasmota/issues/20643)
 - Berry explicit error log when memory allocation fails [#20807](https://github.com/arendst/Tasmota/issues/20807)
 - Berry `path.rename()` [#20840](https://github.com/arendst/Tasmota/issues/20840)
 - Berry `string.startswith`, `string.endswith` and `%q` format [#20909](https://github.com/arendst/Tasmota/issues/20909)
@@ -151,6 +151,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - NeoPool webUI pH alarms (4 & 5) completed (#20743)[#20743](https://github.com/arendst/Tasmota/issues/20743)
 - Prevent shutter MQTT broadcast with activated ShutterLock [#20827](https://github.com/arendst/Tasmota/issues/20827)
 - Some `display.ini` to utouch [#21029](https://github.com/arendst/Tasmota/issues/21029)
+- ESP32 WiFi phy modes 11n and 11ax represented as HT20, HT40 and HE20 [#19350](https://github.com/arendst/Tasmota/issues/19350)
 - berry.exe (pre-compiled for Windows) updated to latest Berry patches [#21024](https://github.com/arendst/Tasmota/issues/21024)
 - Berry class `int64` made immutable [#20727](https://github.com/arendst/Tasmota/issues/20727)
 - Matter reduce memory usage when reading with wildcards [#20809](https://github.com/arendst/Tasmota/issues/20809)
