@@ -208,6 +208,9 @@ void WifiBegin(uint8_t flag, uint8_t channel) {
 #endif  // USE_EMULATION
 
   WiFi.persistent(false);   // Solve possible wifi init errors (re-add at 6.2.1.16 #4044, #4083)
+#if defined(USE_IPV6) && defined(ESP32)
+  WiFi.enableIPv6(true);
+#endif
 
 #ifdef USE_WIFI_RANGE_EXTENDER
   if (WiFi.getMode() != WIFI_AP_STA || !RgxApUp()) {  // Preserve range extender connections (#17103)
@@ -218,10 +221,6 @@ void WifiBegin(uint8_t flag, uint8_t channel) {
 #ifdef USE_WIFI_RANGE_EXTENDER
   }
 #endif  // USE_WIFI_RANGE_EXTENDER
-
-#if defined(USE_IPV6) && defined(ESP32)
-  WiFi.enableIPv6(true);
-#endif
 
   WiFiSetSleepMode();
   WifiSetOutputPower();
