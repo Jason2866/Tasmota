@@ -91,7 +91,7 @@
 #define TAS_LORAWAN_RECEIVE_DELAY2       1000    // LoRaWan Receive delay 2
 #define TAS_LORAWAN_JOIN_ACCEPT_DELAY1   5000    // LoRaWan Join accept delay 1
 #define TAS_LORAWAN_JOIN_ACCEPT_DELAY2   1000    // LoRaWan Join accept delay 2
-#define TAS_LORAWAN_ENDNODES                4    // Max number od supported endnodes
+#define TAS_LORAWAN_ENDNODES                4    // Max number of supported endnodes
 #define TAS_LORAWAN_AES128_KEY_SIZE        16    // Size in bytes
 
 enum TasLoraFlags { 
@@ -166,7 +166,7 @@ typedef struct LoraEndNode_t {
 } LoraEndNode_t;
 
 // Global structure containing driver saved variables
-struct {
+typedef struct LoraSettings_t {
   uint32_t crc32;                                // To detect file changes
   float frequency;                               // 868.0 MHz
   float bandwidth;                               // 125.0 kHz
@@ -182,32 +182,30 @@ struct {
 #ifdef USE_LORAWAN_BRIDGE
   LoraEndNode_t end_node[TAS_LORAWAN_ENDNODES];  // End node parameters
 #endif  // USE_LORAWAN_BRIDGE
-} LoraSettings;
+} LoraSettings_t;
 
-struct {
+typedef struct Lora_t {
   bool (* Config)(void);
   bool (* Available)(void);
   int (* Receive)(char*);
   bool (* Send)(uint8_t*, uint32_t, bool);
+  LoraSettings_t settings;                       // Persistent settings
   uint32_t receive_time;
   float rssi;
   float snr;
   uint8_t packet_size;                           // Max is 255 (LORA_MAX_PACKET_LENGTH)
-  volatile bool receivedFlag;                    // flag to indicate that a packet was received
-  bool sendFlag;
+  volatile bool received_flag;                   // flag to indicate that a packet was received
+  bool send_flag;
   bool raw;
-  bool present;
-} Lora;
-
 #ifdef USE_LORAWAN_BRIDGE
-struct {
   uint32_t device_address;
-  uint32_t send_buffer_step;
-  size_t send_buffer_len;
-  uint8_t send_buffer[64];
+  uint8_t* send_buffer;
+  uint8_t send_buffer_step;
+  uint8_t send_buffer_len;
   bool rx;
-} Lorawan;
 #endif  // USE_LORAWAN_BRIDGE
+} Lora_t;
+Lora_t* Lora = nullptr;
 
 #endif  // USE_SPI_LORA
 #endif  // USE_SPI
