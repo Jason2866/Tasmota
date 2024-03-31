@@ -217,6 +217,7 @@ void WifiBegin(uint8_t flag, uint8_t channel) {
 #endif  // USE_WIFI_RANGE_EXTENDER
   WiFi.disconnect(true);  // Delete SDK wifi config
   delay(200);
+  WiFi.begin();
   WifiSetMode(WIFI_STA);  // Disable AP mode
 #ifdef USE_WIFI_RANGE_EXTENDER
   }
