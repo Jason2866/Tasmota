@@ -218,6 +218,7 @@ void WifiBegin(uint8_t flag, uint8_t channel) {
   WiFi.enableIPv6(true);
 #endif
   //WiFi.begin();
+  WiFi.onEnable();
   WifiSetMode(WIFI_STA);  // Disable AP mode
 #ifdef USE_WIFI_RANGE_EXTENDER
   }
