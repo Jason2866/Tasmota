@@ -23,7 +23,7 @@ const char kTasmotaCommands[] PROGMEM = "|"  // No prefix
   // Other commands
   D_CMND_UPGRADE "|" D_CMND_UPLOAD "|" D_CMND_OTAURL "|" D_CMND_SERIALLOG "|" D_CMND_RESTART "|"
 #ifndef FIRMWARE_MINIMAL_ONLY
-  D_CMND_BACKLOG "|" D_CMND_DELAY "|" D_CMND_POWER "|" D_CMND_TIMEDPOWER "|" D_CMND_STATUS "|" D_CMND_STATE "|" D_CMND_SLEEP "|"
+  D_CMND_BACKLOG "|" D_CMND_DELAY "|" D_CMND_POWER "|" D_CMND_POWERLOCK "|" D_CMND_TIMEDPOWER "|" D_CMND_STATUS "|" D_CMND_STATE "|" D_CMND_SLEEP "|"
   D_CMND_POWERONSTATE "|" D_CMND_PULSETIME "|" D_CMND_BLINKTIME "|" D_CMND_BLINKCOUNT "|" D_CMND_SAVEDATA "|"
   D_CMND_SO "|" D_CMND_SETOPTION "|" D_CMND_TEMPERATURE_RESOLUTION "|" D_CMND_HUMIDITY_RESOLUTION "|" D_CMND_PRESSURE_RESOLUTION "|" D_CMND_POWER_RESOLUTION "|"
   D_CMND_VOLTAGE_RESOLUTION "|" D_CMND_FREQUENCY_RESOLUTION "|" D_CMND_CURRENT_RESOLUTION "|" D_CMND_ENERGY_RESOLUTION "|" D_CMND_WEIGHT_RESOLUTION "|"
@@ -63,7 +63,7 @@ SO_SYNONYMS(kTasmotaSynonyms,
 void (* const TasmotaCommand[])(void) PROGMEM = {
   &CmndUpgrade, &CmndUpgrade, &CmndOtaUrl, &CmndSeriallog, &CmndRestart,
 #ifndef FIRMWARE_MINIMAL_ONLY
-  &CmndBacklog, &CmndDelay, &CmndPower, &CmndTimedPower, &CmndStatus, &CmndState, &CmndSleep,
+  &CmndBacklog, &CmndDelay, &CmndPower, &CmndPowerLock, &CmndTimedPower, &CmndStatus, &CmndState, &CmndSleep,
   &CmndPowerOnState, &CmndPulsetime, &CmndBlinktime, &CmndBlinkcount, &CmndSavedata,
   &CmndSetoption, &CmndSetoption, &CmndTemperatureResolution, &CmndHumidityResolution, &CmndPressureResolution, &CmndPowerResolution,
   &CmndVoltageResolution, &CmndFrequencyResolution, &CmndCurrentResolution, &CmndEnergyResolution, &CmndWeightResolution,
@@ -658,6 +658,26 @@ void CmndPower(void)
   }
 }
 
+void CmndPowerLock(void) {
+  // PowerLock    - Show current state
+  // PowerLock0 0 - Reset all power locks
+  // PowerLock0 1 - Set all power locks
+  // PowerLock1 1 - Set Power1 lock
+  if (XdrvMailbox.index <= TasmotaGlobal.devices_present) {
+    if (XdrvMailbox.payload >= 0) {
+      XdrvMailbox.payload &= 1;
+      if (0 == XdrvMailbox.index) {  // Control all bits
+        Settings->power_lock = (XdrvMailbox.payload) ? (1 << TasmotaGlobal.devices_present) -1 : 0;
+      } else {                       // Control individual bits
+        bitWrite(Settings->power_lock, XdrvMailbox.index -1, XdrvMailbox.payload & 1);
+      }
+    }
+    char stemp1[33];
+    ext_snprintf_P(stemp1, sizeof(stemp1), PSTR("%*_b"), TasmotaGlobal.devices_present, Settings->power_lock);
+    ResponseCmndChar(stemp1);
+  }
+}
+
 /********************************************************************************************/
 
 typedef struct {
@@ -826,13 +846,18 @@ void CmndStatus(void)
     for (uint32_t i = 0; i < MAX_SWITCHES_SET; i++) {
       snprintf_P(stemp2, sizeof(stemp2), PSTR("%s%s%d" ), stemp2, (i > 0 ? "," : ""), Settings->switchmode[i]);
     }
-    Response_P(PSTR("{\"" D_CMND_STATUS "\":{\"" D_CMND_MODULE "\":%d,\"" D_CMND_DEVICENAME "\":\"%s\",\"" D_CMND_FRIENDLYNAME "\":[%s],\"" D_CMND_TOPIC "\":\"%s\",\""
-                          D_CMND_BUTTONTOPIC "\":\"%s\",\"" D_CMND_POWER "\":%d,\"" D_CMND_POWERONSTATE "\":%d,\"" D_CMND_LEDSTATE "\":%d,\""
+    Response_P(PSTR("{\"" D_CMND_STATUS "\":{\"" D_CMND_MODULE "\":%d,\"" D_CMND_DEVICENAME "\":\"%s\",\"" D_CMND_FRIENDLYNAME "\":[%s],\""
+                          D_CMND_TOPIC "\":\"%s\",\"" D_CMND_BUTTONTOPIC "\":\"%s\",\""
+                          D_CMND_POWER "\":\"%*_b\",\"" D_CMND_POWERLOCK "\":\"%*_b\",\""
+                          D_CMND_POWERONSTATE "\":%d,\"" D_CMND_LEDSTATE "\":%d,\""
                           D_CMND_LEDMASK "\":\"%04X\",\"" D_CMND_SAVEDATA "\":%d,\"" D_JSON_SAVESTATE "\":%d,\"" D_CMND_SWITCHTOPIC "\":\"%s\",\""
                           D_CMND_SWITCHMODE "\":[%s],\"" D_CMND_BUTTONRETAIN "\":%d,\"" D_CMND_SWITCHRETAIN "\":%d,\"" D_CMND_SENSORRETAIN "\":%d,\"" D_CMND_POWERRETAIN "\":%d,\""
                           D_CMND_INFORETAIN "\":%d,\"" D_CMND_STATERETAIN "\":%d,\"" D_CMND_STATUSRETAIN "\":%d}}"),
-                          ModuleNr(), EscapeJSONString(SettingsText(SET_DEVICENAME)).c_str(), stemp, TasmotaGlobal.mqtt_topic,
-                          SettingsText(SET_MQTT_BUTTON_TOPIC), TasmotaGlobal.power, Settings->poweronstate, Settings->ledstate,
+                          ModuleNr(), EscapeJSONString(SettingsText(SET_DEVICENAME)).c_str(), stemp,
+                          TasmotaGlobal.mqtt_topic, SettingsText(SET_MQTT_BUTTON_TOPIC),
+                          TasmotaGlobal.devices_present, TasmotaGlobal.power,
+                          TasmotaGlobal.devices_present, Settings->power_lock,
+                          Settings->poweronstate, Settings->ledstate,
                           Settings->ledmask, Settings->save_data,
                           Settings->flag.save_state,           // SetOption0 - Save power state and use after restart
                           SettingsText(SET_MQTT_SWITCH_TOPIC),
@@ -2666,8 +2691,7 @@ void CmndWifiPower(void) {
   ResponseCmndFloat(WifiGetOutputPower(), 1);
 }
 
-void CmndWifi(void)
-{
+void CmndWifi(void) {
   if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 1)) {
     Settings->flag4.network_wifi = XdrvMailbox.payload;
     if (Settings->flag4.network_wifi) {
@@ -2677,14 +2701,25 @@ void CmndWifi(void)
       WifiEnable();
 #endif
     }
-  } else if ((XdrvMailbox.payload >= 2) && (XdrvMailbox.payload <= 4)) {
+  } else if ((XdrvMailbox.payload >= 2) &&
+#ifdef ESP32
+#if ESP_IDF_VERSION_MAJOR >= 5
+             (XdrvMailbox.payload <= 5)
+#else   // ESP_IDF_VERSION_MAJOR < 5
+             (XdrvMailbox.payload <= 4)
+#endif  // ESP_IDF_VERSION_MAJOR
+#else   // ESP8266
+             (XdrvMailbox.payload <= 4)
+#endif  // ESP32/ESP8266
+            ) {
     // Wifi 2 = B
     // Wifi 3 = BG
     // Wifi 4 = BGN
+    // Wifi 5 = BGNAX
 #ifdef ESP32
     Wifi.phy_mode = XdrvMailbox.payload - 1;
 #endif
-    WiFi.setPhyMode(WiFiPhyMode_t(XdrvMailbox.payload - 1));  // 1-B/2-BG/3-BGN
+    WiFi.setPhyMode(WiFiPhyMode_t(XdrvMailbox.payload - 1));  // 1-B/2-BG/3-BGN/4-BGNAX
   }
   Response_P(PSTR("{\"" D_JSON_WIFI "\":\"%s\",\"" D_JSON_WIFI_MODE "\":\"%s\"}"), 
     GetStateText(Settings->flag4.network_wifi), WifiGetPhyMode().c_str());
