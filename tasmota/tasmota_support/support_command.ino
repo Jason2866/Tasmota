@@ -306,27 +306,12 @@ void ResponseCmndIdxError(void) {
 void ResponseCmndAll(uint32_t text_index, uint32_t count) {
   uint32_t real_index = text_index;
   ResponseClear();
-#ifdef MQTT_DATA_STRING
   for (uint32_t i = 0; i < count; i++) {
     if ((SET_MQTT_GRP_TOPIC == text_index) && (1 == i)) { real_index = SET_MQTT_GRP_TOPIC2 -1; }
     if ((SET_BUTTON1 == text_index) && (16 == i)) { real_index = SET_BUTTON17 -16; }
     ResponseAppend_P(PSTR("%c\"%s%d\":\"%s\""), (i)?',':'{', XdrvMailbox.command, i +1, EscapeJSONString(SettingsText(real_index +i)).c_str());
   }
   ResponseJsonEnd();
-#else
-  bool jsflg = false;
-  for (uint32_t i = 0; i < count; i++) {
-    if ((SET_MQTT_GRP_TOPIC == text_index) && (1 == i)) { real_index = SET_MQTT_GRP_TOPIC2 -1; }
-    if ((ResponseAppend_P(PSTR("%c\"%s%d\":\"%s\""), (jsflg)?',':'{', XdrvMailbox.command, i +1, EscapeJSONString(SettingsText(real_index +i)).c_str()) > (MAX_LOGSZ - TOPSZ)) || (i == count -1)) {
-      ResponseJsonEnd();
-      MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_STAT, XdrvMailbox.command);
-      ResponseClear();
-      jsflg = false;
-    } else {
-      jsflg = true;
-    }
-  }
-#endif
 }
 
 /********************************************************************************************/
@@ -1758,7 +1743,6 @@ void CmndModule(void)
 void CmndModules(void)
 {
   uint32_t midx = USER_MODULE;
-#ifdef MQTT_DATA_STRING
   Response_P(PSTR("{\"" D_CMND_MODULES "\":{"));
   for (uint32_t i = 0; i <= sizeof(kModuleNiceList); i++) {
     if (i > 0) {
@@ -1769,27 +1753,6 @@ void CmndModules(void)
     ResponseAppend_P(PSTR("\"%d\":\"%s\""), j, AnyModuleName(midx).c_str());
   }
   ResponseJsonEndEnd();
-#else
-  uint32_t lines = 1;
-  bool jsflg = false;
-  for (uint32_t i = 0; i <= sizeof(kModuleNiceList); i++) {
-    if (i > 0) { midx = pgm_read_byte(kModuleNiceList + i -1); }
-    if (!jsflg) {
-      Response_P(PSTR("{\"" D_CMND_MODULES "%d\":{"), lines);
-    } else {
-      ResponseAppend_P(PSTR(","));
-    }
-    jsflg = true;
-    uint32_t j = i ? midx +1 : 0;
-    if ((ResponseAppend_P(PSTR("\"%d\":\"%s\""), j, AnyModuleName(midx).c_str()) > (MAX_LOGSZ - TOPSZ)) || (i == sizeof(kModuleNiceList))) {
-      ResponseJsonEndEnd();
-      MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_STAT, XdrvMailbox.command);
-      jsflg = false;
-      lines++;
-    }
-  }
-  ResponseClear();
-#endif
 }
 
 void CmndGpio(void)
@@ -1850,18 +1813,8 @@ void CmndGpio(void)
           sensor_names = kSensorNamesFixed;
         }
         char stemp1[TOPSZ];
-#ifdef MQTT_DATA_STRING
         ResponseAppend_P(PSTR("\"" D_CMND_GPIO "%d\":{\"%d\":\"%s%s\"}"), i, sensor_type, GetTextIndexed(stemp1, sizeof(stemp1), sensor_name_idx, sensor_names), sindex);
         jsflg2 = true;
-#else
-        if ((ResponseAppend_P(PSTR("\"" D_CMND_GPIO "%d\":{\"%d\":\"%s%s\"}"), i, sensor_type, GetTextIndexed(stemp1, sizeof(stemp1), sensor_name_idx, sensor_names), sindex) > (MAX_LOGSZ - TOPSZ))) {
-          ResponseJsonEnd();
-          MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_STAT, XdrvMailbox.command);
-          ResponseClear();
-          jsflg2 = true;
-          jsflg = false;
-        }
-#endif
       }
     }
     if (jsflg) {
@@ -2692,34 +2645,44 @@ void CmndWifiPower(void) {
 }
 
 void CmndWifi(void) {
-  if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 1)) {
-    Settings->flag4.network_wifi = XdrvMailbox.payload;
-    if (Settings->flag4.network_wifi) {
+  // Wifi    - Show current state
+  // Wifi 0  - Off
+  // Wifi 1  - On
+  // Wifi 2  - B
+  // Wifi 3  - BG
+  // Wifi 4  - BGN
+  // Wifi 6  - BGNAX
+  uint32_t option = XdrvMailbox.payload -1;
+  switch (XdrvMailbox.payload) {
+    case 0:  // Wifi 0 = Off
+    case 1:  // Wifi 1 = On
+      {
+        Settings->flag4.network_wifi = XdrvMailbox.payload;
+        if (Settings->flag4.network_wifi) {
 #ifdef ESP32
-      WifiConnect();
-#else
-      WifiEnable();
-#endif
-    }
-  } else if ((XdrvMailbox.payload >= 2) &&
+          WifiConnect();
+#else   // ESP8266
+          WifiEnable();
+#endif  // ESP32
+        }
+        break;
+      }
 #ifdef ESP32
 #if ESP_IDF_VERSION_MAJOR >= 5
-             (XdrvMailbox.payload <= 5)
-#else   // ESP_IDF_VERSION_MAJOR < 5
-             (XdrvMailbox.payload <= 4)
+    case 6:  // Wifi 6 = BGNAX
+      option = 4;
 #endif  // ESP_IDF_VERSION_MAJOR
-#else   // ESP8266
-             (XdrvMailbox.payload <= 4)
 #endif  // ESP32/ESP8266
-            ) {
-    // Wifi 2 = B
-    // Wifi 3 = BG
-    // Wifi 4 = BGN
-    // Wifi 5 = BGNAX
+    case 4:  // Wifi 4 = BGN
+    case 3:  // Wifi 3 = BG
+    case 2:  // Wifi 2 = B
+      {
 #ifdef ESP32
-    Wifi.phy_mode = XdrvMailbox.payload - 1;
-#endif
-    WiFi.setPhyMode(WiFiPhyMode_t(XdrvMailbox.payload - 1));  // 1-B/2-BG/3-BGN/4-BGNAX
+        Wifi.phy_mode = option;
+#endif  // ESP32
+        WiFiHelper::setPhyMode(WiFiPhyMode_t(option));  // 1=B/2=BG/3=BGN/4=BGNAX
+        break;
+      }
   }
   Response_P(PSTR("{\"" D_JSON_WIFI "\":\"%s\",\"" D_JSON_WIFI_MODE "\":\"%s\"}"), 
     GetStateText(Settings->flag4.network_wifi), WifiGetPhyMode().c_str());
