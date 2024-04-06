@@ -21,6 +21,7 @@
 #define _TASMOTA_CONFIGURATIONS_ESP32_H_
 
 #ifdef ESP32
+#include "sdkconfig.h"
 
 /*********************************************************************************************\
  * [tasmota32x-safeboot.bin]
@@ -186,10 +187,10 @@
 #define USE_WEBCLIENT
 #define USE_WEBCLIENT_HTTPS
 
-#ifdef ESP32_4M
+#if CONFIG_IDF_TARGET_ESP32
   #define USE_SERIAL_BRIDGE                        // Add support for software Serial Bridge console Tee (+2k code)
   #define USE_ETHERNET
-#endif // ESP32_4M
+#endif  // CONFIG_IDF_TARGET_ESP32
 
 #endif  // FIRMWARE_SAFEBOOT
 
@@ -949,4 +950,3 @@
 
 #endif  // ESP32
 #endif  // _TASMOTA_CONFIGURATIONS_ESP32_H_
-  
