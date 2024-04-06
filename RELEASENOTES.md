@@ -118,7 +118,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 ## Changelog v13.4.0.4
 ### Added
-- Command ``Wifi 5`` to enable 11ax on ESP32 Core3
+- Command ``Wifi 6`` to enable 11ax on ESP32 Core3
 - Command ``PowerLock`` to disable power control of selected outputs [#21081](https://github.com/arendst/Tasmota/issues/21081)
 - Support for calculated heat index if temperature and humidity is available with ``#define USE_HEAT_INDEX`` [#4771](https://github.com/arendst/Tasmota/issues/4771)
 - Support for LoRa and single channel EU863-870 LoRaWanBridge [#17790](https://github.com/arendst/Tasmota/issues/17790)
@@ -136,6 +136,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Berry `path.rename()` [#20840](https://github.com/arendst/Tasmota/issues/20840)
 - Berry `string.startswith`, `string.endswith` and `%q` format [#20909](https://github.com/arendst/Tasmota/issues/20909)
 - Berry `close()` to class `serial` [#21042](https://github.com/arendst/Tasmota/issues/21042)
+- Berry `flash.current_ota` [#21097](https://github.com/arendst/Tasmota/issues/21097)
 - LVGL and HASPmota typicons font [#20742](https://github.com/arendst/Tasmota/issues/20742)
 - LVGL `lv.draw_label_dsc` and `lv_bar.get_indic_area` [#20936](https://github.com/arendst/Tasmota/issues/20936)
 - HASPmota `p<x>b<y>.delete` to delete an object [#20735](https://github.com/arendst/Tasmota/issues/20735)
@@ -177,6 +178,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Scripter google char memory leak [#20995](https://github.com/arendst/Tasmota/issues/20995)
 - Too restrictive checksum checks in Lib_teleinfo [#21033](https://github.com/arendst/Tasmota/issues/21033)
 - Color swap option for rgb displaytext [#21049](https://github.com/arendst/Tasmota/issues/21049)
+- NeoPool hydrolysis unit for Hidrolife, Bionet and Generic device [#21098](https://github.com/arendst/Tasmota/issues/21098)
 - ESP32 PWM activity on unconfigured PWM GPIOs [#20732](https://github.com/arendst/Tasmota/issues/20732)
 - BTHome, prep BLE5 [#20989](https://github.com/arendst/Tasmota/issues/20989)
 - Berry Memory leak in `import re` [#20823](https://github.com/arendst/Tasmota/issues/20823)
@@ -188,4 +190,5 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - HASPmota demo and robotocondensed fonts [#21014](https://github.com/arendst/Tasmota/issues/21014)
 
 ### Removed
+- Unused `#define MQTT_DATA_STRING` support
 - Berry `print "a"` syntax no longer supported [#21048](https://github.com/arendst/Tasmota/issues/21048)

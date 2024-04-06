@@ -6,15 +6,19 @@ All notable changes to this project will be documented in this file.
 ## [13.4.0.4]
 ### Added
 - Command ``PowerLock`` to disable power control of selected outputs (#21081)
-- Command ``Wifi 5`` to enable 11ax on ESP32 Core3
+- Command ``Wifi 6`` to enable 11ax on ESP32 Core3
+- Berry `flash.current_ota` (#21097)
 
 ### Breaking Changed
 
 ### Changed
+- Refactored Wifi for ESP32 to allow for Core3
 
 ### Fixed
+- NeoPool hydrolysis unit for Hidrolife, Bionet and Generic device (#21098)
 
 ### Removed
+- Unused `#define MQTT_DATA_STRING` support
 
 ## [13.4.0.3] 20240402
 ### Added
