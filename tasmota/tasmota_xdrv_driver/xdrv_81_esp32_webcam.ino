@@ -340,7 +340,7 @@ uint32_t WcSetup(int32_t fsiz) {
   Wc.stream_active = 0;
 
   if (fsiz < 0) {
-    if (Wc.up){    
+    if (Wc.up){
       esp_camera_deinit();
       AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: Deinit fsiz %d"), fsiz);
       Wc.up = 0;
@@ -431,11 +431,14 @@ uint32_t WcSetup(int32_t fsiz) {
     config.frame_size = FRAMESIZE_UXGA;
     config.jpeg_quality = 10;
     config.fb_count = 2;
+    config.grab_mode = CAMERA_GRAB_LATEST;
+    config.fb_location = CAMERA_FB_IN_PSRAM;
     AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: PSRAM found"));
   } else {
     config.frame_size = FRAMESIZE_VGA;
     config.jpeg_quality = 12;
     config.fb_count = 1;
+    config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
     config.fb_location = CAMERA_FB_IN_DRAM;
     AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: PSRAM not found"));
   }
@@ -608,7 +611,7 @@ int32_t WcSetOptions(uint32_t sel, int32_t value) {
 
 uint32_t WcGetWidth(void) {
   TasAutoMutex localmutex(&WebcamMutex, "WcGetWidth");
-  
+
   camera_fb_t *wc_fb = esp_camera_fb_get();
   if (!wc_fb) { return 0; }
   Wc.width = wc_fb->width;
@@ -1544,3 +1547,4 @@ bool Xdrv81(uint32_t function) {
 #endif  // USE_WEBCAM_LEGACY
 #endif  // USE_WEBCAM
 #endif  // ESP32
+
