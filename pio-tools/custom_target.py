@@ -344,12 +344,10 @@ def reset_target(*args, **kwargs):
         upload_port = join(env.get("UPLOAD_PORT", "none"))
     esptoolpy_flags = [
         "--no-stub",
-        "--chip",
-        mcu,
-        "--port",
-        upload_port,
-        "flash_id",
-    ],
+        "--chip", mcu,
+        "--port", upload_port,
+        "flash_id"
+    ]
     esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
     print("Try to reset device")
     subprocess.call(esptoolpy_cmd, shell=False)
