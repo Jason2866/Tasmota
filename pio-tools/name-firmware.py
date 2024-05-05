@@ -17,6 +17,13 @@ def bin_map_copy(source, target, env):
     firmware_name = env.subst("$BUILD_DIR/${PROGNAME}.bin")
 
     if env["PIOPLATFORM"] == "espressif32":
+        if("safeboot" in firmware_name):
+            FIRMWARE_SIZE = bin_file.stat().st_size
+            if FIRMWARE_SIZE > 831488:
+                print(Fore.RED + "!!! Tasmota safeboot size is too big with {} bytes. Max size is 831488 bytes !!! ".format(
+                        FIRMWARE_SIZE
+                    )
+                )
         if("safeboot" not in firmware_name):
             factory_tmp = pathlib.Path(firsttarget).with_suffix("")
             factory = factory_tmp.with_suffix(factory_tmp.suffix + ".factory.bin")
