@@ -5,6 +5,7 @@ import shutil
 import pathlib
 import tasmotapiolib
 from os.path import join
+from colorama import Fore, Back, Style
 
 
 def bin_map_copy(source, target, env):
