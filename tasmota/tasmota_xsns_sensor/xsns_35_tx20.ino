@@ -71,10 +71,14 @@
 #define TX2X_TIMEOUT             10  // seconds
 #define TX23_READ_INTERVAL        4  // seconds (don't use less than 3)
 
+extern "C" {
+#ifdef ESP8266
 // The Arduino standard GPIO routines are not enough,
 // must use some from the Espressif SDK as well
-extern "C" {
 #include "gpio.h"
+#else // ESP32x
+#include "soc/gpio_periph.h"
+#endif // ESP8266
 }
 
 #ifdef USE_TX20_WIND_SENSOR
@@ -250,12 +254,12 @@ static void IRAM_ATTR TX2xStartRead(void) {
 #ifdef USE_TX23_WIND_SENSOR
       if ((chk == tx2x_sd) && (0x1b==tx2x_sa) && (tx2x_sb==tx2x_se) && (tx2x_sc==tx2x_sf) && (tx2x_sc < 511)) {
 #else
-      if 
+      if
       #ifdef USE_TX20_WIND_SENSOR
-      ((chk == tx2x_sd) && (tx2x_sb==tx2x_se) && (tx2x_sc==tx2x_sf) && (tx2x_sc < 511)) 
+      ((chk == tx2x_sd) && (tx2x_sb==tx2x_se) && (tx2x_sc==tx2x_sf) && (tx2x_sc < 511))
       #endif
       #ifdef USE_WS2300_WIND_SENSOR
-      ((chk == tx2x_sd) && (tx2x_sc < 511)) 
+      ((chk == tx2x_sd) && (tx2x_sc < 511))
       #endif
       {
 #endif
@@ -282,6 +286,8 @@ static void IRAM_ATTR TX2xStartRead(void) {
   // Must clear this bit in the interrupt register,
   // it gets set even when interrupts are disabled
   GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, 1 << Pin(GPIO_TX2X_TXD_BLACK));
+#else // ESP32x
+  GPIO_REG_WRITE(GPIO_STATUS_W1TC_REG, 1 << Pin(GPIO_TX2X_TXD_BLACK));
 #endif
 }
 
