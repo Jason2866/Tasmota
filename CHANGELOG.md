@@ -3,7 +3,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [13.4.1.2]
+## [14.0.0.1]
+### Added
+
+
+### Breaking Changed
+
+### Changed
+
+### Fixed
+
+### Removed
+
+
+## [Released]
+
+## [14.0.0] 20240515
+- Release Rodney
+
+## [13.4.1.2] 20240515
 ### Added
 - ESP32 esp32_partition_app3904k_fs3392k partition scheme for 8MB ESP32S3 (#21241)
 - TCP Serial bridge GPIO type `TCP Tx En` (#21269)
@@ -37,6 +55,8 @@ All notable changes to this project will be documented in this file.
 - TLS Letsencrypt replace R3 CA with long-term ISRG_Root_X1 CA, which works with R3 and R10-R14 (#21352)
 - GPIOViewer from v1.5.0 to v1.5.2
 - ESP32 Core3 platform update from 2024.05.10 to 2024.05.11 (#21381)
+- Berry `Leds` uses native WS2812 driver by default (#21406)
+- Command ``Pixels`` initiates a restart before activation due to changed NeoPixelBus library (#21406)
 
 ### Fixed
 - HASPmota `align` attribute and expand PNG cache (#21228)
@@ -53,6 +73,7 @@ All notable changes to this project will be documented in this file.
 - Avoid unwanted OTA upgrade when safeboot starts for the first time (#21360)
 - Matter broken NOCStruct types preventing pairing with HA (#21365)
 - jpeg compile core3 (#21387)
+- Berry `gpio.dac_voltage()` (#21403)
 
 ### Removed
 - LVGL disabled vector graphics (#21242)
@@ -197,8 +218,6 @@ All notable changes to this project will be documented in this file.
 - Shutter inverted using internal commands (#20752)
 - HASPmota PSRAM memory leak (#20818)
 - Berry Memory leak in `import re` (#20823)
-
-## [Released]
 
 ## [13.4.0] 20240214
 - Release Quinta
