@@ -28,7 +28,7 @@ def ensureBerry():
     if os.path.exists(BERRY_EXECUTABLE):
         return BERRY_EXECUTABLE
     else:
-        return Null
+        return None
 
 def addEntryToModtab(source): 
     code = source.decode("utf-8")
