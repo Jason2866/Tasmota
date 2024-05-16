@@ -1,6 +1,3 @@
-FROM gitpod/workspace-python-3.11
+FROM gitpod/workspace-python-3.12
 
 USER gitpod
-
-RUN sudo apt-get update && sudo apt-get install -yq \
-    clang \
