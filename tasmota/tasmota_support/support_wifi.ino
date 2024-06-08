@@ -925,9 +925,6 @@ void WifiCheck(uint8_t param)
       Wifi.counter = Wifi.config_counter +5;
       if (Wifi.config_counter) {
         if (!Wifi.config_counter) {
-          if (strlen(WiFi.SSID().c_str())) {
-            SettingsUpdateText(SET_STASSID1, WiFi.SSID().c_str());
-          }
           if (strlen(WiFi.psk().c_str())) {
             SettingsUpdateText(SET_STAPWD1, WiFi.psk().c_str());
           }
