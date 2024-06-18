@@ -105,7 +105,7 @@ public:
 
   void setSlotConfig(i2s_port_t i2s_port, uint8_t tx_slot_config,
                      uint8_t tx_slot_mask, uint8_t rx_slot_mask) {
-    _i2s_port = i2s_port;
+    // _i2s_port = i2s_port;
     _tx_slot_config = tx_slot_config;
   }
   void setRxFreq(uint16_t freq) { _rx_freq = freq; }
@@ -349,6 +349,11 @@ bool TasmotaI2S::stopTx() {
       dac_task_stop();
       err = dac_continuous_disable((dac_continuous_handle_t) _tx_handle);
     } else {
+      uint8_t zero_buffer[240] = {0};
+      size_t sz;
+      for(int i = 0;i < 6;i++){
+        i2s_channel_write(_tx_handle, zero_buffer, sizeof(zero_buffer), &sz, 0); // fill DMA buffer with silence
+      }
       err = i2s_channel_disable(_tx_handle);
     }
     AddLog(LOG_LEVEL_DEBUG, "I2S: stopTx i2s_channel_disable err=0x%04X", err);
