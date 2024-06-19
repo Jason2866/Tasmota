@@ -81,13 +81,6 @@ static int i_readbytes(bvm *vm)
 
             char *buffer = (char*) be_tobytes(vm, -1, NULL); /* we get the address of the internam buffer of size 'size' */
             size = be_fread(fh, buffer, size);
-
-            /* resize if something went wrong */
-            be_getmember(vm, -1, "resize");
-            be_pushvalue(vm, -2);
-            be_pushint(vm, size);
-            be_call(vm, 2); /* call b.resize(size) */
-            be_pop(vm, 3);  /* bytes() instance is at top */
         } else {
             be_pushbytes(vm, NULL, 0);
         }

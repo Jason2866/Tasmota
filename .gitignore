@@ -42,3 +42,4 @@ lib/libesp32/berry/berry
 .vscode/extensions.json
 *.bak
 *.code-workspace
+watermeter.jpg
