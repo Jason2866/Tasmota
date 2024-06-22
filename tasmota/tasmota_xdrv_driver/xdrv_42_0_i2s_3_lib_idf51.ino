@@ -105,7 +105,7 @@ public:
 
   void setSlotConfig(i2s_port_t i2s_port, uint8_t tx_slot_config,
                      uint8_t tx_slot_mask, uint8_t rx_slot_mask) {
-    _i2s_port = i2s_port;
+    // _i2s_port = i2s_port;
     _tx_slot_config = tx_slot_config;
   }
   void setRxFreq(uint16_t freq) { _rx_freq = freq; }
@@ -349,6 +349,11 @@ bool TasmotaI2S::stopTx() {
       dac_task_stop();
       err = dac_continuous_disable((dac_continuous_handle_t) _tx_handle);
     } else {
+      uint8_t zero_buffer[240] = {0};
+      size_t sz;
+      for(int i = 0;i < 6;i++){
+        i2s_channel_write(_tx_handle, zero_buffer, sizeof(zero_buffer), &sz, 0); // fill DMA buffer with silence
+      }
       err = i2s_channel_disable(_tx_handle);
     }
     AddLog(LOG_LEVEL_DEBUG, "I2S: stopTx i2s_channel_disable err=0x%04X", err);
@@ -535,7 +540,7 @@ bool TasmotaI2S::startI2SChannel(bool tx, bool rx) {
     // by default we configure for MSB 2 slots `I2S_STD_MSB_SLOT_DEFAULT_CONFIG`
     i2s_slot_mode_t tx_slot_mode = (_tx_channels == 1) ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO;
     i2s_data_bit_width_t tx_data_bit_width = (_tx_bps == 8) ? I2S_DATA_BIT_WIDTH_8BIT : I2S_DATA_BIT_WIDTH_16BIT;
-    i2s_std_config_t tx_std_cfg = {
+    static i2s_std_config_t tx_std_cfg = {
       .clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(hertz),
       .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(tx_data_bit_width, tx_slot_mode),
       .gpio_cfg = {
@@ -726,6 +731,7 @@ bool TasmotaI2S::updateClockConfig(void) {
       clk_cfg.clk_src = I2S_CLK_SRC_APLL;
     }
   #endif
+    AddLog(LOG_LEVEL_INFO, "I2S: tx_handle: %p , clk_cfg: %p, hertz: %u", _tx_handle, &clk_cfg, hertz);
     esp_err_t result = i2s_channel_reconfig_std_clock(_tx_handle, &clk_cfg);
     AddLog(LOG_LEVEL_INFO, "I2S: updateClockConfig i2s_channel_reconfig_std_clock err=0x%04X", result);
     if (_tx_running) { 
