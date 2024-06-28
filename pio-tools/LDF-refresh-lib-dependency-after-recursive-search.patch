@@ -1,0 +1,13 @@
+diff --git a/platformio/builder/tools/piolib.py b/platformio/builder/tools/piolib.py
+index ca9c9f1e04..36b72d2654 100644
+--- a/platformio/builder/tools/piolib.py
++++ b/platformio/builder/tools/piolib.py
+@@ -1159,6 +1159,8 @@ def _correct_found_libs(lib_builders):
+         for lb in lib_builders:
+             if lb in found_lbs:
+                 lb.search_deps_recursive(lb.get_search_files())
++        # refill found libs after recursive search
++        found_lbs = [lb for lb in lib_builders if lb.is_dependent]
+         for lb in lib_builders:
+             for deplb in lb.depbuilders[:]:
+                 if deplb not in found_lbs:
