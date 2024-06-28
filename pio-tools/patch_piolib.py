@@ -6,6 +6,7 @@ env = DefaultEnvironment()
 
 project_dir = join(env.subst("$PROJECT_DIR"))
 sitepackages_dir = "".join(site.getsitepackages())
+print("sitepackages dir: ", sitepackages_dir)
 patchflag_path = join(sitepackages_dir, "platformio", "builder", "tools", ".patching-done")
 original_file = join(sitepackages_dir, "platformio", "builder", "tools", "piolib.py")
 patched_file = join(project_dir, "pio-tools", "piolib.patch")
