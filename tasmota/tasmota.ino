@@ -476,8 +476,8 @@ void setup(void) {
   }
 
 #ifdef ESP8266
-   usePWMFixedNMI(); // link the PWM NMI fix
- #endif
+  usePWMFixedNMI(); // link the PWM NMI fix
+#endif
   
 #ifdef ESP32
 #if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
