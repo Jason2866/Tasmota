@@ -55,6 +55,7 @@
 #include <JsonParser.h>
 #include <JsonGenerator.h>
 #ifdef ESP8266
+extern "C" void usePWMFixedNMI();
 #ifdef USE_ARDUINO_OTA
 #include <ArduinoOTA.h>                     // Arduino OTA
 #ifndef USE_DISCOVERY
@@ -474,6 +475,10 @@ void setup(void) {
     Settings = (TSettings*)calloc(1, sizeof(TSettings));
   }
 
+#ifdef ESP8266
+   usePWMFixedNMI(); // link the PWM NMI fix
+ #endif
+  
 #ifdef ESP32
 #if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
 #ifdef USE_USB_CDC_CONSOLE
