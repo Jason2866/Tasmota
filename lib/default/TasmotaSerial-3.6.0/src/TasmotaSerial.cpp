@@ -152,7 +152,7 @@ void TasmotaSerial::setTransmitEnablePin(int tx_enable_pin) {
 bool TasmotaSerial::freeUart(void) {
   for (uint32_t i = SOC_UART_NUM -1; i >= 0; i--) {
     if (0 == bitRead(tasmota_serial_uart_bitmap, i)) {
-      m_uart = i;
+      m_uart = uart_port_t(i);
       bitSet(tasmota_serial_uart_bitmap, m_uart);
       return true;
     }
@@ -165,20 +165,20 @@ void TasmotaSerial::Esp32Begin(void) {
   // For low bit rate, below 9600, set the Full RX threshold at 10 bytes instead of the default 120
   if (m_speed <= 9600) {
     // At 9600, 10 chars are ~10ms
-    //uart_set_rx_full_threshold(m_uart, 10); // fix me with IDF 5.2
+    uart_set_rx_full_threshold(m_uart, 10);
   } else if (m_speed < 115200) {
     // At 19200, 120 chars are ~60ms
     // At 76800, 120 chars are ~15ms
-    //uart_set_rx_full_threshold(m_uart, 120); // fix me with IDF 5.2
+    uart_set_rx_full_threshold(m_uart, 120);
   } else {
     // At 115200, 256 chars are ~20ms
     // Zigbee requires to keep frames together, i.e. 256 bytes max
-    //uart_set_rx_full_threshold(m_uart, 256); // fix me with IDF 5.2
+    uart_set_rx_full_threshold(m_uart, 256);
   }
   // For bitrate below 115200, set the Rx time out to 6 chars instead of the default 10
   if (m_speed < 115200) {
     // At 76800 the timeout is ~1ms
-    //uart_set_rx_timeout(m_uart, 6); // fix me with IDF 5.2
+    uart_set_rx_timeout(m_uart, 6);
   }
 }
 #endif
