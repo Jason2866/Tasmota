@@ -3990,7 +3990,7 @@ void uDisplay::pb_beginTransaction(void) {
     // dev->lcd_user.lcd_bit_order = false;
     // dev->lcd_user.lcd_8bits_order = false;
 
-    dev->lcd_user.val = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M;
+    dev->lcd_user.val = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG;
 
     _cache_flip = _cache[0];
   }
@@ -4022,13 +4022,13 @@ bool uDisplay::pb_writeCommand(uint32_t data, uint_fast8_t bit_length) {
         dev->lcd_cmd_val.lcd_cmd_value = data;
         data >>= 8;
         WAIT_LCD_NOT_BUSY
-        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
       } while (--bytes);
       return true;
   } else {
       dev->lcd_cmd_val.val = data;
       WAIT_LCD_NOT_BUSY
-      *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+      *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
       return true;
   }
 }
@@ -4045,7 +4045,7 @@ void uDisplay::pb_writeData(uint32_t data, uint_fast8_t bit_length) {
       dev->lcd_cmd_val.lcd_cmd_value = (data >> shift) & 0xff;
       shift -= 8;
       WAIT_LCD_NOT_BUSY
-      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
     }
     return;
 
@@ -4056,14 +4056,14 @@ void uDisplay::pb_writeData(uint32_t data, uint_fast8_t bit_length) {
         dev->lcd_cmd_val.lcd_cmd_value = (data >> shift) & 0xff;
         shift -= 8;
         WAIT_LCD_NOT_BUSY
-        *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
       }
       return;
     }
 
     dev->lcd_cmd_val.val = data;
     WAIT_LCD_NOT_BUSY
-    *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+    *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
     return;
   }
 }
@@ -4078,20 +4078,20 @@ void uDisplay::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
       for (uint32_t cnt = 0; cnt < length; cnt++) {
         dev->lcd_cmd_val.lcd_cmd_value = *data;
         while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
         dev->lcd_cmd_val.lcd_cmd_value = *data >> 8;
         WAIT_LCD_NOT_BUSY
-        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
         data++;
       }
     } else {
       for (uint32_t cnt = 0; cnt < length; cnt++) {
         dev->lcd_cmd_val.lcd_cmd_value = *data >> 8;
         while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
         dev->lcd_cmd_val.lcd_cmd_value = *data;
         WAIT_LCD_NOT_BUSY
-        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
         data++;
       }
     }
@@ -4103,13 +4103,13 @@ void uDisplay::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
         iob = (iob << 8) | (iob >> 8);
         dev->lcd_cmd_val.lcd_cmd_value = iob;
         WAIT_LCD_NOT_BUSY
-        *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
       }
     } else {
       for (uint32_t cnt = 0; cnt < length; cnt++) {
         dev->lcd_cmd_val.lcd_cmd_value = *data++;
         WAIT_LCD_NOT_BUSY
-        *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
       }
     }
   }
@@ -4129,7 +4129,7 @@ void uDisplay::pb_writeBytes(const uint8_t* data, uint32_t length, bool use_dma)
       dev->lcd_cmd_val.lcd_cmd_value = data[0] | data[1] << 16;
       uint32_t cmd_val = data[2] | data[3] << 16;
       while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
 
       if (use_dma) {
         if (slow) { ets_delay_us(slow); }
@@ -4150,7 +4150,7 @@ void uDisplay::pb_writeBytes(const uint8_t* data, uint32_t length, bool use_dma)
       }
       dev->lcd_cmd_val.lcd_cmd_value = cmd_val;
       dev->lcd_misc.lcd_cd_data_set = 0;
-      *reg_lcd_user = LCD_CAM_LCD_ALWAYS_OUT_EN | LCD_CAM_LCD_DOUT | LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE_M;
+      *reg_lcd_user = LCD_CAM_LCD_ALWAYS_OUT_EN | LCD_CAM_LCD_DOUT | LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE_REG;
       while (*reg_lcd_user & LCD_CAM_LCD_START) {}
       *reg_lcd_user = LCD_CAM_LCD_ALWAYS_OUT_EN | LCD_CAM_LCD_DOUT | LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_START;
     } while (length);
@@ -4164,7 +4164,7 @@ void uDisplay::_send_align_data(void) {
     dev->lcd_cmd_val.lcd_cmd_value = _align_data;
     auto reg_lcd_user = &(dev->lcd_user.val);
     while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-    *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+    *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
 }
 
 
