@@ -1029,20 +1029,6 @@
   #define SEND_PRONTO false                      // Exclude PRONTO protocol
 #else
   #define _IR_ENABLE_DEFAULT_ false              // disable all protocols by default
-  // below are the default IR protocols
-  #define DECODE_HASH true
-  #ifdef USE_IR_SEND_NEC
-    #define SEND_NEC   true                      // Support IRsend NEC protocol
-    #define DECODE_NEC true                      // Support IRreceive NEC protocol
-  #endif
-  #ifdef USE_IR_SEND_RC5
-    #define SEND_RC5   true                      // Support IRsend Philips RC5 protocol
-    #define DECODE_RC5 true                      // Support IRreceive Philips RC5 protocol
-  #endif
-  #ifdef USE_IR_SEND_RC6
-    #define SEND_RC6   true                      // Support IRsend Philips RC6 protocol
-    #define DECODE_RC6 true                      // Support IRreceive Philips RC6 protocol
-  #endif
 #endif
 
 /*********************************************************************************************\
@@ -1052,8 +1038,6 @@
 #ifndef ESP8266_1M
   #ifndef FIRMWARE_MINIMAL                       // There might be a ESP32-minimal
     #define USE_UFILESYS
-      #define GUI_TRASH_FILE
-      #define GUI_EDIT_FILE
     #ifdef ESP8266_4M
       #ifndef USE_FTP
         #define USE_FTP
@@ -1065,16 +1049,7 @@
         #define PW_FTP "pass"
       #endif
     #endif // ESP8266_4M
-    #define USE_SPI
-    #define USE_SDCARD
-    #define USE_PING
   #endif // FIRMWARE_MINIMAL
-
-  #ifdef USE_RULES
-    #define USE_EXPRESSION
-    #define SUPPORT_IF_STATEMENT
-    #define SUPPORT_MQTT_EVENT
-  #endif  // USE_RULES
 #endif  // NOT ESP8266_1M
 
 #ifdef USE_EMULATION_HUE
