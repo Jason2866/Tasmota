@@ -20,7 +20,7 @@
 #ifdef USE_ENERGY_SENSOR
 #ifdef USE_CSE7761
 /*********************************************************************************************\
- * CSE7761 - Energy  (Sonoff Dual R3 Pow)
+ * CSE7761 - Energy  (Sonoff Dual R3 and Pow CT)
  *
  * Without zero-cross detection
  * {"NAME":"Sonoff Dual R3","GPIO":[32,0,0,0,0,0,0,0,0,576,225,0,0,0,0,0,0,0,0,0,0,7296,7328,224,0,0,0,0,160,161,0,0,0,0,0,0],"FLAG":0,"BASE":1}
@@ -28,6 +28,8 @@
  * With zero-cross detection
  * {"NAME":"Sonoff Dual R3 (ZCD)","GPIO":[32,0,0,0,7552,0,0,0,0,576,225,0,0,0,0,0,0,0,0,0,0,7296,7328,224,0,0,0,0,160,161,0,0,0,0,0,0],"FLAG":0,"BASE":1}
  *
+ * {"NAME":"Sonoff POWCT","GPIO":[32,0,0,0,0,9280,0,0,0,320,0,576,0,9184,9216,0,0,224,0,9248,0,7329,7296,0,0,0,0,0,0,0,0,0,0,0,0,0],"FLAG":0,"BASE":1}
+ * 
  * Based on datasheet from ChipSea and analysing serial data
  * See https://github.com/arendst/Tasmota/discussions/10793
  * https://goldenrelay.en.alibaba.com/product/62119012875-811845870/GOLDEN_GI_1A_5LH_SPST_5V_5A_10A_250VAC_NO_18_5_10_5_15_3mm_sealed_type_all_certificate_compliances_class_F_SPDT_Form_available.html
@@ -88,6 +90,8 @@ enum CSE7761 { RmsIAC, RmsIBC, RmsUC, PowerPAC, PowerPBC, PowerSC, EnergyAC, Ene
 
 TasmotaSerial *Cse7761Serial = nullptr;
 
+enum CSE7761Model { CSE7761_MODEL_DUALR3, CSE7761_MODEL_POWCT };  // Model index number starting from 0
+
 struct {
   uint32_t frequency = 0;
   uint32_t voltage_rms = 0;
@@ -98,6 +102,7 @@ struct {
   uint8_t energy_update[2] = { 0 };
   uint8_t init = 4;
   uint8_t ready = 0;
+  uint8_t model;
 } CSE7761Data;
 
 /********************************************************************************************/
@@ -442,16 +447,18 @@ void Cse7761GetData(void) {
 #endif
   CSE7761Data.active_power[0] = (0 == CSE7761Data.current_rms[0]) ? 0 : (value & 0x80000000) ? (~value) + 1 : value;
 
-  value = Cse7761ReadFallback(CSE7761_REG_RMSIB, CSE7761Data.current_rms[1], 3);
+  if (2 == Energy->phase_count) {
+    value = Cse7761ReadFallback(CSE7761_REG_RMSIB, CSE7761Data.current_rms[1], 3);
 #ifdef CSE7761_SIMULATE
-  value = 29760;  // 0.185A
+    value = 29760;  // 0.185A
 #endif
-  CSE7761Data.current_rms[1] = ((value >= 0x800000) || (value < 1600)) ? 0 : value;  // No load threshold of 10mA
-  value = Cse7761ReadFallback(CSE7761_REG_POWERPB, CSE7761Data.active_power[1], 4);
+    CSE7761Data.current_rms[1] = ((value >= 0x800000) || (value < 1600)) ? 0 : value;  // No load threshold of 10mA
+    value = Cse7761ReadFallback(CSE7761_REG_POWERPB, CSE7761Data.active_power[1], 4);
 #ifdef CSE7761_SIMULATE
-  value = 2126641;  // 44.05W
+    value = 2126641;  // 44.05W
 #endif
-  CSE7761Data.active_power[1] = (0 == CSE7761Data.current_rms[1]) ? 0 : (value & 0x80000000) ? (~value) + 1 : value;
+    CSE7761Data.active_power[1] = (0 == CSE7761Data.current_rms[1]) ? 0 : (value & 0x80000000) ? (~value) + 1 : value;
+  }
 
   AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("C61: F%d, U%d, I%d/%d, P%d/%d"),
     CSE7761Data.frequency, CSE7761Data.voltage_rms,
@@ -459,16 +466,20 @@ void Cse7761GetData(void) {
     CSE7761Data.active_power[0], CSE7761Data.active_power[1]);
 
   if (Energy->power_on) {  // Powered on
-    // Voltage = RmsU * RmsUC * 10 / 0x400000
-    // Energy->voltage[0] = (float)(((uint64_t)CSE7761Data.voltage_rms * CSE7761Data.coefficient[RmsUC] * 10) >> 22) / 1000;  // V
-    Energy->voltage[0] = ((float)CSE7761Data.voltage_rms / EnergyGetCalibration(ENERGY_VOLTAGE_CALIBRATION));  // V
-    Energy->voltage[1] = Energy->voltage[0];
+    for (uint32_t channel = 0; channel < Energy->phase_count; channel++) {
+      if (0 == channel) {
+        // Voltage = RmsU * RmsUC * 10 / 0x400000
+        // Energy->voltage[0] = (float)(((uint64_t)CSE7761Data.voltage_rms * CSE7761Data.coefficient[RmsUC] * 10) >> 22) / 1000;  // V
+        Energy->voltage[0] = ((float)CSE7761Data.voltage_rms / EnergyGetCalibration(ENERGY_VOLTAGE_CALIBRATION));  // V
 #ifdef CSE7761_FREQUENCY
-    Energy->frequency[0] = (CSE7761Data.frequency) ? ((float)EnergyGetCalibration(ENERGY_FREQUENCY_CALIBRATION) / 8 / CSE7761Data.frequency) : 0;  // Hz
-    Energy->frequency[1] = Energy->frequency[0];
+        Energy->frequency[0] = (CSE7761Data.frequency) ? ((float)EnergyGetCalibration(ENERGY_FREQUENCY_CALIBRATION) / 8 / CSE7761Data.frequency) : 0;  // Hz
 #endif
-
-    for (uint32_t channel = 0; channel < 2; channel++) {
+      } else {
+        Energy->voltage[1] = Energy->voltage[0];
+#ifdef CSE7761_FREQUENCY
+        Energy->frequency[1] = Energy->frequency[0];
+#endif
+      }
       Energy->data_valid[channel] = 0;
       uint32_t power_calibration = EnergyGetCalibration(ENERGY_POWER_CALIBRATION, channel);
       // Active power = PowerPA * PowerPAC * 1000 / 0x80000000
@@ -563,7 +574,7 @@ void Cse7761EverySecond(void) {
   }
   else {
     if (2 == CSE7761Data.ready) {
-      for (uint32_t channel = 0; channel < 2; channel++) {
+      for (uint32_t channel = 0; channel < Energy->phase_count; channel++) {
         if (CSE7761Data.energy_update[channel]) {
           Energy->kWhtoday_delta[channel] += ((CSE7761Data.energy[channel] * 1000) / CSE7761Data.energy_update[channel]) / 36;
           CSE7761Data.energy[channel] = 0;
@@ -577,7 +588,7 @@ void Cse7761EverySecond(void) {
 
 void Cse7761SnsInit(void) {
   // Software serial init needs to be done here as earlier (serial) interrupts may lead to Exceptions
-  Cse7761Serial = new TasmotaSerial(Pin(GPIO_CSE7761_RX), Pin(GPIO_CSE7761_TX), 1);
+  Cse7761Serial = new TasmotaSerial(Pin(GPIO_CSE7761_RX, GPIO_ANY), Pin(GPIO_CSE7761_TX), 1);
   if (Cse7761Serial->begin(38400, SERIAL_8E1)) {
     if (Cse7761Serial->hardwareSerial()) {
       SetSerial(38400, TS_SERIAL_8E1);
@@ -599,10 +610,15 @@ void Cse7761SnsInit(void) {
 }
 
 void Cse7761DrvInit(void) {
-  if (PinUsed(GPIO_CSE7761_RX) && PinUsed(GPIO_CSE7761_TX)) {
+  if (PinUsed(GPIO_CSE7761_RX, GPIO_ANY) && PinUsed(GPIO_CSE7761_TX)) {
+    CSE7761Data.model = GetPin(Pin(GPIO_CSE7761_RX, GPIO_ANY)) - AGPIO(GPIO_CSE7761_RX);
     CSE7761Data.ready = 0;
-    CSE7761Data.init = 4;                       // Init setup steps
-    Energy->phase_count = 2;                     // Handle two channels as two phases
+    CSE7761Data.init = 4;                        // Init setup steps
+
+//    Energy->phase_count = 1;                     // Handle one channel (default set by xdrv_03_energy.ino)
+    if (CSE7761_MODEL_DUALR3 == CSE7761Data.model) {
+      Energy->phase_count = 2;                   // Handle two channels as two phases
+    }
     Energy->voltage_common = true;               // Use common voltage
 #ifdef CSE7761_FREQUENCY
     Energy->frequency_common = true;             // Use common frequency
@@ -615,7 +631,10 @@ void Cse7761DrvInit(void) {
 bool Cse7761Command(void) {
   bool serviced = true;
 
-  uint32_t channel = (2 == XdrvMailbox.index) ? 1 : 0;
+  uint32_t channel = 0;
+  if (Energy->phase_count > 1) {
+    channel = (2 == XdrvMailbox.index) ? 1 : 0;
+  }
   uint32_t value = (uint32_t)(CharToFloat(XdrvMailbox.data) * 100);  // 1.23 = 123
 
   if (CMND_POWERCAL == Energy->command_code) {
@@ -624,7 +643,7 @@ bool Cse7761Command(void) {
   }
   else if (CMND_POWERSET == Energy->command_code) {
     if (XdrvMailbox.data_len && CSE7761Data.active_power[channel]) {
-      if ((value > 100) && (value < 200000)) {  // Between 1W and 2000W
+      if ((value > 100) && (value < 2000000)) {  // Between 1W and 20000W
         XdrvMailbox.payload = ((CSE7761Data.active_power[channel]) / value) * 100;
       }
     }
@@ -635,7 +654,7 @@ bool Cse7761Command(void) {
   }
   else if (CMND_VOLTAGESET == Energy->command_code) {
     if (XdrvMailbox.data_len && CSE7761Data.voltage_rms) {
-      if ((value > 10000) && (value < 26000)) {  // Between 100V and 260V
+      if ((value > 10000) && (value < 40000)) {  // Between 100V and 400V
         XdrvMailbox.payload = (CSE7761Data.voltage_rms * 100) / value;
       }
     }
@@ -646,7 +665,7 @@ bool Cse7761Command(void) {
   }
   else if (CMND_CURRENTSET == Energy->command_code) {
     if (XdrvMailbox.data_len && CSE7761Data.current_rms[channel]) {
-      if ((value > 1000) && (value < 1000000)) {  // Between 10mA and 10A
+      if ((value > 1000) && (value < 10000000)) {  // Between 10mA and 100A
         XdrvMailbox.payload = ((CSE7761Data.current_rms[channel] * 100) / value) * 1000;
       }
     }
