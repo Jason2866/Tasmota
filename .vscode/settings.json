@@ -1,4 +1,7 @@
 {
+    {
+    "platformio.enableTelemetry": false
+    },
     "platformio-ide.toolbar": [
       {
         "text": "$(home)",
