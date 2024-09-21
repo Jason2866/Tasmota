@@ -34,4 +34,8 @@ set(compile_options                 "-ffat-lto-objects"
 
 list(APPEND CMAKE_EXE_LINKER_FLAGS "-flto -fuse-linker-plugin -ffat-lto-objects -flto-partition=max")
 
+idf_build_set_property(COMPILE_OPTIONS "${compile_options}" APPEND)
+idf_build_set_property(C_COMPILE_OPTIONS "${c_compile_options}" APPEND)
+idf_build_set_property(CXX_COMPILE_OPTIONS "${cxx_compile_options}" APPEND)
+idf_build_set_property(CMAKE_EXE_LINKER_FLAGS "${cmake_exe_linker_flags}" APPEND)
 idf_component_register(SRCS ${app_sources})
