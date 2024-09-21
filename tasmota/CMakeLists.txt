@@ -7,7 +7,7 @@ set(CMAKE_RANLIB ${_CMAKE_TOOLCHAIN_PREFIX}gcc-ranlib)
 unset(compile_options)
 unset(c_compile_options)
 unset(cxx_compile_options)
-list(APPEND compile_options         "-ffat-lto-objects"
+set(compile_options                 "-ffat-lto-objects"
                                     "-flto-compression-level=9"
                                     "-flto=auto"
                                     "-ffunction-sections"
