@@ -7,3 +7,9 @@ dependencies:
     require: public
     rules:
       - if: "target in [esp32, esp32s2, esp32s3, esp32p4]"
+  espressif/fb_gfx:
+    version: "v5.1_Arduino"
+    git: https://github.com/Jason2866/esp32-arduino-lib-builder/tree/v5.1_Arduino/components/fb_gfx
+    require: public
+    rules:
+      - if: "target in [esp32, esp32s2, esp32s3, esp32p4]"
