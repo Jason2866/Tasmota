@@ -4,11 +4,11 @@ FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/tasmota/*.*)
 set(CMAKE_AR ${_CMAKE_TOOLCHAIN_PREFIX}gcc-ar)
 set(CMAKE_RANLIB ${_CMAKE_TOOLCHAIN_PREFIX}gcc-ranlib)
 
-list(REMOVE_ITEM compile_options "-Wall")
-list(REMOVE_ITEM compile_options "-Werror=all")
-list(REMOVE_ITEM compile_options "-Wextra")
-
+list(REMOVE_ITEM compile_options "-Wall" "-Werror=all" "-Wextra")
 list(APPEND compile_options "-ffat-lto-objects -flto-compression-level=9 -flto=auto")
+list(REMOVE_DUPLICATES compile_options)
+list(SORT compile_options)
+
 list(APPEND CMAKE_EXE_LINKER_FLAGS "-flto -fuse-linker-plugin -ffat-lto-objects -flto-partition=max")
 
 idf_component_register(SRCS ${app_sources})
