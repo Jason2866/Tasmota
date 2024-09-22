@@ -1,12 +1,12 @@
-name: Tasmota CI
+name: Tasmota IDF compile test
 
 on:
   workflow_dispatch:
   push:
 
 jobs:
-  os-check-win:
-    runs-on: macos-latest
+  compile_test:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
