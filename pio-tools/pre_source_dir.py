@@ -18,7 +18,7 @@ def HandleArduinoIDFbuild(env):
     new_build_flags = [f for f in env["BUILD_FLAGS"] if "-flto=auto" not in f]
     new_build_flags.append("-mtext-section-literals") # TODO
     env["BUILD_FLAGS"] = new_build_flags
-    print(new_build_flags)
+    # print(new_build_flags)
 
     platform = env.PioPlatform()
     board = env.BoardConfig()
@@ -73,5 +73,9 @@ tasmota_flash_mode = "-DCONFIG_TASMOTA_FLASHMODE_" + flash_mode
 env.Append(CXXFLAGS=[tasmota_flash_mode])
 print(tasmota_flash_mode)
 
-if "espidf" in env["PIOFRAMEWORK"]:
-    HandleArduinoIDFbuild(env)
+try:
+    if env.GetProjectOption("custom_sdkconfig").splitlines():
+        env["PIOFRAMEWORK"].append("espidf")
+        HandleArduinoIDFbuild(env)
+except:
+    pass
