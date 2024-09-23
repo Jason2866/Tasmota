@@ -1,4 +1,4 @@
-name: Tasmota IDF compile test
+name: Tasmota IDF compile test C2
 
 on:
   workflow_dispatch:
