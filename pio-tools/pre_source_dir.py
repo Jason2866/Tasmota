@@ -18,7 +18,7 @@ def HandleArduinoIDFbuild(env):
     new_build_flags = [f for f in env["BUILD_FLAGS"] if "-flto=auto" not in f]
     new_build_flags.append("-mtext-section-literals") # TODO
     env["BUILD_FLAGS"] = new_build_flags
-    # print(new_build_flags)
+    print(new_build_flags)
 
     platform = env.PioPlatform()
     board = env.BoardConfig()
