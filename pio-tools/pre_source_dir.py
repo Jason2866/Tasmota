@@ -16,7 +16,7 @@ env.AddMethod(FindInoNodes)
 def HandleArduinoIDFbuild(env):
     print("IDF build!!!, removing LTO")
     new_build_flags = [f for f in env["BUILD_FLAGS"] if "-flto=auto" not in f]
-    new_build_flags.append("-mtext-section-literals") # TODO
+    # new_build_flags.append("-mtext-section-literals") # TODO C2 fails
     env["BUILD_FLAGS"] = new_build_flags
     print(new_build_flags)
 
