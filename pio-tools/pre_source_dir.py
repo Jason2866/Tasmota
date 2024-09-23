@@ -33,12 +33,7 @@ def HandleArduinoIDFbuild(env):
         else:
             return None
 
-    try:
-        idf_config_flags = env.GetProjectOption("custom_sdkconfig").splitlines()
-        print(idf_config_flags)
-    except:
-        idf_config_flags = []
-        print("no user additions")
+    idf_config_flags = env.GetProjectOption("custom_sdkconfig").splitlines()
     with open(sdkconfig_src) as src:
         sdkconfig_dst = join(env.subst("$PROJECT_DIR"),"sdkconfig.defaults")
         dst = open(sdkconfig_dst,"w")
