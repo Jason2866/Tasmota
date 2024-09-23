@@ -3,7 +3,7 @@ Import("env")
 import glob
 import os
 from os.path import join
-import shutil
+# import shutil
 
 def FindInoNodes(env):
     src_dir = glob.escape(env.subst("$PROJECT_SRC_DIR"))
@@ -13,16 +13,19 @@ def FindInoNodes(env):
 
 env.AddMethod(FindInoNodes)
 
-def HandleArduinoIDFbuild(env):
-    print("IDF build!!!, removing LTO")
-    new_build_flags = [f for f in env["BUILD_FLAGS"] if "-flto=auto" not in f]
-    # new_build_flags.append("-mtext-section-literals") # TODO C2 fails
-    env["BUILD_FLAGS"] = new_build_flags
-    # print(new_build_flags)
-
+def HandleArduinoIDFbuild(env, idf_config_flags):
     platform = env.PioPlatform()
     board = env.BoardConfig()
     mcu = board.get("build.mcu", "esp32")
+
+    print("IDF build!!!, removing LTO")
+    new_build_flags = [f for f in env["BUILD_FLAGS"] if "-flto=auto" not in f]
+    if mcu != "esp32c2":
+        new_build_flags.append("-mtext-section-literals") # TODO
+    env["BUILD_FLAGS"] = new_build_flags
+    # print(new_build_flags)
+
+
     sdkconfig_src = join(platform.get_package_dir("framework-arduinoespressif32"),"tools","esp32-arduino-libs",mcu,"sdkconfig")
 
     def get_flag(line):
@@ -32,8 +35,7 @@ def HandleArduinoIDFbuild(env):
             return line.split("=")[0]
         else:
             return None
-
-    idf_config_flags = env.GetProjectOption("custom_sdkconfig").splitlines()
+        
     with open(sdkconfig_src) as src:
         sdkconfig_dst = join(env.subst("$PROJECT_DIR"),"sdkconfig.defaults")
         dst = open(sdkconfig_dst,"w")
@@ -69,8 +71,9 @@ env.Append(CXXFLAGS=[tasmota_flash_mode])
 print(tasmota_flash_mode)
 
 try:
-    if env.GetProjectOption("custom_sdkconfig").splitlines():
+    if idf_config_flags := env.GetProjectOption("custom_sdkconfig").splitlines():
         env["PIOFRAMEWORK"].append("espidf")
-        HandleArduinoIDFbuild(env)
+        HandleArduinoIDFbuild(env, idf_config_flags)
 except:
     pass
+
