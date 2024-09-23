@@ -1,4 +1,4 @@
-name: Tasmota IDF compile test C2
+name: Tasmota IDF compile test
 
 on:
   workflow_dispatch:
@@ -12,6 +12,7 @@ jobs:
       matrix:
         variant:
           - tasmota32c2
+          - tasmota32c3
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
