@@ -5,6 +5,9 @@ project(tasmota)
 
 include(gcc)
 
+set(CMAKE_AR ${_CMAKE_TOOLCHAIN_PREFIX}gcc-ar)
+set(CMAKE_RANLIB ${_CMAKE_TOOLCHAIN_PREFIX}gcc-ranlib)
+
 # Add
 set(app_lto_components tasmota)
 # Add
