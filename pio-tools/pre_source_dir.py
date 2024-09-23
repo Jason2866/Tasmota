@@ -70,7 +70,7 @@ print(tasmota_flash_mode)
 
 try:
     if env.GetProjectOption("custom_sdkconfig").splitlines():
-        env["PIOFRAMEWORK"].append("espidf")
+        # env["PIOFRAMEWORK"].append("espidf")
         HandleArduinoIDFbuild(env)
 except:
     pass
