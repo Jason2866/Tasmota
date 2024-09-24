@@ -35,7 +35,7 @@ def HandleArduinoIDFbuild(env, idf_config_flags):
             return line.split("=")[0]
         else:
             return None
-        
+
     with open(sdkconfig_src) as src:
         sdkconfig_dst = join(env.subst("$PROJECT_DIR"),"sdkconfig.defaults")
         dst = open(sdkconfig_dst,"w")
@@ -60,10 +60,10 @@ def HandleArduinoIDFbuild(env, idf_config_flags):
     # shutil.copy(sdkconfig_src,sdkconfig_dst) # TODO: maybe no rude overwrite
     # assert(0)
 
-    EXTRA_IMG_DIR = join("$PROJECT_DIR", "variants", "tasmota")
+    EXTRA_IMG_DIR = join(env.subst("$PROJECT_DIR"), "variants", "tasmota")
     env.Append(
         FLASH_EXTRA_IMAGES=[
-            (offset, join(EXTRA_IMG_DIR, img)) for offset, img in board_config.get("upload.arduino.flash_extra_images", [])
+            (offset, join(EXTRA_IMG_DIR, img)) for offset, img in board.get("upload.arduino.flash_extra_images", [])
         ]
     )
 
@@ -83,4 +83,3 @@ try:
         HandleArduinoIDFbuild(env, idf_config_flags)
 except:
     pass
-
