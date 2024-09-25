@@ -2,6 +2,7 @@ Import("env")
 
 import glob
 import os
+import os.path
 from os.path import join
 # import shutil
 
@@ -82,7 +83,7 @@ def esp32_copy_new_arduino_libs(target, source, env):
     lib_src = join(env["PROJECT_BUILD_DIR"],env["PIOENV"],"esp-idf")
     lib_dst = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"lib")
     src = [join(lib_src,x) for x in os.listdir(lib_src)]
-    src = [folder for folder in src if not isfile(folder)]
+    src = [folder for folder in src if not os.path.isfile(folder)]
     for folder in src:
         # print(folder)
         files = [join(folder,x) for x in os.listdir(folder)]
