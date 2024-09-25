@@ -5,6 +5,11 @@ import os
 from os.path import join
 # import shutil
 
+platform = env.PioPlatform()
+board = env.BoardConfig()
+mcu = board.get("build.mcu", "esp32")
+FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
+
 def FindInoNodes(env):
     src_dir = glob.escape(env.subst("$PROJECT_SRC_DIR"))
     return env.Glob(os.path.join(src_dir, "*.ino")) + env.Glob(
@@ -14,10 +19,6 @@ def FindInoNodes(env):
 env.AddMethod(FindInoNodes)
 
 def HandleArduinoIDFbuild(env, idf_config_flags):
-    platform = env.PioPlatform()
-    board = env.BoardConfig()
-    mcu = board.get("build.mcu", "esp32")
-
     print("IDF build!!!, removing LTO")
     new_build_flags = [f for f in env["BUILD_FLAGS"] if "-flto=auto" not in f]
     if mcu in ("esp32", "esp32s2", "esp32s3"):
@@ -26,7 +27,7 @@ def HandleArduinoIDFbuild(env, idf_config_flags):
     # print(new_build_flags)
 
 
-    sdkconfig_src = join(platform.get_package_dir("framework-arduinoespressif32"),"tools","esp32-arduino-libs",mcu,"sdkconfig")
+    sdkconfig_src = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig")
 
     def get_flag(line):
         if line.startswith("#") and "is not set" in line:
@@ -67,9 +68,25 @@ def HandleArduinoIDFbuild(env, idf_config_flags):
         ]
     )
 
+def esp32_copy_new_arduino_libs(target, source, env):
+    print("Will copy new Arduino libs to .platformio")
+    lib_src = join(env["PROJECT_BUILD_DIR"],env["PIOENV"],"esp-idf")
+    lib_dst = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"lib")
+    src = [join(lib_src,x) for x in os.listdir(lib_src)]
+    src = [folder for folder in src if not isfile(folder)]
+    for folder in src:
+        # print(folder)
+        files = [join(folder,x) for x in os.listdir(folder)]
+        for file in files:
+            if file.strip().endswith(".a"):
+                # print(file.split("/")[-1])
+                shutil.copyfile(file,join(lib_dst,file.split("/")[-1]))
+    exit()
+
+
 # Pass flashmode at build time to macro
-memory_type = env.BoardConfig().get("build.arduino.memory_type", "").upper()
-flash_mode = env.BoardConfig().get("build.flash_mode", "dio").upper()
+memory_type = board.get("build.arduino.memory_type", "").upper()
+flash_mode = board.get("build.flash_mode", "dio").upper()
 if "OPI_" in memory_type:
     flash_mode = "OPI"
 
@@ -81,5 +98,6 @@ try:
     if idf_config_flags := env.GetProjectOption("custom_sdkconfig").splitlines():
         env["PIOFRAMEWORK"].append("espidf")
         HandleArduinoIDFbuild(env, idf_config_flags)
+        env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", esp32_copy_new_arduino_libs)
 except:
     pass
