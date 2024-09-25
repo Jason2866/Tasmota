@@ -4,7 +4,7 @@ import glob
 import os
 import os.path
 from os.path import join
-# import shutil
+import shutil
 
 platform = env.PioPlatform()
 board = env.BoardConfig()
