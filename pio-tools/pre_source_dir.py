@@ -36,6 +36,10 @@ def HandleArduinoIDFbuild(env, idf_config_flags):
     env["BUILD_FLAGS"] = new_build_flags
     # print(new_build_flags)
 
+    arduino_libs_mcu = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu)
+    lib_backup_folder = "lib_backup"
+    if lib_backup_folder not in os.listdir(arduino_libs_mcu):
+        destination = shutil.copytree(join(arduino_libs_mcu,"lib"), join(arduino_libs_mcu,lib_backup_folder), copy_function = shutil.copy)
 
     sdkconfig_src = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig")
 
@@ -50,6 +54,7 @@ def HandleArduinoIDFbuild(env, idf_config_flags):
     with open(sdkconfig_src) as src:
         sdkconfig_dst = join(env.subst("$PROJECT_DIR"),"sdkconfig.defaults")
         dst = open(sdkconfig_dst,"w")
+        dst.write("# TASMOTA\n")
         while line := src.readline():
             flag = get_flag(line)
             # print(flag)
@@ -83,7 +88,7 @@ def esp32_copy_new_arduino_libs(target, source, env):
     lib_src = join(env["PROJECT_BUILD_DIR"],env["PIOENV"],"esp-idf")
     lib_dst = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"lib")
     src = [join(lib_src,x) for x in os.listdir(lib_src)]
-    src = [folder for folder in src if not os.path.isfile(folder)]
+    src = [folder for folder in src if not os.path.isfile(folder)] # folders only
     for folder in src:
         # print(folder)
         files = [join(folder,x) for x in os.listdir(folder)]
@@ -91,7 +96,10 @@ def esp32_copy_new_arduino_libs(target, source, env):
             if file.strip().endswith(".a"):
                 # print(file.split("/")[-1])
                 shutil.copyfile(file,join(lib_dst,file.split("/")[-1]))
-    exit()
+    if os.path.isfile(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig")) == False:
+        shutil.copyfile(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig"),join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig"))
+    shutil.copyfile(join(env.subst("$PROJECT_DIR"),"sdkconfig."+env["PIOENV"]),join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig"))
+    # exit()
 
 
 # Pass flashmode at build time to macro
@@ -111,3 +119,10 @@ try:
         env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", esp32_copy_new_arduino_libs)
 except:
     pass
+    # arduino_libs_mcu = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu)
+    # lib_backup_folder = "lib_backup"
+    # if lib_backup_folder in os.listdir(arduino_libs_mcu):
+    #     shutil.rmtree(join(arduino_libs_mcu,"lib"))
+    #     destination = shutil.copytree(join(arduino_libs_mcu,lib_backup_folder),join(arduino_libs_mcu,"lib"), copy_function = shutil.copy)
+    #     shutil.rmtree(join(arduino_libs_mcu,lib_backup_folder))
+
