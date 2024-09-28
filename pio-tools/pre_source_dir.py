@@ -28,6 +28,17 @@ def FindInoNodes(env):
 
 env.AddMethod(FindInoNodes)
 
+# Pass flashmode at build time to macro
+memory_type = board.get("build.arduino.memory_type", "").upper()
+flash_mode = board.get("build.flash_mode", "dio").upper()
+if "OPI_" in memory_type:
+    flash_mode = "OPI"
+
+tasmota_flash_mode = "-DCONFIG_TASMOTA_FLASHMODE_" + flash_mode
+env.Append(CXXFLAGS=[tasmota_flash_mode])
+print(tasmota_flash_mode)
+#########################################################
+
 def HandleArduinoIDFbuild(env, idf_config_flags):
     print("IDF build!!!, removing LTO")
     try:
@@ -100,18 +111,8 @@ def esp32_copy_new_arduino_libs(target, source, env):
     if not bool(os.path.isfile(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig"))):
         shutil.move(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig"),join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig"))
     shutil.copyfile(join(env.subst("$PROJECT_DIR"),"sdkconfig."+env["PIOENV"]),join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig"))
-    exit()
+    #exit()
 
-
-# Pass flashmode at build time to macro
-memory_type = board.get("build.arduino.memory_type", "").upper()
-flash_mode = board.get("build.flash_mode", "dio").upper()
-if "OPI_" in memory_type:
-    flash_mode = "OPI"
-
-tasmota_flash_mode = "-DCONFIG_TASMOTA_FLASHMODE_" + flash_mode
-env.Append(CXXFLAGS=[tasmota_flash_mode])
-print(tasmota_flash_mode)
 
 try:
     if idf_config_flags := env.GetProjectOption("custom_sdkconfig").splitlines():
