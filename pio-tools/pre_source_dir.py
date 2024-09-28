@@ -30,16 +30,17 @@ env.AddMethod(FindInoNodes)
 
 def HandleArduinoIDFbuild(env, idf_config_flags):
     print("IDF build!!!, removing LTO")
-    new_build_flags = [f for f in env["BUILD_FLAGS"] if "-flto=auto" not in f]
+    try:
+        env["BUILD_FLAGS"].pop(env["BUILD_FLAGS"].index("-flto=auto"))
+    except:
+        pass
     if mcu in ("esp32", "esp32s2", "esp32s3"):
-        new_build_flags.append("-mtext-section-literals") # TODO
-    env["BUILD_FLAGS"] = new_build_flags
-    # print(new_build_flags)
+        env["BUILD_FLAGS"].append("-mtext-section-literals") # TODO
 
-    arduino_libs_mcu = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu)
-    lib_backup_folder = "lib_backup"
-    if lib_backup_folder not in os.listdir(arduino_libs_mcu):
-        destination = shutil.copytree(join(arduino_libs_mcu,"lib"), join(arduino_libs_mcu,lib_backup_folder), copy_function = shutil.copy)
+    #arduino_libs_mcu = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu)
+    #lib_backup_folder = "lib_backup"
+    #if lib_backup_folder not in os.listdir(arduino_libs_mcu):
+        #destination = shutil.copytree(join(arduino_libs_mcu,"lib"), join(arduino_libs_mcu,lib_backup_folder), copy_function = shutil.copy)
 
     sdkconfig_src = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig")
 
@@ -96,8 +97,8 @@ def esp32_copy_new_arduino_libs(target, source, env):
             if file.strip().endswith(".a"):
                 # print(file.split("/")[-1])
                 shutil.copyfile(file,join(lib_dst,file.split("/")[-1]))
-    if os.path.isfile(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig")) == False:
-        shutil.copyfile(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig"),join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig"))
+    if not bool(os.path.isfile(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig"))):
+        shutil.move(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig"),join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig"))
     shutil.copyfile(join(env.subst("$PROJECT_DIR"),"sdkconfig."+env["PIOENV"]),join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig"))
     # exit()
 
