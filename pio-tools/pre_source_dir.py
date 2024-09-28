@@ -111,14 +111,14 @@ def esp32_copy_new_arduino_libs(target, source, env):
     if not bool(os.path.isfile(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig"))):
         shutil.move(join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig"),join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig.orig"))
     shutil.copyfile(join(env.subst("$PROJECT_DIR"),"sdkconfig."+env["PIOENV"]),join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu,"sdkconfig"))
-    #exit()
+    exit() # TODO Post action in pre script!
 
 
 try:
     if idf_config_flags := env.GetProjectOption("custom_sdkconfig").splitlines():
         env["PIOFRAMEWORK"].append("espidf")
         HandleArduinoIDFbuild(env, idf_config_flags)
-        env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", esp32_copy_new_arduino_libs)
+        env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", esp32_copy_new_arduino_libs) # TODO Post action in pre script!
 except:
     pass
     # arduino_libs_mcu = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu)
