@@ -40,11 +40,7 @@ print(tasmota_flash_mode)
 #########################################################
 
 def HandleArduinoIDFbuild(env, idf_config_flags):
-    print("IDF build!!!, removing LTO")
-    try:
-        env["BUILD_FLAGS"].pop(env["BUILD_FLAGS"].index("-flto=auto"))
-    except:
-        pass
+    print("IDF build!")
     if mcu in ("esp32", "esp32s2", "esp32s3"):
         env["BUILD_FLAGS"].append("-mtext-section-literals") # TODO
 
