@@ -16,16 +16,3 @@ dependencies:
     require: public
     rules:
       - if: "target in [esp32, esp32s2, esp32s3, esp32p4]"
-  espressif/arduino_tinyusb:
-    version: "master"
-    path: components/arduino_tinyusb
-    git: https://github.com/espressif/esp32-arduino-lib-builder.git
-    require: public
-    rules:
-      - if: "target in [esp32s2, esp32s3]"
-#  hathach/tinyusb:
-#    version: "master"
-#    git: https://github.com/hathach/tinyusb.git
-#    require: public
-#    rules:
-#      - if: "target in [esp32s2, esp32s3]"
