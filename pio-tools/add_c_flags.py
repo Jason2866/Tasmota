@@ -3,9 +3,6 @@ Import("env")
 build_flags = env['BUILD_FLAGS']
 mcu = env.get("BOARD_MCU").lower()
 
-if mcu in ("esp32", "esp32s2", "esp32s3"):
-        env["BUILD_FLAGS"].append("-mtext-section-literals")
-
 # General options that are passed to the C++ compiler
 env.Append(CXXFLAGS=["-Wno-volatile"])
 
