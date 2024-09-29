@@ -12,7 +12,7 @@ jobs:
       matrix:
         variant:
           - tasmota32c2
-          - tasmota32c3
+          - tasmota32s2cdc
           - tasmota32s3
     steps:
       - uses: actions/checkout@v4
