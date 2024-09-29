@@ -12,9 +12,6 @@ env.Append(CXXFLAGS=["-Wno-volatile"])
 # General options that are passed to the C compiler (C only; not C++).
 env.Append(CFLAGS=["-Wno-discarded-qualifiers", "-Wno-implicit-function-declaration", "-Wno-incompatible-pointer-types"])
 
-# Extra flags that are passed to the to GCC linker.
-env.Append(LINKFLAGS=["-fuse-linker-plugin", "-ffat-lto-objects", "-flto-partition=max"])
-
 # Remove build flags which are not valid for risc-v
 if mcu in ("esp32c2", "esp32c3", "esp32c6", "esp32h2", "esp32p4"):
   try:
