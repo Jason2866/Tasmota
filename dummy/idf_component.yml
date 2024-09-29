@@ -23,10 +23,9 @@ dependencies:
     require: public
     rules:
       - if: "target in [esp32s2, esp32s3]"
-  hathach/tinyusb:
-    version: "master"
-    path: components/arduino_tinyusb/tinyusb
-    git: https://github.com/hathach/tinyusb.git
-    require: public
-    rules:
-      - if: "target in [esp32s2, esp32s3]"
+#  hathach/tinyusb:
+#    version: "master"
+#    git: https://github.com/hathach/tinyusb.git
+#    require: public
+#    rules:
+#      - if: "target in [esp32s2, esp32s3]"
