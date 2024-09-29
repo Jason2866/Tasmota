@@ -1,7 +1,10 @@
 Import("env")
 
 build_flags = env['BUILD_FLAGS']
-chip = env.get("BOARD_MCU").lower()
+mcu = env.get("BOARD_MCU").lower()
+
+if mcu in ("esp32", "esp32s2", "esp32s3"):
+        env["BUILD_FLAGS"].append("-mtext-section-literals")
 
 # General options that are passed to the C++ compiler
 env.Append(CXXFLAGS=["-Wno-volatile"])
@@ -10,12 +13,12 @@ env.Append(CXXFLAGS=["-Wno-volatile"])
 env.Append(CFLAGS=["-Wno-discarded-qualifiers", "-Wno-implicit-function-declaration", "-Wno-incompatible-pointer-types"])
 
 # Remove build flags which are not valid for risc-v
-if chip in ("esp32c2", "esp32c3", "esp32c6", "esp32h2"):
+if mcu in ("esp32c2", "esp32c3", "esp32c6", "esp32h2", "esp32p4"):
   try:
     build_flags.pop(build_flags.index("-mno-target-align"))
   except:
-    do_nothing=""
+    pass
   try:
     build_flags.pop(build_flags.index("-mtarget-align"))
   except:
-    do_nothing=""
+    pass
