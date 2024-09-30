@@ -19,7 +19,7 @@ elif ("CORE32ITEAD" in extra_flags or "FRAMEWORK_ARDUINO_ITEAD" in build_flags):
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-ITEAD")
 else:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
-print("Platform dir", platform.get_package_dir("platform-espressif32"))
+print("Platform dir", env.subst("$PROJECT_CORE_DIR"))
 
 def FindInoNodes(env):
     src_dir = glob.escape(env.subst("$PROJECT_SRC_DIR"))
