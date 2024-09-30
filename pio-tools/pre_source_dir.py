@@ -19,10 +19,11 @@ elif ("CORE32ITEAD" in extra_flags or "FRAMEWORK_ARDUINO_ITEAD" in build_flags):
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-ITEAD")
 else:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
-#print("Core dir", env.subst("$PROJECT_CORE_DIR"))
-print("Platform dir", os.path.join(env.subst("$PROJECT_CORE_DIR"), "platforms"))
 
-def FindInoNodes(env):
+print("Platform dir", os.path.join(env.subst("$PROJECT_CORE_DIR"), "platforms"))
+print("Link flags", env["LINKFLAGS"])
+
+                                         def FindInoNodes(env):
     src_dir = glob.escape(env.subst("$PROJECT_SRC_DIR"))
     return env.Glob(os.path.join(src_dir, "*.ino")) + env.Glob(
         os.path.join(src_dir, "tasmota_*", "*.ino")
