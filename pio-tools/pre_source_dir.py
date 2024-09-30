@@ -43,7 +43,6 @@ print(tasmota_flash_mode)
 
 def HandleArduinoIDFbuild(env, idf_config_flags):
     print("IDF build!")
-    # Dump build environment (for debug)
     # print(env.Dump())
     if mcu in ("esp32", "esp32s2", "esp32s3"):
         env["BUILD_FLAGS"].append("-mtext-section-literals") # TODO
