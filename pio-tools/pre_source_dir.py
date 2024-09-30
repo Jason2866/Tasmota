@@ -37,17 +37,12 @@ if "OPI_" in memory_type:
 tasmota_flash_mode = "-DCONFIG_TASMOTA_FLASHMODE_" + flash_mode
 env.Append(CXXFLAGS=[tasmota_flash_mode])
 print(tasmota_flash_mode)
-#########################################################
 
+#
+# Arduino as an component compile
+#
 try:
-    if idf_config_flags := env.GetProjectOption("custom_sdkconfig").splitlines():
+    if env.GetProjectOption("custom_sdkconfig").splitlines():
         env["PIOFRAMEWORK"].append("espidf")
 except:
     pass
-    # arduino_libs_mcu = join(FRAMEWORK_DIR,"tools","esp32-arduino-libs",mcu)
-    # lib_backup_folder = "lib_backup"
-    # if lib_backup_folder in os.listdir(arduino_libs_mcu):
-    #     shutil.rmtree(join(arduino_libs_mcu,"lib"))
-    #     destination = shutil.copytree(join(arduino_libs_mcu,lib_backup_folder),join(arduino_libs_mcu,"lib"), copy_function = shutil.copy)
-    #     shutil.rmtree(join(arduino_libs_mcu,lib_backup_folder))
-
