@@ -21,7 +21,6 @@ else:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
 
 print("Platform dir", os.path.join(env.subst("$PROJECT_CORE_DIR"), "platforms"))
-print("Link flags", env["LINKFLAGS"])
 
 def FindInoNodes(env):
     src_dir = glob.escape(env.subst("$PROJECT_SRC_DIR"))
