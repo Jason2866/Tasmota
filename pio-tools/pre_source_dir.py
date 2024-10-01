@@ -24,12 +24,3 @@ if "OPI_" in memory_type:
 tasmota_flash_mode = "-DCONFIG_TASMOTA_FLASHMODE_" + flash_mode
 env.Append(CXXFLAGS=[tasmota_flash_mode])
 print(tasmota_flash_mode)
-
-#
-# Arduino as an component compile
-#
-try:
-    if env.GetProjectOption("custom_sdkconfig").splitlines():
-        env["PIOFRAMEWORK"].append("espidf")
-except:
-    pass
