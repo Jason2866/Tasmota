@@ -1,4 +1,4 @@
-name: Tasmota IDF compile test
+name: Tasmota IDF 53_poc_script
 
 on:
   workflow_dispatch:
