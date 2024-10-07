@@ -3,9 +3,6 @@ Import("env")
 import glob
 import os
 
-platform = env.PioPlatform()
-board = env.BoardConfig()
-
 def FindInoNodes(env):
     src_dir = glob.escape(env.subst("$PROJECT_SRC_DIR"))
     return env.Glob(os.path.join(src_dir, "*.ino")) + env.Glob(
