@@ -11,9 +11,10 @@ jobs:
       fail-fast: true
       matrix:
         variant:
-          #- tasmota32c2
+          - tasmota32c2
           - tasmota32s2
-          #- tasmota32s3
+          - tasmota32s3
+          - tasmota32
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
