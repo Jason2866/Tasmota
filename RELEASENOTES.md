@@ -121,21 +121,24 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - ESP8266 support for one-wire M1601 temperature sensor on DS18x20 GPIO [#21376](https://github.com/arendst/Tasmota/issues/21376)
 - ESP8266 support for I2C CLK on GPIO16 [#22199](https://github.com/arendst/Tasmota/issues/22199)
 - Support for I2C M5Unit (Mini)Scales using HX711 driver
+- Support for DALI 1 on ESP8266
 - Support for RX8010 RTC as used in IOTTIMER [#21376](https://github.com/arendst/Tasmota/issues/21376)
 - Support for BL0906 up to 6 channel energy monitor as used in Athom EM2/EM6 [#22167](https://github.com/arendst/Tasmota/issues/22167)
 - Support for Sonoff SPM v1.3.0 [#13447](https://github.com/arendst/Tasmota/issues/13447)
 - Energy command ``PowerSet 60,230`` to calibrate both Current and Power with known resistive load of 60W at 230V using calibrated Voltage
 - Energy command ``CurrentSet 60,230`` to calibrate both Power and Current with known resistive load of 60W at 230V using calibrated Voltage
+- ESP8266 experimental support for second I2C bus
 - MQTT warning if trying to connect without TLS on a port that normally uses TLS [#22175](https://github.com/arendst/Tasmota/issues/22175)
 - Energy Log level 4 message when (Calculated) Apparent Power is less than Active Power indicating wrong calibration [#20653](https://github.com/arendst/Tasmota/issues/20653)
 - Support nexus protocol and calculation of separation limit to rc-switch library [#21886](https://github.com/arendst/Tasmota/issues/21886)
 - KNX additional KnxTx functions and define KNX_USE_DPT9 [#22071](https://github.com/arendst/Tasmota/issues/22071)
 - SML multi TRX line [#22056](https://github.com/arendst/Tasmota/issues/22056)
-- ESP8266 experimental support for second I2C bus
 - Zigbee Koenkk firmware 20240710 for Sonoff Zigbee ZBPro [#22076](https://github.com/arendst/Tasmota/issues/22076)
 - Berry Zigbee improvements to prepare Matter [#22083](https://github.com/arendst/Tasmota/issues/22083)
 - Berry virtual Energy driver [#22134](https://github.com/arendst/Tasmota/issues/22134)
 - Berry improve `int64` constructor [#22172](https://github.com/arendst/Tasmota/issues/22172)
+- LVGL port `colorwheel` from LVGL 8 [#22244](https://github.com/arendst/Tasmota/issues/22244)
+- HASPmota `cpicker` and `msgbox` [#22244](https://github.com/arendst/Tasmota/issues/22244)
 - Matter support for Zigbee Temperature, Humidity and Pressure sensors [#22084](https://github.com/arendst/Tasmota/issues/22084)
 - Matter support for Zigbee Occupancy and Light 0/1/2 (OnOff / Dimmer / White Color Temperature) [#22110](https://github.com/arendst/Tasmota/issues/22110)
 
@@ -144,17 +147,19 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 ### Changed
 - ESP8266 platform update from 2024.06.00 to 2024.09.00 and Framework (Arduino Core) from v2.7.7 to v2.7.8 [#22199](https://github.com/arendst/Tasmota/issues/22199)
-- ESP32 platform update from 2024.08.10 to 2024.09.30 and Framework (Arduino Core) from v3.0.4 to v3.1.0.240926 (#22203)[#22203](https://github.com/arendst/Tasmota/issues/22203)
+- ESP32 platform update from 2024.08.10 to 2024.09.30 and Framework (Arduino Core) from v3.0.4 to v3.1.0.240926 [#22203](https://github.com/arendst/Tasmota/issues/22203)
 - ESP32 LVGL library from v9.1.0 to v9.2.0 [#22031](https://github.com/arendst/Tasmota/issues/22031)
 - GPIOViewer from v1.5.5 to v1.5.6
 - Add command entered to command error and command unknown message
+- Refactored I2C drivers HTU21, BH1750, SHT3x, iAQ and HYT
 - Energy BL09xx command ``CurrentSet`` input changed from Ampere to milliAmpere
 - Energy force Apparent Power equals Active Power when (Calculated) Apparent Power is less than Active Power [#20653](https://github.com/arendst/Tasmota/issues/20653)
-- Refactored I2C drivers HTU21, BH1750, SHT3x, iAQ and HYT
 - Refactor and fix PID sensor (PID_USE_LOCAL_SENSOR) read race condition [#22162](https://github.com/arendst/Tasmota/issues/22162)
 - SCD30 Lowered I2C clock from 100k to 50k [#15438](https://github.com/arendst/Tasmota/issues/15438)
+- HASPmota `delete` instead of `delete()` [#22245](https://github.com/arendst/Tasmota/issues/22245)
 
 ### Fixed
+- Dali received data decoding
 - Compilation exception when metrics not found [#22170](https://github.com/arendst/Tasmota/issues/22170)
 - Crash when calling TasmotaSerial destructor when initialized with incorrect arguments [#22036](https://github.com/arendst/Tasmota/issues/22036)
 - Energy calculation [#20653](https://github.com/arendst/Tasmota/issues/20653)
@@ -169,10 +174,13 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Zigbee extend timeout for MCU reboot from 5s to 10s [#22009](https://github.com/arendst/Tasmota/issues/22009)
 - Zigbee avoid disabling console serial on ESP32 and improved log messages [#22082](https://github.com/arendst/Tasmota/issues/22082)
 - Zigbee flashing CC2562P with latest firmware [#22117](https://github.com/arendst/Tasmota/issues/22117)
-- ESP32 Range Extender compile error with core 3.0.0 [#22205](https://github.com/arendst/Tasmota/issues/22205)
+- ESP32 Range Extender compile error with core 3.x [#22205](https://github.com/arendst/Tasmota/issues/22205)
+- ESP32 Dali compile error with core 3.x [#22214](https://github.com/arendst/Tasmota/issues/22214)
+- ESP32 Ethernet using EthClockMode 3 [#22248](https://github.com/arendst/Tasmota/issues/22248)
 - Berry avoid `readbytes()` from crashing when file is too large [#22057](https://github.com/arendst/Tasmota/issues/22057)
 - Berry energy missing attributes [#22116](https://github.com/arendst/Tasmota/issues/22116)
 - Berry I2C to prepare M5Stack I2C STM32 based devices [#22143](https://github.com/arendst/Tasmota/issues/22143)
+- Berry improve `persist` dirty data handling [#22246](https://github.com/arendst/Tasmota/issues/22246)
 - ESP32-S3 uDisplay force cache writes to RGB display [#22222](https://github.com/arendst/Tasmota/issues/22222)
 - LVGL Added OpenHASP icons to font `montserrat-28` [#22048](https://github.com/arendst/Tasmota/issues/22048)
 - LVGL compilation of lv_menu [#22188](https://github.com/arendst/Tasmota/issues/22188)
