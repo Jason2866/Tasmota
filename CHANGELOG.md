@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - HASPmota `cpicker` and `msgbox` (#22244)
 - Support for DALI on ESP8266
 - Command ``DaliWeb 1`` to enable light control for DALI broadcast address
+- Command ``DaliSend <address>|<address+256>,<command>`` to send command (address+256 is repeat) on DALI bus
+- Command ``DaliQuery <address>|<address+256>,<command>`` to send command (address+256 is repeat) on DALI bus and wait up to DALI_TIMEOUT ms for response
+- Berry Serial `config` to change parity on-the-fly for RS-485 (#22285)
 
 ### Breaking Changed
 
@@ -27,6 +30,7 @@ All notable changes to this project will be documented in this file.
 - DALI received data decoding
 - ESP32 Ethernet using EthClockMode 3 (#22248)
 - ESP32 disable SPI DMA for uDisplay (broken since esp-idf 5.3 (core 3.1.0)) (#22264)
+- Sonoff WTS01 temperature sensor shows incorrect negative temperature (#19373)
 
 ### Removed
 - Berry Zigbee removed test code (#22263)
@@ -54,6 +58,10 @@ All notable changes to this project will be documented in this file.
 - ESP8266 experimental support for second I2C bus
 - Berry improve `int64` constructor (#22172)
 - MQTT warning if trying to connect without TLS on a port that normally uses TLS (#22175)
+- Misubishi Electric HVAC Heat/Dry/Cool ISEE operation mode (#22216)
+- Misubishi Electric HVAC Bridge to HomeBridge/Homekit locally (#22236)
+- Misubishi Electric HVAC Air Direction Control (#22241)
+- Misubishi Electric HVAC prohibit function (#22269)
 
 ### Changed
 - Refactored I2C drivers HTU21, BH1750, SHT3x, iAQ and HYT
