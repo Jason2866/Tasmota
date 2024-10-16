@@ -13,10 +13,12 @@ jobs:
         variant:
           - tasmota32c2
           - tasmota32s2
+          - tasmota32s2-safeboot
           - tasmota32c3
           - tasmota32c6-safeboot
           - tasmota32c6
           - tasmota32
+          - tasmota32-ITEAD
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
