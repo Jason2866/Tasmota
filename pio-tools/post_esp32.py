@@ -43,18 +43,7 @@ variant = env.BoardConfig().get("build.variant", "")
 sections = env.subst(env.get("FLASH_EXTRA_IMAGES"))
 chip = env.get("BOARD_MCU")
 mcu_build_variant = env.BoardConfig().get("build.variant", "").lower()
-
-# Copy safeboots firmwares in place when running in Github
-github_actions = os.getenv('GITHUB_ACTIONS')
-extra_flags = ''.join([element.replace("-D", " ") for element in env.BoardConfig().get("build.extra_flags", "")])
-build_flags = ''.join([element.replace("-D", " ") for element in env.GetProjectOption("build_flags")])
-
-
 FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
-if github_actions and os.path.exists("./firmware/firmware"):
-    shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota")
-    if variants_dir:
-        shutil.copytree("./firmware/firmware", variants_dir, dirs_exist_ok=True)
 
 # Copy pins_arduino.h to variants folder
 if variants_dir:
