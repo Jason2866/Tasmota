@@ -174,25 +174,25 @@ jobs:
   base32-images:
     needs: safeboot-images
     runs-on: ubuntu-latest
-    if: github.repository == 'arendst/Tasmota'
+    #if: github.repository == 'arendst/Tasmota'
     continue-on-error: true
     strategy:
       matrix:
         variant:
-          - tasmota32
-          - tasmota32-zbbrdgpro
-          - tasmota32-webcam
-          - tasmota32-bluetooth
-          - tasmota32-nspanel
-          - tasmota32-display
-          - tasmota32-ir
-          - tasmota32-lvgl
-          - tasmota32c2
-          - tasmota32c3
-          - tasmota32c6
-          - tasmota32s2
-          - tasmota32s2cdc
-          - tasmota32s3
+          #- tasmota32
+          #- tasmota32-zbbrdgpro
+          #- tasmota32-webcam
+          #- tasmota32-bluetooth
+          #- tasmota32-nspanel
+          #- tasmota32-display
+          #- tasmota32-ir
+          #- tasmota32-lvgl
+          #- tasmota32c2
+          #- tasmota32c3
+          #- tasmota32c6
+          #- tasmota32s2
+          #- tasmota32s2cdc
+          #- tasmota32s3
           - tasmota32solo1
     steps:
       - uses: actions/checkout@v4
