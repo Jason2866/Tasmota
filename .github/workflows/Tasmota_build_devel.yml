@@ -114,7 +114,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install wheel
-          pip install -U https://github.com/Jason2866/platformio-core/archive/refs/tags/6.1.16-comp.zip
+          pip install -U platformio
+          # pip install -U https://github.com/Jason2866/platformio-core/archive/refs/tags/6.1.16-comp.zip
       - name: Add SHA to footer
         run: |
           COMMIT_SHA_LONG=$(git rev-parse --short HEAD || echo "")
