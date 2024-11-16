@@ -5,10 +5,12 @@ build_flags = " ".join(env['BUILD_FLAGS'])
 
 try:
   link_flags.pop(link_flags.index("-u _printf_float"))
+  print("*** link flags:", link_flags)
 except:
   pass
 try:
   link_flags.pop(link_flags.index("-u _scanf_float"))
+  print("*** link flags:", link_flags)
 except:
   pass
 
