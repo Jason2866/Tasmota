@@ -41,12 +41,12 @@ wl_status_t WiFiHelper::begin(const char *wpa2_ssid, wpa2_auth_method_t method, 
   return ret;
 }
 
-wl_status_t WiFiHelper::begin(const char* wpa2_ssid, wpa2_auth_method_t method, const char* wpa2_identity, const char* wpa2_username, const char *wpa2_password, const char* ca_pem, const char* client_crt, const char* client_key, int32_t channel, const uint8_t* bssid, bool connect) {
-  WiFiHelper::scrubDNS();
-  wl_status_t ret = WiFi.begin(wpa2_ssid, method, wpa2_identity, wpa2_username, wpa2_password, ca_pem, client_crt, client_key, channel, bssid, connect);
-  WiFiHelper::scrubDNS();
-  return ret;
-}
+//wl_status_t WiFiHelper::begin(const char* wpa2_ssid, wpa2_auth_method_t method, const char* wpa2_identity, const char* wpa2_username, const char *wpa2_password, const char* ca_pem, const char* client_crt, const char* client_key, int32_t channel, const uint8_t* bssid, bool connect) {
+//  WiFiHelper::scrubDNS();
+//  wl_status_t ret = WiFi.begin(wpa2_ssid, method, wpa2_identity, wpa2_username, wpa2_password, ca_pem, client_crt, client_key, channel, bssid, connect);
+//  WiFiHelper::scrubDNS();
+//  return ret;
+//}
 
 wl_status_t WiFiHelper::begin(const char* ssid, const char *passphrase, int32_t channel, const uint8_t* bssid, bool connect) {
   WiFiHelper::scrubDNS();
