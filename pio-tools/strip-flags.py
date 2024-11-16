@@ -3,8 +3,14 @@ Import('env')
 link_flags = env['LINKFLAGS']
 build_flags = " ".join(env['BUILD_FLAGS'])
 
-link_flags = link_flags.replace("-u _printf_float", "")
-link_flags = link_flags.replace("-u _scanf_float", "")
+try:
+  link_flags.pop(link_flags.index("-u _printf_float"))
+except:
+  pass
+try:
+  link_flags.pop(link_flags.index("-u _scanf_float"))
+except:
+  pass
 
 if "FIRMWARE_SAFEBOOT" in build_flags:
   # Crash Recorder is not included in safeboot firmware -> remove Linker wrap
