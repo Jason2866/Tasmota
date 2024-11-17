@@ -186,6 +186,7 @@ jobs:
       matrix:
         variant:
           - tasmota32-hybrid
+          - tasmota32c2-hybrid
           #- tasmota32-zbbrdgpro
           #- tasmota32-webcam
           #- tasmota32-bluetooth
