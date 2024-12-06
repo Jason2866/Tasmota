@@ -7,18 +7,36 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Support for TM1640 based IoTTimer by Stefan Oskamp (#21376)
 - Command `SetOption161 1` to disable display of state text (#22515)
+- ESP32 new BLE filters by name and minimum RSSI (#22530)
+- ESP32 Hybrid compile take custom boards settings in account (#22542)
+- ESP32 ULP lp_core to Berry ULP module (#22567)
+- Shelly 1 Gen3 template {"NAME":"Shelly 1 Gen3","GPIO":[0,0,0,4736,0,224,0,0,1,1,192,0,0,0,0,0,0,0,0,576,1,1],"FLAG":0,"BASE":1,"CMND":"AdcGpio3 10000,10000,4000"}
+- Shelly 1PM Gen3 template {"NAME":"Shelly 1PM Gen3","GPIO":[0,32,0,4736,224,0,3200,8161,576,1,192,0,0,0,0,0,0,0,0,1,1,1],"FLAG":0,"BASE":1,"CMND":"AdcGpio3 10000,10000,4000"}
+- Shelly 2PM Gen3 template {"NAME":"Shelly 2PM Gen3","GPIO":[9472,3458,576,225,4736,224,640,608,1,1,193,0,0,0,0,0,0,0,192,32,1,1],"FLAG":0,"BASE":1,"CMND":"AdcGpio4 10000,10000,4000"}
+- Shelly i4 Gen3 template {"NAME":"Shelly i4 Gen3","GPIO":[0,0,0,4736,32,195,194,193,1,1,192,0,0,0,0,0,0,0,0,0,1,1],"FLAG":0,"BASE":1,"CMND":"AdcGpio3 10000,10000,4000}
+- Show Active Power Total with any multi-phase energy monitoring (#22579)
+- Command `SetOption162 1` to disable adding export energy to energy today (#22578)
 
 ### Breaking Changed
+- ESP32 ArtNet switches from GRB to RGB encoding (#22556)
 
 ### Changed
 - ESP32 max number of supported switches/buttons/relays from 28 to 32
 - ESP32 max number of interlocks from 14 to 16
 - ESP32 Platform from 2024.11.30 to 2024.11.31, Framework (Arduino Core) from v3.1.0.241030 to v3.1.0.241117 and IDF to 5.3.1.241024 (#22504)
+- Prevent active BLE operations with unencrypted MI-format beacons (#22453)
+- ESP32 replaced NeoPixelBus with TasmotaLED (#22556)
 
 ### Fixed
 - ESP32 upgrade by file upload response based on file size (#22500)
 - Wrong GUI Module and Template drop down list indexes regression
 - Use HTML escape on File System Edit File load (#22492)
+- Magic switch applying masking window to any power change (#22535)
+- Shift595 output offsets and restart relay toggles
+- Shutter wrong power ON state (#22548)
+- ESP32-C2 TasmotaLED from not present I2S to SPI (#22575)
+- KNX Scenes index change regression from v14.2.0.4 (#22405)
+- Add GUI submenu headers and refresh configuration button text (#22592)
 
 ### Removed
 
@@ -50,6 +68,7 @@ All notable changes to this project will be documented in this file.
 - Support for MS5837 pressure and temperature sensor (#22376)
 - Berry add I2C read16/write16 supporting Little Endian (#22448)
 - Berry drivers for PCA9535 (generic and in SenseCAP D1) (#22451)
+- Shelly DALI Dimmer Gen3 template {"NAME":"Shelly DALI Dimmer Gen3","GPIO":[34,4736,0,3840,11360,11392,128,129,0,1,576,0,0,0,0,0,0,0,0,1,1,1],"FLAG":0,"BASE":1,"CMND":"AdcGpio1 10000,10000,4000}
 
 ### Changed
 - AHT1X/AHT2X/AHT3X ready for virtual I2C (#22427)

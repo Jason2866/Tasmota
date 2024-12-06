@@ -278,7 +278,9 @@ void EnergyUpdateToday(void) {
       int32_t delta = Energy->kWhtoday_delta[i] / 1000;
       delta_sum_balanced += delta;
       Energy->kWhtoday_delta[i] -= (delta * 1000);
-      Energy->kWhtoday[i] += delta;
+      if (!Settings->flag6.no_export_energy_today || (delta > 0)) {  // SetOption162 - (Energy) Do not add export energy to energy today (1)
+        Energy->kWhtoday[i] += delta;
+      }
       if (delta < 0) {     // Export energy
         Energy->kWhtoday_export[i] += (delta *-1);
         if (Energy->kWhtoday_export[i] > 100) {
@@ -1472,15 +1474,16 @@ void EnergyShow(bool json) {
       WSContentSend_PD(HTTP_SNS_CURRENT, WebEnergyFmt(Energy->current, Settings->flag2.current_resolution));
     }
     WSContentSend_PD(HTTP_SNS_POWER, WebEnergyFmt(Energy->active_power, Settings->flag2.wattage_resolution));
+//    if (abs(negative_phases) != Energy->phase_count) {  // Provide total power if producing power (PV) and multi phase
+    if (Energy->phase_count > 1) {  // Provide total power if multi phase
+       WSContentSend_PD(HTTP_SNS_POWER_TOTAL, WebEnergyFmt(Energy->active_power, Settings->flag2.wattage_resolution, 3));
+    }
     if (!Energy->type_dc) {
       if (Energy->current_available && Energy->voltage_available) {
         WSContentSend_PD(HTTP_SNS_POWERUSAGE_APPARENT, WebEnergyFmt(apparent_power, Settings->flag2.wattage_resolution));
         WSContentSend_PD(HTTP_SNS_POWERUSAGE_REACTIVE, WebEnergyFmt(reactive_power, Settings->flag2.wattage_resolution));
         WSContentSend_PD(HTTP_SNS_POWER_FACTOR, WebEnergyFmt(power_factor, 2));
       }
-    }
-    if (abs(negative_phases) != Energy->phase_count) {  // Provide total power if producing power (PV) and multi phase
-       WSContentSend_PD(HTTP_SNS_POWER_TOTAL, WebEnergyFmt(Energy->active_power, Settings->flag2.wattage_resolution, 3));
     }
     WSContentSend_PD(HTTP_SNS_ENERGY_TODAY, WebEnergyFmt(Energy->daily, Settings->flag2.energy_resolution, 2));
     WSContentSend_PD(HTTP_SNS_ENERGY_YESTERDAY, WebEnergyFmt(energy_yesterday_ph, Settings->flag2.energy_resolution, 2));
