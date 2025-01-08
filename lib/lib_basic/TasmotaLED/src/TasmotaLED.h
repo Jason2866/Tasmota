@@ -44,10 +44,10 @@ enum TasmotaLEDTypesEncoding : uint16_t {
 enum TasmotaLEDHardware : uint32_t {
   // low-order bits are reserved for channels numbers and hardware flags - currenlty not useds
   // bits 16..23
-  TasmotaLed_HW_Default = 0x0 << 16,
-  TasmotaLed_RMT  = 1 << 16,
-  TasmotaLed_SPI  = 2 << 16,
-  TasmotaLed_I2S  = 3 << 16,
+  TasmotaLed_HW_Default = 0x000000,
+  TasmotaLed_RMT  = (1 << 0) << 16,
+  TasmotaLed_SPI  = (1 << 1) << 16,
+  TasmotaLed_I2S  = (1 << 2) << 16,
   TasmotaLed_HW_None = 0xFF << 16,    // indicates that the specified HW is not supported
 };
 
@@ -90,6 +90,8 @@ class TasmotaLED {
 public:
   TasmotaLED(uint16_t type, uint16_t num_leds);
   ~TasmotaLED();
+
+  void SetPixelCount(uint16_t num_leds);
 
   bool Begin(void);
   void SetPusher(TasmotaLEDPusher *pusher);   // needs to be called before `Begin()`, sets the hardware implementation

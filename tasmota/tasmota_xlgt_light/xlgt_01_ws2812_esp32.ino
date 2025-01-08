@@ -95,20 +95,8 @@ const uint16_t kTasLed_PixelWhite = TasmotaLed_xxxW;
 
 const uint16_t kTasLed_Type = kTasLed_PixelSize | kTasLed_PixelOrder | kTasLed_PixelWhite | kTasLed_Timing;
 
-// select hardware acceleration - bitbanging is not supported on ESP32 due to interference of interrupts
-#if CONFIG_IDF_TARGET_ESP32C2
-  const uint32_t kTasLed_Hardware = TasmotaLed_SPI;   // no I2S for the C2
-#else // all other ESP32 variants
-  #if defined(USE_WS2812_DMA)
-    const uint32_t kTasLed_Hardware = TasmotaLed_RMT;   // default DMA to RMT
-  #elif defined(USE_WS2812_RMT)
-    const uint32_t kTasLed_Hardware = TasmotaLed_RMT;   // default DMA to RMT
-  #elif defined(USE_WS2812_I2S)
-    const uint32_t kTasLed_Hardware = TasmotaLed_I2S;   // I2S
-  #else
-    const uint32_t kTasLed_Hardware = TasmotaLed_RMT;   // default DMA to RMT
-  #endif
-#endif
+// select hardware acceleration - bitbanging is not supported on ESP32 due to interference of interrupts - use default
+const uint32_t kTasLed_Hardware = TasmotaLed_HW_Default;   // use whatever is available
 
 #if (USE_WS2812_HARDWARE == NEO_HW_P9813)
   #error "P9813 is not supported by this library"
@@ -186,12 +174,6 @@ long wsmap(long x, long in_min, long in_max, long out_min, long out_max) {
 
 void Ws2812LibStripShow(void) {
   strip->Show();
-
-#if defined(USE_WS2812_DMA) || defined(USE_WS2812_RMT) || defined(USE_WS2812_I2S)
-  // Wait for DMA/RMT/I2S to complete fixes distortion due to analogRead
-//  delay((Settings->light_pixels >> 6) +1);  // 256 / 64 = 4 +1 = 5
-  SystemBusyDelay( (Settings->light_pixels + 31) >> 5);  // (256 + 32) / 32 = 8
-#endif
 }
 
 void Ws2812StripShow(void)
@@ -651,6 +633,16 @@ bool Ws2812InitStrip(void)
   return false;
 }
 
+bool Ws2812ChangePixelCount(void)
+{
+  if (strip == nullptr) {
+    return true;
+  }
+  strip->SetPixelCount(Settings->light_pixels);
+  Ws2812Clear();
+  return true;
+}
+
 void Ws2812ModuleSelected(void)
 {
   if (Ws2812InitStrip()) {
@@ -698,6 +690,14 @@ uint32_t Ws2812PixelsSize(void) {
 bool Ws2812CanShow(void) {
   if (strip) { return strip->CanShow(); }
   return false;
+}
+
+void Ws2812CanShowWait(void) {
+  if (strip) {
+    while (!strip->CanShow()) {
+      yield();
+    }
+  }
 }
 
 bool Ws2812IsDirty(void) {
@@ -791,19 +791,22 @@ void CmndLed(void)
 
 void CmndPixels(void)
 {
-  if ((XdrvMailbox.payload > 0) && (XdrvMailbox.payload <= WS2812_MAX_LEDS)) {
-/*
-    Settings->light_pixels = XdrvMailbox.payload;
-    Settings->light_rotation = 0;
-    Ws2812ReinitStrip();   -- does not work with latest NeoPixelBus driver
-    Light.update = true;
-*/
-    Ws2812Clear();                     // Clear all known pixels
-    Settings->light_pixels = XdrvMailbox.payload;
-    Settings->light_rotation = 0;
-    TasmotaGlobal.restart_flag = 2;    // reboot instead
+  uint32_t parm[4] = { Settings->light_pixels, Settings->light_pixels_reverse,
+                       (uint32_t) Settings->light_pixels_height_1 + 1, Settings->light_pixels_alternate };
+  if (ParseParameters(4, parm) > 0) {
+    if ((parm[0] > 0) && (parm[0] <= WS2812_MAX_LEDS)) {
+      Ws2812Clear();                     // Clear all known pixels
+      Ws2812CanShowWait();
+      Settings->light_pixels = parm[0];
+      Settings->light_pixels_reverse = parm[1];
+      Settings->light_pixels_height_1 = (parm[2] > 0) ? parm[2] - 1 : 1;
+      Settings->light_pixels_alternate = parm[3];
+      Ws2812ChangePixelCount();
+      Light.update = true;
+    }
   }
-  ResponseCmndNumber(Settings->light_pixels);
+  Response_P(PSTR("{\"Pixels\":%i,\"PixelsReverse\":%i,\"PixelsHeight\":%i,\"PixelsAlternate\":%i}"),
+    Settings->light_pixels, Settings->light_pixels_reverse, Settings->light_pixels_height_1 + 1, Settings->light_pixels_alternate);
 }
 
 void CmndStepPixels(void)

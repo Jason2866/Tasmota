@@ -3,7 +3,78 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [14.3.0.7] 
+## [14.4.1.2] 
+### Added
+- Support for ESP32 Two-Wire Automotive Interface (TWAI) or Controller Area Network (CAN) busses
+- Support for Senseair S88 CO2 sensor (#22733)
+- ESP32 TasmotaLED change dynamically the number of pixels (#22754)
+- ESP32 expand `Pixels` with reverse, height and alternate (#22755)
+- Berry add light_pixels values to `tasmota.settings` (#22762)
+- Berry add `bytes().appendhex()` (#22767)
+
+### Breaking Changed
+
+### Changed
+
+### Fixed
+- Shutter discovery message regression from v14.4.1 (#22730)
+
+### Removed
+
+
+## [14.4.1.1] 20241231
+### Added
+- Command ``SetOption163 1`` to disable display of Device name in GUI header
+- Berry `animate.crenel` primitive (#22673)
+- Berry scroll to Leds_matrix (#22693)
+- HASPmota support for `tabview` (#22707)
+- Berry bit-shift operators to `int64` (#22709)
+- Berry add unicode encoding to string parsing (#22713)
+- Berry `tasmota.int(v, min, max)` function (#22723)
+- Berry driver for M5Stack 8encoder (#22724)
+- Support for PCF85063 RTC (#22727)
+
+### Changed
+- ESP32 disable PSRAM check (and on restart some relay toggles) with `#define DISABLE_PSRAMCHECK true` (#21266)
+- TLS disable ECDSA for MQTT to ensure we don't break fingerprints after #22649
+- GPIOViewer from v1.5.6 to v1.5.8
+- HASPmota use 'roboto.ttf' for automatic sizing of default font (#22697)
+- HASPmota add 'tag' attribute for free-form JSON (#22698)
+- Postpone save_data during light animation when fade is Off
+
+### Fixed
+- Berry Zigbee fix wrong attributes (#22684)
+- Berry walrus operator (#22685)
+- Webcam compilation with `define USE_WEBCAM` but without `define ENABLE_RTSPSERVER` (#22686)
+- LVGL updated `Antiburn.tapp` (#22699)
+- Matter Air Quality sensor (#22708)
+
+## [Released]
+
+## [14.4.1] 20241215
+- Release Rudolph
+
+## [14.4.0.1] 20241215
+### Added
+- MCP23XXX_DRV control register IOCON in template (#22622)
+- ESP32 support for TLS ECDSA (#22649)
+
+### Changed
+- Berry make Leds animate calls reentrant (#22643)
+- SSL clean up remnants of old fingerprint algorithm (#22645)
+- Display removed PWM control of backlight GPIO regression from v14.1.0
+
+### Fixed
+- ESP32 rules operation priority regression from v13.3.0.4 (#22636)
+- GUI display power button regression from v14.3.0.5 (#15788)
+- MCP23xxx, PCF8574 and Shift595 power control when a display is configured regression from v14.3.0.7
+- Display DisplayMode adds a display device while not configured
+- GUI timing related divide by zero exception on screen updates
+
+## [14.4.0] 20241211
+- Release Rudolph
+
+## [14.3.0.7] 20241211
 ### Added
 - Support for TM1640 based IoTTimer by Stefan Oskamp (#21376)
 - Command `SetOption161 1` to disable display of state text (#22515)
@@ -16,6 +87,9 @@ All notable changes to this project will be documented in this file.
 - Shelly i4 Gen3 template {"NAME":"Shelly i4 Gen3","GPIO":[0,0,0,4736,32,195,194,193,1,1,192,0,0,0,0,0,0,0,0,0,1,1],"FLAG":0,"BASE":1,"CMND":"AdcGpio3 10000,10000,4000}
 - Show Active Power Total with any multi-phase energy monitoring (#22579)
 - Command `SetOption162 1` to disable adding export energy to energy today (#22578)
+- ESP32 support for WPA2/3 Enterprise conditional in core v3.1.0.241206 (#22600)
+- Support for Sonoff POWCT Energy Export Active (#22596)
+- Improved auto-selection of LED hardware support (RMT, SPI) (#22618)
 
 ### Breaking Changed
 - ESP32 ArtNet switches from GRB to RGB encoding (#22556)
@@ -26,6 +100,8 @@ All notable changes to this project will be documented in this file.
 - ESP32 Platform from 2024.11.30 to 2024.11.31, Framework (Arduino Core) from v3.1.0.241030 to v3.1.0.241117 and IDF to 5.3.1.241024 (#22504)
 - Prevent active BLE operations with unencrypted MI-format beacons (#22453)
 - ESP32 replaced NeoPixelBus with TasmotaLED (#22556)
+- ESP32 Platform from 2024.11.31 to 2024.12.30, Framework (Arduino Core) from v3.1.0.241117 to v3.1.0.241206 and IDF to 5.3.2 (#22600)
+- RG-15 sensor name from RG-15 to RG15 (#22612)
 
 ### Fixed
 - ESP32 upgrade by file upload response based on file size (#22500)
@@ -37,8 +113,7 @@ All notable changes to this project will be documented in this file.
 - ESP32-C2 TasmotaLED from not present I2S to SPI (#22575)
 - KNX Scenes index change regression from v14.2.0.4 (#22405)
 - Add GUI submenu headers and refresh configuration button text (#22592)
-
-### Removed
+- ESP8266 Device Group exception due to lack of stack space (#22271)
 
 ## [14.3.0.6] 20241116
 ### Added
@@ -137,8 +212,6 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - EQ3 TRV firmware version 1.46 fails if the default true is used in subscribe on the notify characteristic (#22328)
-
-## [Released]
 
 ## [14.3.0] 20241015
 - Release Robert

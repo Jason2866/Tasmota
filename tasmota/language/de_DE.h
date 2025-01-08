@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v14.1.0.4 - Last update 28.07.2024
+ * Updated until v14.3.0.7 - Last update 08.12.2024
 \*********************************************************************/
 
 //#define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -56,6 +56,7 @@
 #define D_AIR_QUALITY "Luftqualität"
 #define D_AP "AP"                    // Access Point
 #define D_AS "als"
+#define D_AT "an"
 #define D_AUTO "AUTO"
 #define D_BATTERY "Batterie"
 #define D_BATT "Batt"                // Short for Battery
@@ -285,7 +286,7 @@
 #define D_CONFIGURE_MQTT "MQTT"
 #define D_CONFIGURE_DOMOTICZ "Domoticz"
 #define D_CONFIGURE_LOGGING "Logging"
-#define D_CONFIGURE_OTHER "Weitere"
+#define D_CONFIGURE_OTHER "Erweitert"
 #define D_CONFIRM_RESET_CONFIGURATION "Zurücksetzen bestätigen"
 #define D_RESET_CONFIGURATION "Zurücksetzen"
 #define D_BACKUP_CONFIGURATION "Sichern"
@@ -341,7 +342,7 @@
 #define D_SYSLOG_PORT "Syslog Port"
 #define D_TELEMETRY_PERIOD "Telemetrieperiode"
 
-#define D_OTHER_PARAMETERS "Weitere"
+#define D_OTHER_PARAMETERS "Einstellungen"
 #define D_TEMPLATE "Vorlage"
 #define D_ACTIVATE "Aktivieren"
 #define D_DEVICE_NAME "Gerätename"
@@ -356,7 +357,7 @@
 #define D_SINGLE_DEVICE "Einzelnes Gerät"
 #define D_MULTI_DEVICE "Mehrfachgerät"
 
-#define D_CONFIGURE_TEMPLATE "konfigurieren"
+#define D_CONFIGURE_TEMPLATE "Vorlage"
 #define D_TEMPLATE_PARAMETERS "Parameter"
 #define D_TEMPLATE_NAME "Name"
 #define D_BASE_TYPE "basiert auf"
@@ -388,7 +389,7 @@
 
 #define D_UPGRADE_BY_WEBSERVER "Update über Webserver"
 #define D_OTA_URL "OTA-URL"
-#define D_START_UPGRADE "starten"
+#define D_START_UPGRADE "Starten"
 #define D_UPGRADE_BY_FILE_UPLOAD "Update Datei hochladen"
 #define D_UPLOAD_FACTORY "Wechsle zur Safeboot Partition"
 #define D_UPLOAD_STARTED "Upload gestartet"
@@ -571,10 +572,10 @@
 #define D_THERMOSTAT_AUTOTUNE_HYBRID  "Autotune (Hybrid)"
 
 // xdrv_79_esp32_ble.ino
-#define D_CONFIGURE_BLE       "BLE Einstellungen"
+#define D_CONFIGURE_BLE       "BLE"
 #define D_BLE_PARAMETERS      "BLE Parameter"
-#define D_MQTT_BLE_ENABLE     "BLE aktivieren"
-#define D_MQTT_BLE_ACTIVESCAN "Aktiv scannen (*)"
+#define D_BLE_ENABLE          "BLE aktivieren"
+#define D_BLE_ACTIVESCAN      "Aktiv scannen (*)"
 #define D_BLE_DEVICES         "Erkannte Geräte"
 #define D_BLE_REMARK          "Mit (*) markierte Geräte werden nicht gespeichert."
 
@@ -1010,6 +1011,10 @@
 #define D_SENSOR_ME007_RX      "ME007 Rx"
 #define D_SENSOR_TUYAMCUBR_TX  "TuyaMCUBr Tx"
 #define D_SENSOR_TUYAMCUBR_RX  "TuyaMCUBr Rx"
+#define D_SENSOR_TWAI_TX       "TWAI Tx"
+#define D_SENSOR_TWAI_RX       "TWAI Rx"
+#define D_SENSOR_TWAI_BO       "TWAI BusOff"
+#define D_SENSOR_TWAI_CLK      "TWAI ClkOut"
 #define D_SENSOR_BIOPDU_PZEM0XX_TX "BioPDU PZEM0XX Tx"
 #define D_SENSOR_BIOPDU_PZEM016_RX "BioPDU PZEM016 Rx"
 #define D_SENSOR_BIOPDU_BIT    "BioPDU Bit"
@@ -1210,6 +1215,13 @@
 #define D_FP_ADDRCODE "Adresse"                         // 0x20 Address code
 #define D_FP_PASSVERIFY "Übereinstimmung"               // 0x21 Verify the fingerprint passed
 #define D_FP_UNKNOWNERROR "Fehler"                      // Any other error
+
+// xsns_90_hrg15.ino
+#define D_HRG_VALID "Valid"
+#define D_HRG_ACTIVE "Active"
+#define D_HRG_EVENT "Event"
+#define D_HRG_TOTAL "Total"
+#define D_HRG_FLOWRATE "Flow Rate"
 
 // xsns_96_flowratemeter.ino
 #define D_FLOWRATEMETER_NAME "Durchflussmesser"
