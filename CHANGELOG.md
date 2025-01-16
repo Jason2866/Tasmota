@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 ## [14.4.1.3] 
 ### Added
 - Command `FileLog 0..4` to enable logging to filesystem using up to 16 rotating log files of 100kB (`#define FILE_LOG_SIZE 100`)
+- Command `FileLog 10..14` to enable logging to filesystem using up to 16 log files of 100kB (`#define FILE_LOG_SIZE 100`)
 - I2S Opus stream and file support for opus/aac (#22795)
 - I2S command I2sLoop (#22807)
 
@@ -14,8 +15,10 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - ESP32 Platform from 2024.12.30 to 2025.01.30, Framework (Arduino Core) from v3.1.0.241206 to v3.1.1.250109 and IDF to 5.3.2 (#22792)
 - Allow negative values for AdcParam/AdcGpio INPUT, TEMP and RANGE parameters (#22809)
+- GPIOViewer from v1.5.9 to v1.6.0 (No functional change)
 
 ### Fixed
+- Sonoff SPM `PowerOnState` overrules `SSPMPowerOnState` in mixed 4Relay setup with 4Relay version 1.0.0
 
 ### Removed
 
