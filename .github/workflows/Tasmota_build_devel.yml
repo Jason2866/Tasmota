@@ -213,6 +213,13 @@ jobs:
           pip install wheel
           pip install -U platformio
           cp ./platformio_override_sample.ini ./platformio_override.ini
+      - name: Run PlatformIO
+        run: platformio run -e ${{ matrix.variant }}
+      - name: Upload firmware artifacts
+        uses: jason2866/upload-artifact@v2.0.3
+        with:
+          name: firmware
+          path: ./build_output
 
   language-images:
     needs: safeboot-images
