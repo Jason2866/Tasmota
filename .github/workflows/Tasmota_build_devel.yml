@@ -217,7 +217,12 @@ jobs:
         uses: jason2866/download-artifact@v3.0.4
         with:
           name: firmware_safeboot
-          path: ./firmware    
+          path: ./firmware
+      - name: Add SHA to footer
+        run: |
+          COMMIT_SHA_LONG=$(git rev-parse --short HEAD || echo "")
+          SHA=${COMMIT_SHA_LONG::7}
+          sed -i -e "s/TASMOTA_SHA_SHORT/TASMOTA_SHA_SHORT $SHA-/g" ./tasmota/include/tasmota_version.h  
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload firmware artifacts
