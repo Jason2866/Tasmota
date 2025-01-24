@@ -89,7 +89,7 @@ jobs:
   safeboot-images:
     needs: push_solidified
     runs-on: ubuntu-latest
-    if: github.repository == 'arendst/Tasmota'
+    # if: github.repository == 'arendst/Tasmota'
     continue-on-error: true
     strategy:
       matrix:
@@ -178,7 +178,7 @@ jobs:
           path: ./build_output
 
   base32-images:
-    needs: push_solidified
+    needs: safeboot-images
     runs-on: ubuntu-latest
     # if: github.repository == 'arendst/Tasmota'
     continue-on-error: true
@@ -213,6 +213,11 @@ jobs:
           pip install wheel
           pip install -U platformio
           cp ./platformio_override_sample.ini ./platformio_override.ini
+      - name: Download safeboot firmwares
+        uses: jason2866/download-artifact@v3.0.4
+        with:
+          name: firmware_safeboot
+          path: ./firmware    
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload firmware artifacts
