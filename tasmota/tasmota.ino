@@ -419,8 +419,10 @@ void setup(void) {
     if (pkg_version <= 3) {         // D0WD, S0WD, D2WD
       gpio_reset_pin((gpio_num_t)CONFIG_D0WD_PSRAM_CS_IO);
       gpio_reset_pin((gpio_num_t)CONFIG_D0WD_PSRAM_CLK_IO);
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
       // IDF5.3 fix esp_gpio_reserve used in init PSRAM
       esp_gpio_revoke(BIT64(CONFIG_D0WD_PSRAM_CS_IO) | BIT64(CONFIG_D0WD_PSRAM_CLK_IO));
+#endif // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
     }
   }
 #endif  // CORE32SOLO1
