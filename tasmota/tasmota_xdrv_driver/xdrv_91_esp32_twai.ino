@@ -7,6 +7,7 @@
 */
 
 #ifdef ESP32
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #ifdef USE_ESP32_TWAI
 #if SOC_TWAI_SUPPORTED
 /*********************************************************************************************\
@@ -421,4 +422,5 @@ bool Xdrv91(uint32_t function) {
 
 #endif  // SOC_TWAI_SUPPORTED
 #endif  // USE_ESP32_TWAI
+#endif  // ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
 #endif  // ESP32
