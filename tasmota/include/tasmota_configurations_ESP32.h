@@ -600,7 +600,8 @@
 #undef USE_SHELLY_DIMMER                        // Disable support for Shelly Dimmer (+3k code)
 
 #define USE_LIGHT_PALETTE                        // Add support for color palette (+0k9 code)
-#define USE_LIGHT_ARTNET                         // Add support for DMX/ArtNet via UDP on port 6454 (+3.5k code)
+//#define USE_LIGHT_ARTNET                         // Add support for DMX/ArtNet via UDP on port 6454 (+3.5k code)
+#undef USE_WS2812
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 #define USE_MAGIC_SWITCH                         // Add Sonoff MagicSwitch support as implemented in Sonoff Basic R4
 #endif
@@ -802,7 +803,7 @@
 #define USE_KNX                                  // Enable KNX IP Protocol Support (+23k code, +3k3 mem)
 #endif
 #define USE_DALI                                 // Add support for DALI gateway (+5k code)
-//#define USE_ESP32_TWAI                           // Add support for TWAI/CAN interface (+7k code)
+#define USE_ESP32_TWAI                           // Add support for TWAI/CAN interface (+7k code)
 
 #endif // FIRMWARE_TASMOTA32
 
