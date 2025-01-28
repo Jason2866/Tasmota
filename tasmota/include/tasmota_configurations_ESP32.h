@@ -354,7 +354,7 @@
 #undef USE_EMULATION_WEMO
 //#undef USE_EMULATION_HUE
 
-// #define USE_WS2812
+#define USE_WS2812
 
 #define USE_DS18x20                              // Add support for DS18x20 sensors with id sort, single scan and read retry (+1k3 code)
 
@@ -598,8 +598,6 @@
 #undef USE_KEELOQ                               // Disable support for Jarolift rollers by Keeloq algorithm (+4k5 code)
 #undef USE_SONOFF_D1                            // Disable support for Sonoff D1 Dimmer (+0k7 code)
 #undef USE_SHELLY_DIMMER                        // Disable support for Shelly Dimmer (+3k code)
-
-#undef USE_WS2812
 
 #define USE_LIGHT_PALETTE                        // Add support for color palette (+0k9 code)
 #define USE_LIGHT_ARTNET                         // Add support for DMX/ArtNet via UDP on port 6454 (+3.5k code)
