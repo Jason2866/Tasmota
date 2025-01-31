@@ -16,9 +16,11 @@ All notable changes to this project will be documented in this file.
 - Berry driver for AXP2102 and M5CoreS3 (#22878)
 - GPS driver select baudrate using GPIO GPS_RX1 (9600bps), GPS_RX2 (19200bps) or GPS_RX3 (38400bps) (#22869)
 - LVLG/HASPmota add color names from OpenHASP (#22879)
-- HASPmota support for `buttonmatrix` events
-- Berry driver for PN532 NFC/Mifare reader
-- Berry `tasmota.add_rule_once` and auto-remove rules with same pattern and id
+- HASPmota support for `buttonmatrix` events (#22898)
+- Berry driver for PN532 NFC/Mifare reader (#22899)
+- Berry `tasmota.add_rule_once` and auto-remove rules with same pattern and id (#22900)
+- Berry example for HeatFan WiFi Controller
+- LVGL add `lv.set_paint_cb()` to register a callback when screen is refreshed
 
 ### Breaking Changed
 
@@ -29,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - ESP32 Platform from 2025.01.30 to 2025.01.31 (#22832)
 - Berry `gpio.pin_mode` frees PWM on pin
 - GPIOViewer from v1.6.0 to v1.6.1 (No functional change)
+- Berry callback now passes 5 arguments instead of 4 (in line with documentation)
 
 ### Fixed
 - Sonoff SPM `PowerOnState` overrules `SSPMPowerOnState` in mixed 4Relay setup with 4Relay version 1.0.0
