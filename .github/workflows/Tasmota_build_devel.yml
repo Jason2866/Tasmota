@@ -217,7 +217,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: tasmota32*
-          path: ./firmware    
+          path: ./firmware
+      - run: ls -R ./firmware
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload firmware artifacts
