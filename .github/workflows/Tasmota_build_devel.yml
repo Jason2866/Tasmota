@@ -216,7 +216,7 @@ jobs:
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v4
         with:
-          name: firmware_safeboot
+          pattern: safeboot-*
           path: ./firmware    
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
@@ -251,7 +251,7 @@ jobs:
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v4
         with:
-          name: firmware_safeboot
+          pattern: safeboot-*
           path: ./firmware
       - name: Add SHA to footer
         run: |
