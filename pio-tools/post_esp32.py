@@ -68,7 +68,7 @@ elif ("CORE32ITEAD" in extra_flags or "FRAMEWORK_ARDUINO_ITEAD" in build_flags) 
 else:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
     if github_actions and os.path.exists("./firmware"):
-        print("Github safeboot dl dir: ", listdir("./firmware/firmware"))
+        print("Github safeboot dl dir: ", os.listdir("./firmware/firmware"))
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota", dirs_exist_ok=True)
         if variants_dir:
             shutil.copytree("./firmware/firmware", variants_dir, dirs_exist_ok=True)
