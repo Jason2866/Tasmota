@@ -217,7 +217,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: tasmota32*
-          path: ./firmware
+          path: ./firmware/firmware
       - run: ls -R ./firmware
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
@@ -253,7 +253,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: tasmota32*
-          path: ./firmware
+          path: ./firmware/firmware
       - name: Add SHA to footer
         run: |
           COMMIT_SHA_LONG=$(git rev-parse --short HEAD || echo "")
