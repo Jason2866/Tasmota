@@ -17,7 +17,7 @@ concurrency:
 jobs:
   be_solidify:
     runs-on: ubuntu-latest
-    # if: github.repository == 'arendst/Tasmota' && github.ref_name == 'development'
+    if: github.repository == 'arendst/Tasmota' && github.ref_name == 'development'
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +58,7 @@ jobs:
   push_solidified:
     needs: be_solidify
     runs-on: ubuntu-latest
-    # if: github.repository == 'arendst/Tasmota' && github.ref_name == 'development'
+    if: github.repository == 'arendst/Tasmota' && github.ref_name == 'development'
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +87,7 @@ jobs:
           commit_message: Solidified Code updated
 
   safeboot-images:
-    needs: push_solidified
+    #needs: push_solidified
     runs-on: ubuntu-latest
     # if: github.repository == 'arendst/Tasmota'
     continue-on-error: true
@@ -129,7 +129,7 @@ jobs:
         #run: |
           #cp ./build_output/firmware/tasmota32solo1-safeboot.bin ./build_output/firmware/tasmota32-safeboot.bin 
       - name: Upload safeboot firmware artifacts
-        uses: jason2866/upload-artifact@v2.0.3
+        uses: actions/upload-artifact@v4
         with:
           name: firmware_safeboot
           path: ./build_output
@@ -172,7 +172,7 @@ jobs:
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload firmware artifacts
-        uses: jason2866/upload-artifact@v2.0.3
+        uses: actions/upload-artifact@v4
         with:
           name: firmware
           path: ./build_output
@@ -214,14 +214,14 @@ jobs:
           pip install -U platformio
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Download safeboot firmwares
-        uses: jason2866/download-artifact@v3.0.4
+        uses: actions/download-artifact@v4
         with:
           name: firmware_safeboot
           path: ./firmware    
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload firmware artifacts
-        uses: jason2866/upload-artifact@v2.0.3
+        uses: actions/upload-artifact@v4
         with:
           name: firmware
           path: ./build_output
@@ -249,7 +249,7 @@ jobs:
           pip install -U platformio
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Download safeboot firmwares
-        uses: jason2866/download-artifact@v3.0.4
+        uses: actions/download-artifact@v4
         with:
           name: firmware_safeboot
           path: ./firmware
@@ -261,7 +261,7 @@ jobs:
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}-${{ matrix.language }}
       - name: Upload language firmware artifacts
-        uses: jason2866/upload-artifact@v2.0.3
+        uses: actions/upload-artifact@v4
         with:
           name: firmware
           path: ./build_output
