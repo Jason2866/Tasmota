@@ -131,7 +131,7 @@ jobs:
       - name: Upload safeboot firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: safeboot-${{ matrix.variant }}
+          name: ${{ matrix.variant }}
           path: ./build_output
 
   base-images:
@@ -174,7 +174,7 @@ jobs:
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tasmota-${{ matrix.variant }}
+          name: ${{ matrix.variant }}
           path: ./build_output
 
   base32-images:
@@ -216,14 +216,14 @@ jobs:
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v4
         with:
-          pattern: safeboot-*
+          pattern: tasmota32*
           path: ./firmware    
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tasmota32-${{ matrix.variant }}
+          name: ${{ matrix.variant }}
           path: ./build_output
 
   language-images:
@@ -251,7 +251,7 @@ jobs:
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v4
         with:
-          pattern: safeboot-*
+          pattern: tasmota32*
           path: ./firmware
       - name: Add SHA to footer
         run: |
@@ -263,7 +263,7 @@ jobs:
       - name: Upload language firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: language-${{ matrix.variant }}
+          name: ${{ matrix.variant }}
           path: ./build_output
 
   Start_final_copy:
