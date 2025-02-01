@@ -179,7 +179,7 @@ jobs:
 
   base32-images:
     needs: safeboot-images
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     # if: github.repository == 'arendst/Tasmota'
     continue-on-error: true
     strategy:
