@@ -26,6 +26,7 @@ platform = env.PioPlatform()
 from genericpath import exists
 import os
 import sys
+from os import listdir
 from os.path import join
 import csv
 import requests
@@ -66,6 +67,7 @@ elif ("CORE32ITEAD" in extra_flags or "FRAMEWORK_ARDUINO_ITEAD" in build_flags) 
             shutil.copytree("./firmware/firmware", variants_dir, dirs_exist_ok=True)
 else:
     FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
+    print("Github safeboot dl dir: ", listdir("./firmware/firmware"))
     if github_actions and os.path.exists("./firmware/firmware"):
         shutil.copytree("./firmware/firmware", "/home/runner/.platformio/packages/framework-arduinoespressif32/variants/tasmota", dirs_exist_ok=True)
         if variants_dir:
