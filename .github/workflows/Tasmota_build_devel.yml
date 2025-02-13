@@ -74,12 +74,12 @@ jobs:
       - name: Move solidified Berry files back
         run: |
           ls -R ./berry
-          ls ./lib/libesp32/berry_tasmota/src/solidify
-          ls ./lib/libesp32/berry_matter/src/solidify
-          ls ./lib/libesp32/berry_animate/src/solidify
-          ls ./lib/libesp32_lvgl/lv_binding_berry/src/solidify
-          ls ./lib/libesp32_lvgl/lv_haspmota/src/solidify
-          ls ./lib/libesp32/berry/generate
+          rm -f ./lib/libesp32/berry_tasmota/src/solidify/*
+          rm -f ./lib/libesp32/berry_matter/src/solidify/*
+          rm -f ./lib/libesp32/berry_animate/src/solidify/*
+          rm -f ./lib/libesp32_lvgl/lv_binding_berry/src/solidify/*
+          rm -f ./lib/libesp32_lvgl/lv_haspmota/src/solidify/*
+          rm -f ./lib/libesp32/berry/generate/*
           mv berry/berry/libesp32/berry_tasmota/src/solidify/* ./lib/libesp32/berry_tasmota/src/solidify
           mv berry/berry/libesp32/berry_matter/src/solidify/* ./lib/libesp32/berry_matter/src/solidify
           mv berry/berry/libesp32/berry_animate/src/solidify/* ./lib/libesp32/berry_animate/src/solidify
