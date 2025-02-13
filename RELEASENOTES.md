@@ -114,17 +114,22 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 [Complete list](BUILDS.md) of available feature and sensors.
 
-## Changelog v14.4.1.3
+## Changelog v14.4.1.4
 ### Added
 - Command `SetOption163 1` to disable display of Device name in GUI header
 - Command `FileLog 0..4` to enable logging to filesystem using up to 16 rotating log files of 100kB (`#define FILE_LOG_SIZE 100`)
 - Command `FileLog 10..14` to enable logging to filesystem using up to 16 log files of 100kB (`#define FILE_LOG_SIZE 100`)
 - Command I2sLoop [#22807](https://github.com/arendst/Tasmota/issues/22807)
+- Support for Lithuanian language translations by zzdovydas [#22971](https://github.com/arendst/Tasmota/issues/22971)
 - Support for PCF85063 RTC [#22727](https://github.com/arendst/Tasmota/issues/22727)
 - Support for Senseair S88 CO2 sensor [#22733](https://github.com/arendst/Tasmota/issues/22733)
 - Support for C8-CO2-5K CO2 sensor [#22905](https://github.com/arendst/Tasmota/issues/22905)
 - Support for ESP32 Two-Wire Automotive Interface (TWAI) or Controller Area Network (CAN) busses
 - `#define FIX_JSON_HEXADECIMAL` to change JSON hexadecimal value "FF5F78" into "0xFF5F78" [#22919](https://github.com/arendst/Tasmota/issues/22919)
+- Support for RC-switch decoding of 64-bit received data
+- Support for WiZ Smart Remote using `#define USE_WIZMOTE` and command `SetOption164 1`
+- `MqttTLS` field in `Status 6` to indicate if the MQTT connection is encrypted [#22995](https://github.com/arendst/Tasmota/issues/22995)
+- Formatter `%_U` for `ext_snprintf_P()` to print uint64_t variable as decimal equivalent to `%llu`
 - GPS driver select baudrate using GPIO GPS_RX1 (9600bps), GPS_RX2 (19200bps) or GPS_RX3 (38400bps) [#22869](https://github.com/arendst/Tasmota/issues/22869)
 - I2S AAC support for web radio [#22787](https://github.com/arendst/Tasmota/issues/22787)
 - I2S Opus stream and file support for opus/aac [#22795](https://github.com/arendst/Tasmota/issues/22795)
@@ -147,6 +152,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Berry scroll to Leds_matrix [#22693](https://github.com/arendst/Tasmota/issues/22693)
 - Berry unicode encoding to string parsing [#22713](https://github.com/arendst/Tasmota/issues/22713)
 - Berry light_pixels values to `tasmota.settings` [#22762](https://github.com/arendst/Tasmota/issues/22762)
+- Berry `tasmota.defer()` [#22976](https://github.com/arendst/Tasmota/issues/22976)
 - LVLG/HASPmota add color names from OpenHASP [#22879](https://github.com/arendst/Tasmota/issues/22879)
 - LVGL `lv.set_paint_cb()` to register a callback when screen is refreshed [#22909](https://github.com/arendst/Tasmota/issues/22909)
 - HASPmota support for `buttonmatrix` events [#22898](https://github.com/arendst/Tasmota/issues/22898)
@@ -154,7 +160,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 ### Breaking Changed
 
 ### Changed
-- ESP32 Platform from 2024.12.30 to 2025.01.31, Framework (Arduino Core) from v3.1.0.241206 to v3.1.1.250109 and IDF to 5.3.2 [#22832](https://github.com/arendst/Tasmota/issues/22832)
+- ESP32 Platform from 2024.12.30 to 2025.02.30, Framework (Arduino Core) from v3.1.0.241206 to v3.1.1.250203 and IDF to 5.3.2 [#22943](https://github.com/arendst/Tasmota/issues/22943)
 - GPIOViewer from v1.5.6 to v1.6.1 (No functional change)
 - Postpone save_data during light animation when fade is Off
 - Allow negative values for AdcParam/AdcGpio INPUT, TEMP and RANGE parameters [#22809](https://github.com/arendst/Tasmota/issues/22809)
@@ -175,6 +181,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Webcam compilation with `define USE_WEBCAM` but without `define ENABLE_RTSPSERVER` [#22686](https://github.com/arendst/Tasmota/issues/22686)
 - Berry Zigbee fix wrong attributes [#22684](https://github.com/arendst/Tasmota/issues/22684)
 - Berry walrus operator [#22685](https://github.com/arendst/Tasmota/issues/22685)
+- Berry parser error in rare case [#22997](https://github.com/arendst/Tasmota/issues/22997)
 - LVGL updated `Antiburn.tapp` [#22699](https://github.com/arendst/Tasmota/issues/22699)
 - Matter Air Quality sensor [#22708](https://github.com/arendst/Tasmota/issues/22708)
 
