@@ -61,6 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: IDF55
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -81,6 +82,7 @@ jobs:
           mv berry/berry/libesp32/berry/generate/* ./lib/libesp32/berry/generate
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
+          branch: IDF55
           commit_message: Solidified Code updated
 
   safeboot-images:
