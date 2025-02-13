@@ -21,6 +21,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: IDF55
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -58,6 +60,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: IDF55
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -148,7 +152,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: development
+          ref: IDF55
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -240,7 +244,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: development
+          ref: IDF55
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
