@@ -706,7 +706,7 @@ class leds_panel
   var h, w, cell_size, cell_space
 
   static var SAMPLING = 100
-  static var PORT = 8887      # default port 8886
+  static var PORT = 8886      # default port 8886
   static var HTML_HEAD1 = 
     "<!DOCTYPE HTML><html><head>"
   static var HTML_URL_F = 
@@ -750,7 +750,6 @@ class leds_panel
     '};'
 
     'function jd() {'
-      'lh = eb("leds_hex");'
       'led_canvas = eb("canvas");'
       'led_canvas_ctx = led_canvas.getContext("2d");'
       'initEventSource();'
@@ -812,7 +811,7 @@ class leds_panel
       log("LED: no leds configured, can't start leds_panel", 3)
       return
     end
-    if (port == nil)  port = 8886   end
+    if (port == nil)  port = self.PORT   end
     self.port = port
     self.web = global.webserver_async(port)
     self.sampling_interval = self.SAMPLING
