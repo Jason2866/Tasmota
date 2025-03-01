@@ -1,7 +1,7 @@
 #
-# leds_panel.be - implements a real-time mirroring of the WS2812 leds on the main page
+# lvgl_panel.be - implements a real-time mirroring of LVGL display on the main page
 #
-# Copyright (C) 2023  Stephan Hadinger & Theo Arends
+# Copyright (C) 2025  Stephan Hadinger & Theo Arends
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -697,108 +697,115 @@ if !global.contains("webserver_async") || type(global.webserver_async) != 'class
   global.webserver_async = webserver_async
 end
 
-class leds_panel
+class lvgl_panel
   var port
   var web
-  var sampling_interval
-  var p1, p_leds
-  var strip                     # strip object
-  var h, w, cell_size, cell_space
+  var p1                          # bytes() object reused when generating payload
+  var feeders
 
-  static var SAMPLING = 100
-  static var PORT = 8886      # default port 8886
-  static var HTML_WIDTH = 290
+  # static var SAMPLING = 100
+  static var PORT = 8881      # default port 8881
+
   static var HTML_HEAD1 = 
     "<!DOCTYPE HTML><html><head>"
   static var HTML_URL_F = 
     "<script>"
-    "var event_url='http://%s:%i/leds_feed';"
+    "var event_url='http://%s:%i/lvgl_feed';"
     "</script>"
   static var HTML_HEAD2 = 
     '<script>'
     'var source = new EventSource(event_url);'
-    'var source = new EventSource(event_url);'
     'wl = f => window.addEventListener("load", f);'
     'eb = s => document.getElementById(s);'
-    'var led_canvas, led_strip = {"w":0,"h":0,"clsz":0,"clsp":0,"rev":0,"alt":0}, led_canvas_ctx;'
-
-    # reverse_gamma
-    'function ledGammaReverse_8(v) {'
-        'const table = [[40,1],[80,3],[98,10],[124,26],[158,65],[190,112],[223, 175],[255, 255]];'
-        'let p_src=0,p_gamma=0;'
-        
-        'for (const [src, gamma] of table) {'
-            'if (v <= gamma) {'
-                'return Math.round(p_src + (v - p_gamma) * (src - p_src) / (gamma - p_gamma));'
-            '}'
-            'p_src=src;'
-            'p_gamma=gamma;'
-        '}'
-        'return 255;'
-    '}'
+    'var lvgl_canvas, lvgl_info = {"x1":0,"y1":0,"x2":0,"y2":0}, lvgl_canvas_ctx;'
 
     'function initEventSource() {'
-      'source.addEventListener("leds",function (e) {'
-       ' var j = JSON.parse(e.data);'
-        'if("w" in j){led_strip.w=j.w;}'
-        'if("h" in j){led_strip.h=j.h;}'
-        'if("rev" in j){led_strip.rev=j.rev;}'
-        'if("clsz" in j){led_strip.clsz=j.clsz;}'
-        'if("clsp" in j){led_strip.clsp=j.clsp;}'
-        'if("alt" in j){led_strip.alt=j.alt;}'
-        'if("hex" in j){drawLED(j.hex);}'
+      'source.addEventListener("lvgl",function(e){'
+       ' var j=JSON.parse(e.data);'
+        'if("x1" in j){lvgl_info.x1=j.x1;}'
+        'if("y1" in j){lvgl_info.y1=j.y1;}'
+        'if("x2" in j){lvgl_info.x2=j.x2;}'
+        'if("y2" in j){lvgl_info.y2=j.y2;}'
+        'if("b64" in j){drawPixels(j.b64);}'
 	    '}, false);'
     '};'
 
     'function jd() {'
-      'led_canvas = eb("canvas");'
-      'led_canvas_ctx = led_canvas.getContext("2d");'
+      'lvgl_canvas=eb("canvas");'
+      'lvgl_canvas_ctx=lvgl_canvas.getContext("2d");'
       'initEventSource();'
+
+      # Mouse down event
+      'lvgl_canvas.addEventListener("mousedown", (event) => {'
+        'event.preventDefault();'
+        'const coords=getCanvasCoordinates(event);'
+        'sendTS(coords.x,coords.y);'
+      '});'
+
     '}'
     'wl(jd);'
 
-   ' function drawLED(msg){'
-      'const rows = led_strip.h;'
-      'const cols = led_strip.w;'
-      'let leds_left = Math.min(msg.length / 6, rows * cols);'
-      'const alt = led_strip.alt;'
-      'let left2right = true;'
-  
-      'let cell_space = led_strip.clsp;'
-      'let cell_size = led_strip.clsz;'
-  
-      'led_canvas.height = rows * cell_size;'
-      'led_canvas.width = cols * cell_size;'
-  
-      'const width = led_canvas.width - cell_size;'
-      'for(let row = 0; row < rows; row += 1){'
-        'for (let i = 0; i < cols && leds_left > 0; i += 1) {'
-          'const rgb = msg.substring((i+(row*cols)) * 6,((i+(row*cols))*6)+6);'
-          'const r = ledGammaReverse_8(parseInt(rgb.slice(0, 2), 16));'
-          'const g = ledGammaReverse_8(parseInt(rgb.slice(2, 4), 16));'
-          'const b = ledGammaReverse_8(parseInt(rgb.slice(4, 6), 16));'
-          'led_canvas_ctx.fillStyle = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;'
-          ' if(left2right){'
-            'led_canvas_ctx.fillRect((i * cell_size) + 1 , (row * cell_size) + 1, cell_size-cell_space, cell_size-cell_space);'
-          '} else {'
-            'led_canvas_ctx.fillRect((width - (i * cell_size) ) + 1 , (row * cell_size) + 1, cell_size-cell_space, cell_size-cell_space);'
-          '}'
-          'leds_left -= 1;'
-        '}'
-        'if (alt) {'
-          'left2right = !left2right;'
-        '}'
+    'function drawPixels(b64){'
+      'const p565=atob(b64);'
+    
+      # Calculate dimensions
+      'const width=lvgl_info.x2-lvgl_info.x1+1;'
+      'const height=lvgl_info.y2-lvgl_info.y1+1;'
+      # 'console.log(`width: (${lvgl_info.x1},${lvgl_info.y1},${lvgl_info.x2},${lvgl_info.y2}) ${width}, height: ${height}, p565.length; ${p565.length}`);'
+    
+      # Create buffers for the RGB data
+      'const imageData=lvgl_canvas_ctx.createImageData(width,height);'
+      'const rgb=new Uint8ClampedArray(width*height*4);'
+
+      # 'console.log(`p565.length ${p565.length} allocated ${width * height}`);'
+      # Convert RGB565 to RGBA in a single pass
+      'for(let i=0;i<p565.length;i+=2){'
+        'const p0=p565[i].charCodeAt(0);'
+        'const p1=p565[i+1].charCodeAt(0);'
+        'const pos=i*2;'
+        
+        # Extract RGB components and convert to 8-bit in a single operation
+        'rgb[pos]=((p1>>3)&0x1F)<<3;'               # R
+        'rgb[pos+1]=((p1&0x07)<<5)|((p0>>5)<<2);'   # G
+        'rgb[pos+2]=(p0&0x1F)<<3;'                  # B
+        'rgb[pos+3]=255;'                           # A
       '}'
+      # Update the ImageData
+      'imageData.data.set(rgb);'
+    
+      # Put the image data on the canvas
+      'lvgl_canvas_ctx.putImageData(imageData,lvgl_info.x1,lvgl_info.y1);'
     '}'
+
+    ######################
+    # virtual touchscreen
+    # Function to calculate relative coordinates within canvas
+    'function getCanvasCoordinates(event){'
+      'const rect=lvgl_canvas.getBoundingClientRect();'
+      'return{x:event.clientX-rect.left,y:event.clientY-rect.top};'
+    '}'
+
+    # Function to send events to the embedded system
+    'function sendTS(x,y){'
+      'fetch("/lvgl_touch",{'
+        'method:"POST",'
+        'headers:{'
+          '"Content-Type":"application/json",'
+        '},'
+        'body:JSON.stringify({x,y})'
+      '});'
+      # '}).catch(error => console.error("Error:", error));'
+    '}'
+
     '</script>'
     '</head>'
     '<body>'
       '<style>body{margin:0px;}</style>'
   static var HTML_CONTENT =
-     '<table style="width:100%;border:0px;margin:0px;">'
+      '<table style="width:100%%;border:0px;margin:0px;">'
         '<tbody>'
           '<tr><td>'
-            '<canvas id="canvas" width="290" height="10" style="display:block;margin-left:auto;margin-right:auto;"></canvas>'
+            '<canvas id="canvas" width="%i" height="%i" style="display:block;margin-left:auto;margin-right:auto;"></canvas>'
           '</td></tr>'
         '</tbody>'
     '</table>'
@@ -807,24 +814,22 @@ class leds_panel
     '</html>'
   
   def init(port)
-    import gpio
-    if !gpio.pin_used(gpio.WS2812, 0)
-      log("LED: no leds configured, can't start leds_panel", 3)
-      return
-    end
     if (port == nil)  port = self.PORT   end
     self.port = port
     self.web = global.webserver_async(port)
-    self.sampling_interval = self.SAMPLING
 
-    self.strip = Leds()
     self.p1 = bytes(100)
-    self.p_leds = self.strip.pixels_buffer()
+    self.feeders = []
 
     self.web.set_chunked(true)
     self.web.set_cors(true)
-    self.web.on("/leds_feed", self, self.send_info_feed)        # feed with leds values
-    self.web.on("/leds", self, self.send_info_page)             # display leds page
+    self.web.on("/lvgl_feed", self, self.send_info_feed)            # feed with lvgl pixels
+    self.web.on("/lvgl_touch", self, self.touch_received, "POST")   # virtual touch screen
+    self.web.on("/lvgl", self, self.send_info_page)                 # display lvgl page
+
+    import cb
+    var paint_cb = cb.gen_cb(def (x1,y1,x2,y2,pixels) self.paint_cb(x1,y1,x2,y2,pixels) end)
+    lv.set_paint_cb(paint_cb)
 
     tasmota.add_driver(self)
   end
@@ -835,17 +840,84 @@ class leds_panel
   end
 
   def update()
-    self.p_leds = self.strip.pixels_buffer(self.p_leds)   # update buffer
-    self.h = tasmota.settings.light_pixels_height_1 + 1
-    self.w = self.strip.pixel_count() / (tasmota.settings.light_pixels_height_1 + 1)
-    self.cell_size = tasmota.int(self.HTML_WIDTH / self.w, 4, 25)
-    self.cell_space = (self.cell_size <= 6) ? 1 : 2
+  end
+
+  def touch_received(cnx, uri, verb)
+    # log(f">>>TS: touch_received {uri=} {verb=} {cnx.buf_in=}")
+    cnx.close()
+    # Example of events:
+    #   {"x":376,"y":258}
+    import json
+    import display
+    var touch = json.load(cnx.buf_in)     # POST payload
+    if (touch == nil)
+      log(f"LVG: received invalid touch event '{cnx.buf_in}'")
+      return
+    end
+
+    if (tasmota.loglevel(4))
+      log(f"LVG: received touch event '{touch}'")
+    end
+
+    display.touch_update(1, touch.find('x', 0), touch.find('y', 0), 0)
+  end
+
+  def paint_cb(x1,y1,x2,y2,pixels)
+    if (size(self.feeders) == 0)    return    end       # nothing to do if no feeders
+
+    import introspect
+    var pixels_count = (x2-x1+1) * (y2-y1+1)
+    var pixels_bytes = bytes(introspect.toptr(pixels), pixels_count * 2)
+    #log(f">>>>>: {x1=} {x2=} {y1=} {y2=} {pixels_count=} {size(pixels_bytes)=}")
+
+    var bytes_per_line = (x2 - x1 + 1) * 2
+    var lines_remaining = (y2 - y1 + 1)
+    var lines_per_msg = 2000 / bytes_per_line
+    var bytes_per_msg = lines_per_msg * bytes_per_line
+    var y = y1
+    var offset_bytes = 0
+
+    #log(f">>>>>: {x1=} {x2=} {y1=} {y2=} {bytes_per_line=} {lines_per_msg=} {bytes_per_msg=}")
+
+    while lines_remaining > 0
+      # compute the workload
+      # var payload = pixels_bytes[offset_bytes .. offset_bytes + bytes_per_msg - 1].tob64()    # string in base64
+
+      var idx = 0
+      var lines_to_send = (lines_per_msg > lines_remaining) ? lines_remaining : lines_per_msg
+      var bytes_to_send = lines_to_send * bytes_per_line
+      while idx < size(self.feeders)
+        self.feeders[idx].send_feed(x1, y, x2, y + lines_to_send - 1, pixels_bytes, offset_bytes, bytes_to_send)
+        idx += 1
+      end
+
+      # move to next message
+      offset_bytes += bytes_to_send
+      y += lines_to_send
+      lines_remaining -= lines_to_send
+    end
+
+    # log(f">>>: paint {x1=} {y1=} {x2=} {y2=} {pixels_count=}", 2)
+  end
+
+  def add_feed(feed)
+    if self.feeders.find(feed) == nil           # make sure it's not already in teh list
+      self.feeders.push(feed)
+    end
+  end
+
+  def remove_feed(feed)
+    var idx = self.feeders.find(feed)
+    if idx != nil
+      self.feeders.remove(idx)
+    end
   end
 
   def send_info_page(cnx, uri, verb)
     import string
+    var height = lv.get_ver_res()
+    var width = lv.get_hor_res()
     
-    self.update()
     var host = cnx.header_host
     var host_split = string.split(host, ':')      # need to make it stronger
     var ip = host_split[0]
@@ -858,7 +930,7 @@ class leds_panel
     cnx.write(self.HTML_HEAD1)
     cnx.write(format(self.HTML_URL_F, ip, port))
     cnx.write(self.HTML_HEAD2)
-    cnx.write(self.HTML_CONTENT)
+    cnx.write(format(self.HTML_CONTENT, width, height))
     cnx.write(self.HTML_END)
 
     cnx.content_stop()
@@ -867,58 +939,52 @@ class leds_panel
   static class feeder
     var app                                   # overarching app (debug_panel)
     var cnx                                   # connection object
+    var w, h
 
     def init(app, cnx)
       self.app = app
       self.cnx = cnx
-      tasmota.add_driver(self)
+      self.w = lv.get_hor_res()
+      self.h = lv.get_ver_res()
+      #tasmota.add_driver(self)
     end
 
     def close()
-      tasmota.remove_driver(self)
+      self.app.remove_feed(self)
     end
 
-    def every_100ms()
-      self.send_feed()
-    end
-
-    def send_feed()
+    # payload is max 16KB
+    def send_feed(x1, y1, x2, y2, pixels, idx, len)
       var cnx = self.cnx
       if !cnx.connected()
         self.close()
-        return
+        return nil
       end
 
       var server = self.cnx.server
-      if cnx.buf_out_empty()
+      # if cnx.buf_out_empty()
         # if out buffer is not empty, do not send any new information
-        var app = self.app
-        app.update()
-        var payload1 = app.p1
-        var p_leds = app.p_leds
+      var app = self.app
+      var p1 = app.p1
 
-        payload1.clear()
-        payload1 .. "id:"
-        server.bytes_append_int(payload1, tasmota.millis())
-        payload1 .. "\r\nevent:leds\r\ndata:"
+      p1.clear()
+      p1.append("id:")
+      server.bytes_append_int(p1, tasmota.millis())
+      p1.append("\r\nevent:lvgl\r\ndata:")
 
-        payload1 .. '{"w":'
-        server.bytes_append_int(payload1, app.w)
-        payload1 .. ',"h":'
-        server.bytes_append_int(payload1, app.h)
-        payload1 .. ',"clsz":'
-        server.bytes_append_int(payload1, app.cell_size)
-        payload1 .. ',"clsp":'
-        server.bytes_append_int(payload1, app.cell_space)
-        payload1 .. ',"rev":'
-        server.bytes_append_int(payload1, tasmota.settings.light_pixels_reverse)
-        payload1 .. ',"alt":'
-        server.bytes_append_int(payload1, tasmota.settings.light_pixels_alternate)
-        payload1 .. ',"hex":"'
-        payload1.appendhex(p_leds)
-        payload1 .. '"}\r\n\r\n'
-        cnx.write(payload1)
-      end
+      p1.append('{"x1":')
+      server.bytes_append_int(p1, x1)
+      p1.append(',"x2":')
+      server.bytes_append_int(p1, x2)
+      p1.append(',"y1":')
+      server.bytes_append_int(p1, y1)
+      p1.append(',"y2":')
+      server.bytes_append_int(p1, y2)
+      p1.append(',"b64":"')
+      p1.appendb64(pixels, idx, len)
+      p1.append('"}\r\n\r\n')
+      cnx.write(p1)
+      # end
     end
 
   end
@@ -928,7 +994,8 @@ class leds_panel
     cnx.send(200, "text/event-stream")
     #
     var feed = feeder(self, cnx)
-    feed.send_feed()          # send first values immediately
+    self.add_feed(feed)
+    lv.scr_act().invalidate()                 # force a screen redraw for any new connection
   end
 
   def web_add_main_button()
@@ -943,20 +1010,22 @@ class leds_panel
       ip = tasmota.eth().find('ip')
     end
     if (ip != nil)
-      var height = self.h * self.cell_size + 10
+      var height = lv.get_ver_res() + 10
+      var width = lv.get_hor_res() + 20
+      if (width < 340) width = 340 end
       webserver.content_send(
-        f'<table style="width:100%;">'
+       f'<table style="width:100%;">'
           '<tbody>'
             '<tr>'
               '<td>'
                 '<fieldset style="background-color:{tasmota.webcolor(1)};">'
                   '<legend style="text-align:left;">'
                     '<label>'
-                      '<input type="checkbox" id="ledchk">&nbsp;Leds mirroring&nbsp;'
+                      '<input type="checkbox" id="lvchk">&nbsp;LVGL screen mirroring&nbsp;'
                     '</label>'
                   '</legend>'
-                  '<iframe id="led_iframe" src="about:blank" hidden="true" '
-                    'style="color:#eaeaea;border:0px none;height:{height}px;width:300px;margin:0px 8px 0px 8px;padding:0px 0px;">'
+                  '<iframe id="lvgl_iframe" src="about:blank" hidden="true" '
+                    'style="color:#eaeaea; border:0px none;height:{height}px;width:{width}px;margin:0px 8px 0px 8px;padding:0px 0px;">'
                   '</iframe>'
                 '</fieldset>'            
               '</td>'
@@ -964,19 +1033,19 @@ class leds_panel
           '</tbody>'
         '</table>'
         '<script>'
-          'const leduri="http://{ip}:{self.port}/leds";'
+          'const lvuri="http://{ip}:{self.port}/lvgl";'
         '</script>'
       )
       webserver.content_send(
         '<script>'
-        'function ledm(){'
-          'ledchk=eb("ledchk");'
+        'function lvg(){'
+          'lvchk=eb("lvchk");'
           # checkbox event
-          'ledchk.addEventListener("change",(event)=>{'
-            'const iframe=document.getElementById("led_iframe");'
-            'if(ledchk.checked){'
+          'lvchk.addEventListener("change",(event)=>{'
+            'const iframe=document.getElementById("lvgl_iframe");'
+            'if(lvchk.checked){'
               # When checked, reload the original content
-              'iframe.src=leduri;'
+              'iframe.src=lvuri;'
               'iframe.hidden=false;'
             '}else{'
               # When unchecked, replace iframe with itself to unload it
@@ -985,7 +1054,7 @@ class leds_panel
             '}'
           '});'
         '}'
-        'wl(ledm);'
+        'wl(lvg);'
         '</script>'
       )
     end
@@ -993,4 +1062,4 @@ class leds_panel
 
 end
 
-return leds_panel()
+return lvgl_panel()
