@@ -364,7 +364,7 @@ void BerryInit(void) {
     be_set_obs_micros(berry.vm, (bmicrosfnct)&micros);
     comp_set_named_gbl(berry.vm);  /* Enable named globals in Berry compiler */
     comp_set_strict(berry.vm);  /* Enable strict mode in Berry compiler, equivalent of `import strict` */
-    be_set_ctype_func_hanlder(berry.vm, be_call_ctype_func);
+    be_set_ctype_func_handler(berry.vm, be_call_ctype_func);
 
     if (UsePSRAM()) {     // if PSRAM is available, raise the max size to 512kb
       berry.vm->bytesmaxsize = 512 * 1024;
@@ -382,7 +382,7 @@ void BerryInit(void) {
     }
     // AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_BERRY "Berry code loaded, RAM used=%u"), be_gc_memcount(berry.vm));
     ret_code2 = be_pcall(berry.vm, 0);
-    if (ret_code1 != 0) {
+    if (ret_code2 != 0) {
       be_error_pop_all(berry.vm);             // clear Berry stack
       break;
     }
