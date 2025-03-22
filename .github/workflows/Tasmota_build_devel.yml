@@ -21,6 +21,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: IDF51
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -58,6 +60,9 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: IDF51
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -69,6 +74,12 @@ jobs:
       - name: Move solidified Berry files back
         run: |
           ls -R ./berry
+          rm -f ./lib/libesp32/berry_tasmota/src/solidify/*
+          rm -f ./lib/libesp32/berry_matter/src/solidify/*
+          rm -f ./lib/libesp32/berry_animate/src/solidify/*
+          rm -f ./lib/libesp32_lvgl/lv_binding_berry/src/solidify/*
+          rm -f ./lib/libesp32_lvgl/lv_haspmota/src/solidify/*
+          rm -f ./lib/libesp32/berry/generate/*
           mv berry/berry/libesp32/berry_tasmota/src/solidify/* ./lib/libesp32/berry_tasmota/src/solidify
           mv berry/berry/libesp32/berry_matter/src/solidify/* ./lib/libesp32/berry_matter/src/solidify
           mv berry/berry/libesp32/berry_animate/src/solidify/* ./lib/libesp32/berry_animate/src/solidify
@@ -77,6 +88,7 @@ jobs:
           mv berry/berry/libesp32/berry/generate/* ./lib/libesp32/berry/generate
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
+          branch: IDF51
           commit_message: Solidified Code updated
 
   safeboot-images:
@@ -148,7 +160,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: development
+          ref: IDF51
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -240,7 +252,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: development
+          ref: IDF51
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
