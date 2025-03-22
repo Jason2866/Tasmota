@@ -183,8 +183,6 @@
 
 #define USE_TLS
 #define USE_WEBSERVER
-#define USE_WEBCLIENT
-#define USE_WEBCLIENT_HTTPS
 
 #undef USE_ESP32_WDT                                  // disable watchdog on SAFEBOOT until more testing is done
 
@@ -211,7 +209,8 @@
 #endif
 
 #define USE_WEBCAM
-#define ENABLE_RTSPSERVER
+  #define USE_WEBCAM_V2
+  #define ENABLE_RTSPSERVER
 #define USE_SPI
 #define USE_SDCARD
 
@@ -302,8 +301,6 @@
 #undef USE_DOMOTICZ
 #undef USE_HOME_ASSISTANT
 #define USE_TASMOTA_DISCOVERY                    // Enable Tasmota Discovery support (+2k code)
-
-#define USE_WEBCLIENT_HTTPS
 
 #define USE_I2S
 #define USE_SPI
@@ -509,8 +506,6 @@
 #undef USE_DOMOTICZ
 #undef USE_HOME_ASSISTANT
 #define USE_TASMOTA_DISCOVERY                    // Enable Tasmota Discovery support (+2k code)
-
-#define USE_WEBCLIENT_HTTPS
 
 #define USE_ZIGBEE
 #define USE_TCP_BRIDGE
