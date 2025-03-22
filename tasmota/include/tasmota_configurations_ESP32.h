@@ -265,6 +265,8 @@
 
 #define USE_SDCARD
 
+#undef USE_WS2812
+
 #ifndef USE_BERRY_ULP                              // potential performance gains with ULP
   #define USE_ADC                                  // so do not use common ADC funtions in that case
 #endif
@@ -351,7 +353,7 @@
 #undef USE_EMULATION_WEMO
 //#undef USE_EMULATION_HUE
 
-#define USE_WS2812
+#undef USE_WS2812
 
 #define USE_DS18x20                              // Add support for DS18x20 sensors with id sort, single scan and read retry (+1k3 code)
 
@@ -510,6 +512,7 @@
 
 #define USE_ENHANCED_GUI_WIFI_SCAN
 
+#undef USE_WS2812
 #undef USE_ENERGY_SENSOR                        // Disable support for energy sensors
 #undef USE_SHUTTER                              // Disable support for shutter
 #undef USE_IR_REMOTE                            // Disable support for IR Remote
@@ -553,6 +556,8 @@
 
 #define FIRMWARE_TASMOTA32
 
+#undef USE_WS2812
+
 #endif // FIRMWARE_NSPANEL
 
 /*********************************************************************************************\
@@ -595,7 +600,8 @@
 #undef USE_SHELLY_DIMMER                        // Disable support for Shelly Dimmer (+3k code)
 
 #define USE_LIGHT_PALETTE                        // Add support for color palette (+0k9 code)
-#define USE_LIGHT_ARTNET                         // Add support for DMX/ArtNet via UDP on port 6454 (+3.5k code)
+//#define USE_LIGHT_ARTNET                         // Add support for DMX/ArtNet via UDP on port 6454 (+3.5k code)
+#undef USE_WS2812
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 #define USE_MAGIC_SWITCH                         // Add Sonoff MagicSwitch support as implemented in Sonoff Basic R4
 #endif

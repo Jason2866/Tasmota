@@ -304,6 +304,10 @@
   #define CODE_IMAGE_STR "display"
 #endif
 
+#ifdef ESP32
+#undef USE_WS2812
+#endif
+
 #undef USE_EMULATION                             // Disable Belkin WeMo and Hue Bridge emulation for Alexa (-16k code, -2k mem)
 #undef USE_EMULATION_HUE                         // Disable Hue Bridge emulation for Alexa (+14k code, +2k mem common)
 #undef USE_EMULATION_WEMO                        // Disable Belkin WeMo emulation for Alexa (+6k code, +2k mem common)
