@@ -2398,6 +2398,10 @@ void SystemBusyDelayExecute(void) {
  *
 \*********************************************************************************************/
 
+void SetMinimumSeriallog(void) {
+  TasmotaGlobal.seriallog_level = (Settings->seriallog_level < LOG_LEVEL_INFO) ? (uint8_t)LOG_LEVEL_INFO : Settings->seriallog_level;
+}
+
 void SetTasConlog(uint32_t loglevel) {
   Settings->seriallog_level = loglevel;
   TasmotaGlobal.seriallog_level = loglevel;
@@ -2609,6 +2613,7 @@ bool GetLog(uint32_t req_loglevel, uint32_t* index_p, char** entry_pp, size_t* l
 
 uint32_t HighestLogLevel(void) {
   uint32_t highest_loglevel = TasmotaGlobal.seriallog_level;
+  if (Settings->seriallog_level > highest_loglevel) { highest_loglevel = Settings->seriallog_level; }
   if (Settings->mqttlog_level > highest_loglevel) { highest_loglevel = Settings->mqttlog_level; }
 #ifdef USE_WEBSERVER
   if (Settings->weblog_level > highest_loglevel) { highest_loglevel = Settings->weblog_level; }
@@ -2656,9 +2661,6 @@ void AddLogData(uint32_t loglevel, const char* log_data, const char* log_data_pa
   if ((loglevel <= TasmotaGlobal.seriallog_level) &&
       (TasmotaGlobal.masterlog_level <= TasmotaGlobal.seriallog_level)) {
     TasConsole.printf("%s%s%s%s\r\n", mxtime, log_data, log_data_payload, log_data_retained);
-#ifdef USE_SERIAL_BRIDGE
-    SerialBridgePrintf("%s%s%s%s\r\n", mxtime, log_data, log_data_payload, log_data_retained);
-#endif  // USE_SERIAL_BRIDGE
   }
 
   if (!TasmotaGlobal.log_buffer) { return; }  // Leave now if there is no buffer available
@@ -2680,27 +2682,44 @@ void AddLogData(uint32_t loglevel, const char* log_data, const char* log_data_pa
       log_data_payload = empty;
       log_data_retained = empty;
     }
+    log_data_len = strlen(mxtime) + strlen(log_data) + strlen(log_data_payload) + strlen(log_data_retained);
 
     TasmotaGlobal.log_buffer_pointer &= 0xFF;
     if (!TasmotaGlobal.log_buffer_pointer) {
       TasmotaGlobal.log_buffer_pointer++;  // Index 0 is not allowed as it is the end of char string
     }
     while (TasmotaGlobal.log_buffer_pointer == TasmotaGlobal.log_buffer[0] ||  // If log already holds the next index, remove it
-           strlen(TasmotaGlobal.log_buffer) + strlen(log_data) + strlen(log_data_payload) + strlen(log_data_retained) + strlen(mxtime) + 4 > LOG_BUFFER_SIZE)  // 4 = log_buffer_pointer + '\1' + '\0'
-    {
+           strlen(TasmotaGlobal.log_buffer) + log_data_len +4 > LOG_BUFFER_SIZE) {  // 4 = log_buffer_pointer + '\1' + '\0'
       char* it = TasmotaGlobal.log_buffer;
       it++;                                // Skip log_buffer_pointer
       it += strchrspn(it, '\1');           // Skip log line
       it++;                                // Skip delimiting "\1"
       memmove(TasmotaGlobal.log_buffer, it, LOG_BUFFER_SIZE -(it-TasmotaGlobal.log_buffer));  // Move buffer forward to remove oldest log line
     }
-    snprintf_P(TasmotaGlobal.log_buffer, LOG_BUFFER_SIZE, PSTR("%s%c%c%s%s%s%s\1"),
-      TasmotaGlobal.log_buffer, TasmotaGlobal.log_buffer_pointer++, '0'+loglevel, mxtime, log_data, log_data_payload, log_data_retained);
+    char *log_line = TasmotaGlobal.log_buffer + strlen(TasmotaGlobal.log_buffer);  // Ponter to next entry
+    snprintf_P(log_line, log_data_len +4, PSTR("%c%c%s%s%s%s\1"),
+      TasmotaGlobal.log_buffer_pointer++, '0'+loglevel, mxtime, log_data, log_data_payload, log_data_retained);
     if (too_long) { free(too_long); }
     TasmotaGlobal.log_buffer_pointer &= 0xFF;
     if (!TasmotaGlobal.log_buffer_pointer) {
       TasmotaGlobal.log_buffer_pointer++;  // Index 0 is not allowed as it is the end of char string
     }
+
+    // These calls fail to show initial logging
+    log_line += 2;                         // Skip log_buffer_pointer and loglevel
+#ifdef USE_SERIAL_BRIDGE
+    if (loglevel <= TasmotaGlobal.seriallog_level) {
+      SerialBridgeWrite(log_line, log_data_len);
+    }
+#endif  // USE_SERIAL_BRIDGE
+#ifdef USE_TELNET
+#ifdef ESP32
+    if (loglevel <= TasmotaGlobal.seriallog_level) {
+      TelnetWrite(log_line, log_data_len);  // This uses too much heap on ESP8266
+    }
+#endif  // ESP32
+#endif  // USE_TELNET
+
   }
 }
 
