@@ -7,38 +7,36 @@ ARG USER_GID=$USER_UID
 
 
 ENV DEBIAN_FRONTEND=noninteractive
+# Install dependencies for building Python
 RUN apt-get update \
-    && apt-get -qqy install \
-        # Common stuff
-        apt-utils \
-        build-essential \
-        ca-certificates \
-        curl \
-        dialog \
-        git \
-        sudo \
-        unzip \
+    && apt-get install -y \
         wget \
-        # for platformio
-        bc \
         build-essential \
+        libssl-dev \
+        zlib1g-dev \
+        libncurses5-dev \
+        libgdbm-dev \
+        libnss3-dev \
+        libsqlite3-dev \
+        libreadline-dev \
+        libffi-dev \
         curl \
-        python3 \
-        python3-dev \
-        python3-venv \
-        python3-distutils \
-        python3-pip \
-        srecord \
-        xz-utils \
-        # debugging
-        #libpython2.7 \
-        #libusb-1.0 \
-        #libelf1 \
-        #libncurses5 \
-    # Clean up
-    && apt-get autoremove -y \
-    && apt-get clean -y \
+        libbz2-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Download and build Python 3.13.2
+RUN wget https://www.python.org/ftp/python/3.13.2/Python-3.13.2.tgz \
+    && tar -xvf Python-3.13.2.tgz \
+    && cd Python-3.13.2 \
+    && ./configure --enable-optimizations \
+    && make -j$(nproc) \
+    && make altinstall \
+    && cd .. \
+    && rm -rf Python-3.13.2 Python-3.13.2.tgz
+
+# Verify Python installation
+RUN python3.13 --version
+
 ENV DEBIAN_FRONTEND=dialog
 
 RUN if [ ${USER_UID:-0} -ne 0 ] && [ ${USER_GID:-0} -ne 0 ]; then \
