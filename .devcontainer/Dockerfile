@@ -63,4 +63,4 @@ RUN if [ ${USER_UID:-0} -ne 0 ] && [ ${USER_GID:-0} -ne 0 ]; then \
 
 USER $USERNAME
 RUN curl -fsSL https://raw.githubusercontent.com/pioarduino/pioarduino-core-installer/pioarduino/get-platformio.py
-RUN python3 -c get-platformio.py
+RUN python3 get-platformio.py
