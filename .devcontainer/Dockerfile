@@ -25,6 +25,7 @@ RUN apt-get update \
         curl \
         python3 \
         python3-dev \
+        python3-venv \
         python3-distutils \
         python3-pip \
         srecord \
@@ -58,9 +59,7 @@ RUN if [ ${USER_UID:-0} -ne 0 ] && [ ${USER_GID:-0} -ne 0 ]; then \
 # Restart udev service to use the newly installed udev rules
 # RUN service udev restart
 
-# some OpenOCD req outdated libmpfr.so.4
-# RUN ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/x86_64-linux-gnu/libmpfr.so.4
-
 USER $USERNAME
-RUN curl -fsSL https://raw.githubusercontent.com/pioarduino/pioarduino-core-installer/pioarduino/get-platformio.py
-RUN python3 get-platformio.py
+RUN curl -fsSL https://raw.githubusercontent.com/pioarduino/pioarduino-core-installer/pioarduino/get-platformio.py -o get-platformio.py \
+    && python3 get-platformio.py \
+    && rm get-platformio.py
