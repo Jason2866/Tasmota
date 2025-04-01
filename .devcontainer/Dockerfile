@@ -22,9 +22,7 @@ RUN apt-get update \
         # for platformio
         bc \
         build-essential \
-        clang \
         curl \
-        gcc \
         python3 \
         python3-dev \
         python3-distutils \
@@ -57,7 +55,7 @@ RUN usermod -a -G dialout $USERNAME
 RUN usermod -a -G plugdev $USERNAME
 
 # Restart udev service to use the newly installed udev rules
-RUN service udev restart
+# RUN service udev restart
 
 # some OpenOCD req outdated libmpfr.so.4
 # RUN ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/x86_64-linux-gnu/libmpfr.so.4
