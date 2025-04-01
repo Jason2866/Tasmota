@@ -6,7 +6,7 @@
     // Append -bullseye or -buster to pin to an OS version.
     // Use -bullseye variants on local on arm64/Apple Silicon.
     "args": {
-      "VARIANT": "3.13-bullseye",
+      "VARIANT": "3.13.2-bullseye",
       "PIO_VERSION": "6.1.16"
     }
   },
