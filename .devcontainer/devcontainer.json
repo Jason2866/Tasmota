@@ -2,12 +2,12 @@
   "name": "PlatformIO",
   "build": {
     "dockerfile": "Dockerfile",
-    // Update 'VARIANT' to pick a Python version: 3, 3.11, 3.12, 3.13
+    // Update 'VARIANT' to pick a Python version: 3, 3.11, 3.12, 3.13, 3.13.2
     // Append -bullseye or -buster to pin to an OS version.
     // Use -bullseye variants on local on arm64/Apple Silicon.
     "args": {
       "VARIANT": "3.13.2-bullseye",
-      "PIO_VERSION": "6.1.16"
+      "PIO_VERSION": "6.1.18"
     }
   },
   // Configure tool-specific properties.
