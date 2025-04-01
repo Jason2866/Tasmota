@@ -60,5 +60,4 @@ RUN curl -fLo /etc/udev/rules.d/99-platformio-udev.rules --create-dirs https://r
 RUN ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/x86_64-linux-gnu/libmpfr.so.4
 
 USER $USERNAME
-RUN python3 -c "$(curl -fsSL https://raw.githubusercontent.com/platformio/platformio/develop/scripts/get-platformio.py)"
-
+RUN python3 -c "$(curl -fsSL https://raw.githubusercontent.com/pioarduino/pioarduino-core-installer/pioarduino/get-platformio.py)"
