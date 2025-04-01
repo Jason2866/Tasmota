@@ -32,10 +32,10 @@ RUN apt-get update \
         srecord \
         xz-utils \
         # debugging
-        libpython2.7 \
-        libusb-1.0 \
-        libelf1 \
-        libncurses5 \
+        #libpython2.7 \
+        #libusb-1.0 \
+        #libelf1 \
+        #libncurses5 \
     # Clean up
     && apt-get autoremove -y \
     && apt-get clean -y \
@@ -58,7 +58,7 @@ RUN curl -fsSL /etc/udev/rules.d/99-platformio-udev.rules --create-dirs https://
 # Restart udev service to use the newly installed udev rules
 #RUN service udev restart
 # some OpenOCD req outdated libmpfr.so.4
-RUN ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/x86_64-linux-gnu/libmpfr.so.4
+# RUN ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/x86_64-linux-gnu/libmpfr.so.4
 
 USER $USERNAME
 RUN python3 -c "$(curl -fsSL https://raw.githubusercontent.com/pioarduino/pioarduino-core-installer/pioarduino/get-platformio.py)"
