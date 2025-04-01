@@ -60,6 +60,6 @@ RUN if [ ${USER_UID:-0} -ne 0 ] && [ ${USER_GID:-0} -ne 0 ]; then \
 # RUN service udev restart
 
 USER $USERNAME
-RUN curl -fsSL https://raw.githubusercontent.com/pioarduino/pioarduino-core-installer/pioarduino/get-platformio.py -o get-platformio.py \
-    && python3 get-platformio.py \
-    && rm get-platformio.py
+RUN curl -fsSL https://raw.githubusercontent.com/pioarduino/pioarduino-core-installer/pioarduino/get-platformio.py -o /tmp/get-platformio.py \
+    && python3 /tmp/get-platformio.py \
+    && rm /tmp/get-platformio.py
