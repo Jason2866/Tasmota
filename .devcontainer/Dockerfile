@@ -6,7 +6,7 @@ ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
 ENV DEBIAN_FRONTEND=noninteractive
-# Install dependencies for building Python
+# Install dependencies
 RUN apt-get update \
     && apt-get -qqy install \
         apt-utils \
@@ -62,20 +62,14 @@ RUN if [ ${USER_UID:-0} -ne 0 ] && [ ${USER_GID:-0} -ne 0 ]; then \
     ; fi
 
 # Optional: Install PlatformIO udev rules
-# Uncomment the following lines if PlatformIO is required
-# RUN curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules \
-#     -o /etc/udev/rules.d/99-platformio-udev.rules
+RUN curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules \
+    -o /etc/udev/rules.d/99-platformio-udev.rules
 
 # Add user to necessary groups (uncomment if needed)
-# RUN usermod -a -G dialout $USERNAME
-# RUN usermod -a -G plugdev $USERNAME
+RUN usermod -a -G dialout $USERNAME
+RUN usermod -a -G plugdev $USERNAME
 
 # Restart udev service to apply new rules (uncomment if needed)
 # RUN service udev restart
 
 USER $USERNAME
-
-# Optional: Install PlatformIO (uncomment if needed)
-# RUN curl -fsSL https://raw.githubusercontent.com/pioarduino/pioarduino-core-installer/pioarduino/get-platformio.py -o /tmp/get-platformio.py \
-#     && python3 /tmp/get-platformio.py \
-#     && rm /tmp/get-platformio.py
