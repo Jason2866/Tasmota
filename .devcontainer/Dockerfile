@@ -51,8 +51,12 @@ RUN ln -sf /usr/local/bin/python3.13 /usr/bin/python && \
 # Verify default Python version
 RUN python --version && python3 --version
 
+# Install udev if not already installed
+RUN apt-get update && apt-get -qqy install udev && rm -rf /var/lib/apt/lists/*
+
 # Add udev rule for PlatformIO ports
-RUN wget -q https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules -O /etc/udev/rules.d/99-platformio-udev.rules && \
+RUN mkdir -p /etc/udev/rules.d/ && \
+    wget -q https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules -O /etc/udev/rules.d/99-platformio-udev.rules && \
     udevadm control --reload-rules && udevadm trigger
 
 ENV DEBIAN_FRONTEND=dialog
