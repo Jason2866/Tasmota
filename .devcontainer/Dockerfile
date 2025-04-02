@@ -70,10 +70,6 @@ RUN if [ ${USER_UID:-0} -ne 0 ] && [ ${USER_GID:-0} -ne 0 ]; then \
         && chmod 0440 /etc/sudoers.d/$USERNAME \
     ; fi
 
-# Set default user
-ARG USERNAME=vscode
-RUN useradd -ms /bin/bash $USERNAME && \
-    usermod -aG sudo $USERNAME
 
 # Switch to the non-root user
 USER $USERNAME
