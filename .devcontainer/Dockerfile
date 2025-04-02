@@ -53,12 +53,13 @@ RUN ln -sf /usr/local/bin/python3.13 /usr/bin/python && \
 RUN python --version && python3 --version
 
 # Add udev rule for PlatformIO ports
-RUN service udev start && \
-    mkdir -p /etc/udev/rules.d/ && \
-    wget -q https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules -O /etc/udev/rules.d/99-platformio-udev.rules && \
-    udevadm control --reload-rules && udevadm trigger
+RUN mkdir -p /etc/udev/rules.d/ && \
+    wget -q https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules -O /etc/udev/rules.d/99-platformio-udev.rules
 
 ENV DEBIAN_FRONTEND=dialog
+
+# Set up the workspace
+WORKDIR /workspace
 
 # Create a non-root user with sudo privileges and add to dialout group
 RUN if [ ${USER_UID:-0} -ne 0 ] && [ ${USER_GID:-0} -ne 0 ]; then \
@@ -69,4 +70,13 @@ RUN if [ ${USER_UID:-0} -ne 0 ] && [ ${USER_GID:-0} -ne 0 ]; then \
         && chmod 0440 /etc/sudoers.d/$USERNAME \
     ; fi
 
+# Set default user
+ARG USERNAME=vscode
+RUN useradd -ms /bin/bash $USERNAME && \
+    usermod -aG sudo $USERNAME
+
+# Switch to the non-root user
 USER $USERNAME
+
+# Final setup
+CMD [ "bash" ]
