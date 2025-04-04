@@ -1,4 +1,4 @@
-FROM debian:bullseye-slim
+FROM python:slim-bullseye
 
 ARG USERNAME=vscode
 ARG USER_UID=1000
@@ -32,25 +32,6 @@ RUN apt-get update \
         srecord \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
-
-# Download and build Python 3.13.2
-RUN wget https://www.python.org/ftp/python/3.13.2/Python-3.13.2.tgz \
-    && tar -xvf Python-3.13.2.tgz \
-    && cd Python-3.13.2 \
-    && ./configure --enable-optimizations \
-    && make -j$(nproc) \
-    && make altinstall \
-    && cd .. \
-    && rm -rf Python-3.13.2 Python-3.13.2.tgz
-
-# Set Python 3.13.2 as the default Python version
-RUN ln -sf /usr/local/bin/python3.13 /usr/bin/python && \
-    ln -sf /usr/local/bin/python3.13 /usr/bin/python3 && \
-    ln -sf /usr/local/bin/pip3.13 /usr/bin/pip && \
-    ln -sf /usr/local/bin/pip3.13 /usr/bin/pip3
-
-# Verify default Python version
-RUN python --version && python3 --version
 
 # Add udev rule for PlatformIO ports
 RUN mkdir -p /etc/udev/rules.d/ && \
