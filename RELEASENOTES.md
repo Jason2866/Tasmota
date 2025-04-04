@@ -138,6 +138,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 ### Changed
 - ESP32 Platform from 2025.02.30 to 2025.03.30, Framework (Arduino Core) from v3.1.1.250203 to v3.1.3.250302 and IDF from v5.3.2.250120 to 5.3.2.250228 [#23088](https://github.com/arendst/Tasmota/issues/23088)
 - Output of commands `GPIO` and `GPIOs` swapped
+- Smoothen light gamma curve when using `Fade` [#23230](https://github.com/arendst/Tasmota/issues/23230)
 - RCSwitch `RCSWITCH_SEPARATION_LIMIT` from 4100 to 3600
 - GPIOViewer from v1.6.1 to v1.6.2 (No functional change)
 - ESP8266 enable FTP for >= 4MB variants [#23120](https://github.com/arendst/Tasmota/issues/23120)
@@ -150,6 +151,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 ### Fixed
 - Too many zeros in RCSwitch received data regression from v14.4.1.4 [#23050](https://github.com/arendst/Tasmota/issues/23050)
+- INA226 driver fixes [#23197](https://github.com/arendst/Tasmota/issues/23197)
 - ESP32 receive incomplete serial data over 128 bytes [#23156](https://github.com/arendst/Tasmota/issues/23156)
 - ESP32 intermittent exception on WiFi AP cannot be reached [#23115](https://github.com/arendst/Tasmota/issues/23115)
 - ESP32-C3 WiFi sleep [#23096](https://github.com/arendst/Tasmota/issues/23096)
