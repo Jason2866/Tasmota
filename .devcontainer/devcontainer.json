@@ -44,6 +44,6 @@
     // Mount the host's device to this container's.
     "source=/dev,target=/dev,type=bind,consistency=consistent"
   ],
-  "postCreateCommand": "mkdir -p $HOME/Documents/PlatformIO && ln -s $(pwd) $HOME/Documents/PlatformIO/Projects"
-  //"postAttachCommand": "sudo service udev restart"
+  "postCreateCommand": "mkdir -p $HOME/Documents/PlatformIO && ln -s $(pwd) $HOME/Documents/PlatformIO/Projects",
+  "postAttachCommand": "sudo curl -o /etc/udev/rules.d/99-platformio-udev.rules https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules || true && sudo usermod -a -G dialout,plugdev vscode"
 }
