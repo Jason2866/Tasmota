@@ -40,7 +40,7 @@ RUN mkdir -p /etc/udev/rules.d/ && \
 ENV DEBIAN_FRONTEND=dialog
 
 # Set up the workspace
-WORKDIR /workspace
+WORKDIR /workspaces
 
 # Create a non-root user with sudo privileges and add to dialout group
 RUN if [ ${USER_UID:-0} -ne 0 ] && [ ${USER_GID:-0} -ne 0 ]; then \
