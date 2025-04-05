@@ -9,7 +9,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install dependencies
 RUN apt-get update \
     && apt-get -qqy install \
-        udev \
         apt-utils \
         ca-certificates \
         dialog \
@@ -18,19 +17,7 @@ RUN apt-get update \
         unzip \
         wget \
         bc \
-        build-essential \
-        libssl-dev \
-        zlib1g-dev \
-        libncurses5-dev \
-        libgdbm-dev \
-        libnss3-dev \
-        libsqlite3-dev \
-        libreadline-dev \
-        libffi-dev \
         curl \
-        libbz2-dev \
-        srecord \
-        xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Add udev rule for PlatformIO ports
