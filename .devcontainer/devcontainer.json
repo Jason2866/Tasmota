@@ -37,8 +37,12 @@
   // Comment out this line to run as root instead.
   "remoteUser": "vscode",
   "runArgs": [
-    // --privileged grants access to /dev on host. Arduino will most likely be /dev/ttysN
-    "--privileged"
+    // Privilegierter Modus für vollen Hardware-Zugriff
+    "--privileged",
+    // Spezifisch für USB-Serial-Konverter (FTDI, CH340, CP210x)
+    "--device-cgroup-rule=c 188:* rmw",
+    // Für Arduino-kompatible Boards mit ACM
+    "--device-cgroup-rule=c 166:* rmw"
   ],
   "mounts": [
     // Mount the host's device to this container's.
