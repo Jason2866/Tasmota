@@ -32,6 +32,9 @@ extern int m_aes_ctr_tag(bvm *vm);
 extern int m_aes_cbc_encrypt1(bvm *vm);
 extern int m_aes_cbc_decrypt1(bvm *vm);
 
+extern int m_chacha20_encrypt1(bvm *vm);
+extern int m_chacha20_decrypt1(bvm *vm);
+
 extern int m_ec_p256_pubkey(bvm *vm);
 extern int m_ec_p256_sharedkey(bvm *vm);
 extern int m_ec_p256_ecdsa_sign_sha256(bvm *vm);
@@ -45,6 +48,7 @@ extern int m_ec_p256_mul(bvm *vm);
 
 extern int m_ec_c25519_pubkey(bvm *vm);
 extern int m_ec_c25519_sharedkey(bvm *vm);
+extern int m_ec_c25519_sign(bvm *vm);
 
 extern int m_hash_sha256_init(bvm *vm);
 extern int m_hash_sha256_update(bvm *vm);
@@ -68,6 +72,7 @@ extern const bclass be_class_md5;
 #include "be_fixed_be_class_aes_gcm.h"
 #include "be_fixed_be_class_aes_ctr.h"
 #include "be_fixed_be_class_aes_cbc.h"
+#include "be_fixed_be_class_chacha_poly.h"
 #include "be_fixed_be_class_ec_p256.h"
 #include "be_fixed_be_class_ec_c25519.h"
 #include "be_fixed_be_class_sha256.h"
@@ -94,6 +99,10 @@ const be_const_member_t be_crypto_members[] = {
 #ifdef USE_BERRY_CRYPTO_AES_GCM
   { "/AES_GCM", (intptr_t) &be_class_aes_gcm },
 #endif // USE_BERRY_CRYPTO_AES_GCM
+
+#ifdef USE_BERRY_CRYPTO_CHACHA_POLY
+  { "/CHACHA", (intptr_t) &be_class_chacha_poly },
+#endif // USE_BERRY_CRYPTO_CHACHA_POLY
 
 #ifdef USE_BERRY_CRYPTO_EC_C25519
   { "/EC_C25519", (intptr_t) &be_class_ec_c25519 },
@@ -175,6 +184,11 @@ class be_class_aes_cbc (scope: global, name: AES_CBC) {
     encrypt1, static_func(m_aes_cbc_encrypt1)
 }
 
+class be_class_chacha_poly (scope: global, name: CHACHA) {
+    decrypt1, static_func(m_chacha20_decrypt1)
+    encrypt1, static_func(m_chacha20_encrypt1)
+}
+
 class be_class_ec_p256 (scope: global, name: EC_P256) {
     public_key, static_func(m_ec_p256_pubkey)
     shared_key, static_func(m_ec_p256_sharedkey)
@@ -191,6 +205,7 @@ class be_class_ec_p256 (scope: global, name: EC_P256) {
 class be_class_ec_c25519 (scope: global, name: EC_C25519) {
     public_key, func(m_ec_c25519_pubkey)
     shared_key, func(m_ec_c25519_sharedkey)
+    sign, func(m_ec_c25519_sign)
 }
 
 class be_class_sha256 (scope: global, name: SHA256) {

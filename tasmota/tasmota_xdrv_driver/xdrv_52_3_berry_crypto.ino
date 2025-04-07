@@ -23,6 +23,7 @@
 #include <berry.h>
 #include "be_mem.h"
 #include "be_object.h"
+#include "include/ed25519.h"
 
 /*********************************************************************************************\
  * members class
@@ -617,6 +618,92 @@ extern "C" {
 }
 
 /*********************************************************************************************\
+ * CHACHA20-POLY1305  class
+ * 
+\*********************************************************************************************/
+extern "C" {
+
+  int32_t m_chacha20_run(bvm *vm, int32_t _encrypt) {
+    int32_t argc = be_top(vm); // Get the number of arguments
+    if (argc >= 4  && be_isbytes(vm, 1)    // secret_key  - 32 bytes
+                   && be_isbytes(vm, 2)    // iv          - 12 bytes
+                   && be_isbytes(vm, 3)    // data/cipher - multiple 16 bytes
+                   && be_isbytes(vm, 4)    // mac         - 16 bytes
+                   ) {
+
+      size_t key_len = 0;
+      const void * key = be_tobytes(vm, 1, &key_len);
+      if (key_len != 32) {
+        be_raise(vm, "value_error", "Key size must be 32 bytes");
+      }
+
+      size_t iv_len = 0;
+      void * iv = (void *) be_tobytes(vm, 2, &iv_len);
+      if (iv_len != 12) {
+        be_raise(vm, "value_error", "IV size must be 12");
+      }
+
+      size_t data_len = 0;
+      void * data = (void *) be_tobytes(vm, 3, &data_len);
+      // if (data_len%16 != 0) {
+      //   be_raise(vm, "value_error", "Data size must be multiple of 16");
+      // }
+
+      size_t mac_len = 0;
+      void * mac = (void *) be_tobytes(vm, 4, &data_len);
+      if (mac_len != 16) {
+        be_raise(vm, "value_error", "MAC size must be multiple of 16");
+      }
+
+      size_t aad_len = 0;
+      void * aad = NULL;
+      if(argc == 5  && be_isbytes(vm, 5)){
+        aad = (void *) be_tobytes(vm, 5, &data_len);
+      }
+
+      char _mac[16];
+      bbool _success = false;
+      br_chacha20_run bc = br_chacha20_ct_run;
+    
+      br_poly1305_ctmul32_run(key, iv, data,
+        data_len, aad, aad_len,
+        _mac, bc, _encrypt);
+    
+    //  AddLog(LOG_LEVEL_DEBUG, PSTR("MSH: encryption done "));
+    
+      if (_encrypt==1) {
+        memcpy(mac, _mac, 16);
+    //    AddLog(LOG_LEVEL_DEBUG, PSTR("MSH: payload encrypted"));
+        _success = true;
+      }
+      if (memcmp(mac, _mac, 16) == 0) {
+    //    AddLog(LOG_LEVEL_DEBUG, PSTR("MSH: payload decrypted"));
+        _success = true;
+      }
+  
+      // (unchecked )success
+      be_pushbool(vm, _success);
+      return 0;
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }    
+
+
+  // `chacha20.encrypt1(secret_key:bytes(32),iv:bytes(12),data:bytes(n*16)),tag:bytes(),aad:bytes()-> bool (true)
+  int32_t m_chacha20_encrypt1(bvm *vm);
+  int32_t m_chacha20_encrypt1(bvm *vm) {
+    m_chacha20_run(vm, 1);
+    be_return(vm);
+  }
+  // `chacha20.decrypt1(secret_key:bytes(32),iv:bytes(12),cipher:bytes(n*16),tag:bytes()add:bytes())-> bool (true)
+  int32_t m_chacha20_decrypt1(bvm *vm);
+  int32_t m_chacha20_decrypt1(bvm *vm) {
+    m_chacha20_run(vm, 0);
+    be_return(vm);
+  }
+}
+
+/*********************************************************************************************\
  * SHA256 class
  * 
 \*********************************************************************************************/
@@ -1170,6 +1257,76 @@ extern "C" {
         }
       }
       be_raise(vm, "value_error", "invalid input");
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
+  int32_t m_ec_c25519_sign(bvm *vm);
+  // https://github.com/rdeker/ed25519/blob/13a0661670949bc2e1cfcd8720082d9670768041/src/sign.c
+  int32_t m_ec_c25519_sign(bvm *vm) {
+    int32_t argc = be_top(vm); // Get the number of arguments
+    if (argc >= 5 && be_isbytes(vm, 2)  // message
+                  && be_isbytes(vm, 3)  // signature
+                  && be_isbytes(vm, 4)  // secret key
+                  && be_isbytes(vm, 5)) // public key
+                  {
+      size_t msg_len = 0;
+      const void * msg = be_tobytes(vm, 2, &msg_len);
+
+      size_t sign_len = 0;
+      void * sign = (void *) be_tobytes(vm, 3, &sign_len);
+      if (sign_len != 64) {
+        be_raise(vm, "value_error", "signature size must be 64");
+      }
+
+      size_t sec_key_len = 0;
+      void * sec_key = (void *) be_tobytes(vm, 4, &sec_key_len);
+      if (sec_key_len != 32) {
+        be_raise(vm, "value_error", "Key size must be 32");
+      }
+
+      size_t pub_key_len = 0;
+      void * pub_key = (void *) be_tobytes(vm, 5, &pub_key_len);
+      if (pub_key_len != 32) {
+        be_raise(vm, "value_error", "Key size must be 32");
+      }
+
+      unsigned char hram[64];
+      unsigned char r[64];
+      unsigned char az[64];
+      ge_p3 R;
+
+      br_sha512_context ctx_0;
+      br_sha512_init(&ctx_0);
+      br_sha512_update(&ctx_0, (unsigned char*)sec_key, 32);
+      br_sha512_out(&ctx_0, az);
+      az[0] &= 248;
+      az[31] &= 63;
+      az[31] |= 64;
+
+
+      br_sha512_context ctx;
+      br_sha512_init(&ctx);
+      br_sha512_update(&ctx, az + 32, 32);
+      br_sha512_update(&ctx, msg, msg_len);
+      br_sha512_out(&ctx, r);
+
+      memmove((unsigned char*)sign + 32, (unsigned char*)sec_key + 32, 32);
+  
+      sc_reduce(r);
+      ge_scalarmult_base(&R, r);
+      ge_p3_tobytes((unsigned char*)sign, &R);
+
+      br_sha512_context ctx1;
+      br_sha512_init(&ctx1);
+      br_sha512_update(&ctx1, sign, 64);
+      br_sha512_update(&ctx1, msg, msg_len);
+      br_sha512_out(&ctx1, hram);
+  
+      sc_reduce(hram);
+      sc_muladd((unsigned char*)sign + 32, hram, az, r);
+
+      be_return(vm);
     }
     be_raise(vm, kTypeError, nullptr);
   }
