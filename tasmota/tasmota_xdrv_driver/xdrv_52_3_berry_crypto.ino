@@ -1259,32 +1259,26 @@ extern "C" {
   // https://github.com/rdeker/ed25519/blob/13a0661670949bc2e1cfcd8720082d9670768041/src/sign.c
   int32_t m_ec_c25519_sign(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc >= 5 && be_isbytes(vm, 2)  // message
-                  && be_isbytes(vm, 3)  // signature
-                  && be_isbytes(vm, 4)  // secret key
-                  && be_isbytes(vm, 5)) // public key
+    if (argc >= 4 && be_isbytes(vm, 2)  // message
+                  && be_isbytes(vm, 3)  // secret key
+                  && be_isbytes(vm, 4)) // public key
                   {
       size_t msg_len = 0;
       const void * msg = be_tobytes(vm, 2, &msg_len);
 
-      size_t sign_len = 0;
-      void * sign = (void *) be_tobytes(vm, 3, &sign_len);
-      if (sign_len != 64) {
-        be_raise(vm, "value_error", "signature size must be 64");
-      }
-
       size_t sec_key_len = 0;
-      void * sec_key = (void *) be_tobytes(vm, 4, &sec_key_len);
+      void * sec_key = (void *) be_tobytes(vm, 3, &sec_key_len);
       if (sec_key_len != 32) {
         be_raise(vm, "value_error", "Key size must be 32");
       }
 
       size_t pub_key_len = 0;
-      void * pub_key = (void *) be_tobytes(vm, 5, &pub_key_len);
+      void * pub_key = (void *) be_tobytes(vm, 4, &pub_key_len);
       if (pub_key_len != 32) {
         be_raise(vm, "value_error", "Key size must be 32");
       }
 
+      uint8_t sign[64];
       unsigned char hram[64];
       unsigned char r[64];
       unsigned char az[64];
@@ -1298,7 +1292,6 @@ extern "C" {
       az[0] &= 248;
       az[31] &= 63;
       az[31] |= 64;
-
 
       br_sha512_init(&ctx);
       br_sha512_update(&ctx, az + 32, 32);
@@ -1321,6 +1314,7 @@ extern "C" {
       sc_reduce(hram);
       sc_muladd((unsigned char*)sign + 32, hram, az, r);
 
+      be_pushbytes(vm, sign, 64);
       be_return(vm);
     }
     be_raise(vm, kTypeError, nullptr);
