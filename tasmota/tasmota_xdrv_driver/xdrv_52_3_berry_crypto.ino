@@ -1296,32 +1296,33 @@ extern "C" {
       unsigned char az[64];
       ge_p3 R;
 
-      br_sha512_context ctx_0;
-      br_sha512_init(&ctx_0);
-      br_sha512_update(&ctx_0, (unsigned char*)sec_key, 32);
-      br_sha512_out(&ctx_0, az);
+      br_sha512_context ctx;
+
+      br_sha512_init(&ctx);
+      br_sha512_update(&ctx, (unsigned char*)sec_key, 32);
+      br_sha512_out(&ctx, az);
       az[0] &= 248;
       az[31] &= 63;
       az[31] |= 64;
 
 
-      br_sha512_context ctx;
       br_sha512_init(&ctx);
       br_sha512_update(&ctx, az + 32, 32);
       br_sha512_update(&ctx, msg, msg_len);
       br_sha512_out(&ctx, r);
 
-      memmove((unsigned char*)sign + 32, (unsigned char*)sec_key + 32, 32);
+      // memmove((unsigned char*)sign + 32, (unsigned char*)sec_key + 32, 32);
+      memmove((unsigned char*)sign + 32, (unsigned char*)pub_key, 32);
   
       sc_reduce(r);
       ge_scalarmult_base(&R, r);
       ge_p3_tobytes((unsigned char*)sign, &R);
 
-      br_sha512_context ctx1;
-      br_sha512_init(&ctx1);
-      br_sha512_update(&ctx1, sign, 64);
-      br_sha512_update(&ctx1, msg, msg_len);
-      br_sha512_out(&ctx1, hram);
+
+      br_sha512_init(&ctx);
+      br_sha512_update(&ctx, sign, 64);
+      br_sha512_update(&ctx, msg, msg_len);
+      br_sha512_out(&ctx, hram);
   
       sc_reduce(hram);
       sc_muladd((unsigned char*)sign + 32, hram, az, r);
