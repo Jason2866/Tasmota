@@ -102,6 +102,14 @@ class HANDSHAKE
         buf .. str_entry
     end
 
+    def add_mpint(buf, str_entry)
+        if str_entry[0] & 128 != 0
+            str_entry = bytes("00") + str_entry
+        end
+        buf.add(size(str_entry),-4)
+        buf .. str_entry
+    end
+
     def kexinit_from_client()
         var buf = self.bin_packet.payload
         var k = {}
@@ -176,22 +184,23 @@ class HANDSHAKE
     def create_KEX_ECDH_REPLY()
         import crypto
         var hash = bytes(2048)
-        hash .. self.V_C
-        hash .. self.V_S
-        hash .. self.I_C
-        hash .. self.I_S
-        hash .. self.K_S
-        hash .. self.Q_C
-        hash .. self.Q_S
-        hash .. self.K
+        self.add_string(hash, self.V_C)
+        self.add_string(hash, self.V_S)
+        self.add_string(hash, self.I_C)
+        self.add_string(hash, self.I_S)
+        self.add_string(hash, self.K_S)
+        self.add_string(hash, self.Q_C)
+        self.add_string(hash, self.Q_S)
+        self.add_mpint(hash, self.K)
 
-        # print(self.V_C)
-        # print(self.V_S)
-        # print(self.I_C)
-        # print(self.I_S)
-        # print(self.K_S)
-        # print(self.Q_C)
-        # print(self.Q_S)
+        # print("name client",self.V_C)
+        # print("name server",self.V_S)
+        # print("kex init client",self.I_C)
+        # print("kex init server",self.I_S)
+        # print("server key bytes K_S",self.K_S)
+        # print("ephemeral client", self.Q_C)
+        # print("ephemeral server",self.Q_S)
+        # print("shared secret K", self.K,size(self.K))
 
         var sha256 = crypto.SHA256()
         sha256.update(hash)
@@ -203,7 +212,7 @@ class HANDSHAKE
 
         var payload = bytes(256)
         payload .. SSH_MSG.KEX_ECDH_REPLY
-        print(self.K_S, size(self.K_S), self.Q_S, size(self.Q_S), H, size(H) )
+        # print(self.K_S, size(self.K_S), self.Q_S, size(self.Q_S), H, size(H) )
         self.add_string(payload, self.K_S)
         self.add_string(payload, self.Q_S)
         var HS = bytes(128)
