@@ -14,7 +14,7 @@
 
 import re
 import sys
-from os.path import isfile, join
+from os.path import isfile, join, basename, isdir
 from enum import Enum
 import os
 import tasmotapiolib
@@ -28,6 +28,61 @@ platform = env.PioPlatform()
 board = env.BoardConfig()
 mcu = board.get("build.mcu", "esp32")
 IS_WINDOWS = sys.platform.startswith("win")
+
+# --- Helper function to find a tool within PlatformIO packages ---
+def _find_pio_tool(tool_name, package_name):
+    """Finds a tool executable within a PlatformIO package directory."""
+    tool_path = None
+    try:
+        package_dir = platform.get_package_dir(package_name)
+        if not package_dir:
+            # Fallback for older structures or potential issues
+            package_dir = env.PioPlatform().get_package_dir(package_name)
+
+        if not package_dir or not isdir(package_dir):
+             raise ValueError(f"Could not find package directory for '{package_name}'.")
+
+        # Common tool locations (check root and bin/)
+        possible_paths = [
+            join(package_dir, tool_name),
+            join(package_dir, "bin", tool_name)
+        ]
+        # Add .exe for Windows
+        if IS_WINDOWS:
+            possible_paths.extend([p + ".exe" for p in possible_paths])
+
+        for p in possible_paths:
+            if isfile(p):
+                tool_path = p
+                break
+
+        if not tool_path:
+             raise ValueError(f"'{tool_name}' not found in package '{package_name}' at expected locations.")
+
+        return tool_path
+
+    except Exception as e:
+        print(Fore.RED + f"Error finding tool '{tool_name}': {e}")
+        env.Exit(1) # Exit if the tool cannot be found
+
+# --- Locate essential tools once ---
+try:
+    ESPTOOL_PATH = _find_pio_tool("esptool.py", "tool-esptoolpy")
+    # MKFSTOOL_NAME is needed for FS_Info, find it here too
+    MKFSTOOL_NAME = env.get("MKFSTOOL") # Get the tool name from the environment
+    if not MKFSTOOL_NAME:
+        print(Fore.RED + "Error: MKFSTOOL environment variable not set.")
+        env.Exit(1)
+    MKFSTOOL_PATH = _find_pio_tool(MKFSTOOL_NAME, "tool-mklittlefs")
+except Exception as e:
+    # Error message already printed in _find_pio_tool, just ensure exit
+    env.Exit(1)
+
+# --- Python Executable ---
+PYTHON_EXE = env.subst("$PYTHONEXE")
+if not PYTHON_EXE or not isfile(PYTHON_EXE):
+     print(Fore.RED + f"Error: Python executable not found at '{PYTHON_EXE}'. Check PlatformIO installation.")
+     env.Exit(1)
 
 
 class FSType(Enum):
@@ -49,21 +104,14 @@ class FSInfo:
 
 class FS_Info(FSInfo):
     def __init__(self, start, length, page_size, block_size):
-        self.tool = env["MKFSTOOL"]
-        # Use platform.get_package_dir which is generally preferred
-        mklittlefs_dir = platform.get_package_dir("tool-mklittlefs")
-        if not mklittlefs_dir:
-             # Fallback if needed
-             mklittlefs_dir = env.PioPlatform().get_package_dir("tool-mklittlefs")
-        if not mklittlefs_dir or not isfile(join(mklittlefs_dir, self.tool)):
-             print(Fore.RED + f"Error: Could not find mklittlefs tool '{self.tool}'")
-             env.Exit(1)
-        self.tool = join(mklittlefs_dir, self.tool)
+        # Use the globally found MKFSTOOL_PATH
+        self.tool = MKFSTOOL_PATH
         super().__init__(FSType.LITTLEFS, start, length, page_size, block_size)
     def __repr__(self):
         return f"{self.fs_type} Start {hex(self.start)} Len {hex(self.length)} Page size {hex(self.page_size)} Block size {hex(self.block_size)}"
     def get_extract_cmd(self, input_file, output_dir):
         # Ensure paths with spaces are quoted for shell execution
+        # Use the full path to the tool
         return f'"{self.tool}" -b {self.block_size} -s {self.length} -p {self.page_size} --unpack "{output_dir}" "{input_file}"'
 
 # SPIFFS helpers copied from ESP32, https://github.com/platformio/platform-espressif32/blob/develop/builder/main.py
@@ -211,21 +259,6 @@ def parse_partition_table(content):
 
 
 def get_partition_table():
-    # --- Locating esptool.py ---
-    try:
-        esptool_dir = platform.get_package_dir("tool-esptoolpy")
-        if not esptool_dir:
-            raise ValueError("Could not find esptool.py package directory.")
-        esptoolpy = join(esptool_dir, "esptool.py")
-        if not isfile(esptoolpy):
-             # Fallback for older structures or potential issues
-             esptoolpy = join(env.PioPlatform().get_package_dir("tool-esptoolpy") or "", "esptool.py")
-        if not isfile(esptoolpy):
-             raise ValueError(f"esptool.py not found at expected location: {esptoolpy}")
-    except Exception as e:
-        print(Fore.RED + f"Error finding esptool.py: {e}")
-        env.Exit(1) # Exit if esptool.py cannot be found
-
     # --- Configuration ---
     upload_port = env.get("UPLOAD_PORT", None)
     # Use a specific download speed setting if available, otherwise fallback to upload speed or default
@@ -249,6 +282,7 @@ def get_partition_table():
     partition_table_file = join(env.subst("$BUILD_DIR"), "partition_table_from_flash.bin")
 
     # --- esptool Command ---
+    # Use the globally found ESPTOOL_PATH
     esptoolpy_flags = [
             "--chip", mcu,
             "--port", upload_port,
@@ -260,7 +294,8 @@ def get_partition_table():
             "0x1000", # Standard size to read (covers default and larger tables)
             partition_table_file
     ]
-    esptoolpy_cmd = [env.subst("$PYTHONEXE"), esptoolpy] + esptoolpy_flags
+    # Use the globally found PYTHON_EXE
+    esptoolpy_cmd = [PYTHON_EXE, ESPTOOL_PATH] + esptoolpy_flags
 
     # --- Execution ---
     print(f"Attempting to read partition table from {mcu} via {upload_port}...")
@@ -272,7 +307,8 @@ def get_partition_table():
         print(Fore.RED + f"Error reading partition table: esptool.py exited with code {e.returncode}.")
         env.Exit(1)
     except FileNotFoundError:
-        print(Fore.RED + f"Error: Could not execute command. Is Python ('{env.subst('$PYTHONEXE')}') or esptool ('{esptoolpy}') path correct?")
+        # This error is less likely now with PYTHON_EXE and ESPTOOL_PATH checked earlier
+        print(Fore.RED + f"Error: Could not execute command. Check Python ('{PYTHON_EXE}') and esptool ('{ESPTOOL_PATH}') paths.")
         env.Exit(1)
     except Exception as e:
         print(Fore.RED + f"An unexpected error occurred during partition table read: {e}")
@@ -352,19 +388,6 @@ def get_fs_type_start_and_length():
 
 def download_fs(fs_info: FSInfo):
     print(f"Preparing to download filesystem: {fs_info}")
-    # --- Locating esptool.py --- (Duplicated logic, consider refactoring)
-    try:
-        esptool_dir = platform.get_package_dir("tool-esptoolpy")
-        if not esptool_dir:
-            raise ValueError("Could not find esptool.py package directory.")
-        esptoolpy = join(esptool_dir, "esptool.py")
-        if not isfile(esptoolpy):
-             esptoolpy = join(env.PioPlatform().get_package_dir("tool-esptoolpy") or "", "esptool.py")
-        if not isfile(esptoolpy):
-             raise ValueError(f"esptool.py not found at expected location: {esptoolpy}")
-    except Exception as e:
-        print(Fore.RED + f"Error finding esptool.py: {e}")
-        env.Exit(1)
 
     # --- Configuration ---
     upload_port = env.get("UPLOAD_PORT", None)
@@ -372,7 +395,7 @@ def download_fs(fs_info: FSInfo):
     if not download_speed:
         download_speed = str(board.get("download.speed", "115200"))
 
-    # --- Port Auto-detection --- (Duplicated logic, consider refactoring)
+    # --- Port Auto-detection ---
     if not upload_port or "none" in upload_port.lower():
         print("Upload port not specified, attempting auto-detection...")
         env.AutodetectUploadPort()
@@ -388,6 +411,7 @@ def download_fs(fs_info: FSInfo):
     fs_file = join(env.subst("$BUILD_DIR"), f"downloaded_{fs_info.fs_type.value}_{hex(fs_info.start)}_{hex(fs_info.length)}.bin")
 
     # --- esptool Command ---
+    # Use the globally found ESPTOOL_PATH
     esptoolpy_flags = [
             "--chip", mcu,
             "--port", upload_port,
@@ -399,7 +423,8 @@ def download_fs(fs_info: FSInfo):
             hex(fs_info.length),
             fs_file
     ]
-    esptoolpy_cmd = [env.subst("$PYTHONEXE"), esptoolpy] + esptoolpy_flags
+    # Use the globally found PYTHON_EXE
+    esptoolpy_cmd = [PYTHON_EXE, ESPTOOL_PATH] + esptoolpy_flags
 
     # --- Execution ---
     print(f"Attempting to download filesystem image to '{fs_file}'...")
@@ -413,7 +438,7 @@ def download_fs(fs_info: FSInfo):
         print(Fore.YELLOW + "Tip: If download fails, try reducing 'download_speed' / 'upload_speed' in platformio.ini or override.")
         return (False, "")
     except FileNotFoundError:
-        print(Fore.RED + f"Error: Could not execute command. Is Python ('{env.subst('$PYTHONEXE')}') or esptool ('{esptoolpy}') path correct?")
+        print(Fore.RED + f"Error: Could not execute command. Check Python ('{PYTHON_EXE}') and esptool ('{ESPTOOL_PATH}') paths.")
         return (False, "")
     except Exception as e:
         print(Fore.RED + f"An unexpected error occurred during filesystem download: {e}")
@@ -516,23 +541,6 @@ def command_download_fs(*args, **kwargs):
 
 # --- Start of Updated upload_factory function ---
 def upload_factory(*args, **kwargs):
-    # --- Locating esptool.py ---
-    try:
-        # Prefer platform.get_package_dir which is more robust
-        esptool_dir = platform.get_package_dir("tool-esptoolpy")
-        if not esptool_dir:
-            # Fallback for older structures or potential issues
-            esptool_dir = env.PioPlatform().get_package_dir("tool-esptoolpy")
-        if not esptool_dir:
-            raise ValueError("Could not find esptool.py package directory.")
-
-        esptoolpy = join(esptool_dir, "esptool.py")
-        if not isfile(esptoolpy):
-             raise ValueError(f"esptool.py not found at expected location: {esptoolpy}")
-    except Exception as e:
-        print(Fore.RED + f"Error finding esptool.py: {e}")
-        env.Exit(1) # Exit if esptool.py cannot be found
-
     # --- Configuration Retrieval ---
     # Use env.subst to ensure we get the final resolved value from the environment
     upload_speed = env.subst("$UPLOAD_SPEED")
@@ -580,6 +588,7 @@ def upload_factory(*args, **kwargs):
             print(f"Detected upload port: {upload_port}")
 
     # --- Construct esptool Command ---
+    # Use the globally found ESPTOOL_PATH
     esptoolpy_flags = [
             "--chip", mcu,
             "--port", upload_port,
@@ -592,16 +601,11 @@ def upload_factory(*args, **kwargs):
             "0x0",
             target_firm # The full path to the firmware file
     ]
-    # Ensure Python executable path is correctly substituted
-    python_exe = env.subst("$PYTHONEXE")
-    if not python_exe or not isfile(python_exe):
-         print(Fore.RED + f"Error: Python executable not found at '{python_exe}'. Check PlatformIO installation.")
-         env.Exit(1)
-
-    esptoolpy_cmd = [python_exe, esptoolpy] + esptoolpy_flags
+    # Use the globally found PYTHON_EXE
+    esptoolpy_cmd = [PYTHON_EXE, ESPTOOL_PATH] + esptoolpy_flags
 
     # --- Execute Flashing Command with Error Handling ---
-    print(f"Attempting to flash factory firmware '{os.path.basename(target_firm)}' to {mcu} at address 0x0...")
+    print(f"Attempting to flash factory firmware '{basename(target_firm)}' to {mcu} at address 0x0...")
     print(f"Using command: {' '.join(esptoolpy_cmd)}") # Show the command being run
     try:
         # Use subprocess.check_call to raise an error on failure
@@ -613,7 +617,7 @@ def upload_factory(*args, **kwargs):
         env.Exit(1) # Exit PlatformIO script execution with an error code
     except FileNotFoundError:
         # This error usually means python_exe or esptoolpy path is wrong
-        print(Fore.RED + f"Error: Could not execute command. Check Python ('{python_exe}') and esptool ('{esptoolpy}') paths.")
+        print(Fore.RED + f"Error: Could not execute command. Check Python ('{PYTHON_EXE}') and esptool ('{ESPTOOL_PATH}') paths.")
         env.Exit(1)
     except Exception as e:
         # Catch any other unexpected exceptions during the subprocess call
@@ -621,7 +625,7 @@ def upload_factory(*args, **kwargs):
         env.Exit(1)
 # --- End of Updated upload_factory function ---
 
-
+# --- Start of esp32_use_external_crashreport function ---
 def esp32_use_external_crashreport(*args, **kwargs):
     crash_report_str = None
     try:
@@ -674,18 +678,33 @@ def esp32_use_external_crashreport(*args, **kwargs):
     toolchain_dir = None
     try:
         # Find the toolchain package directory more reliably
-        pkg = platform.get_package("toolchain-" + board.get("build.mcu", mcu)) # e.g., toolchain-esp32
+        # Use board.get("build.mcu", mcu) to handle cases where build.mcu might not be explicitly set
+        pkg = platform.get_package("toolchain-" + board.get("build.mcu", mcu))
         if pkg:
             toolchain_dir = pkg.path
             bin_dir = join(toolchain_dir, "bin")
             if os.path.isdir(bin_dir):
+                # Iterate through files in bin directory to find addr2line
                 for f in os.listdir(bin_dir):
-                    # Match common addr2line executable names
-                    if "addr2line" in f and not f.endswith(".py"): # Avoid scripts
+                    # Match common addr2line executable names (case-insensitive check might be safer)
+                    if "addr2line" in f.lower() and not f.lower().endswith((".py", ".pyc", ".pyo")): # Avoid scripts
                         addr2line = join(bin_dir, f)
                         break # Found one
+
         if not addr2line:
-             raise FileNotFoundError("Could not find addr2line executable in toolchain.")
+             # Try a fallback using platform.get_tool_dir if the package method fails
+             try:
+                 tool_dir = platform.get_tool_dir("xtensa-%s-elf" % ("lx106" if mcu == "esp8266" else mcu)) # Adjust based on MCU if needed
+                 addr2line_path_attempt = join(tool_dir, "bin", "xtensa-%s-elf-addr2line" % ("lx106" if mcu == "esp8266" else mcu))
+                 if IS_WINDOWS:
+                     addr2line_path_attempt += ".exe"
+                 if isfile(addr2line_path_attempt):
+                     addr2line = addr2line_path_attempt
+                 else:
+                     raise FileNotFoundError # Trigger the outer exception handler
+             except: # Catch potential errors in fallback
+                 raise FileNotFoundError("Could not find addr2line executable in toolchain package or via get_tool_dir.")
+
 
     except FileNotFoundError as e:
         print(Fore.RED + f"Error finding addr2line: {e}")
@@ -761,24 +780,14 @@ def esp32_use_external_crashreport(*args, **kwargs):
     except Exception as e:
         print(Fore.RED + f"An unexpected error occurred during address decoding: {e}")
         env.Exit(1)
+# --- End of esp32_use_external_crashreport function ---
 
-
+# --- Start of reset_target function ---
 def reset_target(*args, **kwargs):
-    # --- Locating esptool.py --- (Duplicated logic)
-    try:
-        esptool_dir = platform.get_package_dir("tool-esptoolpy")
-        if not esptool_dir: esptool_dir = env.PioPlatform().get_package_dir("tool-esptoolpy")
-        if not esptool_dir: raise ValueError("Could not find esptool.py package directory.")
-        esptoolpy = join(esptool_dir, "esptool.py")
-        if not isfile(esptoolpy): raise ValueError(f"esptool.py not found: {esptoolpy}")
-    except Exception as e:
-        print(Fore.RED + f"Error finding esptool.py: {e}")
-        env.Exit(1)
-
     # --- Configuration ---
     upload_port = env.get("UPLOAD_PORT", None)
 
-    # --- Port Auto-detection --- (Duplicated logic)
+    # --- Port Auto-detection ---
     if not upload_port or "none" in upload_port.lower():
         print("Upload port not specified, attempting auto-detection...")
         try:
@@ -794,39 +803,40 @@ def reset_target(*args, **kwargs):
             print(f"Detected upload port: {upload_port}")
 
     # --- esptool Command ---
-    # Using 'flash_id' with '--no-stub' is a common way to trigger a reset
-    # without uploading a stub loader. It connects, reads the ID, and resets.
+    # Use the globally found ESPTOOL_PATH
+    # Using 'flash_id' or 'chip_id' with '--no-stub' and '--after hard_reset' is a reliable way
+    # to trigger the reset sequence without uploading a stub. Using flash_id as original.
     esptoolpy_flags = [
         "--no-stub",
         "--chip", mcu,
         "--port", upload_port,
         "--before", "no_reset", # Don't reset before connecting
         "--after", "hard_reset", # Hard reset after the command finishes
-        "flash_id" # The command itself
+        "flash_id" # Use flash_id command (or chip_id if preferred)
     ]
-    python_exe = env.subst("$PYTHONEXE")
-    if not python_exe or not isfile(python_exe):
-         print(Fore.RED + f"Error: Python executable not found at '{python_exe}'.")
-         env.Exit(1)
-    esptoolpy_cmd = [python_exe, esptoolpy] + esptoolpy_flags
+    # Use the globally found PYTHON_EXE
+    esptoolpy_cmd = [PYTHON_EXE, ESPTOOL_PATH] + esptoolpy_flags
 
-    # --- Execution ---
+    # --- Execution (Blocking) ---
     print(f"Attempting to reset device {mcu} via {upload_port}...")
     try:
-        # Use check_call, although the output of flash_id might be printed
+        # Use subprocess.check_call (waits for completion) for consistency and error reporting.
         subprocess.check_call(esptoolpy_cmd, shell=False)
         print(Fore.GREEN + "Device reset command sent successfully.")
     except subprocess.CalledProcessError as e:
         # A non-zero exit code might occur if connection fails, but reset might still happen
         print(Fore.YELLOW + f"Warning: esptool.py exited with code {e.returncode} during reset attempt.")
         print(Fore.YELLOW + "Device may or may not have reset. Check device status.")
-        # Don't necessarily exit here, as the goal was just to trigger a reset.
+        # Don't exit here, as the goal was just to trigger a reset.
     except FileNotFoundError:
-        print(Fore.RED + f"Error: Could not execute command. Check Python ('{python_exe}') and esptool ('{esptoolpy}') paths.")
+        # Handle error if python or esptool.py cannot be executed
+        print(Fore.RED + f"Error: Could not execute command. Check Python ('{PYTHON_EXE}') and esptool ('{ESPTOOL_PATH}') paths.")
         env.Exit(1)
     except Exception as e:
+        # Handle any other errors during process launch
         print(Fore.RED + f"An unexpected error occurred during device reset: {e}")
         env.Exit(1)
+# --- End of reset_target function ---
 
 
 # --- Custom Target Definitions ---
@@ -836,7 +846,7 @@ env.AddCustomTarget(
     name="reset_target",
     dependencies=None, # No build dependencies needed
     actions=[
-        reset_target # Function to execute
+        reset_target # Use the standard blocking function
     ],
     title="Reset Target",
     description="Resets the target device using esptool.py",
@@ -856,7 +866,7 @@ env.AddCustomTarget(
 # Flash Factory Firmware
 env.AddCustomTarget(
     name="factory_flash",
-    dependencies=["$PIOMAINPROG"],
+    dependencies=None,
     actions=[
         upload_factory # Use the updated function
     ],
