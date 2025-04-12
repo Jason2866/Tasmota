@@ -856,9 +856,7 @@ env.AddCustomTarget(
 # Flash Factory Firmware
 env.AddCustomTarget(
     name="factory_flash",
-    # Specify the program binary as a dependency? Maybe not needed as we find the path dynamically.
-    # dependencies=["$PIOMAINPROG"],
-    dependencies=None,
+    dependencies=["$PIOMAINPROG"],
     actions=[
         upload_factory # Use the updated function
     ],
