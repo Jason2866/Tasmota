@@ -57,7 +57,7 @@ class SSH_MSG
 end
 
 class HANDSHAKE
-    var state, bin_packet
+    var state, bin_packet, session
     var kexinit_client
     var kexinit_own
     static banner = "  / \\    Secure Wireless Serial Interface: ID %u\n"
@@ -73,14 +73,17 @@ class HANDSHAKE
     var   Q_S # server's ephemeral public key octet string
     var   K   # shared secret
 
+    var   H   # hash of above
+
     var   E_S_S # server's ephemeral secret key bytes
     var   E_S_H # server's secret host key bytes
 
 
-    def init()
+    def init(session)
         self.state = 0
         self.K_S = (bytes().fromb64("AAAAC3NzaC1lZDI1NTE5AAAAIGgTQ3jxXinPuu/JJltK1gRIT1OYUe4WOqu/sszMgI5A"))#[-32..]
         self.E_S_H = bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd")
+        self.session = session
     end
 
     def get_name_list(buffer, index, length)
@@ -204,10 +207,10 @@ class HANDSHAKE
 
         var sha256 = crypto.SHA256()
         sha256.update(hash)
-        var H = sha256.out()
+        self.H = sha256.out()
 
         var eddsa25519 = crypto.EC_C25519()
-        var SIG = eddsa25519.sign(H,self.E_S_H,self.K_S[-32..])
+        var SIG = eddsa25519.sign(self.H,self.E_S_H,self.K_S[-32..])
         print(SIG)
 
         var payload = bytes(256)
@@ -237,6 +240,7 @@ class HANDSHAKE
         log("SSH: confirm to be ready for new keys",2)
         var payload = bytes(-1)
         payload[0] = SSH_MSG.NEWKEYS
+        self.session.prepare(self.K,self.H)
         return self.bin_packet.create(payload)
     end
 
@@ -279,10 +283,68 @@ class HANDSHAKE
     end
 end
 
+class SESSION
+    var up
+    var H, K, ID
+    var IV_C_S, IV_S_C,  MAC_C_S, MAC_S_C
+    var KEY_C_S_main, KEY_S_C_main, KEY_C_S_header, KEY_S_C_header
+
+    def init()
+        self.up = false
+    end
+
+    def decrypt(packet)
+        import crypto
+        var c = crypto.CHACHA()
+        var _tag = bytes(-16)
+        var d = c.decrypt1(self.KEY_C_S_header,bytes(-12),packet[0..4],_tag)
+        print(d,_tag,packet[-17..],packet)
+    end
+
+    def generate_keys(K,H,third,id)
+        import crypto
+        var sha256 = crypto.SHA256()
+        var mp_prefix = bytes("")
+        if K[0]&128 != 0 
+            mp_prefix = bytes("00")
+        end
+        sha256.update(mp_prefix + K)
+        sha256.update(H)
+        if classof(third) != bytes
+            sha256.update(bytes().fromstring(third))
+        else
+            sha256.update(third)
+        end
+        if id != nil
+            sha256.update(id)
+        end
+        return sha256.out()
+    end
+
+    def prepare(K,H)
+        self.K = K
+        self.H = H
+        self.ID = H.copy()
+
+        # self.IV_C_S = self.generate_keys(K,H,"A",H)
+        # self.IV_S_C = self.generate_keys(K,H,"B",H)
+        self.KEY_C_S_main = self.generate_keys(K,H,"C",H)
+        self.KEY_C_S_header = self.generate_keys(K,H,self.KEY_C_S_main)
+
+        self.KEY_S_C_main = self.generate_keys(K,H,"D",H)
+        self.KEY_S_C_header = self.generate_keys(K,H,self.KEY_S_C_main)
+        # self.MAC_C_S = self.generate_keys(K,H,"E",H)
+        # self.MAC_S_C = self.generate_keys(K,H,"F",H)
+        print("Did create session keys:")
+        print(self.KEY_C_S_main, self.KEY_C_S_header, self.KEY_S_C_main, self.KEY_S_C_header)
+        self.up = true
+    end
+end
+
 class SSH : Driver
 
     var connection, server, client, data_server, data_client, data_ip
-    var handshake
+    var handshake, session
     var dir, dir_list, dir_pos
     var file, file_size, file_rename, retries, chunk_size
     var binary_mode, active_ip, active_port, user_input
@@ -315,7 +377,8 @@ class SSH : Driver
             self.loop()
         elif self.server.hasclient()
             self.client = self.server.acceptasync()
-            self.handshake = HANDSHAKE()
+            self.session = SESSION()
+            self.handshake = HANDSHAKE(self.session)
             self.connection = true
             self.pubClientInfo()
         else
@@ -544,7 +607,10 @@ class SSH : Driver
         var d = self.client.readbytes()
         if size(d) == 0 return end
         log(f"SSH: <<< {d} _ {size(d)} bytes",2)
-        if self.handshake
+        if self.session.up == true
+            self.handshake = nil
+            self.session.decrypt(d)
+        elif self.handshake
             response = self.handshake.process(d)
             if response != ""
                 self.sendResponse(response)
