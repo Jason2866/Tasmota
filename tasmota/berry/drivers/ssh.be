@@ -54,6 +54,19 @@ class SSH_MSG
     static NEWKEYS = 21
     static KEXDH_INIT = 30
     static KEX_ECDH_REPLY = 31
+
+    static def add_string(buf, str_entry)
+        buf.add(size(str_entry),-4)
+        buf .. str_entry
+    end
+
+    static def add_mpint(buf, entry)
+        if entry[0] & 128 != 0
+            entry = bytes("00") + entry
+        end
+        buf.add(size(entry),-4)
+        buf .. entry
+    end
 end
 
 class HANDSHAKE
@@ -105,12 +118,12 @@ class HANDSHAKE
         buf .. str_entry
     end
 
-    def add_mpint(buf, str_entry)
-        if str_entry[0] & 128 != 0
-            str_entry = bytes("00") + str_entry
+    def add_mpint(buf, entry)
+        if entry[0] & 128 != 0
+            entry = bytes("00") + entry
         end
-        buf.add(size(str_entry),-4)
-        buf .. str_entry
+        buf.add(size(entry),-4)
+        buf .. entry
     end
 
     def kexinit_from_client()
@@ -315,11 +328,10 @@ class SESSION
     def generate_keys(K,H,third,id)
         import crypto
         var sha256 = crypto.SHA256()
-        var mp_prefix = bytes("")
-        # if K[0]&128 != 0 
-        #     mp_prefix = bytes("00")
-        # end
-        sha256.update(mp_prefix + K)
+        var K_mpint = bytes()
+        SSH_MSG.add_mpint(K_mpint,K)
+        sha256.update(K_mpint)
+
         sha256.update(H)
         if classof(third) != bytes
             sha256.update(bytes().fromstring(third))
