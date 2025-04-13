@@ -32,8 +32,9 @@ extern int m_aes_ctr_tag(bvm *vm);
 extern int m_aes_cbc_encrypt1(bvm *vm);
 extern int m_aes_cbc_decrypt1(bvm *vm);
 
-extern int m_chacha20_encrypt1(bvm *vm);
-extern int m_chacha20_decrypt1(bvm *vm);
+extern int m_chacha20_run(bvm *vm);
+extern int m_chacha20_poly_encrypt1(bvm *vm);
+extern int m_chacha20_poly_decrypt1(bvm *vm);
 
 extern int m_ec_p256_pubkey(bvm *vm);
 extern int m_ec_p256_sharedkey(bvm *vm);
@@ -101,7 +102,7 @@ const be_const_member_t be_crypto_members[] = {
 #endif // USE_BERRY_CRYPTO_AES_GCM
 
 #ifdef USE_BERRY_CRYPTO_CHACHA_POLY
-  { "/CHACHA", (intptr_t) &be_class_chacha_poly },
+  { "/CHACHA20_POLY1305", (intptr_t) &be_class_chacha_poly },
 #endif // USE_BERRY_CRYPTO_CHACHA_POLY
 
 #ifdef USE_BERRY_CRYPTO_EC_C25519
@@ -184,9 +185,10 @@ class be_class_aes_cbc (scope: global, name: AES_CBC) {
     encrypt1, static_func(m_aes_cbc_encrypt1)
 }
 
-class be_class_chacha_poly (scope: global, name: CHACHA) {
-    decrypt1, static_func(m_chacha20_decrypt1)
-    encrypt1, static_func(m_chacha20_encrypt1)
+class be_class_chacha_poly (scope: global, name: CHACHA20_POLY1305) {
+    poly_decrypt1, static_func(m_chacha20_poly_decrypt1)
+    poly_encrypt1, static_func(m_chacha20_poly_encrypt1)
+    chacha_run, static_func(m_chacha20_run)
 }
 
 class be_class_ec_p256 (scope: global, name: EC_P256) {

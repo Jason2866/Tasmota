@@ -8,7 +8,7 @@ assert(signature == bytes("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e
 
 # https://boringssl.googlesource.com/boringssl/+/2e2a226ac9201ac411a84b5e79ac3a7333d8e1c9/crypto/cipher_extra/test/chacha20_poly1305_tests.txt
 import crypto
-c = crypto.CHACHA()
+c = crypto.CHACHA20_POLY1305()
 key = bytes("808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f")
 iv =bytes("070000004041424344454647")
 aad= bytes("50515253c0c1c2c3c4c5c6c7")
@@ -17,6 +17,25 @@ msg = bytes().fromstring(_msg)
 ct = bytes("d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d63dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc3ff4def08e4b7a9de576d26586cec64b6116")
 tag = bytes("1ae10b594f09e26a7e902ecbd0600691")
 _tag = bytes(-16)
-c.encrypt1(key,iv,msg,_tag,aad)
+c.poly_encrypt1(key,iv,msg,_tag,aad)
 assert(_tag == tag)
+
+# https://datatracker.ietf.org/doc/draft-ietf-sshm-chacha20-poly1305/01/
+
+import crypto
+c = crypto.CHACHA20_POLY1305()
+keys = bytes("8bbff6855fc102338c373e73aac0c914f076a905b2444a32eecaffeae22becc5e9b7a7a5825a8249346ec1c28301cf394543fc7569887d76e168f37562ac0740")
+packet = bytes("2c3ecce4a5bc05895bf07a7ba956b6c68829ac7c83b780b7000ecde745afc705bbc378ce03a280236b87b53bed5839662302b164b6286a48cd1e097138e3cb909b8b2b829dd18d2a35ff82d995349e855bf02c298ef775f2d1a7e8b8")
+
+iv = bytes("000000000000000000000007") # seq number
+
+length = packet[0..3].copy()
+c.chacha_run(keys[-32..],iv,0,length) # use upper 32 bytes of key material
+assert(length == bytes("00000048"))
+
+_tag = packet[-16..].copy()
+data = packet[4..-17].copy()
+valid = c.poly_decrypt1(keys[0..31], iv, data , _tag) # lower bytes of key for packet
+# assert(valid == true)
+assert(length + data == bytes("00000048065e00000000000000384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c69744e43e804dc6c"))
 

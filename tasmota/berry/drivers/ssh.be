@@ -154,7 +154,7 @@ class HANDSHAKE
     def kexinit_to_client()
         import crypto
         var	cookie  = crypto.random(16)
-        var	kex_algorithms = "curve25519-sha256@libssh.org"
+        var	kex_algorithms = "curve25519-sha256,kex-strict-s-v00@openssh.com" #curve25519-sha256@libssh.org
         var	server_host_key_algorithms = "ssh-ed25519" # "-cert-v01@openssh.com"
         var	encryption_algorithms_client_to_server = "chacha20-poly1305@openssh.com"
         var	encryption_algorithms_server_to_client = "chacha20-poly1305@openssh.com"
@@ -273,6 +273,8 @@ class HANDSHAKE
                     print("SSH: unknown packet type", self.bin_packet.payload[0])
                 end
                 self.bin_packet = nil
+            else
+                self.session.seq_nr_rx -= 1
             end
             return response
         elif self.state == 2
@@ -286,28 +288,37 @@ end
 class SESSION
     var up
     var H, K, ID
-    var IV_C_S, IV_S_C,  MAC_C_S, MAC_S_C
+    # var IV_C_S, IV_S_C,  MAC_C_S, MAC_S_C
     var KEY_C_S_main, KEY_S_C_main, KEY_C_S_header, KEY_S_C_header
+    var seq_nr_rx, seq_nr_tx
 
     def init()
         self.up = false
+        self.seq_nr_rx = -1
+        self.seq_nr_tx = -1
     end
 
     def decrypt(packet)
         import crypto
-        var c = crypto.CHACHA()
-        var _tag = bytes(-16)
-        var d = c.decrypt1(self.KEY_C_S_header,bytes(-12),packet[0..4],_tag)
-        print(d,_tag,packet[-17..],packet)
+        var c = crypto.CHACHA20_POLY1305()
+        var length = packet[0..3].copy()
+        var iv = bytes(-12)
+        # iv.seti(8,self.seq_nr_rx,-4)
+        c.chacha_run(self.KEY_C_S_header,iv,0,length) # use upper 32 bytes of key material
+        print(length)
+        var _tag = packet[-16..].copy()
+        var data = packet[4..-17].copy()
+        c.poly_decrypt1(self.KEY_C_S_main, iv, data , _tag) # lower bytes of key for packet
+        print(data)
     end
 
     def generate_keys(K,H,third,id)
         import crypto
         var sha256 = crypto.SHA256()
         var mp_prefix = bytes("")
-        if K[0]&128 != 0 
-            mp_prefix = bytes("00")
-        end
+        # if K[0]&128 != 0 
+        #     mp_prefix = bytes("00")
+        # end
         sha256.update(mp_prefix + K)
         sha256.update(H)
         if classof(third) != bytes
@@ -598,15 +609,17 @@ class SSH : Driver
     end
 
     def sendResponse(resp)
+        self.session.seq_nr_tx += 1
         self.client.write(resp)
-        log(f"SSH: >>> {resp} _ {size(resp)} bytes",2)
+        log(f"SSH: {self.session.seq_nr_tx} >>> {resp} _ {size(resp)} bytes",2)
     end
 
     def handleConnection() # main loop for incoming commands
         var response
         var d = self.client.readbytes()
         if size(d) == 0 return end
-        log(f"SSH: <<< {d} _ {size(d)} bytes",2)
+        self.session.seq_nr_rx += 1
+        log(f"SSH: {self.session.seq_nr_rx} <<< {d} _ {size(d)} bytes",2)
         if self.session.up == true
             self.handshake = nil
             self.session.decrypt(d)

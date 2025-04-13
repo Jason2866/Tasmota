@@ -623,7 +623,45 @@ extern "C" {
 \*********************************************************************************************/
 extern "C" {
 
-  int32_t m_chacha20_run(bvm *vm, int32_t _encrypt) {
+   // `chacha20_run(secret_key:bytes(32),iv:bytes(12),cipher:bytes(n*16),)-> int counter
+  int32_t m_chacha20_run(bvm *vm) {
+    int32_t argc = be_top(vm); // Get the number of arguments
+    if (argc >= 4  && be_isbytes(vm, 1)    // secret_key  - 32 bytes
+                   && be_isbytes(vm, 2)    // iv/nonce    - 12 bytes
+                   && be_isint(vm, 3)      // counter
+                   && be_isbytes(vm, 4)    // data/cipher
+                   ) {
+
+      size_t key_len = 0;
+      const void * key = be_tobytes(vm, 1, &key_len);
+      if (key_len != 32) {
+        AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), key_len);
+        be_raise(vm, "value_error", "Key size must be 32 bytes");
+      }
+
+      size_t iv_len = 0;
+      void * iv = (void *) be_tobytes(vm, 2, &iv_len);
+      if (iv_len != 12) {
+        AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), iv_len);
+        be_raise(vm, "value_error", "IV size must be 12");
+      }
+
+      int32_t cc = be_toint(vm, 3);
+
+      size_t data_len = 0;
+      void * data = (void *) be_tobytes(vm, 4, &data_len);
+
+      br_chacha20_run bc = br_chacha20_ct_run;
+    
+      int32_t new_cc = br_chacha20_ct_run(key, iv, cc, data, data_len);
+
+      be_pushint(vm, new_cc);
+      be_return(vm);
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
+  int32_t m_chacha20_poly_run(bvm *vm, int32_t _encrypt) {
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc >= 4  && be_isbytes(vm, 1)    // secret_key  - 32 bytes
                    && be_isbytes(vm, 2)    // iv/nonce    - 12 bytes
@@ -682,19 +720,19 @@ extern "C" {
       be_return(vm);
     }
     be_raise(vm, kTypeError, nullptr);
-  }    
-
-
-  // `chacha20.encrypt1(secret_key:bytes(32),iv:bytes(12),data:bytes(n*16)),tag:bytes(),aad:bytes()-> bool (true)
-  int32_t m_chacha20_encrypt1(bvm *vm);
-  int32_t m_chacha20_encrypt1(bvm *vm) {
-    return m_chacha20_run(vm, 1);
   }
-  // `chacha20.decrypt1(secret_key:bytes(32),iv:bytes(12),cipher:bytes(n*16),tag:bytes()add:bytes())-> bool (true)
-  int32_t m_chacha20_decrypt1(bvm *vm);
-  int32_t m_chacha20_decrypt1(bvm *vm) {
-    return m_chacha20_run(vm, 0);
+
+  // `chacha_encrypt1(secret_key:bytes(32),iv:bytes(12),data:bytes(n*16)),tag:bytes(),aad:bytes()-> bool (true)
+  // int32_t m_chacha20_encrypt1(bvm *vm);
+  int32_t m_chacha20_poly_encrypt1(bvm *vm) {
+    return m_chacha20_poly_run(vm, 1);
   }
+  // `chacha_decrypt1(secret_key:bytes(32),iv:bytes(12),cipher:bytes(n*16),tag:bytes()add:bytes())-> bool (true)
+  // int32_t m_chacha20_decrypt1(bvm *vm);
+  int32_t m_chacha20_poly_decrypt1(bvm *vm) {
+    return m_chacha20_poly_run(vm, 0);
+  }
+
 }
 
 /*********************************************************************************************\
