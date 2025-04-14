@@ -9,13 +9,18 @@ All notable changes to this project will be documented in this file.
 - Berry `bytes.add()` now accepts 3-bytes values (#23200)
 - Berry expose `esp_http_server` for websockets (#23206)
 - AlpineJS 2.8.2 - optional for now (#23259)
+- Support for XMODEM over serial and telnet if enabled with `#define USE_XYZMODEM`
+- PZEM_AC device address in JSON and GUI (#23268)
 
 ### Breaking Changed
+- HASPmota added `y2_min` and `y2_max` to control the second series of `chart` (#23287)
+- HASPmota default theme is now Tasmota-style (#23288)
 
 ### Changed
 - Output of commands `GPIO` and `GPIOs` swapped
 - Smoothen light gamma curve when using `Fade` (#23230)
 - ESP32 Platform from 2025.03.30 to 2025.04.30, Framework (Arduino Core) from v3.1.3.250302 to v3.1.3.250411 and IDF from v5.3.2.250228 to 5.3.2.250403 (#23280)
+- HLK-LD2402 updates for firmware 3.3.5+ (#23281)
 
 ### Fixed
 - INA226 driver fixes (#23197)
@@ -25,7 +30,6 @@ All notable changes to this project will be documented in this file.
 ### Removed
 
 
-
 ## [14.5.0.2] 20250325
 ### Added
 - Berry load `.tapp` files in `/.extensions/` then in `/` (#23113)
@@ -33,7 +37,7 @@ All notable changes to this project will be documented in this file.
 - Support for HLK-LD2402 24GHz smart wave motion sensor (#23133)
 - Matter prepare for ICD cluster (#23158)
 - Berry `re.dump()` (#23162)
-- Telnet server using command `Telnet <0|1|port>[,<IP filter>]`
+- Support for Telnet server using command `Telnet <0|1|port>[,<IP filter>]` if enabled with `#define USE_TELNET`
 - HASPmota autostart when `pages.jsonl` exists (#23181)
 
 ### Breaking Changed

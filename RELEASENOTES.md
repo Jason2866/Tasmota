@@ -119,7 +119,9 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Extend command `GPIO` with different display options and allowing updating of module GPIO's in one go
 - Support Vango Technologies V924x ultralow power, single-phase, power measurement [#23127](https://github.com/arendst/Tasmota/issues/23127)
 - Support for HLK-LD2402 24GHz smart wave motion sensor [#23133](https://github.com/arendst/Tasmota/issues/23133)
-- Telnet server using command `Telnet <0|1|port>[,<IP filter>]`
+- Support for Telnet server using command `Telnet <0|1|port>[,<IP filter>]` if enabled with `#define USE_TELNET`
+- Support for XMODEM over serial and telnet if enabled with `#define USE_XYZMODEM`
+- PZEM_AC device address in JSON and GUI [#23268](https://github.com/arendst/Tasmota/issues/23268)
 - Allow acl in mqtt when client certificate is in use with `#define USE_MQTT_CLIENT_CERT` [#22998](https://github.com/arendst/Tasmota/issues/22998)
 - AlpineJS 2.8.2 - optional for now [#23259](https://github.com/arendst/Tasmota/issues/23259)
 - Berry experimental driver for AXP2101 for M5Core2v1.1 [#23039](https://github.com/arendst/Tasmota/issues/23039)
@@ -136,6 +138,8 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 ### Breaking Changed
 - Berry remove `Leds.create_matrix` from the standard library waiting for reimplementation [#23114](https://github.com/arendst/Tasmota/issues/23114)
+- HASPmota added `y2_min` and `y2_max` to control the second series of `chart` [#23287](https://github.com/arendst/Tasmota/issues/23287)
+- HASPmota default theme is now Tasmota-style [#23288](https://github.com/arendst/Tasmota/issues/23288)
 
 ### Changed
 - ESP32 Platform from 2025.02.30 to 2025.04.30, Framework (Arduino Core) from v3.1.1.250203 to v3.1.3.250411 and IDF from v5.3.2.250120 to 5.3.2.250403 [#23280](https://github.com/arendst/Tasmota/issues/23280)
@@ -143,6 +147,7 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Smoothen light gamma curve when using `Fade` [#23230](https://github.com/arendst/Tasmota/issues/23230)
 - RCSwitch `RCSWITCH_SEPARATION_LIMIT` from 4100 to 3600
 - GPIOViewer from v1.6.1 to v1.6.2 (No functional change)
+- HLK-LD2402 updates for firmware 3.3.5+ [#23281](https://github.com/arendst/Tasmota/issues/23281)
 - ESP8266 enable FTP for >= 4MB variants [#23120](https://github.com/arendst/Tasmota/issues/23120)
 - ESP32 enable webcam version 2 [#18732](https://github.com/arendst/Tasmota/issues/18732)
 - Berry update flasher for Sonoff ZBBridge Pro [#23136](https://github.com/arendst/Tasmota/issues/23136)
