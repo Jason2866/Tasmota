@@ -50,10 +50,40 @@ end
 
 
 class SSH_MSG
+    static DISCONNECT = 1
+    static SERVICE_REQUEST = 5
+    static SERVICE_ACCEPT = 6
     static KEXINIT = 20
     static NEWKEYS = 21
     static KEXDH_INIT = 30
     static KEX_ECDH_REPLY = 31
+    static USERAUTH_REQUEST = 50
+    static USERAUTH_FAILURE = 51
+    static USERAUTH_SUCCESS = 52
+    static USERAUTH_BANNER = 53
+
+    static def get_name_list(buffer, index, length)
+        import string
+        if length == 0 || length > (size(buffer) - 5)
+            return nil
+        end
+        var names = buffer[index + 4 .. index + 3 + length]
+        print(names.asstring())
+        return string.split(names.asstring(),",")
+    end
+
+    static def get_string(buffer, index, length)
+        import string
+        if length == 0 || length > (size(buffer) - 5)
+            return nil
+        end
+        var name = buffer[index + 4 .. index + 3 + length]
+        return name.asstring()
+    end
+
+    static def get_item_length(buf)
+        return buf.geti(0,-4)
+    end
 
     static def add_string(buf, str_entry)
         buf.add(size(str_entry),-4)
@@ -67,15 +97,22 @@ class SSH_MSG
         buf.add(size(entry),-4)
         buf .. entry
     end
+
+    static def make_mpint(buf)
+        var mpint = bytes(size(buf) + 5)
+        if buf[0] & 128 != 0
+            buf = bytes("00") + buf
+        end
+        mpint.add(size(buf),-4)
+        mpint .. buf
+        return mpint
+    end
 end
 
 class HANDSHAKE
     var state, bin_packet, session
     var kexinit_client
     var kexinit_own
-    static banner = "  / \\    Secure Wireless Serial Interface: ID %u\n"
-                    "/ /|\\ \\  SSH Terminal Server\n"
-                    "  \\_/    Copyright (C) 2025 Tasmota\n"
 
     var   V_C # client's identification string (CR and LF excluded)
     static V_S = "SSH-2.0-TasmotaSSH_0.1" # server's identification string (CR and LF excluded)
@@ -99,75 +136,49 @@ class HANDSHAKE
         self.session = session
     end
 
-    def get_name_list(buffer, index, length)
-        import string
-        if length == 0 || length > (size(buffer) - 5)
-            return nil
-        end
-        var names = buffer[index + 4 .. index + 3 + length]
-        print(names.asstring())
-        return string.split(names.asstring(),",")
-    end
 
-    def name_list_length(buf)
-        return buf.geti(0,-4)
-    end
-
-    def add_string(buf, str_entry)
-        buf.add(size(str_entry),-4)
-        buf .. str_entry
-    end
-
-    def add_mpint(buf, entry)
-        if entry[0] & 128 != 0
-            entry = bytes("00") + entry
-        end
-        buf.add(size(entry),-4)
-        buf .. entry
-    end
-
-    def kexinit_from_client()
-        var buf = self.bin_packet.payload
-        var k = {}
-        k["cookie"] = buf[1..16].tohex()
-        var next_index = 17
-        var next_length = self.name_list_length(buf[next_index..])
-        k["kex_algorithms"] = self.get_name_list(buf, next_index, next_length)
-        next_index += next_length + 4
-        next_length = self.name_list_length(buf[next_index..])
-        k["server_host_key_algorithms"] = self.get_name_list(buf, next_index, next_length)
-        next_index += next_length + 4
-        next_length = self.name_list_length(buf[next_index..])
-        k["encryption_algorithms_client_to_server"] = self.get_name_list(buf, next_index, next_length)
-        next_index += next_length + 4
-        next_length = self.name_list_length(buf[next_index..])
-        k["encryption_algorithms_server_to_client"] = self.get_name_list(buf, next_index, next_length)
-        next_index += next_length + 4
-        next_length = self.name_list_length(buf[next_index..])
-        k["mac_algorithms_client_to_server"] = self.get_name_list(buf, next_index, next_length)
-        next_index += next_length + 4
-        next_length = self.name_list_length(buf[next_index..])
-        k["mac_algorithms_server_to_client"] = self.get_name_list(buf, next_index, next_length)
-        next_index += next_length + 4
-        next_length = self.name_list_length(buf[next_index..])
-        k["compression_algorithms_client_to_server"] = self.get_name_list(buf, next_index, next_length)
-        next_index += next_length + 4
-        next_length = self.name_list_length(buf[next_index..])
-        k["compression_algorithms_server_to_client"] = self.get_name_list(buf, next_index, next_length)
-        next_index += next_length + 4
-        next_length = self.name_list_length(buf[next_index..])
-        k["languages_client_to_server"] = self.get_name_list(buf, next_index, next_length)
-        next_index += next_length + 4
-        next_length = self.name_list_length(buf[next_index..])
-        k["languages_server_to_client"] = self.get_name_list(buf, next_index, next_length)
-        self.kexinit_client = k
-        # print("SSH: Kexinit from client = ",k)
-    end
+    # def kexinit_from_client()
+    #     var buf = self.bin_packet.payload
+    #     var k = {}
+    #     k["cookie"] = buf[1..16].tohex()
+    #     var next_index = 17
+    #     var next_length = self.name_list_length(buf[next_index..])
+    #     k["kex_algorithms"] = self.get_name_list(buf, next_index, next_length)
+    #     next_index += next_length + 4
+    #     next_length = self.name_list_length(buf[next_index..])
+    #     k["server_host_key_algorithms"] = self.get_name_list(buf, next_index, next_length)
+    #     next_index += next_length + 4
+    #     next_length = self.name_list_length(buf[next_index..])
+    #     k["encryption_algorithms_client_to_server"] = self.get_name_list(buf, next_index, next_length)
+    #     next_index += next_length + 4
+    #     next_length = self.name_list_length(buf[next_index..])
+    #     k["encryption_algorithms_server_to_client"] = self.get_name_list(buf, next_index, next_length)
+    #     next_index += next_length + 4
+    #     next_length = self.name_list_length(buf[next_index..])
+    #     k["mac_algorithms_client_to_server"] = self.get_name_list(buf, next_index, next_length)
+    #     next_index += next_length + 4
+    #     next_length = self.name_list_length(buf[next_index..])
+    #     k["mac_algorithms_server_to_client"] = self.get_name_list(buf, next_index, next_length)
+    #     next_index += next_length + 4
+    #     next_length = self.name_list_length(buf[next_index..])
+    #     k["compression_algorithms_client_to_server"] = self.get_name_list(buf, next_index, next_length)
+    #     next_index += next_length + 4
+    #     next_length = self.name_list_length(buf[next_index..])
+    #     k["compression_algorithms_server_to_client"] = self.get_name_list(buf, next_index, next_length)
+    #     next_index += next_length + 4
+    #     next_length = self.name_list_length(buf[next_index..])
+    #     k["languages_client_to_server"] = self.get_name_list(buf, next_index, next_length)
+    #     next_index += next_length + 4
+    #     next_length = self.name_list_length(buf[next_index..])
+    #     k["languages_server_to_client"] = self.get_name_list(buf, next_index, next_length)
+    #     self.kexinit_client = k
+    #     # print("SSH: Kexinit from client = ",k)
+    # end
 
     def kexinit_to_client()
         import crypto
         var	cookie  = crypto.random(16)
-        var	kex_algorithms = "curve25519-sha256,kex-strict-s-v00@openssh.com" #curve25519-sha256@libssh.org
+        var	kex_algorithms = "curve25519-sha256,kex-strict-s-v00@openssh.com,kex-strict-s" #curve25519-sha256@libssh.org
         var	server_host_key_algorithms = "ssh-ed25519" # "-cert-v01@openssh.com"
         var	encryption_algorithms_client_to_server = "chacha20-poly1305@openssh.com"
         var	encryption_algorithms_server_to_client = "chacha20-poly1305@openssh.com"
@@ -181,17 +192,17 @@ class HANDSHAKE
         var payload = bytes(256)
         payload .. SSH_MSG.KEXINIT
         payload .. cookie
-        self.add_string(payload,kex_algorithms)
-        self.add_string(payload,server_host_key_algorithms)
-        self.add_string(payload,encryption_algorithms_client_to_server)
-        self.add_string(payload,encryption_algorithms_server_to_client)
-        self.add_string(payload,mac_algorithms_client_to_server)
-        self.add_string(payload,mac_algorithms_server_to_client)
-        self.add_string(payload,compression_algorithms_client_to_server)
-        self.add_string(payload,compression_algorithms_client_to_server)
-        self.add_string(payload,languages_client_to_server)
-        self.add_string(payload,languages_server_to_client)
-        payload .. 0 # false
+        SSH_MSG.add_string(payload,kex_algorithms)
+        SSH_MSG.add_string(payload,server_host_key_algorithms)
+        SSH_MSG.add_string(payload,encryption_algorithms_client_to_server)
+        SSH_MSG.add_string(payload,encryption_algorithms_server_to_client)
+        SSH_MSG.add_string(payload,mac_algorithms_client_to_server)
+        SSH_MSG.add_string(payload,mac_algorithms_server_to_client)
+        SSH_MSG.add_string(payload,compression_algorithms_client_to_server)
+        SSH_MSG.add_string(payload,compression_algorithms_client_to_server)
+        SSH_MSG.add_string(payload,languages_client_to_server)
+        SSH_MSG.add_string(payload,languages_server_to_client)
+        payload .. 0 # false - first_kex_follows
         payload.add(0,-4) # reserved
         self.I_S = payload.copy()
         return self.bin_packet.create(payload)
@@ -200,14 +211,14 @@ class HANDSHAKE
     def create_KEX_ECDH_REPLY()
         import crypto
         var hash = bytes(2048)
-        self.add_string(hash, self.V_C)
-        self.add_string(hash, self.V_S)
-        self.add_string(hash, self.I_C)
-        self.add_string(hash, self.I_S)
-        self.add_string(hash, self.K_S)
-        self.add_string(hash, self.Q_C)
-        self.add_string(hash, self.Q_S)
-        self.add_mpint(hash, self.K)
+        SSH_MSG.add_string(hash, self.V_C)
+        SSH_MSG.add_string(hash, self.V_S)
+        SSH_MSG.add_string(hash, self.I_C)
+        SSH_MSG.add_string(hash, self.I_S)
+        SSH_MSG.add_string(hash, self.K_S)
+        SSH_MSG.add_string(hash, self.Q_C)
+        SSH_MSG.add_string(hash, self.Q_S)
+        SSH_MSG.add_mpint(hash, self.K)
 
         # print("name client",self.V_C)
         # print("name server",self.V_S)
@@ -229,12 +240,12 @@ class HANDSHAKE
         var payload = bytes(256)
         payload .. SSH_MSG.KEX_ECDH_REPLY
         # print(self.K_S, size(self.K_S), self.Q_S, size(self.Q_S), H, size(H) )
-        self.add_string(payload, self.K_S)
-        self.add_string(payload, self.Q_S)
+        SSH_MSG.add_string(payload, self.K_S)
+        SSH_MSG.add_string(payload, self.Q_S)
         var HS = bytes(128)
-            self.add_string(HS, "ssh-ed25519")
-            self.add_string(HS,SIG)
-        self.add_string(payload, HS)
+            SSH_MSG.add_string(HS, "ssh-ed25519")
+            SSH_MSG.add_string(HS,SIG)
+            SSH_MSG.add_string(payload, HS)
         return self.bin_packet.create(payload)
     end
 
@@ -258,8 +269,6 @@ class HANDSHAKE
     end
 
     def process(buf)
-        # log(buf)
-        # print(buf[0],size(buf) )
         var response = bytes()
         if self.state == 0
             self.state = 1
@@ -275,7 +284,7 @@ class HANDSHAKE
                 print(self.bin_packet.payload, self.bin_packet.payload_length)
                 if self.bin_packet.payload[0] == SSH_MSG.KEXINIT
                     self.I_C = self.bin_packet.payload.copy()
-                    self.kexinit_from_client()
+                    # self.kexinit_from_client()
                     response = self.kexinit_to_client()
                 elif self.bin_packet.payload[0] == SSH_MSG.KEXDH_INIT
                     response = self.create_ephemeral(self.bin_packet.payload)
@@ -301,9 +310,12 @@ end
 class SESSION
     var up
     var H, K, ID
-    # var IV_C_S, IV_S_C,  MAC_C_S, MAC_S_C
+    var bin_packet
     var KEY_C_S_main, KEY_S_C_main, KEY_C_S_header, KEY_S_C_header
     var seq_nr_rx, seq_nr_tx
+    static banner = "  / \\    Secure Wireless Serial Interface: ID %u\n"
+                    "/ /|\\ \\  SSH Terminal Server\n"
+                    "  \\_/    Copyright (C) 2025 Tasmota\n"
 
     def init()
         self.up = false
@@ -311,27 +323,45 @@ class SESSION
         self.seq_nr_tx = -1
     end
 
+    def handle_SR()
+        var name = SSH_MSG.get_string(self.bin_packet.payload, 1, SSH_MSG.get_item_length(self.bin_packet.payload[1..]))
+        return name
+    end
+
+    def process(data)
+        var r = bytes()
+        var d = self.decrypt(data)
+        print(d)
+        if self.bin_packet
+            self.bin_packet.append(d)
+        else
+            self.bin_packet = BIN_PACKET(d)
+        end
+        if self.bin_packet.complete == true
+            if self.bin_packet.payload[0] == SSH_MSG.SERVICE_REQUEST
+                return self.handle_SR()
+            end
+        end
+        return r
+    end
+
     def decrypt(packet)
         import crypto
         var c = crypto.CHACHA20_POLY1305()
         var length = packet[0..3].copy()
         var iv = bytes(-12)
-        # iv.seti(8,self.seq_nr_rx,-4)
+        iv.seti(8,self.seq_nr_rx,-4)
         c.chacha_run(self.KEY_C_S_header,iv,0,length) # use upper 32 bytes of key material
-        print(length)
         var _tag = packet[-16..].copy()
         var data = packet[4..-17].copy()
         c.poly_decrypt1(self.KEY_C_S_main, iv, data , _tag) # lower bytes of key for packet
-        print(data)
+        return length + data
     end
 
     def generate_keys(K,H,third,id)
         import crypto
         var sha256 = crypto.SHA256()
-        var K_mpint = bytes()
-        SSH_MSG.add_mpint(K_mpint,K)
-        sha256.update(K_mpint)
-
+        sha256.update(SSH_MSG.make_mpint(K))
         sha256.update(H)
         if classof(third) != bytes
             sha256.update(bytes().fromstring(third))
@@ -348,19 +378,15 @@ class SESSION
         self.K = K
         self.H = H
         self.ID = H.copy()
-
-        # self.IV_C_S = self.generate_keys(K,H,"A",H)
-        # self.IV_S_C = self.generate_keys(K,H,"B",H)
         self.KEY_C_S_main = self.generate_keys(K,H,"C",H)
         self.KEY_C_S_header = self.generate_keys(K,H,self.KEY_C_S_main)
-
         self.KEY_S_C_main = self.generate_keys(K,H,"D",H)
         self.KEY_S_C_header = self.generate_keys(K,H,self.KEY_S_C_main)
-        # self.MAC_C_S = self.generate_keys(K,H,"E",H)
-        # self.MAC_S_C = self.generate_keys(K,H,"F",H)
-        print("Did create session keys:")
-        print(self.KEY_C_S_main, self.KEY_C_S_header, self.KEY_S_C_main, self.KEY_S_C_header)
+        # print("Did create session keys:")
+        # print(self.KEY_C_S_main, self.KEY_C_S_header, self.KEY_S_C_main, self.KEY_S_C_header)
         self.up = true
+        self.seq_nr_rx = -1 # reset to handle Terrapin attack
+        self.seq_nr_tx = -1
     end
 end
 
@@ -415,7 +441,7 @@ class SSH : Driver
             if self.client.connected() == false
                 self.pubClientInfo()
                 self.connection = false
-                self.abortDataOp()
+                #self.abortDataOp()
             end
         end
     end
@@ -431,185 +457,6 @@ class SSH : Driver
             self.handleConnection()
         end
     end
-
-    def abortDataOp()
-        if self.data_op == "d"
-            self.finishDownload(true)
-        elif self.data_op == "u"
-            self.finishUpload(true)
-        elif self.data_op == "dir"
-            self.finishUpload(false)
-        end
-    end
-
-    def download() # ESP -> client
-        self.data_buf..self.file.readbytes(self.chunk_size)
-        if size(self.data_buf) == 0
-            self.retries -= 1
-            if self.retries > 0
-                return
-            end
-        else
-            var written = self.data_client.write(self.data_buf)
-            self.data_buf.clear()
-            self.data_ptr += written
-            if self.data_ptr < self.file_size
-                self.file.seek(self.data_ptr)
-                if self.retries > 0
-                    return
-                end
-            end
-        end
-        self.finishDownload()
-    end
-
-    def finishDownload(error)
-        self.data_client.close()
-        tasmota.remove_fast_loop(self.fast_loop)
-        self.file.close()
-        if error
-            self.sendResponse(f"426 Connection closed; transfer aborted after {self.data_ptr} bytes.")
-        else
-            self.sendResponse(f"250 download done with {self.data_ptr} bytes.")
-        end
-        self.data_op = nil
-        tasmota.gc()
-    end
-
-    def upload() # client -> ESP
-        self.data_buf..self.data_client.readbytes()
-
-        if size(self.data_buf) > 0
-            self.file.write(self.data_buf)
-            self.data_ptr += size(self.data_buf)
-            self.data_buf.clear()
-        else
-            log(f"SSH: {self.retries} retries",4)
-            self.retries -= 1
-            if self.retries > 0
-                return
-            end
-            self.finishUpload()
-        end
-    end
-
-    def finishUpload(error)
-        self.data_client.close()
-        tasmota.remove_fast_loop(self.fast_loop)
-        self.file.close()
-        if error
-            self.sendResponse(f"426 Connection closed; transfer after {self.data_ptr} bytes")
-        else
-            self.sendResponse(f"250 upload done with {self.data_ptr} bytes")
-        end
-        self.data_op = nil
-        tasmota.gc()
-    end
-
-    def transferDir(mode)
-        import path
-        var sz, date, isdir
-        var i = self.dir_list[self.dir_pos]
-        var url = f"{self.dir.get_url()}{i}"
-        isdir = path.isdir(url)
-        if isdir == false
-            var f = open(url,"r")
-            sz = f.size()
-            f.close()
-            date = path.last_modified(url)
-        end
-        if self.data_client.connected()
-            var dir = ""
-            if mode == "MLSD"
-                if  isdir
-                    dir = "Type=dir;Perm=edlmp; "
-                else
-                    date = tasmota.time_dump(date)
-                    var y = str(date['year'])
-                    var m = f"{date['month']:02s}"
-                    var d = f"{date['day']:02s}"
-                    var h = f"{date['hour']:02s}"
-                    var min = f"{date['min']:02s}"
-                    var sec = f"{date['sec']:02s}"
-                    var modif =f"{y}{m}{d}{h}{min}{sec}"
-                    dir = f"Type=file;Perm=rwd;Modify={modif};Size={sz}; "
-                end
-            elif mode == "LIST"
-                var d = "-"
-                if isdir
-                    d = "d"
-                    date = ""
-                    sz = ""
-                else
-                    date = tasmota.strftime("%b %d %H:%M", date)
-                end
-                dir = f"{d}rw-------  1 all all{sz:14s} {date} "
-
-            elif mode == "NLST"
-                dir=self.dir.get_url()
-            end
-            var entry = f"{dir}{i}"
-            log(entry,4)
-            self.data_client.write(entry + "\r\n")
-            self.dir_pos += 1
-        else
-            self.finishTransferDir(false)
-        end
-        if self.dir_pos < size(self.dir_list)
-            return
-        end
-        self.finishTransferDir(true)
-    end
-
-    def finishTransferDir(success)
-        self.data_client.close()
-        if success
-            var n = size(self.dir_list)
-            self.sendResponse(f"226 {n} files in {self.dir.get_url()}")
-        else
-            self.sendResponse("426 Transfer aborted")
-        end
-        self.data_op = nil
-        tasmota.remove_fast_loop(self.fast_loop)
-        tasmota.gc()
-    end
-
-    def readDir()
-        import path
-        self.dir_list = path.listdir(self.dir.get_url())
-    end
-
-    def openFile(name,mode)
-        import path
-        var url = f"{self.dir.get_url()}{name}"
-        if path.isdir(url) == true
-            log(f"SSH: {url} is a folder",2)
-            return false
-        end
-        if mode == "r"
-            if path.exists(url) != true
-                log(f"SSH: {url} not found",2)
-                return false
-            end
-        end
-        log(f"SSH: Open file {url} in {mode} mode",3)
-        self.file = open(f"{url}",mode)
-        if mode == "a"
-            if self.data_ptr != 0
-                log(f"SSH: Appending file {url} at position {self.data_ptr}",3)
-                if self.data_ptr != self.file.size()
-                    log(f"SSH: !!! resume position of {self.data_ptr} != file size of {self.file.size()} !!!",2)
-                end
-            end
-        end
-        return true
-    end
-
-    def close()
-        self.sendResponse("221 Closing connection")
-        self.connection = false
-    end
-
 
     def deinitConnectServer()
         if self.data_server != nil
@@ -633,12 +480,15 @@ class SSH : Driver
         self.session.seq_nr_rx += 1
         log(f"SSH: {self.session.seq_nr_rx} <<< {d} _ {size(d)} bytes",2)
         if self.session.up == true
-            self.handshake = nil
-            self.session.decrypt(d)
+            response = self.session.process(d)
+            if response != ""
+                self.sendResponse(response)
+            end
         elif self.handshake
             response = self.handshake.process(d)
             if response != ""
                 self.sendResponse(response)
+                if response[5] == SSH_MSG.NEWKEYS self.handshake = nil end
             end
         end
     end
