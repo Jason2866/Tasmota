@@ -2552,6 +2552,11 @@ void br_poly1305_ctmul32_run(const void *key, const void *iv,
 	void *data, size_t len, const void *aad, size_t aad_len,
 	void *tag, br_chacha20_run ichacha, int encrypt);
 
+void br_poly1305_ssh_run(const void *key, const void *iv,
+	void *data, size_t len, const void *aad, size_t aad_len,
+	void *tag, br_chacha20_run ichacha, int encrypt);
+	
+
 /**
  * \brief ChaCha20+Poly1305 AEAD implementation (i15).
  *

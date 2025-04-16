@@ -295,3 +295,147 @@ br_poly1305_ctmul32_run(const void *key, const void *iv,
 		ichacha(key, iv, 1, data, len);
 	}
 }
+
+void
+br_poly1305_ssh_run(const void *key, const void *iv,
+	void *data, size_t len, const void *aad___, size_t aad_len____,
+	void *tag, br_chacha20_run ichacha, int encrypt)
+{
+	unsigned char pkey[32], foot[16];
+	uint32_t z, r[19], acc[10], cc, ctl;
+	int i;
+
+	const void *_key = key + 32;
+	void *_data = data - 4;
+	uint8_t _aad[16];
+	memset(_aad, 0, sizeof _aad);
+	memcpy(_aad, _data, 4);
+
+	/*
+	 * Compute the MAC key. The 'r' value is the first 16 bytes of
+	 * pkey[].
+	 */
+	memset(pkey, 0, sizeof pkey);
+	ichacha(key, iv, 0, pkey, sizeof pkey);
+
+	/*
+	 * If encrypting, ChaCha20 must run first, followed by Poly1305.
+	 * When decrypting, the operations are reversed.
+	 */
+	if (encrypt) {
+		ichacha(key, iv, 1, data, len);
+		ichacha(_key, iv, 0, _aad, 4);
+		memcpy(_data,_aad,4);
+	}
+
+	/*
+	 * Run Poly1305. We must process the AAD, then ciphertext, then
+	 * the footer (with the lengths). Note that the AAD and ciphertext
+	 * are meant to be padded with zeros up to the next multiple of 16,
+	 * and the length of the footer is 16 bytes as well.
+	 */
+
+	/*
+	 * Decode the 'r' value into 13-bit words, with the "clamping"
+	 * operation applied.
+	 */
+	z = br_dec32le(pkey) & 0x03FFFFFF;
+	r[9] = z & 0x1FFF;
+	r[10] = z >> 13;
+	z = (br_dec32le(pkey +  3) >> 2) & 0x03FFFF03;
+	r[11] = z & 0x1FFF;
+	r[12] = z >> 13;
+	z = (br_dec32le(pkey +  6) >> 4) & 0x03FFC0FF;
+	r[13] = z & 0x1FFF;
+	r[14] = z >> 13;
+	z = (br_dec32le(pkey +  9) >> 6) & 0x03F03FFF;
+	r[15] = z & 0x1FFF;
+	r[16] = z >> 13;
+	z = (br_dec32le(pkey + 12) >> 8) & 0x000FFFFF;
+	r[17] = z & 0x1FFF;
+	r[18] = z >> 13;
+
+	/*
+	 * Extend r[] with the 5x factor pre-applied.
+	 */
+	for (i = 0; i < 9; i ++) {
+		r[i] = MUL15(5, r[i + 10]);
+	}
+
+	/*
+	 * Accumulator is 0.
+	 */
+	memset(acc, 0, sizeof acc);
+
+	/*
+	 * Process the additional authenticated data, ciphertext, and
+	 * footer in due order.
+	 */
+	br_enc64le(foot, (uint64_t)4);
+	br_enc64le(foot + 8, (uint64_t)len);
+	poly1305_inner(acc, r, _aad, 4);
+	poly1305_inner(acc, r, data, len);
+	poly1305_inner(acc, r, foot, sizeof foot);
+
+	/*
+	 * Finalise modular reduction. This is done with carry propagation
+	 * and applying the '2^130 = -5 mod p' rule. Note that the output
+	 * of poly1035_inner() is already mostly reduced, since only
+	 * acc[1] may be (very slightly) above 2^13. A single loop back
+	 * to acc[1] will be enough to make the value fit in 130 bits.
+	 */
+	cc = 0;
+	for (i = 1; i < 10; i ++) {
+		z = acc[i] + cc;
+		acc[i] = z & 0x1FFF;
+		cc = z >> 13;
+	}
+	z = acc[0] + cc + (cc << 2);
+	acc[0] = z & 0x1FFF;
+	acc[1] += z >> 13;
+
+	/*
+	 * We may still have a value in the 2^130-5..2^130-1 range, in
+	 * which case we must reduce it again. The code below selects,
+	 * in constant-time, between 'acc' and 'acc-p',
+	 */
+	ctl = GT(acc[0], 0x1FFA);
+	for (i = 1; i < 10; i ++) {
+		ctl &= EQ(acc[i], 0x1FFF);
+	}
+	acc[0] = MUX(ctl, acc[0] - 0x1FFB, acc[0]);
+	for (i = 1; i < 10; i ++) {
+		acc[i] &= ~(-ctl);
+	}
+
+	/*
+	 * Convert back the accumulator to 32-bit words, and add the
+	 * 's' value (second half of pkey[]). That addition is done
+	 * modulo 2^128.
+	 */
+	z = acc[0] + (acc[1] << 13) + br_dec16le(pkey + 16);
+	br_enc16le((unsigned char *)tag, z & 0xFFFF);
+	z = (z >> 16) + (acc[2] << 10) + br_dec16le(pkey + 18);
+	br_enc16le((unsigned char *)tag + 2, z & 0xFFFF);
+	z = (z >> 16) + (acc[3] << 7) + br_dec16le(pkey + 20);
+	br_enc16le((unsigned char *)tag + 4, z & 0xFFFF);
+	z = (z >> 16) + (acc[4] << 4) + br_dec16le(pkey + 22);
+	br_enc16le((unsigned char *)tag + 6, z & 0xFFFF);
+	z = (z >> 16) + (acc[5] << 1) + (acc[6] << 14) + br_dec16le(pkey + 24);
+	br_enc16le((unsigned char *)tag + 8, z & 0xFFFF);
+	z = (z >> 16) + (acc[7] << 11) + br_dec16le(pkey + 26);
+	br_enc16le((unsigned char *)tag + 10, z & 0xFFFF);
+	z = (z >> 16) + (acc[8] << 8) + br_dec16le(pkey + 28);
+	br_enc16le((unsigned char *)tag + 12, z & 0xFFFF);
+	z = (z >> 16) + (acc[9] << 5) + br_dec16le(pkey + 30);
+	br_enc16le((unsigned char *)tag + 14, z & 0xFFFF);
+
+	/*
+	 * If decrypting, then ChaCha20 runs _after_ Poly1305.
+	 */
+	if (!encrypt) {
+		ichacha(key, iv, 1, data, len);
+		ichacha(_key, iv, 0, _aad, 4);
+		memcpy(_data,_aad,4);
+	}
+}

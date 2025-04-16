@@ -4,29 +4,83 @@
 
 class BIN_PACKET
     var packet_length, padding_length, payload, payload_length, padding, mac, mac_length
-    var complete
+    var expected_length
+    var complete, session, encrypted, buf
 
-    def init(buf)
+    def init(buf, session, encrypted)
+        self.session = session
         self.packet_length = buf.geti(0,-4)
-        self.padding_length = buf[4]
+        self.expected_length = self.packet_length + 4
+        if encrypted == true
+            self.packet_length = self.get_length(buf)
+            self.expected_length = self.packet_length + 4 + 16 # mac
+            if session == nil print("session is nil") end
+        end
+        self.buf = bytes((self.packet_length + 4))
+        self.encrypted = encrypted
+        self.append(buf)
+    end
+
+    def get_length(packet)
+        import crypto
+        var c = crypto.CHACHA20_POLY1305()
+        var length = packet[0..3].copy()
+        var iv = bytes(-12)
+        iv.seti(8,self.session.seq_nr_rx,-4)
+        c.chacha_run(self.session.KEY_C_S_header,iv,0,length) # use upper 32 bytes of key material
+        print(length)
+        return length.geti(0,-4)
+    end
+
+    def check_packet()
+        import crypto
+        var c = crypto.CHACHA20_POLY1305()
+        var iv = bytes(-12)
+        iv.seti(8,self.session.seq_nr_rx,-4)
+        var data = self.buf[0..-17]
+        var poly_key = bytes(-32)
+        c.chacha_run(self.session.KEY_C_S_main, iv, 0 ,poly_key)
+        var mac = bytes(-16)
+        var given_mac = self.buf[-16..]
+        c.poly_run(mac,data,poly_key)
+        print("check",mac, given_mac, size(given_mac))
+    end
+
+    def decrypt()
+        import crypto
+        var c = crypto.CHACHA20_POLY1305()
+        var iv = bytes(-12)
+        iv.seti(8,self.session.seq_nr_rx,-4)
+        var data = self.buf[4..-17].copy()
+        var _tag = self.mac
+        c.chacha_run(self.session.KEY_C_S_main, iv, 1, data) # lower bytes of key for packet
+        self.buf.setbytes(4,data)
+        print(self.buf)
+        return 
+    end
+
+    def decode()
+        self.padding_length = self.buf[4]
         self.payload_length = self.packet_length - self.padding_length - 1
         # print(self.packet_length, self.padding_length, self.payload_length)
-        self.payload = buf[5 .. 5 + self.payload_length - 1]
-        self.padding = buf[5 + self.payload_length .. 5 + self.payload_length + self.padding_length - 1]
-        self.mac = buf[5 + self.payload_length + self.padding_length .. ]
-        if size(buf) == self.packet_length + 4
-            self.complete = true
-        else
-            self.complete = false
-        end
+        self.payload = self.buf[5 .. 5 + self.payload_length - 1]
+        self.padding = self.buf[5 + self.payload_length .. 5 + self.payload_length + self.padding_length - 1]
+        print(self.payload)
     end
 
     def append(buf)
-        var payload_left = self.payload_length - size(self.payload)
-        self.payload .. buf[0..payload_left - 1]
-        # print(self.payload, size(self.payload))
-        if size(self.payload) == self.payload_length
+        print("append",size(self.buf),size(buf))
+        self.buf .. buf
+        print(size(self.buf),self.expected_length)
+        if size(self.buf) == self.expected_length
             self.complete = true
+            if self.encrypted == true
+                self.check_packet()
+                self.decrypt()
+            end
+            self.decode()
+        else
+            self.complete = false
         end
     end
 
@@ -278,7 +332,7 @@ class HANDSHAKE
             if self.bin_packet
                 self.bin_packet.append(buf)
             else
-                self.bin_packet = BIN_PACKET(buf)
+                self.bin_packet = BIN_PACKET(buf,self.session, false)
             end
             if self.bin_packet.complete == true
                 print(self.bin_packet.payload, self.bin_packet.payload_length)
@@ -323,39 +377,25 @@ class SESSION
         self.seq_nr_tx = -1
     end
 
-    def handle_SR()
+    def handle_service_request()
         var name = SSH_MSG.get_string(self.bin_packet.payload, 1, SSH_MSG.get_item_length(self.bin_packet.payload[1..]))
+        print(name)
         return name
     end
 
     def process(data)
         var r = bytes()
-        var d = self.decrypt(data)
-        print(d)
         if self.bin_packet
-            self.bin_packet.append(d)
+            self.bin_packet.append(data)
         else
-            self.bin_packet = BIN_PACKET(d)
+            self.bin_packet = BIN_PACKET(data, self ,true)
         end
         if self.bin_packet.complete == true
             if self.bin_packet.payload[0] == SSH_MSG.SERVICE_REQUEST
-                return self.handle_SR()
+                return self.handle_service_request()
             end
         end
         return r
-    end
-
-    def decrypt(packet)
-        import crypto
-        var c = crypto.CHACHA20_POLY1305()
-        var length = packet[0..3].copy()
-        var iv = bytes(-12)
-        iv.seti(8,self.seq_nr_rx,-4)
-        c.chacha_run(self.KEY_C_S_header,iv,0,length) # use upper 32 bytes of key material
-        var _tag = packet[-16..].copy()
-        var data = packet[4..-17].copy()
-        c.poly_decrypt1(self.KEY_C_S_main, iv, data , _tag) # lower bytes of key for packet
-        return length + data
     end
 
     def generate_keys(K,H,third,id)
@@ -382,8 +422,8 @@ class SESSION
         self.KEY_C_S_header = self.generate_keys(K,H,self.KEY_C_S_main)
         self.KEY_S_C_main = self.generate_keys(K,H,"D",H)
         self.KEY_S_C_header = self.generate_keys(K,H,self.KEY_S_C_main)
-        # print("Did create session keys:")
-        # print(self.KEY_C_S_main, self.KEY_C_S_header, self.KEY_S_C_main, self.KEY_S_C_header)
+        print("Did create session keys:")
+        print(self.KEY_C_S_main, self.KEY_C_S_header, self.KEY_S_C_main, self.KEY_S_C_header)
         self.up = true
         self.seq_nr_rx = -1 # reset to handle Terrapin attack
         self.seq_nr_tx = -1
