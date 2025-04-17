@@ -24,7 +24,7 @@ class BIN_PACKET
     def get_length(packet)
         import crypto
         var c = crypto.CHACHA20_POLY1305()
-        var length = packet[0..3].copy()
+        var length = packet[0..3]
         var iv = bytes(-12)
         iv.seti(8,self.session.seq_nr_rx,-4)
         c.chacha_run(self.session.KEY_C_S_header,iv,0,length) # use upper 32 bytes of key material
@@ -84,10 +84,32 @@ class BIN_PACKET
         end
     end
 
-    def create(payload)
+    def encrypt(packet)
+        print(packet)
+        import crypto
+        var c = crypto.CHACHA20_POLY1305()
+        var iv = bytes(-12)
+        iv.seti(8,self.session.seq_nr_rx,-4)
+        var length = packet[0..3]
+        c.chacha_run(self.session.KEY_S_C_header,iv,0,length) # use upper 32 bytes of key material
+        var data = packet[4..]
+        c.chacha_run(self.session.KEY_S_C_main, iv, 1, data) # lower bytes of key for packet
+        var enc_packet = length + data
+        var mac = bytes(-16)
+        var poly_key = bytes(-32)
+        c.chacha_run(self.session.KEY_S_C_main,iv,0,poly_key)
+        c.poly_run(mac,enc_packet,poly_key)
+        print(size(enc_packet),size(mac))
+        return enc_packet + mac
+    end
+
+    def create(payload, encrypted)
         import crypto
         var paylength = size(payload)
-        var padlength = 16-((5 + paylength)%16)
+        var padlength = 8-((5 + paylength)%8)
+        if encrypted == true
+            padlength -= 4
+        end
         if padlength < 5
             padlength += 16
         end
@@ -98,6 +120,9 @@ class BIN_PACKET
         bin .. padlength
         bin .. payload
         bin .. padding
+        if encrypted == true
+            return self.encrypt(bin)
+        end
         return bin
     end
 end
@@ -196,34 +221,34 @@ class HANDSHAKE
     #     var k = {}
     #     k["cookie"] = buf[1..16].tohex()
     #     var next_index = 17
-    #     var next_length = self.name_list_length(buf[next_index..])
+    #     var next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["kex_algorithms"] = self.get_name_list(buf, next_index, next_length)
     #     next_index += next_length + 4
-    #     next_length = self.name_list_length(buf[next_index..])
+    #     next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["server_host_key_algorithms"] = self.get_name_list(buf, next_index, next_length)
     #     next_index += next_length + 4
-    #     next_length = self.name_list_length(buf[next_index..])
+    #     next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["encryption_algorithms_client_to_server"] = self.get_name_list(buf, next_index, next_length)
     #     next_index += next_length + 4
-    #     next_length = self.name_list_length(buf[next_index..])
+    #     next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["encryption_algorithms_server_to_client"] = self.get_name_list(buf, next_index, next_length)
     #     next_index += next_length + 4
-    #     next_length = self.name_list_length(buf[next_index..])
+    #     next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["mac_algorithms_client_to_server"] = self.get_name_list(buf, next_index, next_length)
     #     next_index += next_length + 4
-    #     next_length = self.name_list_length(buf[next_index..])
+    #     next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["mac_algorithms_server_to_client"] = self.get_name_list(buf, next_index, next_length)
     #     next_index += next_length + 4
-    #     next_length = self.name_list_length(buf[next_index..])
+    #     next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["compression_algorithms_client_to_server"] = self.get_name_list(buf, next_index, next_length)
     #     next_index += next_length + 4
-    #     next_length = self.name_list_length(buf[next_index..])
+    #     next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["compression_algorithms_server_to_client"] = self.get_name_list(buf, next_index, next_length)
     #     next_index += next_length + 4
-    #     next_length = self.name_list_length(buf[next_index..])
+    #     next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["languages_client_to_server"] = self.get_name_list(buf, next_index, next_length)
     #     next_index += next_length + 4
-    #     next_length = self.name_list_length(buf[next_index..])
+    #     next_length = SSH_MSG.get_item_length(buf[next_index..])
     #     k["languages_server_to_client"] = self.get_name_list(buf, next_index, next_length)
     #     self.kexinit_client = k
     #     # print("SSH: Kexinit from client = ",k)
@@ -273,15 +298,6 @@ class HANDSHAKE
         SSH_MSG.add_string(hash, self.Q_C)
         SSH_MSG.add_string(hash, self.Q_S)
         SSH_MSG.add_mpint(hash, self.K)
-
-        # print("name client",self.V_C)
-        # print("name server",self.V_S)
-        # print("kex init client",self.I_C)
-        # print("kex init server",self.I_S)
-        # print("server key bytes K_S",self.K_S)
-        # print("ephemeral client", self.Q_C)
-        # print("ephemeral server",self.Q_S)
-        # print("shared secret K", self.K,size(self.K))
 
         var sha256 = crypto.SHA256()
         sha256.update(hash)
@@ -367,6 +383,8 @@ class SESSION
     var bin_packet
     var KEY_C_S_main, KEY_S_C_main, KEY_C_S_header, KEY_S_C_header
     var seq_nr_rx, seq_nr_tx
+    var send_queue
+
     static banner = "  / \\    Secure Wireless Serial Interface: ID %u\n"
                     "/ /|\\ \\  SSH Terminal Server\n"
                     "  \\_/    Copyright (C) 2025 Tasmota\n"
@@ -375,12 +393,73 @@ class SESSION
         self.up = false
         self.seq_nr_rx = -1
         self.seq_nr_tx = -1
+        self.send_queue = []
+    end
+
+    def send_banner()
+        var r = bytes(64)
+        r .. SSH_MSG.USERAUTH_BANNER
+        SSH_MSG.add_string(r,format(self.banner,self.ID))
+        SSH_MSG.add_string(r,"") # language
+        print(r)
+        var p = BIN_PACKET(bytes(-64),self,false)
+        print("send banner")
+        print(self.banner)
+        return p.create(r ,true)
     end
 
     def handle_service_request()
         var name = SSH_MSG.get_string(self.bin_packet.payload, 1, SSH_MSG.get_item_length(self.bin_packet.payload[1..]))
-        print(name)
-        return name
+        print("service request:",name)
+        if name == "ssh-userauth"
+            var r = bytes(64)
+            r .. SSH_MSG.SERVICE_ACCEPT
+            SSH_MSG.add_string(r,name)
+            print(r)
+            var enc_r = self.bin_packet.create(r ,true)
+            self.bin_packet = nil
+            return enc_r
+        end
+        return ""
+    end
+
+    def handle_userauth_request()
+        var buf = self.bin_packet.payload
+        var next_index = 1
+        var next_length = SSH_MSG.get_item_length(buf[next_index..])
+        var user_name = SSH_MSG.get_string(buf, next_index, next_length)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        var service_name = SSH_MSG.get_string(buf, next_index, next_length)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        var method_name = SSH_MSG.get_string(buf, next_index, next_length)
+        if method_name == "none"
+            var r = bytes(32)
+            r .. SSH_MSG.USERAUTH_FAILURE
+            SSH_MSG.add_string(r,"password")
+            r .. 0
+            var enc_r = self.bin_packet.create(r ,true)
+            self.bin_packet = nil
+            return enc_r
+        end
+        next_index += next_length + 4
+        var bool_field = buf[next_index]
+        next_index += 1
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        var key_algo = SSH_MSG.get_string(buf, next_index, next_length)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        var algo_blob = SSH_MSG.get_string(buf, next_index, next_length)
+        print(user_name,service_name,method_name,bool_field,key_algo,algo_blob)
+        var r = bytes(64)
+        r .. SSH_MSG.USERAUTH_SUCCESS
+        # SSH_MSG.add_string(r,key_algo)
+        # SSH_MSG.add_string(r,algo_blob)
+        print(r)
+        var enc_r = self.bin_packet.create(r ,true)
+        self.send_queue.push(/->self.send_banner())
+        return enc_r
     end
 
     def process(data)
@@ -393,9 +472,13 @@ class SESSION
         if self.bin_packet.complete == true
             if self.bin_packet.payload[0] == SSH_MSG.SERVICE_REQUEST
                 return self.handle_service_request()
+            elif self.bin_packet.payload[0] == SSH_MSG.USERAUTH_REQUEST
+                print("USERAUTH_REQUEST")
+                return self.handle_userauth_request()
             end
+            print("unhandled message type", self.bin_packet.payload[0])
         end
-        return r
+        return ""
     end
 
     def generate_keys(K,H,third,id)
@@ -508,15 +591,21 @@ class SSH : Driver
     end
 
     def sendResponse(resp)
-        self.session.seq_nr_tx += 1
         self.client.write(resp)
+        self.session.seq_nr_tx += 1
         log(f"SSH: {self.session.seq_nr_tx} >>> {resp} _ {size(resp)} bytes",2)
     end
 
     def handleConnection() # main loop for incoming commands
         var response
         var d = self.client.readbytes()
-        if size(d) == 0 return end
+        if size(d) == 0
+            if size(self.session.send_queue) != 0
+                self.session.seq_nr_tx += 1
+                self.sendResponse(self.session.send_queue.pop()())
+            end
+            return 
+        end
         self.session.seq_nr_rx += 1
         log(f"SSH: {self.session.seq_nr_rx} <<< {d} _ {size(d)} bytes",2)
         if self.session.up == true
@@ -529,6 +618,7 @@ class SSH : Driver
             if response != ""
                 self.sendResponse(response)
                 if response[5] == SSH_MSG.NEWKEYS self.handshake = nil end
+                self.session.bin_packet = nil
             end
         end
     end
