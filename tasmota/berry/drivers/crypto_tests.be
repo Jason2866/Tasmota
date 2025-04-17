@@ -25,98 +25,48 @@ assert(valid==true)
 assert(msg.asstring()==_msg)
 
 # https://datatracker.ietf.org/doc/draft-ietf-sshm-chacha20-poly1305/01/
+# special needs for SSH:
+# chacha run over length and data with different keys
+# poly run over whole encrypted material with key used for data
 
 import crypto
 c = crypto.CHACHA20_POLY1305()
 keys = bytes("8bbff6855fc102338c373e73aac0c914f076a905b2444a32eecaffeae22becc5e9b7a7a5825a8249346ec1c28301cf394543fc7569887d76e168f37562ac0740")
 packet = bytes("2c3ecce4a5bc05895bf07a7ba956b6c68829ac7c83b780b7000ecde745afc705bbc378ce03a280236b87b53bed5839662302b164b6286a48cd1e097138e3cb909b8b2b829dd18d2a35ff82d995349e855bf02c298ef775f2d1a7e8b8")
-
 iv = bytes("000000000000000000000007") # seq number
 k_header = keys[-32..]
 k_main = keys[0..31]
 
-length = packet[0..3].copy()
+poly_key = bytes(-32)
+c.chacha_run(k_main,iv,0,poly_key)
+calculated_mac = bytes(-16)
+given_mac = packet[-16..]
+c.poly_run(calculated_mac,packet[0..-17],poly_key)
+assert(calculated_mac == given_mac)
+
+data = packet[4..-17]
+length = packet[0..3]
 c.chacha_run(k_header,iv,0,length) # use upper 32 bytes of key material
 assert(length == bytes("00000048"))
-
-_tag = packet[-16..].copy()
-data = packet[4..-17].copy()
-valid = c.poly_decrypt1(k_main, iv, data, _tag, packet[0..3].copy()) # lower bytes of key for packet
-print(_tag, valid)
+counter = c.chacha_run(k_main, iv, 1, data) # lower bytes of key for packet
 # assert(valid == true)
 assert(length + data == bytes("00000048065e00000000000000384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c69744e43e804dc6c"))
 
 # reverse it - now encrypt a packet
 
-packet = bytes("00000048065e00000000000000384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c69744e43e804dc6c")
-length = packet[0..3].copy()
+raw_packet = bytes("00000048065e00000000000000384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c69744e43e804dc6c")
+length = raw_packet[0..3]
 c.chacha_run(k_header,iv,0,length) # use upper 32 bytes of key material
-tag = bytes(-16)
-data = packet[4..].copy()
-c.poly_encrypt1(k_main, iv, data , tag) # lower bytes of key for packet
+
+data = raw_packet[4..]
+counter = c.chacha_run(k_main, iv, 1, data) # lower bytes of key for packet
 enc_packet = length + data
-print(enc_packet)
-print(tag)
-tag = bytes(-16)
-valid = c.poly_decrypt1(k_main, iv, enc_packet , tag) # lower bytes of key for packet
-print(tag, valid)
-
-
-#work around
-
-import crypto
-c = crypto.CHACHA20_POLY1305()
-keys = bytes("8bbff6855fc102338c373e73aac0c914f076a905b2444a32eecaffeae22becc5e9b7a7a5825a8249346ec1c28301cf394543fc7569887d76e168f37562ac0740")
-packet = bytes("2c3ecce4a5bc05895bf07a7ba956b6c68829ac7c83b780b7000ecde745afc705bbc378ce03a280236b87b53bed5839662302b164b6286a48cd1e097138e3cb909b8b2b829dd18d2a35ff82d995349e855bf02c298ef775f2d1a7e8b8")
-out = bytes(-size(packet))
-# c.chacha_ssh_decrypt1(keys,7,out,packet)
-
-packet = bytes("00000048065e00000000000000384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c69744e43e804dc6c")
-c.chacha_ssh_encrypt1(keys,7,out,packet)
-
-
-#####
-import crypto
-c = crypto.CHACHA20_POLY1305()
-keys = bytes("8bbff6855fc102338c373e73aac0c914f076a905b2444a32eecaffeae22becc5e9b7a7a5825a8249346ec1c28301cf394543fc7569887d76e168f37562ac0740")
-packet = bytes("2c3ecce4a5bc05895bf07a7ba956b6c68829ac7c83b780b7000ecde745afc705bbc378ce03a280236b87b53bed5839662302b164b6286a48cd1e097138e3cb909b8b2b829dd18d2a35ff82d995349e855bf02c298ef775f2d1a7e8b8")
-iv = bytes("000000000000000000000007") # seq number
-k_header = keys[-32..]
-k_main = keys[0..31]
-
-length = packet[0..3].copy()
-c.chacha_run(k_header,iv,0,length) # use upper 32 bytes of key material
-assert(length == bytes("00000048"))
-
-_tag = packet[-16..].copy()
-data = packet[4..-17].copy()
-print(data)
-valid = c.poly_decrypt1(keys, iv, data, _tag) # lower bytes of key for packet
-print(_tag, valid)
-
-_tag = bytes(-16)
-packet = bytes("00000048065e00000000000000384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c69744e43e804dc6c")
-c.poly_encrypt1(keys,iv,packet,_tag)
-
-#
-import crypto
-c = crypto.CHACHA20_POLY1305()
-keys = bytes("8bbff6855fc102338c373e73aac0c914f076a905b2444a32eecaffeae22becc5e9b7a7a5825a8249346ec1c28301cf394543fc7569887d76e168f37562ac0740")
-packet = bytes("2c3ecce4a5bc05895bf07a7ba956b6c68829ac7c83b780b7000ecde745afc705bbc378ce03a280236b87b53bed5839662302b164b6286a48cd1e097138e3cb909b8b2b829dd18d2a35ff82d995349e855bf02c298ef775f2d1a7e8b8")
-iv = bytes("000000000000000000000007") # seq number
-k_main = keys[0..31]
-tag = bytes(-16)
-data = packet[0..-17].copy()
+mac = bytes(-16)
 poly_key = bytes(-32)
 c.chacha_run(k_main,iv,0,poly_key)
-mac = bytes(-16)
-c.poly_run(mac,data,poly_key)
-print(mac)
-
-
-
-
-
+c.poly_run(mac,enc_packet,poly_key)
+enc_packet .. mac
+assert(enc_packet == packet)
 
 
 
