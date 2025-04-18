@@ -48,7 +48,7 @@ class BIN_PACKET
             self.expected_length = size(buf)
             self.packet_length = size(buf) - 20
         end
-        self.buf = bytes() #(self.packet_length + 4)
+        self.buf = bytes(self.expected_length)
         self.encrypted = encrypted
         self.append(buf)
     end
@@ -59,7 +59,7 @@ class BIN_PACKET
         var length = packet[0..3]
         var iv = bytes(-12)
         iv.seti(8,self.session.seq_nr_rx,-4)
-        c.chacha_run(self.session.KEY_C_S_header,iv,0,length) # use upper 32 bytes of key material
+        c.chacha_run(self.session.KEY_C_S_header,iv,0,length)
         return length.geti(0,-4)
     end
 
@@ -85,7 +85,7 @@ class BIN_PACKET
         var iv = bytes(-12)
         iv.seti(8,self.session.seq_nr_rx,-4)
         var data = self.buf[4..-17]
-        c.chacha_run(self.session.KEY_C_S_main, iv, 1, data) # lower bytes of key for packet
+        c.chacha_run(self.session.KEY_C_S_main, iv, 1, data)
         self.buf.setbytes(4,data)
         # print(self.buf, size(self.buf))
         return 
@@ -103,12 +103,8 @@ class BIN_PACKET
     def append(buf)
         self.buf .. buf
         if size(self.buf) > self.expected_length
-            # print("append",size(self.buf),size(buf))
-            # print(size(self.buf),self.expected_length)
             print("will split TCP packet")
             self.session.overrun_buf = self.buf[self.expected_length ..]
-            # print(".",self.buf.tohex(),size(self.buf))
-            # print("..",self.overrun_buf.tohex(),size(self.overrun_buf))
         end
         if size(self.buf) >= self.expected_length
             self.complete = true
@@ -129,15 +125,15 @@ class BIN_PACKET
         var iv = bytes(-12)
         iv.seti(8,self.session.seq_nr_tx,-4)
         var length = packet[0..3]
-        c.chacha_run(self.session.KEY_S_C_header,iv,0,length) # use upper 32 bytes of key material
+        c.chacha_run(self.session.KEY_S_C_header,iv,0,length)
         var data = packet[4..]
-        c.chacha_run(self.session.KEY_S_C_main, iv, 1, data) # lower bytes of key for packet
+        c.chacha_run(self.session.KEY_S_C_main, iv, 1, data)
         var enc_packet = length + data
         var mac = bytes(-16)
         var poly_key = bytes(-32)
         c.chacha_run(self.session.KEY_S_C_main,iv,0,poly_key)
         c.poly_run(mac,enc_packet,poly_key)
-        # print(size(enc_packet),size(mac))
+
         return enc_packet + mac
     end
 
@@ -151,7 +147,6 @@ class BIN_PACKET
         if padlength < 5
             padlength += 16
         end
-        # print("padlength", padlength)
         var padding = crypto.random(padlength)
         var bin = bytes(256)
         bin.add(1 + paylength + padlength, -4)
@@ -271,7 +266,7 @@ class HANDSHAKE
 
     def init(session)
         self.state = 0
-        self.K_S = (bytes().fromb64("AAAAC3NzaC1lZDI1NTE5AAAAIGgTQ3jxXinPuu/JJltK1gRIT1OYUe4WOqu/sszMgI5A"))#[-32..]
+        self.K_S = (bytes().fromb64("AAAAC3NzaC1lZDI1NTE5AAAAIGgTQ3jxXinPuu/JJltK1gRIT1OYUe4WOqu/sszMgI5A"))
         self.E_S_H = bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd")
         self.session = session
     end
@@ -407,7 +402,7 @@ class SESSION
     var send_queue, terminal, overrun_buf
 
     static banner = "  / \\    Secure Wireless Serial Interface\n"
-                    "/ /|\\ \\  SSH Terminal Server\n"
+                    "/ /|\\ \\  SSH Terminal Server on %s\n"
                     "  \\_/    Copyright (C) 2025 Tasmota %s\n"
                     "%s \n"
 
@@ -421,9 +416,10 @@ class SESSION
     def send_banner()
         var r = bytes()
         r .. SSH_MSG.USERAUTH_BANNER
-        var v = tasmota.version()
-        var vs = f"{v>>24}.{(v>>16)&0xff:x}.{(v>>8)&0xff:x}.{v&0xff:x}."
-        SSH_MSG.add_string(r,format(self.banner,vs,tasmota.memory().tostring()))
+        var s2 = tasmota.cmd("status 2")["StatusFWR"]
+        var hw = s2["Hardware"]
+        var vs = s2["Version"]
+        SSH_MSG.add_string(r,format(self.banner,hw,vs,tasmota.memory().tostring()))
         SSH_MSG.add_string(r,"") # language
         var p = BIN_PACKET(bytes(-32),self,false)
         self.overrun_buf = nil

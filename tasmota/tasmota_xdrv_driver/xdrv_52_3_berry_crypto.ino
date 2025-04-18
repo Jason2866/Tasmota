@@ -723,68 +723,6 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
-  int32_t m_chacha20_ssh_run(bvm *vm, int32_t _encrypt) {
-    int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc >= 4  && be_isbytes(vm, 1)    // secret_key  - 32 bytes
-                   && be_isbytes(vm, 2)    // iv/nonce    - 12 bytes
-                   && be_isbytes(vm, 3)    // data/cipher
-                   && be_isbytes(vm, 4)    // mac/tag     - 16 bytes
-                                           // optional: aad
-                   ) {
-
-      size_t key_len = 0;
-      const void * key = be_tobytes(vm, 1, &key_len);
-      if (key_len != 64) {
-        AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), key_len);
-        be_raise(vm, "value_error", "Keys size must be 64 bytes");
-      }
-
-      size_t iv_len = 0;
-      void * iv = (void *) be_tobytes(vm, 2, &iv_len);
-      if (iv_len != 12) {
-        AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), iv_len);
-        be_raise(vm, "value_error", "IV size must be 12");
-      }
-
-      size_t data_len = 0;
-      void * data = (void *) be_tobytes(vm, 3, &data_len);
-      data_len -= 4;
-      data = (char*)data + 4;
-      AddLog(LOG_LEVEL_INFO, PSTR("corrected data_len %d bytes"), data_len);
-
-      size_t mac_len = 0;
-      void * mac = (void *) be_tobytes(vm, 4, &mac_len);
-      if (mac_len != 16) {
-        AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), mac_len);
-        be_raise(vm, "value_error", "MAC size must be 16");
-      }
-
-      size_t aad_len = 4;
-      void * aad = NULL;
-
-      char _mac[16];
-      bbool _success = false;
-      br_chacha20_run bc = br_chacha20_ct_run;
-    
-      br_poly1305_ssh_run(key, iv, data,
-        data_len, aad, aad_len,
-        _mac, bc, _encrypt);
-    
-      if (_encrypt==1) {
-        memcpy(mac, _mac, 16);
-        _success = true;
-      }
-      if (memcmp(mac, _mac, 16) == 0) {
-        _success = true;
-      }
-      memcpy(mac, _mac, 16);
-
-      be_pushbool(vm, _success);
-      be_return(vm);
-    }
-    be_raise(vm, kTypeError, nullptr);
-  }
-
   // `chacha_encrypt1(secret_key:bytes(32),iv:bytes(12),data:bytes(n*16)),tag:bytes(),aad:bytes()-> bool (true)
   // int32_t m_chacha20_encrypt1(bvm *vm);
   int32_t m_chacha20_poly_encrypt(bvm *vm) {
@@ -794,63 +732,6 @@ extern "C" {
   // int32_t m_chacha20_decrypt1(bvm *vm);
   int32_t m_chacha20_poly_decrypt(bvm *vm) {
     return m_chacha20_poly_run(vm, 0);
-  }
-
-  int32_t m_chacha20_poly_ssh_crypt(bvm *vm, int encrypt) {
-    int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc >= 4  && be_isbytes(vm, 1)    // secret_key  - 32 bytes
-                   && be_isint(vm, 2)      // seq number
-                   && be_isbytes(vm, 3)    // data in
-                   && be_isbytes(vm, 4)    // data out
-                   ) {
-
-      size_t key_len = 0;
-      const char * keys = (const char * )be_tobytes(vm, 1, &key_len);
-      if (key_len != 64) {
-        AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), key_len);
-        be_raise(vm, "value_error", "combined key size must be 64 bytes");
-      }
-
-      uint32_t seqnr = be_toint(vm, 2);
-
-      size_t data_len_in = 0;
-      const char * data_in = (const char *) be_tobytes(vm, 3, &data_len_in);
-
-      size_t data_len_out = 0;
-      char * data_out = (char *) be_tobytes(vm, 4, &data_len_out);
-
-      // size_t mac_len = 0;
-      // void * mac = (void *) be_tobytes(vm, 5, &mac_len);
-      // if (mac_len != 16) {
-      //   AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), mac_len);
-      //   be_raise(vm, "value_error", "MAC size must be 16");
-      // }
-
-      // char _mac[16];
-
-      int aadlen = 4;
-
-      if(encrypt){
-        data_len_in =  data_len_in - 4;
-        aadlen = 0;
-      } else {
-        data_len_in =  data_len_in - 4 - 16;
-      }
-
-      int _success = chachapoly_crypt(keys, seqnr, data_out, data_in, data_len_in, aadlen,
-      POLY1305_TAGLEN, encrypt);
-
-      be_pushint(vm, _success);
-      be_return(vm);
-    }
-    be_raise(vm, kTypeError, nullptr);
-  }
-  int m_chacha20_ssh_encrypt(bvm *vm){
-    return m_chacha20_poly_ssh_crypt(vm, 1);
-  }
-
-  int m_chacha20_ssh_decrypt(bvm *vm){
-    return m_chacha20_poly_ssh_crypt(vm, 0);
   }
 
   int m_poly1305_run(bvm *vm){

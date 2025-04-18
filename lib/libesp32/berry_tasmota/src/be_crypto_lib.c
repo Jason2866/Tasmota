@@ -34,8 +34,6 @@ extern int m_aes_cbc_decrypt1(bvm *vm);
 
 extern int m_chacha20_run(bvm *vm);
 extern int m_poly1305_run(bvm *vm);
-extern int m_chacha20_ssh_encrypt(bvm *vm);
-extern int m_chacha20_ssh_decrypt(bvm *vm);
 extern int m_chacha20_poly_encrypt(bvm *vm);
 extern int m_chacha20_poly_decrypt(bvm *vm);
 
@@ -192,8 +190,6 @@ class be_class_chacha_poly (scope: global, name: CHACHA20_POLY1305) {
     poly_decrypt1, static_func(m_chacha20_poly_decrypt)
     poly_encrypt1, static_func(m_chacha20_poly_encrypt)
     chacha_run, static_func(m_chacha20_run)
-    chacha_ssh_encrypt1, static_func(m_chacha20_ssh_encrypt)
-    chacha_ssh_decrypt1, static_func(m_chacha20_ssh_decrypt)
     poly_run, static_func(m_poly1305_run)
 }
 
