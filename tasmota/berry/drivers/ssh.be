@@ -12,16 +12,17 @@ class TERMINAL
 
     def put(data)
         self.in_buf .. data
-        # print("::::", self.in_buf)
         if data == bytes("0d")
             var c = self.in_buf.asstring()
             var r = tasmota.cmd(f"{c}")
             self.in_buf.clear()
             if r
-                return r.tostring() + "\r\n"
+                return "\r\n" + r.tostring() + "\r\n"
             else
                 return "\r\n"
             end
+        else
+            return data.asstring()
         end
         return ""
     end
@@ -86,7 +87,7 @@ class BIN_PACKET
         var data = self.buf[4..-17]
         c.chacha_run(self.session.KEY_C_S_main, iv, 1, data) # lower bytes of key for packet
         self.buf.setbytes(4,data)
-        print(self.buf, size(self.buf))
+        # print(self.buf, size(self.buf))
         return 
     end
 
@@ -102,11 +103,11 @@ class BIN_PACKET
     def append(buf)
         self.buf .. buf
         if size(self.buf) > self.expected_length
-            print("append",size(self.buf),size(buf))
-            print(size(self.buf),self.expected_length)
-            print("overrun!!!!")
+            # print("append",size(self.buf),size(buf))
+            # print(size(self.buf),self.expected_length)
+            print("will split TCP packet")
             self.session.overrun_buf = self.buf[self.expected_length ..]
-            print(".",self.buf.tohex(),size(self.buf))
+            # print(".",self.buf.tohex(),size(self.buf))
             # print("..",self.overrun_buf.tohex(),size(self.overrun_buf))
         end
         if size(self.buf) >= self.expected_length
@@ -116,21 +117,13 @@ class BIN_PACKET
                 self.decrypt()
             end
             self.decode()
-            if size(self.buf) > self.expected_length
-                print(self.payload_length)
-                # self.overrun_buf = self.buf[self.expected_length ..].copy
-                # print("_",self.buf.tohex(),size(self.buf))
-                # print("_",self.buf[0..self.expected_length + 16 + 4].tohex(),size(self.buf))
-                # print("__",self.overrun_buf.tohex(),size(self.overrun_buf))
-                # self.session.seq_nr_rx += 2
-            end
         else
             self.complete = false
         end
     end
 
     def encrypt(packet)
-        print(packet)
+        # print(packet)
         import crypto
         var c = crypto.CHACHA20_POLY1305()
         var iv = bytes(-12)
@@ -380,7 +373,6 @@ class HANDSHAKE
                 self.bin_packet = BIN_PACKET(buf,self.session, false)
             end
             if self.bin_packet.complete == true
-                print(self.bin_packet.payload, self.bin_packet.payload_length)
                 if self.bin_packet.payload[0] == SSH_MSG.KEXINIT
                     self.I_C = self.bin_packet.payload.copy()
                     # self.kexinit_from_client()
@@ -402,7 +394,7 @@ class HANDSHAKE
 
         end
         log("SSH: unknown packet")
-        return bytes("01")
+        return ""
     end
 end
 
@@ -414,9 +406,10 @@ class SESSION
     var seq_nr_rx, seq_nr_tx
     var send_queue, terminal, overrun_buf
 
-    static banner = "  / \\    Secure Wireless Serial Interface: ID %u\n"
+    static banner = "  / \\    Secure Wireless Serial Interface\n"
                     "/ /|\\ \\  SSH Terminal Server\n"
-                    "  \\_/    Copyright (C) 2025 Tasmota\n"
+                    "  \\_/    Copyright (C) 2025 Tasmota %s\n"
+                    "%s \n"
 
     def init()
         self.up = false
@@ -426,14 +419,14 @@ class SESSION
     end
 
     def send_banner()
-        var r = bytes(64)
+        var r = bytes()
         r .. SSH_MSG.USERAUTH_BANNER
-        SSH_MSG.add_string(r,format(self.banner,self.ID))
+        var v = tasmota.version()
+        var vs = f"{v>>24}.{(v>>16)&0xff:x}.{(v>>8)&0xff:x}.{v&0xff:x}."
+        SSH_MSG.add_string(r,format(self.banner,vs,tasmota.memory().tostring()))
         SSH_MSG.add_string(r,"") # language
-        print(r)
-        var p = BIN_PACKET(bytes(-4),self,false)
-        print("send banner")
-        print(self.banner)
+        var p = BIN_PACKET(bytes(-32),self,false)
+        self.overrun_buf = nil
         return p.create(r ,true)
     end
 
@@ -444,14 +437,13 @@ class SESSION
             var r = bytes(64)
             r .. SSH_MSG.SERVICE_ACCEPT
             SSH_MSG.add_string(r,name)
-            print(r)
             var enc_r = self.bin_packet.create(r ,true)
-            # self.send_queue.push(/->self.send_banner())
+            self.send_queue.push(/->self.send_banner())
             return enc_r
         end
         var r = bytes(64)
         r .. SSH_MSG.USERAUTH_SUCCESS
-        print(r)
+        print("unhandled request",r)
         var enc_r = self.bin_packet.create(r ,true)
         return enc_r
     end
@@ -584,7 +576,7 @@ class SESSION
                 print("CHANNEL_REQUEST")
                 return self.handle_channel_request()
             elif self.bin_packet.payload[0] == SSH_MSG.CHANNEL_DATA
-                print("CHANNEL_CHANNEL_DATA")
+                print("CHANNEL_DATA")
                 return self.handle_channel_data()
             end
             print("unhandled message type", self.bin_packet.payload[0])
@@ -634,7 +626,7 @@ class SSH : Driver
     var dir, dir_list, dir_pos
     var file, file_size, file_rename, retries, chunk_size
     var binary_mode, active_ip, active_port, user_input
-    var data_buf, data_ptr, fast_loop, data_op
+    var data_buf, data_ptr, data_op
     static port = 22
 
     static user = "user"
@@ -644,10 +636,6 @@ class SSH : Driver
         self.server = tcpserver(self.port) # connection for control data
         self.connection = false
         self.data_ip = tasmota.wifi()['ip']
-        # self.dir = PATH()
-        # self.readDir()
-        # self.data_ptr = 0
-        self.fast_loop = /->self.loop()
         tasmota.add_driver(self)
         log(f"SSH: init server on port {self.port}",1)
     end
@@ -711,18 +699,17 @@ class SSH : Driver
         self.client.write(resp)
         session.seq_nr_tx += 1
         if size(session.send_queue) != 0
-            self.sendResponse(self.session.send_queue.pop()())
+            self.client.write(self.session.send_queue.pop()())
             session.seq_nr_tx += 1
         end
         log(f"SSH: {self.session.seq_nr_tx} >>> {resp} _ {size(resp)} bytes",2)
-        tasmota.gc()
     end
 
     def handleConnection() # main loop for incoming commands
         var response
         var d
         if self.session.overrun_buf
-            print("process overrun",self.session.overrun_buf, size(self.session.overrun_buf))
+            # print("process overrun",self.session.overrun_buf, size(self.session.overrun_buf))
             d = self.session.overrun_buf.copy()
             self.session.overrun_buf = nil
         else
@@ -740,11 +727,10 @@ class SSH : Driver
             end
         elif self.handshake
             response = self.handshake.process(d)
-            if response != ""
+            if size(response) != 0 
                 self.sendResponse(response)
-                if response[5] == SSH_MSG.NEWKEYS
+                if size(response) > 5 && response[5] == SSH_MSG.NEWKEYS
                      self.handshake = nil
-                     tasmota.add_fastloop(self.fastloop())
                 end
             end
         end
