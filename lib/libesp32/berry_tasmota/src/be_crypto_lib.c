@@ -51,6 +51,7 @@ extern int m_ec_p256_mul(bvm *vm);
 extern int m_ec_c25519_pubkey(bvm *vm);
 extern int m_ec_c25519_sharedkey(bvm *vm);
 extern int m_ec_c25519_sign(bvm *vm);
+extern int m_ec_c25519_verify(bvm *vm);
 
 extern int m_hash_sha256_init(bvm *vm);
 extern int m_hash_sha256_update(bvm *vm);
@@ -210,6 +211,7 @@ class be_class_ec_c25519 (scope: global, name: EC_C25519) {
     public_key, func(m_ec_c25519_pubkey)
     shared_key, func(m_ec_c25519_sharedkey)
     sign, func(m_ec_c25519_sign)
+    verify, func(m_ec_c25519_verify)
 }
 
 class be_class_sha256 (scope: global, name: SHA256) {
