@@ -7,10 +7,10 @@ class TERMINAL
 
     def init(session)
         self.session = session
-        self.in_buf = bytes(128)
+        self.in_buf = bytes(64)
     end
 
-    def put(data)
+    def process(data)
         self.in_buf .. data
         if data == bytes("0d")
             var c = self.in_buf.asstring()
@@ -26,7 +26,85 @@ class TERMINAL
         end
         return ""
     end
+end
 
+class PATH    # helper class to hold the current directory 
+    var p  #  path components in a list
+
+    def init()
+        import string
+        self.p = []
+    end
+
+    def set(p)
+        import string
+        import path
+
+        if path.isdir(p) != true
+            return false
+        end
+
+        var new = string.split(p,"/")
+        self.p = []
+        for c:new
+            if c != ""
+                self.p.push(c)
+            end
+        end
+        return true
+    end
+
+    def dir_up()
+        if size(self.p) > 0
+            self.p.pop()
+        end
+    end
+
+    def get_url()
+        var url = "/"
+        for c:self.p
+            if c != ""
+                url += f"{c}/"
+            end
+        end
+        return url
+    end
+end
+
+class SFTP
+    static INIT     = 1
+    static VERSION  = 2
+    static STAT     = 17
+    static STATUS   = 101
+
+    var session, dir_list, dir
+    def init(session)
+        self.session = session
+        self.dir = PATH()
+        self.readDir()
+        print("SFTP started")
+        print(self.dir_list)
+    end
+
+    def readDir()
+        import path
+        self.dir_list = path.listdir(self.dir.get_url())
+    end
+
+    def process(d)
+        print("SFTP:",d)
+        var ptype = d[4] # https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02#section-3
+        if ptype == SFTP.INIT
+            return bytes('0000000d02000000030000000000000000') # no extended data support, ver 3
+        elif ptype == SFTP.STAT
+            var id = d.geti(9,-4)
+            var file = d[13..]
+            print(id,file)
+            return bytes('00000009020000000000000000') # no extended data support
+        end
+        print("d SFTP type:",ptype)
+        return ""
+    end
 end
 
 class BIN_PACKET
@@ -399,7 +477,11 @@ class SESSION
     var bin_packet
     var KEY_C_S_main, KEY_S_C_main, KEY_C_S_header, KEY_S_C_header
     var seq_nr_rx, seq_nr_tx
-    var send_queue, terminal, overrun_buf
+    var send_queue, overrun_buf
+    var type # terminal or SFTP
+
+    static user = "admin"
+    static password = "1234"
 
     static banner = "  / \\    Secure Wireless Serial Interface\n"
                     "/ /|\\ \\  SSH Terminal Server on %s\n"
@@ -444,11 +526,20 @@ class SESSION
         return enc_r
     end
 
+
     def handle_userauth_request()
+        var r = bytes(32)
         var buf = self.bin_packet.payload
         var next_index = 1
         var next_length = SSH_MSG.get_item_length(buf[next_index..])
         var user_name = SSH_MSG.get_string(buf, next_index, next_length)
+        if user_name != self.user
+            r .. SSH_MSG.USERAUTH_FAILURE
+            SSH_MSG.add_string(r,"unknown user")
+            r .. 0
+            var enc_r = self.bin_packet.create(r ,true)
+            return enc_r
+        end
         next_index += next_length + 4
         next_length = SSH_MSG.get_item_length(buf[next_index..])
         var service_name = SSH_MSG.get_string(buf, next_index, next_length)
@@ -456,7 +547,6 @@ class SESSION
         next_length = SSH_MSG.get_item_length(buf[next_index..])
         var method_name = SSH_MSG.get_string(buf, next_index, next_length)
         if method_name == "none"
-            var r = bytes(32)
             r .. SSH_MSG.USERAUTH_FAILURE
             SSH_MSG.add_string(r,"password")
             r .. 0
@@ -467,15 +557,21 @@ class SESSION
         var bool_field = buf[next_index]
         next_index += 1
         next_length = SSH_MSG.get_item_length(buf[next_index..])
-        var key_algo = SSH_MSG.get_string(buf, next_index, next_length)
+        var key_algo = SSH_MSG.get_string(buf, next_index, next_length) #var name is "context sensitive"
+        if method_name == "password"
+            if key_algo != self.password
+                r .. SSH_MSG.USERAUTH_FAILURE
+                SSH_MSG.add_string(r,"wrong password")
+                r .. 0
+                var enc_r = self.bin_packet.create(r ,true)
+                return enc_r
+            end
+        end
         next_index += next_length + 4
         next_length = SSH_MSG.get_item_length(buf[next_index..])
-        var algo_blob = SSH_MSG.get_string(buf, next_index, next_length)
+        var algo_blob = SSH_MSG.get_string(buf, next_index, next_length) #var name is "context sensitive"
         print(user_name,service_name,method_name,bool_field,key_algo,algo_blob)
-        # we accept every password for now
-        var r = bytes(64)
         r .. SSH_MSG.USERAUTH_SUCCESS
-        print(r)
         var enc_r = self.bin_packet.create(r ,true)
         return enc_r
     end
@@ -527,7 +623,11 @@ class SESSION
         next_length = SSH_MSG.get_item_length(buf[next_index..])
         var terminal_modes = SSH_MSG.get_string(buf, next_index, next_length)
         print(channel,req_type_type,bool_field,term,width_c,height_c,width_p,height_p)
-        self.terminal = TERMINAL()
+        if req_type_type == "shell"
+            self.type = TERMINAL()
+        elif req_type_type == "subsystem" && term == "sftp"
+            self.type = SFTP()
+        end
         var r = bytes(64)
         r .. SSH_MSG.IGNORE
         print(r)
@@ -543,11 +643,11 @@ class SESSION
         var next_length = SSH_MSG.get_item_length(buf[next_index..])
         var data = SSH_MSG.get_bytes(buf, next_index, next_length)
         next_index += next_length + 4
-        var t = self.terminal.put(data)
+        var t_r = self.type.process(data)
         var r = bytes()
         r .. SSH_MSG.CHANNEL_DATA
         r.add(channel,-4)
-        SSH_MSG.add_string(r,t)
+        SSH_MSG.add_string(r,t_r)
         var enc_r = self.bin_packet.create(r ,true)
         return enc_r
     end
@@ -578,7 +678,6 @@ class SESSION
             print("unhandled message type", self.bin_packet.payload[0])
         end
         r .. SSH_MSG.IGNORE
-        print(r)
         var enc_r = self.bin_packet.create(r ,true)
         return enc_r
     end
@@ -608,7 +707,7 @@ class SESSION
         self.KEY_S_C_main = self.generate_keys(K,H,"D",H)
         self.KEY_S_C_header = self.generate_keys(K,H,self.KEY_S_C_main)
         print("Did create session keys:")
-        print(self.KEY_C_S_main, self.KEY_C_S_header, self.KEY_S_C_main, self.KEY_S_C_header)
+        # print(self.KEY_C_S_main, self.KEY_C_S_header, self.KEY_S_C_main, self.KEY_S_C_header)
         self.up = true
         self.seq_nr_rx = -1 # reset to handle Terrapin attack
         self.seq_nr_tx = -1
@@ -624,9 +723,6 @@ class SSH : Driver
     var binary_mode, active_ip, active_port, user_input
     var data_buf, data_ptr, data_op
     static port = 22
-
-    static user = "user"
-    static password = "pass"
 
     def init()
         self.server = tcpserver(self.port) # connection for control data
