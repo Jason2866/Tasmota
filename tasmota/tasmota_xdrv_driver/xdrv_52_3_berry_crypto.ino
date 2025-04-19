@@ -24,7 +24,7 @@
 #include "be_mem.h"
 #include "be_object.h"
 #include "include/ed25519.h"
-#include "include/chacha_poly_ssh.h"
+#include "include/poly1305_auth.h"
 
 /*********************************************************************************************\
  * members class
