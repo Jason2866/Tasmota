@@ -478,7 +478,7 @@ class HANDSHAKE
         sha256.update(hash)
         self.H = sha256.out()
 
-        var eddsa25519 = crypto.EC_C25519()
+        var eddsa25519 = crypto.ED25519()
         var SIG = eddsa25519.sign(self.H,self.E_S_H,self.K_S[-32..])
         print(SIG)
 

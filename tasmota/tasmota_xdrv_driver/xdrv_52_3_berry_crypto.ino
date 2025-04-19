@@ -1248,6 +1248,13 @@ extern "C" {
     }
     be_raise(vm, kTypeError, nullptr);
   }
+}
+
+  /*********************************************************************************************\
+ * ED25519 class
+ * 
+\*********************************************************************************************/
+extern "C" {
 
   void _ed25519_get_keypair(unsigned char *public_key, unsigned char *private_key, const unsigned char *seed){
     ge_p3 A;
@@ -1267,7 +1274,7 @@ extern "C" {
   }
 
    // from seed
-  int32_t m_ec_c25519_keypair(bvm *vm) {
+  int32_t m_ed25519_keypair(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc >= 4 && be_isbytes(vm, 2)  // seed
                   && be_isbytes(vm, 3)  // secret key
@@ -1300,7 +1307,7 @@ extern "C" {
 
 
   // https://github.com/rdeker/ed25519/blob/13a0661670949bc2e1cfcd8720082d9670768041/src/sign.c
-  int32_t m_ec_c25519_sign(bvm *vm) {
+  int32_t m_ed25519_sign(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc >= 4 && be_isbytes(vm, 2)  // message
                   && be_isbytes(vm, 3)  // secret key
@@ -1363,65 +1370,65 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
-    // https://github.com/rdeker/ed25519/blob/13a0661670949bc2e1cfcd8720082d9670768041/src/verify.c
-    int32_t m_ec_c25519_verify(bvm *vm) {
-      int32_t argc = be_top(vm); // Get the number of arguments
-      if (argc >= 4 && be_isbytes(vm, 2)  // message
-                    && be_isbytes(vm, 3)  // signature
-                    && be_isbytes(vm, 4)) // public key
-                    {
-        size_t message_len = 0;
-        const void * message = be_tobytes(vm, 2, &message_len);
-  
-        size_t sign_len = 0;
-        const unsigned char * signature = (const unsigned char *) be_tobytes(vm, 3, &sign_len);
-        if (sign_len != 64) {
-          be_raise(vm, "value_error", "signature size must be 64");
-        }
-  
-        size_t pub_key_len = 0;
-        const unsigned char * public_key = (const unsigned char *) be_tobytes(vm, 4, &pub_key_len);
-        if (pub_key_len != 32) {
-          be_raise(vm, "value_error", "key size must be 32");
-        }
+  // https://github.com/rdeker/ed25519/blob/13a0661670949bc2e1cfcd8720082d9670768041/src/verify.c
+  int32_t m_ed25519_verify(bvm *vm) {
+    int32_t argc = be_top(vm); // Get the number of arguments
+    if (argc >= 4 && be_isbytes(vm, 2)  // message
+                  && be_isbytes(vm, 3)  // signature
+                  && be_isbytes(vm, 4)) // public key
+                  {
+      size_t message_len = 0;
+      const void * message = be_tobytes(vm, 2, &message_len);
 
-        unsigned char h[64];
-        unsigned char checker[32];
-        br_sha512_context ctx;
-
-        ge_p3 A;
-        ge_p2 R;
-    
-        bbool success = false;
-        if (signature[63] & 224) {
-          AddLog(LOG_LEVEL_INFO, PSTR(" signature[63] & 224"));
-            goto eddsa_verify_exit;
-        }
-    
-        if (ge_frombytes_negate_vartime(&A, public_key) != 0) {
-          AddLog(LOG_LEVEL_INFO, PSTR(" ge_frombytes_negate_vartime(&A, public_key) != 0"));
-            goto eddsa_verify_exit;
-        }
-
-        br_sha512_init(&ctx);
-        br_sha512_update(&ctx, signature, 32);
-        br_sha512_update(&ctx, public_key, 32);
-        br_sha512_update(&ctx, message, message_len);
-        br_sha512_out(&ctx, h);
-    
-        sc_reduce(h);
-        ge_double_scalarmult_vartime(&R, h, &A, signature + 32);
-        ge_tobytes(checker, &R);
-    
-        if (memcmp(checker, signature, 32) == 0) {
-            success = true;
-        }
-eddsa_verify_exit:
-        be_pushbool(vm, success);
-        be_return(vm);
+      size_t sign_len = 0;
+      const unsigned char * signature = (const unsigned char *) be_tobytes(vm, 3, &sign_len);
+      if (sign_len != 64) {
+        be_raise(vm, "value_error", "signature size must be 64");
       }
-      be_raise(vm, kTypeError, nullptr);
+
+      size_t pub_key_len = 0;
+      const unsigned char * public_key = (const unsigned char *) be_tobytes(vm, 4, &pub_key_len);
+      if (pub_key_len != 32) {
+        be_raise(vm, "value_error", "key size must be 32");
+      }
+
+      unsigned char h[64];
+      unsigned char checker[32];
+      br_sha512_context ctx;
+
+      ge_p3 A;
+      ge_p2 R;
+  
+      bbool success = false;
+      if (signature[63] & 224) {
+        AddLog(LOG_LEVEL_INFO, PSTR(" signature[63] & 224"));
+          goto eddsa_verify_exit;
+      }
+  
+      if (ge_frombytes_negate_vartime(&A, public_key) != 0) {
+        AddLog(LOG_LEVEL_INFO, PSTR(" ge_frombytes_negate_vartime(&A, public_key) != 0"));
+          goto eddsa_verify_exit;
+      }
+
+      br_sha512_init(&ctx);
+      br_sha512_update(&ctx, signature, 32);
+      br_sha512_update(&ctx, public_key, 32);
+      br_sha512_update(&ctx, message, message_len);
+      br_sha512_out(&ctx, h);
+  
+      sc_reduce(h);
+      ge_double_scalarmult_vartime(&R, h, &A, signature + 32);
+      ge_tobytes(checker, &R);
+  
+      if (memcmp(checker, signature, 32) == 0) {
+          success = true;
+      }
+eddsa_verify_exit:
+      be_pushbool(vm, success);
+      be_return(vm);
     }
+    be_raise(vm, kTypeError, nullptr);
+  }
 }
 
 /*********************************************************************************************\
