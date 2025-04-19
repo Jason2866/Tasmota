@@ -34,8 +34,6 @@ extern int m_aes_cbc_decrypt1(bvm *vm);
 
 extern int m_chacha20_run(bvm *vm);
 extern int m_poly1305_run(bvm *vm);
-extern int m_chacha20_poly_encrypt(bvm *vm);
-extern int m_chacha20_poly_decrypt(bvm *vm);
 
 extern int m_ec_p256_pubkey(bvm *vm);
 extern int m_ec_p256_sharedkey(bvm *vm);
@@ -52,6 +50,7 @@ extern int m_ec_c25519_pubkey(bvm *vm);
 extern int m_ec_c25519_sharedkey(bvm *vm);
 extern int m_ec_c25519_sign(bvm *vm);
 extern int m_ec_c25519_verify(bvm *vm);
+extern int m_ec_c25519_keypair(bvm *vm);
 
 extern int m_hash_sha256_init(bvm *vm);
 extern int m_hash_sha256_update(bvm *vm);
@@ -188,8 +187,6 @@ class be_class_aes_cbc (scope: global, name: AES_CBC) {
 }
 
 class be_class_chacha_poly (scope: global, name: CHACHA20_POLY1305) {
-    poly_decrypt1, static_func(m_chacha20_poly_decrypt)
-    poly_encrypt1, static_func(m_chacha20_poly_encrypt)
     chacha_run, static_func(m_chacha20_run)
     poly_run, static_func(m_poly1305_run)
 }
@@ -212,6 +209,7 @@ class be_class_ec_c25519 (scope: global, name: EC_C25519) {
     shared_key, func(m_ec_c25519_sharedkey)
     sign, func(m_ec_c25519_sign)
     verify, func(m_ec_c25519_verify)
+    keypair, func(m_ec_c25519_keypair)
 }
 
 class be_class_sha256 (scope: global, name: SHA256) {

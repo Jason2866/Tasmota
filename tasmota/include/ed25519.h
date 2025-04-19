@@ -1,3 +1,8 @@
+/*
+D. J. Bernstein
+Public domain.
+*/
+
 typedef int32_t fe[10];
 
 void fe_0(fe h);

@@ -662,78 +662,6 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
-  int32_t m_chacha20_poly_run(bvm *vm, int32_t _encrypt) {
-    int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc >= 4  && be_isbytes(vm, 1)    // secret_key  - 32 bytes
-                   && be_isbytes(vm, 2)    // iv/nonce    - 12 bytes
-                   && be_isbytes(vm, 3)    // data/cipher
-                   && be_isbytes(vm, 4)    // mac/tag     - 16 bytes
-                                           // optional: aad
-                   ) {
-
-      size_t key_len = 0;
-      const void * key = be_tobytes(vm, 1, &key_len);
-      if (key_len != 32) {
-        AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), key_len);
-        be_raise(vm, "value_error", "Key size must be 32 bytes");
-      }
-
-      size_t iv_len = 0;
-      void * iv = (void *) be_tobytes(vm, 2, &iv_len);
-      if (iv_len != 12) {
-        AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), iv_len);
-        be_raise(vm, "value_error", "IV size must be 12");
-      }
-
-      size_t data_len = 0;
-      void * data = (void *) be_tobytes(vm, 3, &data_len);
-
-      size_t mac_len = 0;
-      void * mac = (void *) be_tobytes(vm, 4, &mac_len);
-      if (mac_len != 16) {
-        AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), mac_len);
-        be_raise(vm, "value_error", "MAC size must be 16");
-      }
-
-      size_t aad_len = 0;
-      void * aad = NULL;
-      if(argc == 5  && be_isbytes(vm, 5)){
-        aad = (void *) be_tobytes(vm, 5, &aad_len);
-      }
-
-      char _mac[16];
-      bbool _success = false;
-      br_chacha20_run bc = br_chacha20_ct_run;
-    
-      br_poly1305_ctmul32_run(key, iv, data,
-        data_len, aad, aad_len,
-        _mac, bc, _encrypt);
-    
-      if (_encrypt==1) {
-        memcpy(mac, _mac, 16);
-        _success = true;
-      } else if (memcmp(mac, _mac, 16) == 0) {
-        _success = true;
-      }
-      memcpy(mac, _mac, 16);
-
-      be_pushbool(vm, _success);
-      be_return(vm);
-    }
-    be_raise(vm, kTypeError, nullptr);
-  }
-
-  // `chacha_encrypt1(secret_key:bytes(32),iv:bytes(12),data:bytes(n*16)),tag:bytes(),aad:bytes()-> bool (true)
-  // int32_t m_chacha20_encrypt1(bvm *vm);
-  int32_t m_chacha20_poly_encrypt(bvm *vm) {
-    return m_chacha20_poly_run(vm, 1);
-  }
-  // `chacha_decrypt1(secret_key:bytes(32),iv:bytes(12),cipher:bytes(n*16),tag:bytes()add:bytes())-> bool (true)
-  // int32_t m_chacha20_decrypt1(bvm *vm);
-  int32_t m_chacha20_poly_decrypt(bvm *vm) {
-    return m_chacha20_poly_run(vm, 0);
-  }
-
   int m_poly1305_run(bvm *vm){
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc >= 3  && be_isbytes(vm, 1)   // tag  - 16 bytes
@@ -1321,6 +1249,56 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
+  void _ed25519_get_keypair(unsigned char *public_key, unsigned char *private_key, const unsigned char *seed){
+    ge_p3 A;
+
+    br_sha512_context ctx;
+    br_sha512_init(&ctx);
+    br_sha512_update(&ctx, seed, 32);
+    br_sha512_out(&ctx, private_key);
+    private_key[0] &= 248;
+    private_key[31] &= 63;
+    private_key[31] |= 64;
+
+    ge_scalarmult_base(&A, private_key);
+    ge_p3_tobytes(public_key, &A);
+    memmove(private_key, seed, 32);
+    memmove(private_key + 32, public_key, 32);
+  }
+
+   // from seed
+  int32_t m_ec_c25519_keypair(bvm *vm) {
+    int32_t argc = be_top(vm); // Get the number of arguments
+    if (argc >= 4 && be_isbytes(vm, 2)  // seed
+                  && be_isbytes(vm, 3)  // secret key
+                  && be_isbytes(vm, 4)) // public key
+                  {
+      size_t seed_len = 0;
+      const unsigned char * seed = (const unsigned char *) be_tobytes(vm, 2, &seed_len);
+      if (seed_len != 32) {
+        be_raise(vm, "value_error", "Key size must be 32");
+      }
+
+      size_t sec_key_len = 0;
+      unsigned char * sec_key = (unsigned char *) be_tobytes(vm, 3, &sec_key_len);
+      if (sec_key_len != 64) {
+        be_raise(vm, "value_error", "Key size must be 64");
+      }
+
+      size_t pub_key_len = 0;
+      unsigned char * pub_key = (unsigned char *) be_tobytes(vm, 4, &pub_key_len);
+      if (pub_key_len != 32) {
+        be_raise(vm, "value_error", "Key size must be 32");
+      }
+
+      _ed25519_get_keypair(pub_key, sec_key, seed);
+      be_pushbool(vm, btrue);
+      be_return(vm);
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
+
   // https://github.com/rdeker/ed25519/blob/13a0661670949bc2e1cfcd8720082d9670768041/src/sign.c
   int32_t m_ec_c25519_sign(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
@@ -1431,12 +1409,6 @@ extern "C" {
         br_sha512_update(&ctx, message, message_len);
         br_sha512_out(&ctx, h);
     
-        // sha512_init(&ctx);
-        // sha512_update(&ctx, signature, 32);
-        // sha512_update(&hash, public_key, 32);
-        // sha512_update(&hash, message, message_len);
-        // sha512_final(&hash, h);
-        
         sc_reduce(h);
         ge_double_scalarmult_vartime(&R, h, &A, signature + 32);
         ge_tobytes(checker, &R);

@@ -2,6 +2,89 @@
 #  this is not working for now
 -#
 
+class SSH_MSG
+    static DISCONNECT = 1
+    static IGNORE     = 2
+    static SERVICE_REQUEST = 5
+    static SERVICE_ACCEPT = 6
+    static KEXINIT = 20
+    static NEWKEYS = 21
+    static KEXDH_INIT = 30
+    static KEX_ECDH_REPLY = 31
+    static USERAUTH_REQUEST = 50
+    static USERAUTH_FAILURE = 51
+    static USERAUTH_SUCCESS = 52
+    static USERAUTH_BANNER = 53
+    static GLOBAL_REQUEST  = 80 
+    static REQUEST_SUCCESS = 81 
+    static REQUEST_FAILURE = 82 
+    static CHANNEL_OPEN = 90 
+    static CHANNEL_OPEN_CONFIRMATION = 91 
+    static CHANNEL_OPEN_FAILURE      = 92 
+    static CHANNEL_WINDOW_ADJUST     = 93 
+    static CHANNEL_DATA              = 94 
+    static CHANNEL_EXTENDED_DATA     = 95 
+    static CHANNEL_EOF      = 96 
+    static CHANNEL_CLOSE    = 97 
+    static CHANNEL_REQUEST  = 98 
+    static CHANNEL_SUCCESS  = 99 
+    static CHANNEL_FAILURE  =100 
+
+    static def get_name_list(buffer, index, length)
+        import string
+        if length == 0 || length > (size(buffer) - 5)
+            return nil
+        end
+        var names = buffer[index + 4 .. index + 3 + length]
+        return string.split(names.asstring(),",")
+    end
+
+    static def get_string(buffer, index, length)
+        import string
+        if length == 0 || length > (size(buffer) - 5)
+            return nil
+        end
+        var name = buffer[index + 4 .. index + 3 + length]
+        return name.asstring()
+    end
+
+    static def get_bytes(buffer, index, length)
+        import string
+        if length == 0 || length > (size(buffer) - 5)
+            return nil
+        end
+        var b = buffer[index + 4 .. index + 3 + length]
+        return b
+    end
+
+    static def get_item_length(buf)
+        return buf.geti(0,-4)
+    end
+
+    static def add_string(buf, str_entry)
+        buf.add(size(str_entry),-4)
+        buf .. str_entry
+    end
+
+    static def add_mpint(buf, entry)
+        if entry[0] & 128 != 0
+            entry = bytes("00") + entry
+        end
+        buf.add(size(entry),-4)
+        buf .. entry
+    end
+
+    static def make_mpint(buf)
+        var mpint = bytes(size(buf) + 5)
+        if buf[0] & 128 != 0
+            buf = bytes("00") + buf
+        end
+        mpint.add(size(buf),-4)
+        mpint .. buf
+        return mpint
+    end
+end
+
 class TERMINAL
     var in_buf, session
 
@@ -74,10 +157,13 @@ end
 class SFTP
     static INIT     = 1
     static VERSION  = 2
+    static OPEN     = 3
     static STAT     = 17
     static STATUS   = 101
+    static ATTRS    = 105
 
-    var session, dir_list, dir
+    var session, dir_list, dir, file
+
     def init(session)
         self.session = session
         self.dir = PATH()
@@ -91,19 +177,96 @@ class SFTP
         self.dir_list = path.listdir(self.dir.get_url())
     end
 
+    def attr_for_file(sz, date)
+        var attr = bytes("0000000900000000")
+        attr.add(sz,-4)
+        attr.add(date,-4) # TODO: atime check if better option possible
+        attr.add(date,-4)
+        attr .. bytes(-8) # two empty strings
+        return attr
+    end
+
+    def status(id,code)
+        var s = bytes("00000065") # packet type
+        s .. id
+        s.add(code,-4)
+        s .. bytes(-8) # two empty strings
+        return s
+    end
+
+    def stat_for_file(id, url)
+        import path
+        var fsize = -1
+        var fdate = -1
+        if path.exists(url)
+            var ptype = bytes() .. SFTP.ATTRS
+            if !path.isdir(url)
+                var f = open(url,"r")
+                fsize = f.size()
+                fdate = path.last_modified(f)
+                f.close()
+                return ptype + id + self.attr_for_file(fsize,fdate)
+            end
+            return ptype + id + bytes(-4) # dir , no idea if correct way
+        end
+        return self.status(id, 2) # NO_SUCH_FILE
+    end
+
+    def open_file(id,url,pflags,attr)
+        import path
+        var _pf = pflags[3]
+        if path.exists(url) != true
+            if !_pf&1 && !_pf&4
+                return self.status(id, 2) # NO_SUCH_FILE
+            end
+        end
+        if path.isdir(url) == true
+            return self.status(id, 4) # FAILURE 
+        end
+        var mode = ""
+
+        #define SSH_FXF_READ            0x00000001
+        #define SSH_FXF_WRITE           0x00000002
+        #define SSH_FXF_APPEND          0x00000004
+        #define SSH_FXF_CREAT           0x00000008
+        #define SSH_FXF_TRUNC           0x00000010
+        #define SSH_FXF_EXCL            0x00000020
+        
+        return self.status(id,0)
+    end
+
     def process(d)
         print("SFTP:",d)
+        var r = bytes() 
         var ptype = d[4] # https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02#section-3
+        var id = d[9..12]
         if ptype == SFTP.INIT
-            return bytes('0000000d02000000030000000000000000') # no extended data support, ver 3
+            r = bytes('0000000d02000000030000000000000000') # no extended data support, ver 3
         elif ptype == SFTP.STAT
-            var id = d.geti(9,-4)
-            var file = d[13..]
-            print(id,file)
-            return bytes('00000009020000000000000000') # no extended data support
+            var url = d[13..]
+            var _r = self.stat_for_file(id,url.asstring())
+            r.add(size(_r),-4)
+            r .. _r
+            print(id,url)
+        elif ptype == SFTP.OPEN
+            var next_index = 13
+            var next_length = SSH_MSG.get_item_length(d[next_index..])
+            var url = SSH_MSG.get_string(d, next_index, next_length)
+            next_index += next_length + 4
+            var mode = d.geti(next_index,-4)
+            next_index += 4
+            var attr = d[next_index..]
+            var _r = self.open_file(id,url,mode,attr)
+            r.add(size(_r),-4)
+            r .. _r
+            print(id,url)
+        else
+            var _r = self.status(id,8) #OP_UNSUPPORTED 
+            r.add(size(_r),-4)
+            r .. _r
         end
         print("d SFTP type:",ptype)
-        return ""
+        return r
     end
 end
 
@@ -238,89 +401,6 @@ class BIN_PACKET
     end
 end
 
-
-class SSH_MSG
-    static DISCONNECT = 1
-    static IGNORE     = 2
-    static SERVICE_REQUEST = 5
-    static SERVICE_ACCEPT = 6
-    static KEXINIT = 20
-    static NEWKEYS = 21
-    static KEXDH_INIT = 30
-    static KEX_ECDH_REPLY = 31
-    static USERAUTH_REQUEST = 50
-    static USERAUTH_FAILURE = 51
-    static USERAUTH_SUCCESS = 52
-    static USERAUTH_BANNER = 53
-    static GLOBAL_REQUEST  = 80 
-    static REQUEST_SUCCESS = 81 
-    static REQUEST_FAILURE = 82 
-    static CHANNEL_OPEN = 90 
-    static CHANNEL_OPEN_CONFIRMATION = 91 
-    static CHANNEL_OPEN_FAILURE      = 92 
-    static CHANNEL_WINDOW_ADJUST     = 93 
-    static CHANNEL_DATA              = 94 
-    static CHANNEL_EXTENDED_DATA     = 95 
-    static CHANNEL_EOF      = 96 
-    static CHANNEL_CLOSE    = 97 
-    static CHANNEL_REQUEST  = 98 
-    static CHANNEL_SUCCESS  = 99 
-    static CHANNEL_FAILURE  =100 
-
-    static def get_name_list(buffer, index, length)
-        import string
-        if length == 0 || length > (size(buffer) - 5)
-            return nil
-        end
-        var names = buffer[index + 4 .. index + 3 + length]
-        return string.split(names.asstring(),",")
-    end
-
-    static def get_string(buffer, index, length)
-        import string
-        if length == 0 || length > (size(buffer) - 5)
-            return nil
-        end
-        var name = buffer[index + 4 .. index + 3 + length]
-        return name.asstring()
-    end
-
-    static def get_bytes(buffer, index, length)
-        import string
-        if length == 0 || length > (size(buffer) - 5)
-            return nil
-        end
-        var b = buffer[index + 4 .. index + 3 + length]
-        return b
-    end
-
-    static def get_item_length(buf)
-        return buf.geti(0,-4)
-    end
-
-    static def add_string(buf, str_entry)
-        buf.add(size(str_entry),-4)
-        buf .. str_entry
-    end
-
-    static def add_mpint(buf, entry)
-        if entry[0] & 128 != 0
-            entry = bytes("00") + entry
-        end
-        buf.add(size(entry),-4)
-        buf .. entry
-    end
-
-    static def make_mpint(buf)
-        var mpint = bytes(size(buf) + 5)
-        if buf[0] & 128 != 0
-            buf = bytes("00") + buf
-        end
-        mpint.add(size(buf),-4)
-        mpint .. buf
-        return mpint
-    end
-end
 
 class HANDSHAKE
     var state, bin_packet, session
