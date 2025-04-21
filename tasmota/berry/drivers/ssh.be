@@ -281,6 +281,7 @@ class BIN_PACKET
         self.expected_length = self.packet_length + 4
         if encrypted == true
             self.packet_length = self.get_length(buf)
+            print("length",self.packet_length)
             self.expected_length = self.packet_length + 4 + 16 # mac
             if session == nil print("session is nil") end
         end
@@ -344,7 +345,7 @@ class BIN_PACKET
     def append(buf)
         self.buf .. buf
         if size(self.buf) > self.expected_length
-            print("will split TCP packet")
+            print("must split TCP packet:",self.expected_length,size(self.buf) - self.expected_length)
             self.session.overrun_buf = self.buf[self.expected_length ..]
         end
         if size(self.buf) >= self.expected_length
@@ -404,8 +405,6 @@ end
 
 class HANDSHAKE
     var state, bin_packet, session
-    var kexinit_client
-    var kexinit_own
 
     var   V_C # client's identification string (CR and LF excluded)
     static V_S = "SSH-2.0-TasmotaSSH_0.1" # server's identification string (CR and LF excluded)
@@ -432,8 +431,8 @@ class HANDSHAKE
     def kexinit_to_client()
         import crypto
         var	cookie  = crypto.random(16)
-        var	kex_algorithms = "curve25519-sha256,kex-strict-s-v00@openssh.com,kex-strict-s" #curve25519-sha256@libssh.org
-        var	server_host_key_algorithms = "ssh-ed25519" # "-cert-v01@openssh.com"
+        var	kex_algorithms = "curve25519-sha256,kex-strict-s-v00@openssh.com,kex-strict-s"
+        var	server_host_key_algorithms = "ssh-ed25519"
         var	encryption_algorithms_client_to_server = "chacha20-poly1305@openssh.com"
         var	encryption_algorithms_server_to_client = "chacha20-poly1305@openssh.com"
         var	mac_algorithms_client_to_server = ""
@@ -501,8 +500,50 @@ class HANDSHAKE
         self.Q_S = (crypto.EC_C25519().public_key(self.E_S_S))
         self.Q_C = payload[5..]
         self.K = (crypto.EC_C25519().shared_key(self.E_S_S, self.Q_C))
-        print(self.E_S_S, self.Q_S, self.K)
+        # print(self.E_S_S, self.Q_S, self.K)
         return self.create_KEX_ECDH_REPLY()
+    end
+
+    def kexinit_from_client() # mainly logging function
+        import string
+        var buf = self.bin_packet.payload
+        var k = {}
+        log(f"cookie: {buf[1..16].tohex()}",3)
+        var next_index = 17
+        var next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"kex_algorithms: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3)
+        for i:SSH_MSG.get_name_list(buf, next_index, next_length)
+            if string.find(i, "kex-strict-c") self.session.strict_mode = true end
+        end
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"server_host_key_algorithms: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"encryption_algorithms_client_to_server: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"encryption_algorithms_server_to_client: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"mac_algorithms_client_to_server: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"mac_algorithms_server_to_client: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"compression_algorithms_client_to_server: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"compression_algorithms_server_to_client: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3) 
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"languages_client_to_server: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3)
+        next_index += next_length + 4
+        next_length = SSH_MSG.get_item_length(buf[next_index..])
+        log(f"languages_server_to_client: {SSH_MSG.get_name_list(buf, next_index, next_length)}",3)
+        next_index += next_length + 4
+        log(f"first_kex_packet_follows: {buf[next_index]}",3)
     end
 
     def send_NEWKEYS()
@@ -528,19 +569,21 @@ class HANDSHAKE
             if self.bin_packet.complete == true
                 if self.bin_packet.payload[0] == SSH_MSG.KEXINIT
                     self.I_C = self.bin_packet.payload.copy()
-                    # self.kexinit_from_client()
+                    self.kexinit_from_client()
                     response = self.kexinit_to_client()
                 elif self.bin_packet.payload[0] == SSH_MSG.KEXDH_INIT
                     response = self.create_ephemeral(self.bin_packet.payload)
                 elif self.bin_packet.payload[0] == SSH_MSG.NEWKEYS
                     response = self.send_NEWKEYS()
                     self.state = 2
+                elif self.bin_packet.payload[0] == SSH_MSG.DISCONNECT
+                    log("SSH: client did disconnect",1)
                 else
                     print("SSH: unknown packet type", self.bin_packet.payload[0])
                 end
                 self.bin_packet = nil
             else
-                self.session.seq_nr_rx -= 1
+                self.session.seq_nr_rx -= 1 # TODO: check
             end
             return response
         elif self.state == 2
@@ -552,7 +595,7 @@ class HANDSHAKE
 end
 
 class SESSION
-    var up
+    var up, strict_mode
     var H, K, ID
     var bin_packet
     var KEY_C_S_main, KEY_S_C_main, KEY_C_S_header, KEY_S_C_header
@@ -570,9 +613,10 @@ class SESSION
 
     def init()
         self.up = false
-        self.seq_nr_rx = -1
+        self.seq_nr_rx = -2 # very unsure about this!!!
         self.seq_nr_tx = -1
         self.send_queue = []
+        self.strict_mode = false # support by client
     end
 
     def send_banner()
@@ -581,7 +625,11 @@ class SESSION
         var s2 = tasmota.cmd("status 2")["StatusFWR"]
         var hw = s2["Hardware"]
         var vs = s2["Version"]
-        SSH_MSG.add_string(r,format(self.banner,hw,vs,tasmota.memory().tostring()))
+        var strict_mode = ""
+        if self.strict_mode == false
+            strict_mode = "\n\r WARNING: outdated SSH-client, connection is vulnerable to Terrapin!!!\r\n"
+        end
+        SSH_MSG.add_string(r,format(self.banner,hw,vs,tasmota.memory().tostring()) + strict_mode)
         SSH_MSG.add_string(r,"") # language
         var p = BIN_PACKET(bytes(-32),self,false)
         self.overrun_buf = nil
@@ -789,8 +837,10 @@ class SESSION
         print("Did create session keys:")
         # print(self.KEY_C_S_main, self.KEY_C_S_header, self.KEY_S_C_main, self.KEY_S_C_header)
         self.up = true
-        self.seq_nr_rx = -1 # reset to handle Terrapin attack
-        self.seq_nr_tx = -1
+        if self.strict_mode == true
+            self.seq_nr_rx = -1 # reset to handle Terrapin attack
+            self.seq_nr_tx = -1
+        end
     end
 end
 
@@ -798,10 +848,6 @@ class SSH : Driver
 
     var connection, server, client, data_server, data_client, data_ip
     var handshake, session
-    var dir, dir_list, dir_pos
-    var file, file_size, file_rename, retries, chunk_size
-    var binary_mode, active_ip, active_port, user_input
-    var data_buf, data_ptr, data_op
     static port = 22
 
     def init()
@@ -881,7 +927,6 @@ class SSH : Driver
         var response
         var d
         if self.session.overrun_buf
-            # print("process overrun",self.session.overrun_buf, size(self.session.overrun_buf))
             d = self.session.overrun_buf.copy()
             self.session.overrun_buf = nil
         else
