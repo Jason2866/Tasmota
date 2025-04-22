@@ -599,7 +599,7 @@ class SESSION
     var H, K, ID
     var bin_packet
     var KEY_C_S_main, KEY_S_C_main, KEY_C_S_header, KEY_S_C_header
-    var seq_nr_rx, seq_nr_tx
+    var seq_nr_rx, seq_nr_tx, channel_nr
     var send_queue, overrun_buf
     var type # terminal or SFTP
 
@@ -710,16 +710,16 @@ class SESSION
         var next_length = SSH_MSG.get_item_length(buf[next_index..])
         var channel_type = SSH_MSG.get_string(buf, next_index, next_length)
         next_index += next_length + 4
-        var channel = buf.geti(next_index,-4)
+        self.channel_nr = buf.geti(next_index,-4)
         next_index += 4
         var window_size = buf.geti(next_index,-4)
         next_index += 4
         var packet_size = buf.geti(next_index,-4)
-        print(channel_type,channel,window_size,packet_size)
+        print(channel_type,self.channel_nr,window_size,packet_size)
         var r = bytes(64)
         r .. SSH_MSG.CHANNEL_OPEN_CONFIRMATION
-        r.add(channel,-4)
-        r.add(channel,-4)
+        r.add(self.channel_nr,-4)
+        r.add(self.channel_nr,-4)
         r.add(window_size,-4)
         r.add(packet_size,-4)
         print(r)
@@ -735,7 +735,7 @@ class SESSION
         var next_length = SSH_MSG.get_item_length(buf[next_index..])
         var req_type_type = SSH_MSG.get_string(buf, next_index, next_length)
         next_index += next_length + 4
-        var bool_field = buf[next_index]
+        var want_reply = buf[next_index]
         next_index += 1
         next_length = SSH_MSG.get_item_length(buf[next_index..])
         var term = SSH_MSG.get_string(buf, next_index, next_length)
@@ -750,14 +750,19 @@ class SESSION
         next_index += 4
         next_length = SSH_MSG.get_item_length(buf[next_index..])
         var terminal_modes = SSH_MSG.get_string(buf, next_index, next_length)
-        print(channel,req_type_type,bool_field,term,width_c,height_c,width_p,height_p)
+        print(channel,req_type_type,want_reply,term,width_c,height_c,width_p,height_p)
         if req_type_type == "shell"
             self.type = TERMINAL()
         elif req_type_type == "subsystem" && term == "sftp"
             self.type = SFTP()
         end
         var r = bytes(64)
-        r .. SSH_MSG.IGNORE
+        if want_reply
+            r .. SSH_MSG.CHANNEL_SUCCESS # TODO: may really check
+        else
+            r .. SSH_MSG.IGNORE
+        end
+        r.add(self.channel_nr,-4)
         print(r)
         var enc_r = self.bin_packet.create(r ,true)
         return enc_r
@@ -774,7 +779,7 @@ class SESSION
         var t_r = self.type.process(data)
         var r = bytes()
         r .. SSH_MSG.CHANNEL_DATA
-        r.add(channel,-4)
+        r.add(self.channel_nr,-4)
         SSH_MSG.add_string(r,t_r)
         var enc_r = self.bin_packet.create(r ,true)
         return enc_r
