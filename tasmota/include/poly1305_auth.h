@@ -4,6 +4,9 @@ D. J. Bernstein
 Public domain.
 */
 
+#ifndef TASMOTA_POLY1305_AUTH_H
+#define TASMOTA_POLY1305_AUTH_H
+
 #define POLY1305_TAGLEN      16
 #define POLY1305_KEYLEN      32
 
@@ -24,7 +27,7 @@ Public domain.
 	} while (0)
 
 void
-poly1305_auth(char out[POLY1305_TAGLEN],
+static poly1305_auth(char out[POLY1305_TAGLEN],
 	      const char *m, size_t inlen,
 	      const char key[POLY1305_KEYLEN])
 {
@@ -169,3 +172,5 @@ poly1305_donna_finish:
 	U32TO8_LE(&out[ 8], f2); f3 += (f2 >> 32);
 	U32TO8_LE(&out[12], f3);
 }
+
+#endif /* TASMOTA_POLY1305_AUTH_H */

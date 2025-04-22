@@ -112,13 +112,13 @@ const be_const_member_t be_crypto_members[] = {
   { "/EC_C25519", (intptr_t) &be_class_ec_c25519 },
 #endif // USE_BERRY_CRYPTO_EC_C25519
 
-#ifdef USE_BERRY_CRYPTO_ED25519
-  { "/ED25519", (intptr_t) &be_class_ed25519 },
-#endif // USE_BERRY_CRYPTO_ED25519
-
 #ifdef USE_BERRY_CRYPTO_EC_P256
   { "/EC_P256", (intptr_t) &be_class_ec_p256 },
 #endif // USE_BERRY_CRYPTO_EC_P256
+
+#ifdef USE_BERRY_CRYPTO_ED25519
+  { "/ED25519", (intptr_t) &be_class_ed25519 },
+#endif // USE_BERRY_CRYPTO_ED25519
 
 #ifdef USE_BERRY_CRYPTO_HKDF_SHA256
   { "/HKDF_SHA256", (intptr_t) &be_class_hkdf_sha256 },

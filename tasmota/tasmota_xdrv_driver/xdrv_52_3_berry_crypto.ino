@@ -670,7 +670,7 @@ extern "C" {
     ) {
       size_t tag_len = 0;
       char * tag = (char*)be_tobytes(vm, 1, &tag_len);
-      if (tag_len != 16) {
+      if (tag_len != POLY1305_TAGLEN) {
       AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), tag_len);
       be_raise(vm, "value_error", "combined key size must be 16 bytes");
       }
@@ -680,7 +680,7 @@ extern "C" {
 
       size_t polykey_len = 0;
       char * polykey = (char *) be_tobytes(vm, 3, &polykey_len);
-      if (polykey_len != 32) {
+      if (polykey_len != POLY1305_KEYLEN) {
         AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), polykey_len);
         be_raise(vm, "value_error", "poly key size must be 32 bytes");
       }

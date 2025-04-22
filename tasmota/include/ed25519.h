@@ -3,6 +3,9 @@ D. J. Bernstein
 Public domain.
 */
 
+#ifndef TASMOTA_ED25519_H
+#define TASMOTA_ED25519_H
+
 typedef int32_t fe[10];
 
 void fe_0(fe h);
@@ -4213,3 +4216,4 @@ void sc_muladd(unsigned char *s, const unsigned char *a, const unsigned char *b,
     s[30] = (unsigned char) (s11 >> 9);
     s[31] = (unsigned char) (s11 >> 17);
 }
+#endif //TASMOTA_ED25519_H
