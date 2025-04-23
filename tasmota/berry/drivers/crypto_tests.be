@@ -9,6 +9,15 @@ assert(signature == bytes("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e
 assert(e.verify(message, signature, public_key)==true)
 
 
+def pad16(data)
+    # pad to 16 bytes
+    if (size(data) % 16) == 0
+        return data
+    else
+        return data + bytes(-(16 - (size(data) % 16)))
+    end
+end
+
 # https://boringssl.googlesource.com/boringssl/+/2e2a226ac9201ac411a84b5e79ac3a7333d8e1c9/crypto/cipher_extra/test/chacha20_poly1305_tests.txt
 import crypto
 c = crypto.CHACHA20_POLY1305()
@@ -19,12 +28,25 @@ _msg = "Ladies and Gentlemen of the class of '99: If I could offer you only one 
 msg = bytes().fromstring(_msg)
 ct = bytes("d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d63dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc3ff4def08e4b7a9de576d26586cec64b6116")
 tag = bytes("1ae10b594f09e26a7e902ecbd0600691")
+#create polykey
+poly_key = bytes(-32)
+c.chacha_run(key,iv,0,poly_key)
 _tag = bytes(-16)
-c.poly_encrypt1(key,iv,msg,_tag,aad)
+_aad = pad16(aad)
+sizes = bytes(-16)
+sizes.seti(0,size(aad),4)
+sizes.seti(8,size(ct),4)
+c.poly_run(_tag,pad16(aad)+pad16(ct)+sizes,poly_key)
+# encrypt
+c.chacha_run(key,iv,1,msg)
 assert(_tag == tag)
 assert(ct == msg)
-valid = c.poly_decrypt1(key,iv,msg,_tag,aad)
-assert(valid==true)
+
+# now decrypt - reuse aad and sizes
+_newtag = bytes(-16)
+c.poly_run(_newtag,pad16(aad)+pad16(msg)+sizes,poly_key)
+c.chacha_run(key,iv,1,msg)
+assert(_newtag==_tag)
 assert(msg.asstring()==_msg)
 
 # https://datatracker.ietf.org/doc/draft-ietf-sshm-chacha20-poly1305/01/
@@ -70,7 +92,3 @@ c.chacha_run(k_main,iv,0,poly_key)
 c.poly_run(mac,enc_packet,poly_key)
 enc_packet .. mac
 assert(enc_packet == packet)
-
-
-
-
