@@ -168,7 +168,7 @@ class SFTP
         self.session = session
         self.dir = PATH()
         self.readDir()
-        print("SFTP started")
+        print("SFTP started .. not working yet!!!")
         print(self.dir_list)
     end
 
@@ -861,22 +861,15 @@ end
 
 class SSH : Driver
 
-    var connection, server, client, data_server, data_client, data_ip
+    var connection, server, client
     var handshake, session
     static port = 22
 
     def init()
         self.server = tcpserver(self.port) # connection for control data
         self.connection = false
-        self.data_ip = tasmota.wifi()['ip']
         tasmota.add_driver(self)
         log(f"SSH: init server on port {self.port}",1)
-    end
-
-    def deinit()
-        self.server.deinit()
-        self.data_server.deinit()
-        tasmota.remove_driver(self)
     end
 
     def every_50ms()
@@ -899,7 +892,6 @@ class SSH : Driver
             if self.client.connected() == false
                 self.pubClientInfo()
                 self.connection = false
-                #self.abortDataOp()
             end
         end
     end
@@ -913,15 +905,6 @@ class SSH : Driver
     def loop()
         if self.connection == true
             self.handleConnection()
-        end
-    end
-
-    def deinitConnectServer()
-        if self.data_server != nil
-            self.data_server.close()
-            self.data_server.deinit()
-            self.data_server = nil
-            log("SSH: Delete server",2)
         end
     end
 
