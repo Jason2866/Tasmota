@@ -423,9 +423,19 @@ class HANDSHAKE
 
     def init(session)
         self.state = 0
-        self.K_S = (bytes().fromb64("AAAAC3NzaC1lZDI1NTE5AAAAIGgTQ3jxXinPuu/JJltK1gRIT1OYUe4WOqu/sszMgI5A"))
-        self.E_S_H = bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd")
+        self.create_host_keys()
         self.session = session
+    end
+
+    def create_host_keys()
+        import crypto
+        var ed = crypto.ED25519()
+        var exampe_seed = bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd") # could be any crypto.random(32)
+        self.E_S_H = ed.keypair(exampe_seed) #bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd")
+        var pk = bytes(64)
+        SSH_MSG.add_string(pk, "ssh-ed25519")
+        SSH_MSG.add_string(pk,self.E_S_H[-32..])
+        self.K_S = pk
     end
 
     def kexinit_to_client()
@@ -478,7 +488,7 @@ class HANDSHAKE
         self.H = sha256.out()
 
         var eddsa25519 = crypto.ED25519()
-        var SIG = eddsa25519.sign(self.H,self.E_S_H,self.K_S[-32..])
+        var SIG = eddsa25519.sign(self.H,self.E_S_H)
         print(SIG)
 
         var payload = bytes(256)

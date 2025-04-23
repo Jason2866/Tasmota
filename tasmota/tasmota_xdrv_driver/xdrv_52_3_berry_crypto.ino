@@ -1256,8 +1256,9 @@ extern "C" {
 \*********************************************************************************************/
 extern "C" {
 
-  void _ed25519_get_keypair(unsigned char *public_key, unsigned char *private_key, const unsigned char *seed){
+  void _ed25519_get_keypair(unsigned char *private_key, const unsigned char *seed){
     ge_p3 A;
+    unsigned char pub_key[32];
 
     br_sha512_context ctx;
     br_sha512_init(&ctx);
@@ -1268,38 +1269,25 @@ extern "C" {
     private_key[31] |= 64;
 
     ge_scalarmult_base(&A, private_key);
-    ge_p3_tobytes(public_key, &A);
+    ge_p3_tobytes(pub_key, &A);
     memmove(private_key, seed, 32);
-    memmove(private_key + 32, public_key, 32);
+    memmove(private_key + 32, pub_key, 32);
   }
 
    // from seed
   int32_t m_ed25519_keypair(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc >= 4 && be_isbytes(vm, 2)  // seed
-                  && be_isbytes(vm, 3)  // secret key
-                  && be_isbytes(vm, 4)) // public key
-                  {
+    if (argc == 2 && be_isbytes(vm, 2))  // seed
+    {
       size_t seed_len = 0;
       const unsigned char * seed = (const unsigned char *) be_tobytes(vm, 2, &seed_len);
       if (seed_len != 32) {
-        be_raise(vm, "value_error", "Key size must be 32");
+        be_raise(vm, "value_error", "seed size must be 32");
       }
+      unsigned char sec_key[64];
 
-      size_t sec_key_len = 0;
-      unsigned char * sec_key = (unsigned char *) be_tobytes(vm, 3, &sec_key_len);
-      if (sec_key_len != 64) {
-        be_raise(vm, "value_error", "Key size must be 64");
-      }
-
-      size_t pub_key_len = 0;
-      unsigned char * pub_key = (unsigned char *) be_tobytes(vm, 4, &pub_key_len);
-      if (pub_key_len != 32) {
-        be_raise(vm, "value_error", "Key size must be 32");
-      }
-
-      _ed25519_get_keypair(pub_key, sec_key, seed);
-      be_pushbool(vm, btrue);
+      _ed25519_get_keypair(sec_key, seed);
+      be_pushbytes(vm, sec_key, 64);
       be_return(vm);
     }
     be_raise(vm, kTypeError, nullptr);
@@ -1309,23 +1297,16 @@ extern "C" {
   // https://github.com/rdeker/ed25519/blob/13a0661670949bc2e1cfcd8720082d9670768041/src/sign.c
   int32_t m_ed25519_sign(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc >= 4 && be_isbytes(vm, 2)  // message
-                  && be_isbytes(vm, 3)  // secret key
-                  && be_isbytes(vm, 4)) // public key
+    if (argc == 3 && be_isbytes(vm, 2)  // message
+                  && be_isbytes(vm, 3))  // secret key
                   {
       size_t msg_len = 0;
       const void * msg = be_tobytes(vm, 2, &msg_len);
 
       size_t sec_key_len = 0;
       void * sec_key = (void *) be_tobytes(vm, 3, &sec_key_len);
-      if (sec_key_len != 32) {
-        be_raise(vm, "value_error", "Key size must be 32");
-      }
-
-      size_t pub_key_len = 0;
-      void * pub_key = (void *) be_tobytes(vm, 4, &pub_key_len);
-      if (pub_key_len != 32) {
-        be_raise(vm, "value_error", "Key size must be 32");
+      if (sec_key_len != 64) {
+        be_raise(vm, "value_error", "Key size must be 64");
       }
 
       uint8_t sign[64];
@@ -1348,8 +1329,8 @@ extern "C" {
       br_sha512_update(&ctx, msg, msg_len);
       br_sha512_out(&ctx, r);
 
-      // memmove((unsigned char*)sign + 32, (unsigned char*)sec_key + 32, 32);
-      memmove((unsigned char*)sign + 32, (unsigned char*)pub_key, 32);
+      memmove((unsigned char*)sign + 32, (unsigned char*)sec_key + 32, 32);
+      // memmove((unsigned char*)sign + 32, (unsigned char*)pub_key, 32);
   
       sc_reduce(r);
       ge_scalarmult_base(&R, r);
