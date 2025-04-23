@@ -100,9 +100,9 @@ class TERMINAL
             var r = tasmota.cmd(f"{c}")
             self.in_buf.clear()
             if r
-                return "\r\n" + r.tostring() + "\r\n"
+                return "\r\n" + r.tostring() + "\r\n> "
             else
-                return "\r\n"
+                return "\r\n>"
             end
         else
             return data.asstring()
@@ -915,7 +915,7 @@ class SSH : Driver
         self.client.write(resp)
         session.seq_nr_tx += 1
         if size(session.send_queue) != 0
-            self.client.write(self.session.send_queue.pop()())
+            self.client.write(session.send_queue.pop()())
             session.seq_nr_tx += 1
         end
         log(f"SSH: {self.session.seq_nr_tx} >>> {resp} _ {size(resp)} bytes",2)
