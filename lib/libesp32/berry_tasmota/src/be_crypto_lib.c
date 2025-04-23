@@ -51,7 +51,7 @@ extern int m_ec_c25519_sharedkey(bvm *vm);
 
 extern int m_ed25519_sign(bvm *vm);
 extern int m_ed25519_verify(bvm *vm);
-extern int m_ed25519_keypair(bvm *vm);
+extern int m_ed25519_secret_key(bvm *vm);
 
 extern int m_hash_sha256_init(bvm *vm);
 extern int m_hash_sha256_update(bvm *vm);
@@ -218,7 +218,7 @@ class be_class_ec_c25519 (scope: global, name: EC_C25519) {
 class be_class_ed25519 (scope: global, name: ED25519) {
     sign, func(m_ed25519_sign)
     verify, func(m_ed25519_verify)
-    keypair, func(m_ed25519_keypair)
+    secret_key, func(m_ed25519_secret_key)
 }
 
 class be_class_sha256 (scope: global, name: SHA256) {

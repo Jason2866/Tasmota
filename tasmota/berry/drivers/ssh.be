@@ -1,5 +1,5 @@
 #- Simple SSH server in Berry by Christian Baars
-#  this is not working for now
+#  this is demo code and not intended for production use
 -#
 
 class SSH_MSG
@@ -430,8 +430,8 @@ class HANDSHAKE
     def create_host_keys()
         import crypto
         var ed = crypto.ED25519()
-        var exampe_seed = bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd") # could be any crypto.random(32)
-        self.E_S_H = ed.keypair(exampe_seed) #bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd")
+        var example_seed = bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd") # could be any crypto.random(32)
+        self.E_S_H = ed.secret_key(example_seed) #bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd")
         var pk = bytes(64)
         SSH_MSG.add_string(pk, "ssh-ed25519")
         SSH_MSG.add_string(pk,self.E_S_H[-32..])

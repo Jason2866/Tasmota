@@ -1256,7 +1256,7 @@ extern "C" {
 \*********************************************************************************************/
 extern "C" {
 
-  void _ed25519_get_keypair(unsigned char *private_key, const unsigned char *seed){
+  void _ed25519_get_secret_key(unsigned char *private_key, const unsigned char *seed){
     ge_p3 A;
     unsigned char pub_key[32];
 
@@ -1275,7 +1275,7 @@ extern "C" {
   }
 
    // from seed
-  int32_t m_ed25519_keypair(bvm *vm) {
+  int32_t m_ed25519_secret_key(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc == 2 && be_isbytes(vm, 2))  // seed
     {
@@ -1286,7 +1286,7 @@ extern "C" {
       }
       unsigned char sec_key[64];
 
-      _ed25519_get_keypair(sec_key, seed);
+      _ed25519_get_secret_key(sec_key, seed);
       be_pushbytes(vm, sec_key, 64);
       be_return(vm);
     }
