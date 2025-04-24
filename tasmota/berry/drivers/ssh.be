@@ -313,9 +313,8 @@ class BIN_PACKET
         var data = self.buf[0.. self.packet_length  + 3]
         var poly_key = bytes(-32)
         c.chacha_run(self.session.KEY_C_S_main, iv, 0 ,poly_key)
-        var mac = bytes(-16)
         var given_mac = self.buf[self.packet_length+4..self.packet_length+19]
-        c.poly_run(mac,data,poly_key)
+        var mac = c.poly_run(data,poly_key)
         if mac != given_mac
             print("MAC MISMATCH!!",mac, given_mac, size(given_mac))
         end
@@ -371,10 +370,10 @@ class BIN_PACKET
         var data = packet[4..]
         c.chacha_run(self.session.KEY_S_C_main, iv, 1, data)
         var enc_packet = length + data
-        var mac = bytes(-16)
+
         var poly_key = bytes(-32)
         c.chacha_run(self.session.KEY_S_C_main,iv,0,poly_key)
-        c.poly_run(mac,enc_packet,poly_key)
+        var mac = c.poly_run(enc_packet,poly_key)
 
         return enc_packet + mac
     end

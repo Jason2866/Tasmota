@@ -662,29 +662,25 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
+  // `poly_run(data:bytes(),poly_key:bytes(32),)-> tag:bytes(16)`
   int m_poly1305_run(bvm *vm){
     int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc >= 3  && be_isbytes(vm, 1)   // tag  - 16 bytes
-                  && be_isbytes(vm, 2)    // data in
-                  && be_isbytes(vm, 3)    // poly key
+    if (argc >= 2 && be_isbytes(vm, 1)    // data in
+                  && be_isbytes(vm, 2)    // poly key
     ) {
-      size_t tag_len = 0;
-      char * tag = (char*)be_tobytes(vm, 1, &tag_len);
-      if (tag_len != POLY1305_TAGLEN) {
-      AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), tag_len);
-      be_raise(vm, "value_error", "combined key size must be 16 bytes");
-      }
+      char tag[POLY1305_TAGLEN];
 
       size_t data_len = 0;
-      const char * data = (const char *) be_tobytes(vm, 2, &data_len);
+      const char * data = (const char *) be_tobytes(vm, 1, &data_len);
 
       size_t polykey_len = 0;
-      char * polykey = (char *) be_tobytes(vm, 3, &polykey_len);
+      char * polykey = (char *) be_tobytes(vm, 2, &polykey_len);
       if (polykey_len != POLY1305_KEYLEN) {
         AddLog(LOG_LEVEL_INFO, PSTR(" %d bytes"), polykey_len);
         be_raise(vm, "value_error", "poly key size must be 32 bytes");
       }
       poly1305_auth(tag, data, data_len,polykey);
+      be_pushbytes(vm, tag, sizeof(tag));
       be_return(vm); 
     }
   be_raise(vm, kTypeError, nullptr);
@@ -1255,7 +1251,11 @@ extern "C" {
  * 
 \*********************************************************************************************/
 extern "C" {
-
+  /* internal function to generate a secret key from a seed
+   * The secret key is 64 bytes long, the first 32 bytes are the seed
+   * and the last 32 bytes are the public key.
+   * The seed must be 32 bytes long.
+  */
   void _ed25519_get_secret_key(unsigned char *private_key, const unsigned char *seed){
     ge_p3 A;
     unsigned char pub_key[32];
@@ -1274,7 +1274,7 @@ extern "C" {
     memmove(private_key + 32, pub_key, 32);
   }
 
-   // from seed
+  /*crypto.ED25519().secret_key(seed:bytes(32)) -> bytes(64)*/
   int32_t m_ed25519_secret_key(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc == 2 && be_isbytes(vm, 2))  // seed
@@ -1295,6 +1295,7 @@ extern "C" {
 
 
   // https://github.com/rdeker/ed25519/blob/13a0661670949bc2e1cfcd8720082d9670768041/src/sign.c
+  /*crypto.ED25519().sign(message:bytes(), secret_key:bytes(64)) -> signature:bytes(64)*/
   int32_t m_ed25519_sign(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc == 3 && be_isbytes(vm, 2)  // message
@@ -1352,6 +1353,7 @@ extern "C" {
   }
 
   // https://github.com/rdeker/ed25519/blob/13a0661670949bc2e1cfcd8720082d9670768041/src/verify.c
+  /*crypto.ED25519().verify(message:bytes(), signature:bytes(64), public_key:bytes(32)) -> bool*/
   int32_t m_ed25519_verify(bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc >= 4 && be_isbytes(vm, 2)  // message

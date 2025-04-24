@@ -34,19 +34,17 @@ tag = bytes("1ae10b594f09e26a7e902ecbd0600691")
 #create polykey
 poly_key = bytes(-32)
 c.chacha_run(key,iv,0,poly_key)
-_tag = bytes(-16)
 sizes = bytes(-16)
 sizes.seti(0,size(aad),4)
 sizes.seti(8,size(ct),4)
-c.poly_run(_tag,pad16(aad)+pad16(ct)+sizes,poly_key)
+_tag = c.poly_run(pad16(aad)+pad16(ct)+sizes,poly_key)
 # encrypt
 c.chacha_run(key,iv,1,msg)
 assert(_tag == tag)
 assert(ct == msg)
 
 # now decrypt - reuse aad and sizes
-_newtag = bytes(-16)
-c.poly_run(_newtag,pad16(aad)+pad16(msg)+sizes,poly_key)
+ _newtag = c.poly_run(pad16(aad)+pad16(msg)+sizes,poly_key)
 c.chacha_run(key,iv,1,msg)
 assert(_newtag==_tag)
 assert(msg.asstring()==_msg)
@@ -66,9 +64,8 @@ k_main = keys[0..31]
 
 poly_key = bytes(-32)
 c.chacha_run(k_main,iv,0,poly_key)
-calculated_mac = bytes(-16)
 given_mac = packet[-16..]
-c.poly_run(calculated_mac,packet[0..-17],poly_key)
+calculated_mac = c.poly_run(packet[0..-17],poly_key)
 assert(calculated_mac == given_mac)
 
 data = packet[4..-17]
@@ -88,9 +85,9 @@ c.chacha_run(k_header,iv,0,length) # use upper 32 bytes of key material
 data = raw_packet[4..]
 counter = c.chacha_run(k_main, iv, 1, data) # lower bytes of key for packet
 enc_packet = length + data
-mac = bytes(-16)
+
 poly_key = bytes(-32)
 c.chacha_run(k_main,iv,0,poly_key)
-c.poly_run(mac,enc_packet,poly_key)
+mac = c.poly_run(enc_packet,poly_key)
 enc_packet .. mac
 assert(enc_packet == packet)
