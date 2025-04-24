@@ -417,8 +417,7 @@ class HANDSHAKE
 
     var   H   # hash of above
 
-    var   E_S_S # server's ephemeral secret key bytes
-    var   E_S_H # server's secret host key bytes
+    var   host_key # server's secret host key bytes
 
 
     def init(session)
@@ -431,10 +430,10 @@ class HANDSHAKE
         import crypto
         var ed = crypto.ED25519()
         var example_seed = bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd") # could be any crypto.random(32)
-        self.E_S_H = ed.secret_key(example_seed) #bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd")
+        self.host_key = ed.secret_key(example_seed) #bytes("a60c6c7107be5da01ba7f7bc6a08e1d0faa27e1db9327514823fdac5f8e750dd")
         var pk = bytes(64)
         SSH_MSG.add_string(pk, "ssh-ed25519")
-        SSH_MSG.add_string(pk,self.E_S_H[-32..])
+        SSH_MSG.add_string(pk,self.host_key[-32..]) # public key is simply the last 32 bytes of the secret key
         self.K_S = pk
     end
 
@@ -488,7 +487,7 @@ class HANDSHAKE
         self.H = sha256.out()
 
         var eddsa25519 = crypto.ED25519()
-        var SIG = eddsa25519.sign(self.H,self.E_S_H)
+        var SIG = eddsa25519.sign(self.H,self.host_key)
         print(SIG)
 
         var payload = bytes(256)
@@ -506,11 +505,11 @@ class HANDSHAKE
     def create_ephemeral(payload)
         log("SSH: will create ephemeral keys",2)
         import crypto
-        self.E_S_S = crypto.random(32)
-        self.Q_S = (crypto.EC_C25519().public_key(self.E_S_S))
+        var ephem_key = crypto.random(32)
+        self.Q_S = (crypto.EC_C25519().public_key(ephem_key))
         self.Q_C = payload[5..]
-        self.K = (crypto.EC_C25519().shared_key(self.E_S_S, self.Q_C))
-        # print(self.E_S_S, self.Q_S, self.K)
+        self.K = (crypto.EC_C25519().shared_key(ephem_key, self.Q_C))
+        # print(ephem_key self.Q_S, self.K)
         return self.create_KEX_ECDH_REPLY()
     end
 
