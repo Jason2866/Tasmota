@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Optional Wifi strength indicator in WebUI status line (#23352)
 - WebUI status line left and renamed events `FUNC_WEB_STATUS_LEFT` and `FUNC_WEB_STATUS_RIGHT` (#23354)
 - WebUI heap status (#23356)
+- Support for multi channel AU915-928 LoRaWanBridge by Rob Clark (#23372)
 
 ### Breaking Changed
 
@@ -25,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - Berry `display.touch_update` wrongly applies resistive calibration (#23363)
 - NimBLE log_level definition conflict (#23366)
 - Matter and mDNS can be enabled at the same time (#23373)
+- Berry `introspect.module()` failed to load modules in files (#23376)
 
 ### Removed
 
