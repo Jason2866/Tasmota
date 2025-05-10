@@ -3,24 +3,74 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [14.5.0.3] 
+## [14.6.0.2]
 ### Added
-- Extend command `GPIO` with different display options and allowing updating of module GPIO's in one go
-- Berry `bytes.add()` now accepts 3-bytes values (#23200)
 
 ### Breaking Changed
 
 ### Changed
+- ESP32 Platform from 2025.04.30 to 2025.05.40, Framework (Arduino Core) from v3.1.3.250411 to v3.2.0.250504 and IDF from v5.3.2.250403 to v5.4.1.250501 (#23397)
+
+### Fixed
+
+### Removed
+
+## [14.6.0.1] 20250510
+### Added
+- Command `JsonPP 0..7` to enable (>0) JSON Pretty Print on user interfaces and set number of indents
+- Command `JsonPP <command>|backlog <command>;...` to enable JSON PP only once
+- WebUI status line for MQTT and TLS, added `FUNC_WEB_STATUS` event (#23326)
+- Wireguard VPN (#23347)
+- Optional Wifi strength indicator in WebUI status line (#23352)
+- WebUI status line left and renamed events `FUNC_WEB_STATUS_LEFT` and `FUNC_WEB_STATUS_RIGHT` (#23354)
+- WebUI heap status (#23356)
+- Support for multi channel AU915-928 LoRaWanBridge by Rob Clark (#23372)
+- HASPmota add `antiburn()` (#23400)
+
+### Breaking Changed
+
+### Changed
+- Allow command `WebRefresh` minimum from 1000 to 400 mSec
+- GPIOViewer from v1.6.2 to v1.6.3 (No functional change)
+
+### Fixed
+- Berry `bytes().asstring()` now truncates a string if buffer contains NULL (#23311)
+- Berry string literals containing NULL are truncated (#23312)
+- Berry `display.touch_update` wrongly applies resistive calibration (#23363)
+- NimBLE log_level definition conflict (#23366)
+- Matter and mDNS can be enabled at the same time (#23373)
+- Berry `introspect.module()` failed to load modules in files (#23376)
+
+## [Released]
+
+## [14.6.0] 20250416
+- Release Ryan
+
+## [14.5.0.3] 20250416
+### Added
+- Extend command `GPIO` with different display options and allowing updating of module GPIO's in one go
+- Berry `bytes.add()` now accepts 3-bytes values (#23200)
+- Berry expose `esp_http_server` for websockets (#23206)
+- AlpineJS 2.8.2 - optional for now (#23259)
+- Support for XMODEM over serial and telnet if enabled with `#define USE_XYZMODEM`
+- PZEM_AC device address in JSON and GUI (#23268)
+- Filesystem command ``UfsList[2]``
+- ESP32 show network interface priority in `Status 5` debug logging (#23302)
+
+### Breaking Changed
+- HASPmota added `y2_min` and `y2_max` to control the second series of `chart` (#23287)
+- HASPmota default theme is now Tasmota-style (#23288)
+
+### Changed
 - Output of commands `GPIO` and `GPIOs` swapped
 - Smoothen light gamma curve when using `Fade` (#23230)
+- ESP32 Platform from 2025.03.30 to 2025.04.30, Framework (Arduino Core) from v3.1.3.250302 to v3.1.3.250411 and IDF from v5.3.2.250228 to 5.3.2.250403 (#23280)
+- HLK-LD2402 updates for firmware 3.3.5+ (#23281)
 
 ### Fixed
 - INA226 driver fixes (#23197)
 - TLS increase timeout and fix crash (#23249)
-
-### Removed
-
-
+- Berry `readline` when a line is exactly 98 characters (#23276)
 
 ## [14.5.0.2] 20250325
 ### Added
@@ -29,7 +79,7 @@ All notable changes to this project will be documented in this file.
 - Support for HLK-LD2402 24GHz smart wave motion sensor (#23133)
 - Matter prepare for ICD cluster (#23158)
 - Berry `re.dump()` (#23162)
-- Telnet server using command `Telnet <0|1|port>[,<IP filter>]`
+- Support for Telnet server using command `Telnet <0|1|port>[,<IP filter>]` if enabled with `#define USE_TELNET`
 - HASPmota autostart when `pages.jsonl` exists (#23181)
 
 ### Breaking Changed
@@ -66,8 +116,6 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Too many zeros in RCSwitch received data regression from v14.4.1.4 (#23050)
-
-## [Released]
 
 ## [14.5.0] 20250219
 - Release Ruth

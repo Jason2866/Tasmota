@@ -163,6 +163,7 @@
 #define D_JSON_PUMP "Pumped"
 #define D_JSON_RED "Red"
 #define D_JSON_REFERENCETEMPERATURE "ReferenceTemperature"
+#define D_JSON_REGION "Region"
 #define D_JSON_REMAINING "Remaining"
 #define D_JSON_RESET "Reset"
 #define D_JSON_RESISTANCE "Resistance"
@@ -272,6 +273,7 @@
 // Commands tasmota.ino
 #define D_CMND_BACKLOG "Backlog"
 #define D_CMND_JSON "Json"
+#define D_CMND_JSON_PP "JsonPP"
 #define D_CMND_DELAY "Delay"
 #define D_CMND_NODELAY "NoDelay"
 #define D_CMND_STATUS "Status"
@@ -1040,6 +1042,8 @@ const char HTTP_SNS_IMPORT_REACTIVE[]     PROGMEM = "{s}" D_IMPORT_REACTIVE     
 const char HTTP_SNS_EXPORT_REACTIVE[]     PROGMEM = "{s}" D_EXPORT_REACTIVE         "{m}%s " D_UNIT_KWARH         "{e}";
 const char HTTP_SNS_TOTAL_REACTIVE[]      PROGMEM = "{s}" D_TOTAL_REACTIVE          "{m}%s " D_UNIT_KWARH         "{e}";
 const char HTTP_SNS_PHASE_ANGLE[]         PROGMEM = "{s}" D_PHASE_ANGLE             "{m}%s " D_UNIT_ANGLE         "{e}";
+const char HTTP_SNS_ADDRESS[]             PROGMEM = "{s}" D_ADDRESS                 "{m}%s"                       "{e}";
+
 #endif  // USE_WEBSERVER
 
 #endif  // _I18N_H_
