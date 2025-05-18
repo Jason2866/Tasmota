@@ -240,7 +240,9 @@ class IRsend {
                   bool use_modulation = true);
   void begin();
   void enableIROut(uint32_t freq, uint8_t duty = kDutyDefault);
+  #if !defined(ESP32_RMT)
   VIRTUAL void _delayMicroseconds(uint32_t usec);
+  #endif // ESP32_RMT
   VIRTUAL uint16_t mark(uint16_t usec);
   VIRTUAL void space(uint32_t usec);
   int8_t calibrate(uint16_t hz = 38000U);
@@ -287,6 +289,9 @@ class IRsend {
             const uint16_t nbits, const uint16_t repeat = kNoRepeat);
   bool send(const decode_type_t type, const uint8_t *state,
             const uint16_t nbytes);
+  #ifdef ESP32_RMT
+  void clearSendRawbuf(void);
+  #endif
 #if (SEND_NEC || SEND_SHERWOOD || SEND_AIWA_RC_T501 || SEND_SANYO || \
      SEND_MIDEA24)
   void sendNEC(uint64_t data, uint16_t nbits = kNECBits,
@@ -895,10 +900,12 @@ class IRsend {
 #define LOW 0x0
 #endif
 #endif  // UNIT_TEST
+#if !defined(ESP32_RMT)
   uint8_t outputOn;
   uint8_t outputOff;
   VIRTUAL void ledOff();
   VIRTUAL void ledOn();
+#endif // ESP32_RMT  
 #ifndef UNIT_TEST
 
  private:
@@ -910,6 +917,11 @@ class IRsend {
   uint16_t IRpin;
   int8_t periodOffset;
   uint8_t _dutycycle;
+
+#ifdef ESP32_RMT 
+  uint16_t *_sendRawbuf = nullptr; // NULL;
+  uint16_t _rawBufCounter = 0;
+#endif // ESP32_RMT    
   bool modulation;
   uint32_t calcUSecPeriod(uint32_t hz, bool use_offset = true);
 #if SEND_SONY
