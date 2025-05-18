@@ -54,10 +54,6 @@ void IRsend::begin() {
   if (!rmtInit(IRpin, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 1000000)) {
     log_e("create RMT TX channel fail");
   }
-  #elif defined(ESP_PLATFORM)
-  if (!_irrmt.begin()){
-    ESP_LOGE(RMT_TAG, "IDF RMT Init Fail!");
-  }
 #endif // ESP32_RMT  
 }
 
