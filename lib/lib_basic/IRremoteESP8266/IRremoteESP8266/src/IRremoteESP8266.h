@@ -1000,7 +1000,7 @@
 //         decoding of some protocols. You have been warned. Here Be Dragons!
 //
 // See: `irrecv::decode()` in IRrecv.cpp for more info.
-#ifndef ENABLE_NOISE_FILTER_OPTION
+#if !defined(ENABLE_NOISE_FILTER_OPTION) && !defined(ESP32_RMT)
 #define ENABLE_NOISE_FILTER_OPTION true
 #endif  // ENABLE_NOISE_FILTER_OPTION
 
