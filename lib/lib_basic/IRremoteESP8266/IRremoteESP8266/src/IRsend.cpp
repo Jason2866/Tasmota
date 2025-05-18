@@ -27,7 +27,7 @@
 ///  duty cycle etc.
 IRsend::IRsend(uint16_t IRsendPin, bool inverted, bool use_modulation)
     : IRpin(IRsendPin), periodOffset(kPeriodOffset) {
-  #ifndef ESP32_RMT    
+  #ifndef IR_REMOTE_ESP32_RMT    
   if (inverted) {
     outputOn = LOW;
     outputOff = HIGH;
@@ -40,12 +40,12 @@ IRsend::IRsend(uint16_t IRsendPin, bool inverted, bool use_modulation)
     _dutycycle = kDutyDefault;
   else
     _dutycycle = kDutyMax;
-  #endif // ESP32_RMT  
+  #endif // IR_REMOTE_ESP32_RMT  
 }
 
 /// Enable the pin for output.
 void IRsend::begin() {
-#ifndef ESP32_RMT      
+#ifndef IR_REMOTE_ESP32_RMT      
 #ifndef UNIT_TEST
   pinMode(IRpin, OUTPUT);
 #endif
@@ -54,10 +54,10 @@ void IRsend::begin() {
   if (!rmtInit(IRpin, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 1000000)) {
     log_e("create RMT TX channel fail");
   }
-#endif // ESP32_RMT  
+#endif // IR_REMOTE_ESP32_RMT  
 }
 
-#if !defined(ESP32_RMT)
+#if !defined(IR_REMOTE_ESP32_RMT)
 /// Turn off the IR LED.
 void IRsend::ledOff() {
 #ifndef UNIT_TEST
@@ -71,7 +71,7 @@ void IRsend::ledOn() {
   digitalWrite(IRpin, outputOn);
 #endif
 }
-#endif // ESP32_RMT
+#endif // IR_REMOTE_ESP32_RMT
 
 /// Calculate the period for a given frequency.
 /// @param[in] hz Frequency in Hz.
@@ -100,7 +100,7 @@ uint32_t IRsend::calcUSecPeriod(uint32_t hz, bool use_offset) {
 ///  microseconds timing. Thus minor changes to the freq & duty values may have
 ///  limited effect. You've been warned.
 void IRsend::enableIROut(uint32_t freq, uint8_t duty) {
-#ifndef ESP32_RMT
+#ifndef IR_REMOTE_ESP32_RMT
   // Set the duty cycle to use if we want freq. modulation.
   if (modulation) {
     _dutycycle = std::min(duty, kDutyMax);
@@ -125,10 +125,10 @@ void IRsend::enableIROut(uint32_t freq, uint8_t duty) {
   if (!rmtSetCarrier(IRpin, true, false, freq, (float)duty/100)){
     log_e("rmtSetCarrier fail");
   }
-#endif // ESP32_RMT  
+#endif // IR_REMOTE_ESP32_RMT  
 }
 
-#if !defined(ESP32_RMT)
+#if !defined(IR_REMOTE_ESP32_RMT)
 #if ALLOW_DELAY_CALLS
 /// An ESP8266 RTOS watch-dog timer friendly version of delayMicroseconds().
 /// @param[in] usec Nr. of uSeconds to delay for.
@@ -161,7 +161,7 @@ void IRsend::_delayMicroseconds(uint32_t usec) {
 #endif  // UNIT_TEST
 }
 #endif  // ALLOW_DELAY_CALLS
-#endif  // ESP32_RMT
+#endif  // IR_REMOTE_ESP32_RMT
 
 /// Modulate the IR LED for the given period (usec) and at the duty cycle set.
 /// @param[in] usec The period of time to modulate the IR LED for, in
@@ -178,7 +178,7 @@ void IRsend::_delayMicroseconds(uint32_t usec) {
 ///   https://www.analysir.com/blog/2017/01/29/updated-esp8266-nodemcu-backdoor-upwm-hack-for-ir-signals/
 uint16_t IRsend::mark(uint16_t usec) {
 
-  #ifndef ESP32_RMT  
+  #ifndef IR_REMOTE_ESP32_RMT  
   // Handle the simple case of no required frequency modulation.  
   if (!modulation || _dutycycle >= 100) {    
     ledOn();
@@ -231,7 +231,7 @@ uint16_t IRsend::mark(uint16_t usec) {
 /// A space is no output, so the PWM output is disabled.
 /// @param[in] time Time in microseconds (us).
 void IRsend::space(uint32_t time) {  
-  #ifndef ESP32_RMT
+  #ifndef IR_REMOTE_ESP32_RMT
   ledOff();
   if (time == 0) return;
   _delayMicroseconds(time);
@@ -256,7 +256,7 @@ void IRsend::space(uint32_t time) {
 /// @note This will generate an 65535us mark() IR LED signal.
 ///  This only needs to be called once, if at all.
 int8_t IRsend::calibrate(uint16_t hz) {
-#ifndef ESP32_RMT
+#ifndef IR_REMOTE_ESP32_RMT
   if (hz < 1000)  // Were we given kHz? Supports the old call usage.
     hz *= 1000;
   periodOffset = 0;  // Turn off any existing offset while we calibrate.
@@ -284,7 +284,7 @@ int8_t IRsend::calibrate(uint16_t hz) {
   return periodOffset;
 #else 
     return 0;
-#endif  // ESP32_RMT
+#endif  // IR_REMOTE_ESP32_RMT
 }
 
 /// Generic method for sending data that is common to most protocols.
@@ -411,14 +411,14 @@ void IRsend::sendGeneric(const uint16_t headermark, const uint32_t headerspace,
                          const uint8_t dutycycle) {
   // Setup
   enableIROut(frequency, dutycycle);
-#if !defined(ESP32_RMT)
+#if !defined(IR_REMOTE_ESP32_RMT)
   IRtimer usecs = IRtimer();
-#endif  // ESP32_RMT
+#endif  // IR_REMOTE_ESP32_RMT
 
   // We always send a message, even for repeat=0, hence '<= repeat'.
   for (uint16_t r = 0; r <= repeat; r++) {
 
-#ifdef ESP32_RMT
+#ifdef IR_REMOTE_ESP32_RMT
     // Header
     if (headermark) mark(headermark);
     else if (headerspace) mark(1);
@@ -451,12 +451,12 @@ void IRsend::sendGeneric(const uint16_t headermark, const uint32_t headerspace,
       space(gap);
     else
       space(std::max(gap, mesgtime - elapsed));
-#endif // ESP32_RMT
+#endif // IR_REMOTE_ESP32_RMT
   }
 
-#if defined(ESP32_RMT)
+#if defined(IR_REMOTE_ESP32_RMT)
   this->sendRaw(this->_sendRawbuf, this->_rawBufCounter, frequency);
-#endif // ESP32_RMT  
+#endif // IR_REMOTE_ESP32_RMT  
 }
 
 /// Generic method for sending simple protocol messages.
@@ -496,7 +496,7 @@ void IRsend::sendGeneric(const uint16_t headermark, const uint32_t headerspace,
   enableIROut(frequency, dutycycle);
   // We always send a message, even for repeat=0, hence '<= repeat'.
   for (uint16_t r = 0; r <= repeat; r++) {
-#ifdef ESP32_RMT
+#ifdef IR_REMOTE_ESP32_RMT
     // Header
     if (headermark) mark(headermark);
     else if (headerspace) mark(1);
@@ -524,12 +524,12 @@ void IRsend::sendGeneric(const uint16_t headermark, const uint32_t headerspace,
     // Footer
     if (footermark) mark(footermark);
     space(gap);
-#endif // ESP32_RMT
+#endif // IR_REMOTE_ESP32_RMT
   }
 
-#if defined(ESP32_RMT)
+#if defined(IR_REMOTE_ESP32_RMT)
   this->sendRaw(this->_sendRawbuf, this->_rawBufCounter, frequency);
-#endif // ESP32_RMT  
+#endif // IR_REMOTE_ESP32_RMT  
 }
 
 /// Generic method for sending Manchester code data.
@@ -626,9 +626,9 @@ void IRsend::sendManchester(const uint16_t headermark,
     if (gap) space(gap);
   }
 
-#if defined(ESP32_RMT)
+#if defined(IR_REMOTE_ESP32_RMT)
   this->sendRaw(this->_sendRawbuf, this->_rawBufCounter, frequency);
-#endif // ESP32_RMT    
+#endif // IR_REMOTE_ESP32_RMT    
 }
 
 #if SEND_RAW
@@ -645,7 +645,7 @@ void IRsend::sendRaw(const uint16_t buf[], const uint16_t len,
   // Set IR carrier frequency
   enableIROut(hz);
 
-#ifndef ESP32_RMT
+#ifndef IR_REMOTE_ESP32_RMT
   for (uint16_t i = 0; i < len; i++) {
     if (i & 1) {  // Odd bit.
       space(buf[i]);
@@ -680,11 +680,11 @@ void IRsend::sendRaw(const uint16_t buf[], const uint16_t len,
 
   if (this->_sendRawbuf != NULL) { free(this->_sendRawbuf); this->_sendRawbuf = NULL; }
   this->_rawBufCounter = 0;
-#endif // ESP32_RMT
+#endif // IR_REMOTE_ESP32_RMT
 }
 #endif  // SEND_RAW
 
-#ifdef ESP32_RMT
+#ifdef IR_REMOTE_ESP32_RMT
 void IRsend::clearSendRawbuf(void) {
   if (this->_sendRawbuf != NULL) { free(this->_sendRawbuf); this->_sendRawbuf = NULL; }
   this->_rawBufCounter = 0;
