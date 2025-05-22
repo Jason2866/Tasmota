@@ -1,4 +1,9 @@
 {
+    "terminal.integrated.env.windows": {
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1",
+        "CHCP": "UTF-8"
+    }
     "platformio-ide.toolbar": [
       {
         "text": "$(home)",
