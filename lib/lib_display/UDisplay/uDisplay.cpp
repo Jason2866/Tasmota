@@ -1247,6 +1247,7 @@ Renderer *uDisplay::Init(void) {
     _panel_config->flags.relax_on_idle = 0;
 #endif // ESP_IDF_VERSION_MAJOR >= 5
     _panel_config->flags.fb_in_psram = 1;             // allocate frame buffer in PSRAM
+    _panel_config->bounce_buffer_size_px = 10 * gxs;  // use bounce buffer with 10 lines
 
     ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(_panel_config, &_panel_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_reset(_panel_handle));
