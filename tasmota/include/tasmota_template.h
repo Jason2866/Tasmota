@@ -1454,6 +1454,18 @@ const char PINS_WEMOS[] PROGMEM = "IOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOIO-
 //                                  0 1 2 3 4 5 6 7 8 9101112131415161718192021222324252627282930313233343536373839404142434445464748
 const char PINS_WEMOS[] PROGMEM = "IOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAOIO--------FLFLFLFLFLFLFLIOIOIOIOIOIOIOIOIOIOIOIOIOIOIOIO";
 
+#elif CONFIG_IDF_TARGET_ESP32C5  // ESP32-C5
+/* ****************************************
+ * ESP32C5
+ * ****************************************/
+#define MAX_GPIO_PIN       27   // Number of supported GPIO
+#define MIN_FLASH_PINS     0    // Number of flash chip pins unusable for configuration (GPIO11 to 17)
+#define MAX_USER_PINS      27   // MAX_GPIO_PIN - MIN_FLASH_PINS
+#define WEMOS_MODULE       0    // Wemos module
+
+//                                  0 1 2 3 4 5 6 7 8 91011121314151617181920212223242526
+const char PINS_WEMOS[] PROGMEM = "IOAOAOAOAOAOAOIOIOIOIOIOIOIOIOIOIOIOFLFLFLIOFLFLFLIOIO";
+
 #else  // not CONFIG_IDF_TARGET_ESP32C2/C3/C6 nor CONFIG_IDF_TARGET_ESP32S2 - ESP32
 
 /* ****************************************
@@ -3054,6 +3066,61 @@ const mytmplt kModules[] PROGMEM = {
  Known templates
 \*********************************************************************************************/
 
+#elif CONFIG_IDF_TARGET_ESP32C5
+/********************************************************************************************\
+ * ESP32-C5 Module templates
+\********************************************************************************************/
+
+#define USER_MODULE        255
+
+// Supported hardware modules
+enum SupportedModulesESP32C5 {
+  WEMOS, // not really correct, a placeholder for now
+  MAXMODULE };
+
+// Default module settings
+const uint8_t kModuleNiceList[] PROGMEM = {
+  WEMOS,
+};
+
+// !!! Update this list in the same order as kModuleNiceList !!!
+const char kModuleNames[] PROGMEM =
+  "ESP32C5|"
+  ;
+
+// !!! Update this list in the same order as SupportedModulesESP32C5 !!!
+const mytmplt kModules[] PROGMEM = {
+  {                              // Generic ESP32C5 device
+    AGPIO(GPIO_USER),            // 0       IO                  GPIO0, ADC1_CH0, XTAL_32K_P
+    AGPIO(GPIO_USER),            // 1       IO                  GPIO1, ADC1_CH1, XTAL_32K_N
+    AGPIO(GPIO_USER),            // 2       IO                  GPIO2, ADC1_CH2, FSPIQ
+    AGPIO(GPIO_USER),            // 3       IO                  GPIO3, ADC1_CH3
+    AGPIO(GPIO_USER),            // 4       IO                  GPIO4, ADC1_CH4, FSPIHD, MTMS
+    AGPIO(GPIO_USER),            // 5       IO                  GPIO5, ADC2_CH0, FSPIWP, MTDI
+    AGPIO(GPIO_USER),            // 6       IO                  GPIO6, FSPICLK, MTCK
+    AGPIO(GPIO_USER),            // 7       IO                  GPIO7, FSPID, MTDO
+    AGPIO(GPIO_USER),            // 8       IO                  GPIO8
+    AGPIO(GPIO_USER),            // 9       IO                  GPIO9
+    AGPIO(GPIO_USER),            // 10      IO                  GPIO10
+    0,                           // 11      IO                  GPIO11, output power supply for flash
+    0,                           // 12      IO                  GPIO12, SPIHD - Free if flash DIO/DOUT
+    0,                           // 13      IO                  GPIO13, SPIWP - Free if flash DIO/DOUT
+    0,                           // 14      IO                  GPIO14, SPICS0
+    0,                           // 15      IO                  GPIO15, SPICLK
+    0,                           // 16      IO                  GPIO16, SPID
+    0,                           // 17      IO                  GPIO17, SPIQ
+    AGPIO(GPIO_USER),            // 18      IO                  GPIO18, USB_D
+    AGPIO(GPIO_USER),            // 19      IO                  GPIO19, USB_D+
+    AGPIO(GPIO_USER),            // 20      IO     RXD0         GPIO20, U0RXD
+    AGPIO(GPIO_USER),            // 21      IO     TXD0         GPIO21, U0TXD
+    0                            // Flag
+  },
+};
+
+/*********************************************************************************************\
+ Known templates
+\*********************************************************************************************/
+
 #elif CONFIG_IDF_TARGET_ESP32C6
 /********************************************************************************************\
  * ESP32-C6 Module templates
@@ -3142,7 +3209,7 @@ const char kModuleNames[] PROGMEM =
 
 // !!! Update this list in the same order as SupportedModulesESP32S2 !!!
 const mytmplt kModules[] PROGMEM = {
-  {                              // Generic ESP32C3 device
+  {                              // Generic ESP32S2 device
     AGPIO(GPIO_USER),            // 0       IO                  GPIO0, RTC_GPIO0, Strapping
     AGPIO(GPIO_USER),            // 1       AO                  GPIO1, ADC1_CH0, RTC_GPIO1
     AGPIO(GPIO_USER),            // 2       AO                  GPIO2, ADC1_CH1, RTC_GPIO2
@@ -3222,7 +3289,7 @@ const char kModuleNames[] PROGMEM =
 
 // !!! Update this list in the same order as SupportedModulesESP32S2 !!!
 const mytmplt kModules[] PROGMEM = {
-  {                              // Generic ESP32C3 device
+  {                              // Generic ESP32S3 device
     AGPIO(GPIO_USER),            // 0       IO                  RTC_GPIO0, GPIO0, Strapping
     AGPIO(GPIO_USER),            // 1       AO                  RTC_GPIO1, GPIO1, TOUCH1, ADC1_CH0
     AGPIO(GPIO_USER),            // 2       AO                  RTC_GPIO2, GPIO2, TOUCH2, ADC1_CH1
