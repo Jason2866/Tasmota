@@ -16,10 +16,12 @@ from colorama import Fore, Back, Style
 from SCons.Script import COMMAND_LINE_TARGETS
 from platformio.project.config import ProjectConfig
 
+
 def get_cache_file_path():
     """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""
     env_name = env.get("PIOENV")
-    cache_dir = os.path.join(env.GetProjectDir(), ".pio", "ldf_cache")
+    project_dir = env.get("PROJECT_DIR")
+    cache_dir = os.path.join(project_dir, ".pio", "ldf_cache")
     os.makedirs(cache_dir, exist_ok=True)
     return os.path.join(cache_dir, f"{env_name}_deps.json")
 
@@ -88,7 +90,8 @@ def capture_ldf_results():
     def post_build_callback(source, target, env):
         # Sammle alle verwendeten Libraries
         lib_deps = []
-        libdeps_dir = os.path.join(env.GetProjectDir(), ".pio", "libdeps", env.get("PIOENV"))
+        project_dir = env.get("PROJECT_DIR")
+        libdeps_dir = os.path.join(project_dir, ".pio", "libdeps", env.get("PIOENV"))
         
         if os.path.exists(libdeps_dir):
             for lib_dir in os.listdir(libdeps_dir):
@@ -119,4 +122,3 @@ if not apply_cached_deps():
     capture_ldf_results()
 else:
     print(f"⚡ Verwende LDF Cache für {env.get('PIOENV')} - Build beschleunigt")
-
