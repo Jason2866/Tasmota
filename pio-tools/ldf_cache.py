@@ -9,21 +9,94 @@ def get_cache_file_path():
     project_dir = env.get("PROJECT_DIR")
     cache_dir = os.path.join(project_dir, ".pio", "ldf_cache")
     os.makedirs(cache_dir, exist_ok=True)
-    return os.path.join(cache_dir, f"{env_name}_deps.json")
+    return os.path.join(cache_dir, f"{env_name}_ldf_cache.json")
 
 def get_config_hash():
-    """Erstellt Hash der relevanten Konfiguration"""
+    """Erstellt Hash der relevanten Konfiguration für Cache-Invalidierung"""
     config_items = [
         str(env.get("BUILD_FLAGS", [])),
         str(env.get("LIB_DEPS", [])),
         env.get("BOARD", ""),
-        env.get("PLATFORM", "")
+        env.get("PLATFORM", ""),
+        str(env.get("LIB_IGNORE", []))
     ]
     config_string = "|".join(config_items)
     return hashlib.md5(config_string.encode()).hexdigest()
 
-def load_cached_deps():
-    """Lädt gecachte Dependencies falls vorhanden und gültig"""
+def scan_available_libraries():
+    """Scannt alle verfügbaren Libraries im lib/ Ordner"""
+    project_dir = env.get("PROJECT_DIR")
+    lib_dir = os.path.join(project_dir, "lib")
+    
+    available_libs = []
+    if os.path.exists(lib_dir):
+        for root, dirs, files in os.walk(lib_dir):
+            # Prüfe ob es ein Library-Verzeichnis ist
+            has_code = any(f.endswith(('.h', '.hpp', '.cpp', '.c', '.ino')) for f in files)
+            has_config = any(f in files for f in ['library.json', 'library.properties'])
+            
+            if has_code or has_config:
+                rel_path = os.path.relpath(root, lib_dir)
+                if rel_path != '.':
+                    lib_name = os.path.basename(root)
+                    available_libs.append(lib_name)
+    
+    return sorted(list(set(available_libs)))
+
+def capture_ldf_results():
+    """Erfasst die LDF-Ergebnisse nach dem Build"""
+    # Alle verfügbaren Libraries
+    available_libs = scan_available_libraries()
+    
+    # Aktuell ignorierte Libraries (diese sind ungenutzt)
+    current_ignore = env.get("LIB_IGNORE", [])
+    if isinstance(current_ignore, str):
+        current_ignore = [current_ignore]
+    elif current_ignore is None:
+        current_ignore = []
+    
+    # Verwendete Libraries = Verfügbare - Ignorierte
+    ignored_libs = set(current_ignore)
+    used_libs = [lib for lib in available_libs if lib not in ignored_libs]
+    
+    # Zusätzlich: Externe lib_deps
+    external_deps = env.get("LIB_DEPS", [])
+    if external_deps:
+        for dep in external_deps:
+            if isinstance(dep, str) and not dep.startswith("${"):
+                # Extrahiere Library-Namen aus externen Dependencies
+                lib_name = dep.split('/')[-1].split('@')[0]
+                if lib_name:
+                    used_libs.append(lib_name)
+    
+    used_libs = sorted(list(set(used_libs)))
+    unused_libs = sorted(list(ignored_libs))
+    
+    return {
+        "available": available_libs,
+        "used": used_libs,
+        "unused": unused_libs,
+        "external_deps": external_deps if external_deps else []
+    }
+
+def save_ldf_cache(ldf_results):
+    """Speichert LDF-Ergebnisse im Cache"""
+    cache_file = get_cache_file_path()
+    cache_data = {
+        "config_hash": get_config_hash(),
+        "ldf_results": ldf_results,
+        "env_name": env.get("PIOENV")
+    }
+    
+    with open(cache_file, 'w') as f:
+        json.dump(cache_data, f, indent=2)
+    
+    used_count = len(ldf_results["used"])
+    unused_count = len(ldf_results["unused"])
+    print(f"✓ LDF Cache gespeichert: {used_count} verwendet, {unused_count} ignoriert")
+
+def load_ldf_cache():
+    """Lädt LDF-Cache falls vorhanden und gültig"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
@@ -33,125 +106,99 @@ def load_cached_deps():
         with open(cache_file, 'r') as f:
             cache_data = json.load(f)
         
+        # Prüfe Cache-Gültigkeit
         if cache_data.get("config_hash") == get_config_hash():
-            analysis = cache_data.get("analysis", {})
-            used_libs = analysis.get("used", [])
-            if used_libs:
-                print(f"✓ LDF Cache geladen für {env.get('PIOENV')}: {len(used_libs)} Dependencies")
-                return used_libs
+            ldf_results = cache_data.get("ldf_results")
+            if ldf_results:
+                used_count = len(ldf_results.get("used", []))
+                unused_count = len(ldf_results.get("unused", []))
+                print(f"✓ LDF Cache geladen: {used_count} verwendet, {unused_count} ignoriert")
+                return ldf_results
         else:
-            print(f"⚠ Cache ungültig für {env.get('PIOENV')} - wird neu erstellt")
+            print(f"⚠ LDF Cache ungültig - Konfiguration geändert")
             
     except (json.JSONDecodeError, KeyError) as e:
-        print(f"⚠ Cache beschädigt für {env.get('PIOENV')}: {e}")
+        print(f"⚠ LDF Cache beschädigt: {e}")
     
     return None
 
-def scan_local_libraries_recursive():
-    """Scannt rekursiv alle Libraries im lib/ Ordner und Unterordnern"""
-    project_dir = env.get("PROJECT_DIR")
-    lib_dir = os.path.join(project_dir, "lib")
-    
-    available_libs = []
-    if os.path.exists(lib_dir):
-        for root, dirs, files in os.walk(lib_dir):
-            has_library_config = any(f in files for f in ['library.json', 'library.properties'])
-            has_headers = any(f.endswith(('.h', '.hpp')) for f in files)
-            has_sources = any(f.endswith(('.cpp', '.c', '.ino')) for f in files)
-            
-            if has_library_config or has_headers or has_sources:
-                rel_path = os.path.relpath(root, lib_dir)
-                if rel_path != '.':
-                    lib_name = os.path.basename(root)
-                    available_libs.append(lib_name)
-    
-    return sorted(list(set(available_libs)))
-
-def save_analysis_cache(analysis):
-    """Speichert Library-Analyse im Cache"""
-    cache_file = get_cache_file_path()
-    cache_data = {
-        "config_hash": get_config_hash(),
-        "analysis": analysis,
-        "env_name": env.get("PIOENV")
-    }
-    
-    with open(cache_file, 'w') as f:
-        json.dump(cache_data, f, indent=2)
-    
-    used_count = len(analysis["used"])
-    unused_count = len(analysis["unused"])
-    print(f"✓ Library-Analyse gespeichert: {used_count} verwendet, {unused_count} ungenutzt")
-
-# HAUPTLOGIK - Sofortige Entscheidung beim Script-Load
-print(f"🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
-
-# Versuche gecachte Dependencies zu laden
-cached_deps = load_cached_deps()
-
-if cached_deps is not None:
-    # Cache vorhanden - LDF sofort deaktivieren
-    print(f"⚡ LDF deaktiviert - verwende Cache mit {len(cached_deps)} Dependencies")
+def apply_cached_ldf(ldf_results):
+    """Wendet gecachte LDF-Ergebnisse an"""
+    # 1. LDF deaktivieren
     env.Replace(LIB_LDF_MODE="off")
     
-    # Setze explizite lib_deps basierend auf Cache
-    current_lib_deps = env.get("LIB_DEPS", [])
-    if isinstance(current_lib_deps, str):
-        current_lib_deps = [current_lib_deps]
-    elif current_lib_deps is None:
-        current_lib_deps = []
+    # 2. Externe Dependencies setzen
+    external_deps = ldf_results.get("external_deps", [])
+    if external_deps:
+        current_deps = env.get("LIB_DEPS", [])
+        if isinstance(current_deps, str):
+            current_deps = [current_deps]
+        elif current_deps is None:
+            current_deps = []
+        
+        # Kombiniere bestehende und gecachte externe Dependencies
+        all_deps = list(set(current_deps + external_deps))
+        env.Replace(LIB_DEPS=all_deps)
     
-    # Kombiniere aktuelle lib_deps mit gecachten
-    all_deps = list(set(current_lib_deps + cached_deps))
-    env.Replace(LIB_DEPS=all_deps)
+    # 3. lib_ignore setzen
+    unused_libs = ldf_results.get("unused", [])
+    if unused_libs:
+        current_ignore = env.get("LIB_IGNORE", [])
+        if isinstance(current_ignore, str):
+            current_ignore = [current_ignore]
+        elif current_ignore is None:
+            current_ignore = []
+        
+        # Kombiniere bestehende und gecachte ignores
+        all_ignore = list(set(current_ignore + unused_libs))
+        env.Replace(LIB_IGNORE=all_ignore)
     
-    print(f"✅ Build-Optimierung aktiv - LDF übersprungen")
-    
+    print(f"⚡ LDF übersprungen - Build beschleunigt")
+    return True
+
+# =============================================================================
+# HAUPTLOGIK
+# =============================================================================
+
+print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
+
+# Versuche LDF-Cache zu laden
+cached_ldf = load_ldf_cache()
+
+if cached_ldf is not None:
+    # Cache vorhanden - LDF überspringen
+    if apply_cached_ldf(cached_ldf):
+        used_count = len(cached_ldf.get("used", []))
+        unused_count = len(cached_ldf.get("unused", []))
+        print(f"✅ Cache angewendet: {used_count} Libraries verwendet, {unused_count} ignoriert")
+    else:
+        print(f"⚠ Fehler beim Anwenden des Caches")
+
 else:
-    # Kein Cache - LDF normal laufen lassen
-    print(f"📝 Kein gültiger Cache - LDF wird ausgeführt")
+    # Kein Cache - LDF normal laufen lassen und Ergebnisse erfassen
+    print(f"📝 Erster Build - LDF wird ausgeführt und Ergebnisse gecacht")
     
-    def capture_ldf_results(source, target, env):
-        """Erfasst LDF-Ergebnisse nach dem Build"""
-        print(f"🔄 Sammle Library-Dependencies für zukünftige Builds...")
+    def post_build_cache_ldf(source, target, env):
+        """Erfasst LDF-Ergebnisse nach erfolgreichem Build"""
+        print(f"\n🔄 Erfasse LDF-Ergebnisse für zukünftige Builds...")
         
-        # Sammle alle verfügbaren Libraries
-        available_libs = scan_local_libraries_recursive()
+        ldf_results = capture_ldf_results()
+        save_ldf_cache(ldf_results)
         
-        # Sammle verwendete Libraries aus verschiedenen Quellen
-        used_libs = []
+        used_count = len(ldf_results["used"])
+        unused_count = len(ldf_results["unused"])
         
-        # 1. Aus aktuellen LIB_DEPS
-        lib_deps = env.get("LIB_DEPS", [])
-        if lib_deps:
-            for dep in lib_deps:
-                if isinstance(dep, str):
-                    lib_name = dep.split('/')[-1].split('@')[0]
-                    used_libs.append(lib_name)
+        print(f"📊 LDF-Analyse abgeschlossen:")
+        print(f"   Verfügbare Libraries: {len(ldf_results['available'])}")
+        print(f"   Verwendete Libraries: {used_count}")
+        print(f"   Ignorierte Libraries: {unused_count}")
         
-        # 2. Aus Build-Flags
-        build_flags = env.get("BUILD_FLAGS", [])
-        for flag in build_flags:
-            if isinstance(flag, str) and flag.startswith("-I") and "/lib/" in flag:
-                lib_path = flag.replace("-I", "").strip()
-                lib_name = lib_path.split("/lib/")[-1].split("/")[0]
-                if lib_name and lib_name in available_libs:
-                    used_libs.append(lib_name)
-        
-        # Entferne Duplikate
-        used_libs = sorted(list(set(used_libs)))
-        unused_libs = sorted(list(set(available_libs) - set(used_libs)))
-        
-        analysis = {
-            "available": available_libs,
-            "used": used_libs,
-            "unused": unused_libs
-        }
-        
-        print(f"📊 Library-Analyse: {len(used_libs)} verwendet, {len(unused_libs)} ungenutzt")
-        save_analysis_cache(analysis)
-        print(f"💡 Nächster Build wird LDF überspringen und {len(used_libs)} Dependencies direkt verwenden")
+        if unused_count > 0:
+            print(f"\n💡 Beim nächsten Build werden {unused_count} Libraries übersprungen")
+            print(f"   Erwartete Zeitersparnis: Deutlich schnellerer LDF-Scan")
     
     # Registriere Post-Build Action
-    env.AddPostAction("buildprog", capture_ldf_results)
+    env.AddPostAction("buildprog", post_build_cache_ldf)
+
+print(f"🏁 LDF Cache Setup abgeschlossen für {env.get('PIOENV')}\n")
 
