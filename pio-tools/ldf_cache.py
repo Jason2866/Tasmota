@@ -5,6 +5,7 @@ import hashlib
 import configparser
 import shutil
 import glob
+import re
 
 def get_cache_file_path():
     """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""
@@ -235,7 +236,7 @@ def capture_ldf_results():
     }
 
 def get_config_hash():
-    """Erstellt Hash aller relevanten Konfigurationsdateien"""
+    """Erstellt Hash der relevanten Konfiguration - OHNE lib_ldf_mode"""
     ini_files = find_all_platformio_files()
     
     config_content = []
@@ -243,13 +244,24 @@ def get_config_hash():
     for ini_file in ini_files:
         if os.path.exists(ini_file):
             try:
+                # Lese Datei und entferne lib_ldf_mode Zeilen
                 with open(ini_file, 'r', encoding='utf-8') as f:
                     content = f.read()
-                    config_content.append(f"{os.path.basename(ini_file)}:{content}")
+                
+                # Entferne lib_ldf_mode Zeilen aus dem Hash
+                lines = content.split('\n')
+                filtered_lines = []
+                for line in lines:
+                    # Ignoriere lib_ldf_mode Zeilen für Hash-Berechnung
+                    if not re.match(r'^\s*lib_ldf_mode\s*=', line):
+                        filtered_lines.append(line)
+                
+                filtered_content = '\n'.join(filtered_lines)
+                config_content.append(f"{os.path.basename(ini_file)}:{filtered_content}")
             except Exception:
                 continue
     
-    # Zusätzliche Environment-Werte
+    # Zusätzliche Environment-Werte (OHNE lib_ldf_mode bezogene Werte)
     config_content.extend([
         str(env.get("BUILD_FLAGS", [])),
         env.get("BOARD", ""),
@@ -261,12 +273,13 @@ def get_config_hash():
     return hashlib.md5(config_string.encode()).hexdigest()
 
 def save_ldf_cache(ldf_results):
-    """Speichert LDF-Ergebnisse im Cache"""
+    """Speichert LDF-Ergebnisse im Cache mit LDF-Status"""
     cache_file = get_cache_file_path()
     cache_data = {
-        "config_hash": get_config_hash(),
+        "config_hash": get_config_hash(),  # Ohne lib_ldf_mode
         "ldf_results": ldf_results,
-        "env_name": env.get("PIOENV")
+        "env_name": env.get("PIOENV"),
+        "ldf_mode_modified": False  # Neues Feld
     }
     
     with open(cache_file, 'w') as f:
@@ -275,6 +288,23 @@ def save_ldf_cache(ldf_results):
     used_count = len(ldf_results["used"])
     unused_count = len(ldf_results["unused"])
     print(f"✓ LDF Cache gespeichert: {used_count} verwendet, {unused_count} ignoriert")
+
+def mark_ldf_mode_modified():
+    """Markiert dass lib_ldf_mode vom Script geändert wurde"""
+    cache_file = get_cache_file_path()
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r') as f:
+                cache_data = json.load(f)
+            
+            cache_data["ldf_mode_modified"] = True
+            
+            with open(cache_file, 'w') as f:
+                json.dump(cache_data, f, indent=2)
+            
+            print(f"✓ LDF-Modus-Änderung im Cache markiert")
+        except Exception as e:
+            print(f"⚠ Fehler beim Markieren der LDF-Änderung: {e}")
 
 def load_ldf_cache():
     """Lädt LDF-Cache falls vorhanden und gültig"""
@@ -287,15 +317,25 @@ def load_ldf_cache():
         with open(cache_file, 'r') as f:
             cache_data = json.load(f)
         
-        if cache_data.get("config_hash") == get_config_hash():
+        current_hash = get_config_hash()
+        cached_hash = cache_data.get("config_hash")
+        
+        if cached_hash == current_hash:
             ldf_results = cache_data.get("ldf_results")
             if ldf_results:
                 used_count = len(ldf_results.get("used", []))
                 unused_count = len(ldf_results.get("unused", []))
+                ldf_modified = cache_data.get("ldf_mode_modified", False)
+                
                 print(f"✓ LDF Cache geladen: {used_count} verwendet, {unused_count} ignoriert")
+                if ldf_modified:
+                    print(f"  (lib_ldf_mode wurde bereits vom Script modifiziert)")
+                
                 return ldf_results
         else:
             print(f"⚠ LDF Cache ungültig - Konfiguration geändert")
+            print(f"  Aktueller Hash: {current_hash[:8]}...")
+            print(f"  Gecachter Hash: {cached_hash[:8] if cached_hash else 'None'}...")
             
     except (json.JSONDecodeError, KeyError) as e:
         print(f"⚠ LDF Cache beschädigt: {e}")
@@ -312,7 +352,7 @@ def clear_ldf_cache():
     restore_platformio_ini()
 
 # =============================================================================
-# HAUPTLOGIK - MIT MULTI-FILE SUPPORT
+# HAUPTLOGIK - MIT GELÖSTEM HASH-PROBLEM
 # =============================================================================
 
 print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
@@ -346,9 +386,12 @@ if cache_is_valid and current_ldf_mode == 'off':
 
 elif cache_is_valid and current_ldf_mode != 'off':
     # Cache ist gültig aber LDF noch nicht deaktiviert
-    print(f"⚡ Gültiger Cache gefunden - deaktiviere LDF für diesen Build")
+    print(f"⚡ Gültiger Cache gefunden - deaktiviere LDF")
     
     if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+        # Markiere dass wir lib_ldf_mode geändert haben
+        mark_ldf_mode_modified()
+        
         print(f"✅ lib_ldf_mode = off gesetzt")
         print(f"⚠ WICHTIG: Starten Sie den Build ERNEUT für optimierten Build")
         
