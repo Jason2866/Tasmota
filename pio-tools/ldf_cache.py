@@ -1,7 +1,20 @@
-Import("env")
+env = DefaultEnvironment()
+platform = env.PioPlatform()
+
+from genericpath import exists
 import os
 import json
 import hashlib
+import sys
+from os.path import join, getsize
+import csv
+import requests
+import shutil
+import subprocess
+import codecs
+from colorama import Fore, Back, Style
+from SCons.Script import COMMAND_LINE_TARGETS
+from platformio.project.config import ProjectConfig
 
 def get_cache_file_path():
     """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""
