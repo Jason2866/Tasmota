@@ -235,51 +235,53 @@ def capture_ldf_results():
         "external_deps": external_deps if external_deps else []
     }
 
-def get_config_hash():
-    """Erstellt Hash der relevanten Konfiguration - OHNE lib_ldf_mode"""
+def get_config_hash_simple():
+    """Erstellt vereinfachten Hash nur auf wirklich relevante Werte"""
+    # Nur die wichtigsten Konfigurationswerte hashen
+    relevant_values = [
+        f"BOARD:{env.get('BOARD', '')}",
+        f"PLATFORM:{env.get('PLATFORM', '')}",
+        f"PIOENV:{env.get('PIOENV', '')}",
+        f"BUILD_FLAGS:{str(sorted(env.get('BUILD_FLAGS', [])))}",
+        f"LIB_DEPS:{str(sorted(env.get('LIB_DEPS', [])))}"
+    ]
+    
+    # Zusätzlich: Nur relevante Teile aus platformio*.ini (ohne lib_ldf_mode)
     ini_files = find_all_platformio_files()
     
-    config_content = []
-    
-    for ini_file in ini_files:
-        if os.path.exists(ini_file):
+    for ini_file in sorted(ini_files):
+        if os.path.exists(ini_file) and not ini_file.endswith('.ldf_backup'):
             try:
-                # Lese Datei und entferne lib_ldf_mode Zeilen
-                with open(ini_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
+                config = configparser.ConfigParser(allow_no_value=True)
+                config.read(ini_file, encoding='utf-8')
                 
-                # Entferne lib_ldf_mode Zeilen aus dem Hash
-                lines = content.split('\n')
-                filtered_lines = []
-                for line in lines:
-                    # Ignoriere lib_ldf_mode Zeilen für Hash-Berechnung
-                    if not re.match(r'^\s*lib_ldf_mode\s*=', line):
-                        filtered_lines.append(line)
-                
-                filtered_content = '\n'.join(filtered_lines)
-                config_content.append(f"{os.path.basename(ini_file)}:{filtered_content}")
+                env_section = f"env:{env.get('PIOENV')}"
+                if config.has_section(env_section):
+                    # Nur spezifische Optionen hashen (ohne lib_ldf_mode)
+                    relevant_options = ['board', 'platform', 'framework', 'build_flags', 'lib_deps', 'lib_ignore']
+                    for option in relevant_options:
+                        if config.has_option(env_section, option):
+                            value = config.get(env_section, option)
+                            relevant_values.append(f"{os.path.basename(ini_file)}:{option}:{value}")
             except Exception:
-                continue
+                pass
     
-    # Zusätzliche Environment-Werte (OHNE lib_ldf_mode bezogene Werte)
-    config_content.extend([
-        str(env.get("BUILD_FLAGS", [])),
-        env.get("BOARD", ""),
-        env.get("PLATFORM", ""),
-        env.get("PIOENV", "")
-    ])
+    # Sortiere für konsistenten Hash
+    relevant_values.sort()
+    config_string = "|".join(relevant_values)
+    hash_value = hashlib.md5(config_string.encode()).hexdigest()
     
-    config_string = "|".join(config_content)
-    return hashlib.md5(config_string.encode()).hexdigest()
+    print(f"🔍 Vereinfachter Hash: {hash_value[:8]}...")
+    return hash_value
 
 def save_ldf_cache(ldf_results):
-    """Speichert LDF-Ergebnisse im Cache mit LDF-Status"""
+    """Speichert LDF-Ergebnisse im Cache mit vereinfachtem Hash"""
     cache_file = get_cache_file_path()
     cache_data = {
-        "config_hash": get_config_hash(),  # Ohne lib_ldf_mode
+        "config_hash": get_config_hash_simple(),  # Vereinfachter Hash
         "ldf_results": ldf_results,
         "env_name": env.get("PIOENV"),
-        "ldf_mode_modified": False  # Neues Feld
+        "ldf_mode_modified": False
     }
     
     with open(cache_file, 'w') as f:
@@ -317,7 +319,7 @@ def load_ldf_cache():
         with open(cache_file, 'r') as f:
             cache_data = json.load(f)
         
-        current_hash = get_config_hash()
+        current_hash = get_config_hash_simple()
         cached_hash = cache_data.get("config_hash")
         
         if cached_hash == current_hash:
@@ -352,7 +354,7 @@ def clear_ldf_cache():
     restore_platformio_ini()
 
 # =============================================================================
-# HAUPTLOGIK - MIT GELÖSTEM HASH-PROBLEM
+# HAUPTLOGIK - MIT VEREINFACHTEM HASH
 # =============================================================================
 
 print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
