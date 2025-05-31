@@ -40,7 +40,7 @@ def backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
         
         if set_ldf_off:
             config.set(section_name, "lib_ldf_mode", "off")
-            print(f"✓ lib_ldf_mode = off für nächsten Build gesetzt")
+            print(f"✓ lib_ldf_mode = off gesetzt")
         else:
             if config.has_option(section_name, "lib_ldf_mode"):
                 config.remove_option(section_name, "lib_ldf_mode")
@@ -218,7 +218,7 @@ def clear_ldf_cache():
     restore_platformio_ini()
 
 # =============================================================================
-# HAUPTLOGIK - FEHLERBEREINIGT
+# HAUPTLOGIK - WIRKLICH KORRIGIERT
 # =============================================================================
 
 print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
@@ -250,21 +250,40 @@ if cache_is_valid and current_ldf_mode == 'off':
         env.Replace(LIB_IGNORE=all_ignore)
         print(f"✅ {len(unused_libs)} Libraries ignoriert - Build beschleunigt")
 
-else:
-    # Kein gültiger Cache ODER LDF noch nicht deaktiviert
-    if cache_is_valid and current_ldf_mode != 'off':
-        print(f"⚡ Gültiger Cache vorhanden - LDF wird nach diesem Build deaktiviert")
-    else:
-        print(f"📝 Sammle Dependencies - LDF läuft normal")
+elif cache_is_valid and current_ldf_mode != 'off':
+    # Cache ist gültig aber LDF noch nicht deaktiviert
+    # WICHTIG: Modifiziere platformio.ini JETZT (vor dem Build)
+    print(f"⚡ Gültiger Cache gefunden - deaktiviere LDF für diesen Build")
     
-    # Stelle sicher, dass LDF aktiviert ist für Dependency-Sammlung
+    if backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
+        print(f"✅ lib_ldf_mode = off gesetzt")
+        print(f"⚠ WICHTIG: Starten Sie den Build ERNEUT für optimierten Build")
+        
+        # Setze auch lib_ignore für den Fall dass der Build trotzdem läuft
+        unused_libs = cached_ldf.get("unused", [])
+        if unused_libs:
+            current_ignore = env.get("LIB_IGNORE", [])
+            if isinstance(current_ignore, str):
+                current_ignore = [current_ignore]
+            elif current_ignore is None:
+                current_ignore = []
+            
+            all_ignore = list(set(current_ignore + unused_libs))
+            env.Replace(LIB_IGNORE=all_ignore)
+
+else:
+    # Kein gültiger Cache - sammle Dependencies
+    print(f"📝 Sammle Dependencies - LDF läuft normal")
+    
+    # Stelle sicher, dass LDF aktiviert ist
     if current_ldf_mode == 'off':
         backup_and_modify_platformio_ini(env_name, set_ldf_off=False)
         print(f"✓ LDF reaktiviert für Dependency-Sammlung")
+        print(f"⚠ Starten Sie den Build ERNEUT für LDF-Sammlung")
     
     def post_build_action(source, target, env):
-        """Wird nach erfolgreichem Build ausgeführt"""
-        print(f"\n🔄 Post-Build: Verarbeite LDF-Ergebnisse...")
+        """Wird nach erfolgreichem Build ausgeführt - NUR für Cache-Erstellung"""
+        print(f"\n🔄 Post-Build: Sammle LDF-Ergebnisse...")
         
         ldf_results = capture_ldf_results()
         
@@ -286,15 +305,14 @@ else:
                 if len(ldf_results["unused"]) > 5:
                     print(f"   ... und {len(ldf_results['unused']) - 5} weitere")
             
-            # JETZT erst für den nächsten Build LDF deaktivieren
-            if backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
-                print(f"\n✅ lib_ldf_mode = off für nächsten Build gesetzt")
-                print(f"💡 Nächster Build wird {unused_count} Libraries überspringen")
-                print(f"⚠ Führen Sie 'pio run' erneut aus für optimierten Build")
+            print(f"\n💡 Cache erstellt - führen Sie 'pio run' erneut aus")
+            print(f"   Nächster Build wird {unused_count} Libraries überspringen")
+            
+            # NICHT hier die platformio.ini modifizieren!
+            # Das passiert beim nächsten Script-Aufruf
             
         else:
-            print(f"⚠ Keine verwendeten Libraries gefunden - Cache nicht erstellt")
-            print(f"   Möglicherweise sind alle Libraries bereits in lib_ignore definiert")
+            print(f"⚠ Keine verwendeten Libraries gefunden")
     
     env.AddPostAction("buildprog", post_build_action)
 
