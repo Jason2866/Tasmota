@@ -4,6 +4,7 @@ import json
 import hashlib
 import configparser
 import shutil
+import glob
 
 def get_cache_file_path():
     """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""
@@ -13,82 +14,172 @@ def get_cache_file_path():
     os.makedirs(cache_dir, exist_ok=True)
     return os.path.join(cache_dir, f"{env_name}_ldf_cache.json")
 
-def backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
-    """Modifiziert die originale platformio.ini direkt"""
+def find_all_platformio_files():
+    """Findet alle platformio*.ini Dateien im Projekt"""
     project_dir = env.get("PROJECT_DIR")
-    ini_file = os.path.join(project_dir, "platformio.ini")
-    backup_file = os.path.join(project_dir, "platformio.ini.ldf_backup")
     
-    if not os.path.exists(ini_file):
-        print(f"⚠ platformio.ini nicht gefunden")
+    # Suche nach allen platformio*.ini Dateien
+    ini_patterns = [
+        'platformio.ini',
+        'platformio_*.ini'
+    ]
+    
+    ini_files = []
+    for pattern in ini_patterns:
+        found_files = glob.glob(os.path.join(project_dir, pattern))
+        ini_files.extend(found_files)
+    
+    # Entferne Duplikate und sortiere
+    ini_files = list(set(ini_files))
+    
+    # Sortiere nach Priorität: Basis-Dateien zuerst, Override zuletzt
+    def sort_priority(filepath):
+        filename = os.path.basename(filepath).lower()
+        if filename == 'platformio.ini':
+            return 0
+        elif 'env' in filename and 'override' not in filename:
+            return 1
+        elif 'cenv' in filename:
+            return 2
+        elif 'override' in filename:
+            return 3
+        else:
+            return 4
+    
+    ini_files.sort(key=sort_priority)
+    
+    print(f"📁 Gefundene PlatformIO Konfigurationsdateien:")
+    for ini_file in ini_files:
+        print(f"   - {os.path.basename(ini_file)}")
+    
+    return ini_files
+
+def find_env_definition_file(env_name):
+    """Findet die Datei, die das spezifische Environment definiert"""
+    ini_files = find_all_platformio_files()
+    
+    for ini_file in ini_files:
+        try:
+            config = configparser.ConfigParser(allow_no_value=True)
+            config.read(ini_file, encoding='utf-8')
+            
+            section_name = f"env:{env_name}"
+            if config.has_section(section_name):
+                print(f"✓ Environment [{section_name}] gefunden in: {os.path.basename(ini_file)}")
+                return ini_file
+                
+        except Exception as e:
+            print(f"⚠ Fehler beim Lesen von {os.path.basename(ini_file)}: {e}")
+            continue
+    
+    print(f"⚠ Environment [env:{env_name}] nicht in PlatformIO-Dateien gefunden")
+    return None
+
+def backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+    """Findet und modifiziert die korrekte platformio*.ini Datei"""
+    
+    # Finde die Datei, die das Environment definiert
+    env_file = find_env_definition_file(env_name)
+    
+    if not env_file:
+        print(f"⚠ Environment {env_name} nicht gefunden - verwende platformio.ini")
+        project_dir = env.get("PROJECT_DIR")
+        env_file = os.path.join(project_dir, "platformio.ini")
+    
+    if not os.path.exists(env_file):
+        print(f"⚠ Datei nicht gefunden: {env_file}")
         return False
     
-    # Erstelle Backup nur einmal
+    # Erstelle Backup
+    backup_file = f"{env_file}.ldf_backup"
     if not os.path.exists(backup_file):
-        shutil.copy2(ini_file, backup_file)
-        print(f"✓ Backup erstellt: platformio.ini.ldf_backup")
+        shutil.copy2(env_file, backup_file)
+        print(f"✓ Backup erstellt: {os.path.basename(backup_file)}")
     
     try:
         config = configparser.ConfigParser(allow_no_value=True)
-        config.read(ini_file, encoding='utf-8')
+        config.read(env_file, encoding='utf-8')
         
         section_name = f"env:{env_name}"
         
         if not config.has_section(section_name):
-            print(f"⚠ Sektion [env:{env_name}] nicht gefunden")
+            print(f"⚠ Sektion [env:{env_name}] nicht in {os.path.basename(env_file)} gefunden")
             return False
         
         if set_ldf_off:
             config.set(section_name, "lib_ldf_mode", "off")
-            print(f"✓ lib_ldf_mode = off gesetzt")
+            print(f"✓ lib_ldf_mode = off gesetzt in {os.path.basename(env_file)}")
         else:
             if config.has_option(section_name, "lib_ldf_mode"):
                 config.remove_option(section_name, "lib_ldf_mode")
-                print(f"✓ lib_ldf_mode entfernt (zurück zu Standard)")
+                print(f"✓ lib_ldf_mode entfernt aus {os.path.basename(env_file)}")
         
         # Schreibe zurück
-        with open(ini_file, 'w', encoding='utf-8') as f:
+        with open(env_file, 'w', encoding='utf-8') as f:
             config.write(f, space_around_delimiters=True)
         
         return True
         
     except Exception as e:
-        print(f"⚠ Fehler beim Modifizieren der platformio.ini: {e}")
+        print(f"⚠ Fehler beim Modifizieren von {os.path.basename(env_file)}: {e}")
         return False
 
 def get_current_ldf_mode(env_name):
-    """Ermittelt aktuellen LDF-Modus aus platformio.ini"""
-    project_dir = env.get("PROJECT_DIR")
-    ini_file = os.path.join(project_dir, "platformio.ini")
+    """Ermittelt aktuellen LDF-Modus aus allen platformio*.ini Dateien"""
+    ini_files = find_all_platformio_files()
     
-    try:
-        config = configparser.ConfigParser(allow_no_value=True)
-        config.read(ini_file, encoding='utf-8')
-        
-        section_name = f"env:{env_name}"
-        if config.has_section(section_name):
-            if config.has_option(section_name, 'lib_ldf_mode'):
-                return config.get(section_name, 'lib_ldf_mode')
-        
-        # Fallback: [env] Sektion
-        if config.has_section('env'):
-            if config.has_option('env', 'lib_ldf_mode'):
-                return config.get('env', 'lib_ldf_mode')
-        
-        return 'chain'  # PlatformIO Standard
-        
-    except Exception:
-        return 'unknown'
+    # Lade alle Konfigurationen in der richtigen Reihenfolge
+    merged_config = configparser.ConfigParser(allow_no_value=True)
+    
+    for ini_file in ini_files:
+        try:
+            temp_config = configparser.ConfigParser(allow_no_value=True)
+            temp_config.read(ini_file, encoding='utf-8')
+            
+            # Merge alle Sektionen (spätere Dateien überschreiben frühere)
+            for section_name in temp_config.sections():
+                if not merged_config.has_section(section_name):
+                    merged_config.add_section(section_name)
+                
+                for option, value in temp_config.items(section_name):
+                    merged_config.set(section_name, option, value)
+                    
+        except Exception as e:
+            print(f"⚠ Fehler beim Lesen von {os.path.basename(ini_file)}: {e}")
+            continue
+    
+    # Prüfe spezifisches Environment
+    section_name = f"env:{env_name}"
+    if merged_config.has_section(section_name):
+        if merged_config.has_option(section_name, 'lib_ldf_mode'):
+            mode = merged_config.get(section_name, 'lib_ldf_mode')
+            return mode
+    
+    # Fallback: Prüfe [env] Basis-Sektion
+    if merged_config.has_section('env'):
+        if merged_config.has_option('env', 'lib_ldf_mode'):
+            mode = merged_config.get('env', 'lib_ldf_mode')
+            return mode
+    
+    return 'chain'  # PlatformIO Standard
 
 def restore_platformio_ini():
-    """Stellt die ursprüngliche platformio.ini wieder her"""
+    """Stellt alle ursprünglichen platformio*.ini Dateien wieder her"""
     project_dir = env.get("PROJECT_DIR")
-    ini_file = os.path.join(project_dir, "platformio.ini")
-    backup_file = os.path.join(project_dir, "platformio.ini.ldf_backup")
     
-    if os.path.exists(backup_file):
-        shutil.copy2(backup_file, ini_file)
-        print(f"✓ platformio.ini aus Backup wiederhergestellt")
+    # Finde alle Backup-Dateien
+    backup_files = glob.glob(os.path.join(project_dir, "platformio*.ini.ldf_backup"))
+    
+    restored_count = 0
+    for backup_file in backup_files:
+        original_file = backup_file.replace('.ldf_backup', '')
+        if os.path.exists(backup_file):
+            shutil.copy2(backup_file, original_file)
+            print(f"✓ {os.path.basename(original_file)} wiederhergestellt")
+            restored_count += 1
+    
+    if restored_count > 0:
+        print(f"✓ {restored_count} Dateien wiederhergestellt")
         return True
     return False
 
@@ -144,26 +235,29 @@ def capture_ldf_results():
     }
 
 def get_config_hash():
-    """Erstellt Hash der relevanten Konfiguration"""
-    project_dir = env.get("PROJECT_DIR")
-    ini_file = os.path.join(project_dir, "platformio.ini")
+    """Erstellt Hash aller relevanten Konfigurationsdateien"""
+    ini_files = find_all_platformio_files()
     
-    config_items = []
+    config_content = []
     
-    # Lese platformio.ini
-    if os.path.exists(ini_file):
-        with open(ini_file, 'r', encoding='utf-8') as f:
-            config_items.append(f.read())
+    for ini_file in ini_files:
+        if os.path.exists(ini_file):
+            try:
+                with open(ini_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    config_content.append(f"{os.path.basename(ini_file)}:{content}")
+            except Exception:
+                continue
     
     # Zusätzliche Environment-Werte
-    config_items.extend([
+    config_content.extend([
         str(env.get("BUILD_FLAGS", [])),
         env.get("BOARD", ""),
         env.get("PLATFORM", ""),
         env.get("PIOENV", "")
     ])
     
-    config_string = "|".join(config_items)
+    config_string = "|".join(config_content)
     return hashlib.md5(config_string.encode()).hexdigest()
 
 def save_ldf_cache(ldf_results):
@@ -209,7 +303,7 @@ def load_ldf_cache():
     return None
 
 def clear_ldf_cache():
-    """Löscht den LDF Cache und stellt platformio.ini wieder her"""
+    """Löscht den LDF Cache und stellt alle platformio*.ini wieder her"""
     cache_file = get_cache_file_path()
     if os.path.exists(cache_file):
         os.remove(cache_file)
@@ -218,7 +312,7 @@ def clear_ldf_cache():
     restore_platformio_ini()
 
 # =============================================================================
-# HAUPTLOGIK - WIRKLICH KORRIGIERT
+# HAUPTLOGIK - MIT MULTI-FILE SUPPORT
 # =============================================================================
 
 print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
@@ -252,10 +346,9 @@ if cache_is_valid and current_ldf_mode == 'off':
 
 elif cache_is_valid and current_ldf_mode != 'off':
     # Cache ist gültig aber LDF noch nicht deaktiviert
-    # WICHTIG: Modifiziere platformio.ini JETZT (vor dem Build)
     print(f"⚡ Gültiger Cache gefunden - deaktiviere LDF für diesen Build")
     
-    if backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
+    if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
         print(f"✅ lib_ldf_mode = off gesetzt")
         print(f"⚠ WICHTIG: Starten Sie den Build ERNEUT für optimierten Build")
         
@@ -277,7 +370,7 @@ else:
     
     # Stelle sicher, dass LDF aktiviert ist
     if current_ldf_mode == 'off':
-        backup_and_modify_platformio_ini(env_name, set_ldf_off=False)
+        backup_and_modify_correct_ini_file(env_name, set_ldf_off=False)
         print(f"✓ LDF reaktiviert für Dependency-Sammlung")
         print(f"⚠ Starten Sie den Build ERNEUT für LDF-Sammlung")
     
@@ -307,9 +400,6 @@ else:
             
             print(f"\n💡 Cache erstellt - führen Sie 'pio run' erneut aus")
             print(f"   Nächster Build wird {unused_count} Libraries überspringen")
-            
-            # NICHT hier die platformio.ini modifizieren!
-            # Das passiert beim nächsten Script-Aufruf
             
         else:
             print(f"⚠ Keine verwendeten Libraries gefunden")
