@@ -2,6 +2,7 @@ Import("env")
 import os
 import json
 import hashlib
+import configparser
 
 def get_cache_file_path():
     """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""
@@ -23,6 +24,43 @@ def get_config_hash():
     config_string = "|".join(config_items)
     return hashlib.md5(config_string.encode()).hexdigest()
 
+def modify_platformio_ini(env_name, set_ldf_off=True):
+    """Modifiziert platformio.ini um LDF zu deaktivieren/aktivieren"""
+    project_dir = env.get("PROJECT_DIR")
+    ini_path = os.path.join(project_dir, "platformio.ini")
+    
+    if not os.path.exists(ini_path):
+        print(f"⚠ platformio.ini nicht gefunden: {ini_path}")
+        return False
+    
+    try:
+        config = configparser.ConfigParser()
+        config.read(ini_path)
+        
+        section_name = f"env:{env_name}"
+        if not config.has_section(section_name):
+            print(f"⚠ Environment [{section_name}] nicht in platformio.ini gefunden")
+            return False
+        
+        if set_ldf_off:
+            config.set(section_name, "lib_ldf_mode", "off")
+            print(f"✓ LDF deaktiviert in platformio.ini für {env_name}")
+        else:
+            # Entferne lib_ldf_mode oder setze auf Standard zurück
+            if config.has_option(section_name, "lib_ldf_mode"):
+                config.remove_option(section_name, "lib_ldf_mode")
+            print(f"✓ LDF reaktiviert in platformio.ini für {env_name}")
+        
+        # Schreibe modifizierte Konfiguration zurück
+        with open(ini_path, 'w') as f:
+            config.write(f, space_around_delimiters=True)
+        
+        return True
+        
+    except Exception as e:
+        print(f"⚠ Fehler beim Modifizieren der platformio.ini: {e}")
+        return False
+
 def scan_available_libraries():
     """Scannt alle verfügbaren Libraries im lib/ Ordner"""
     project_dir = env.get("PROJECT_DIR")
@@ -31,7 +69,6 @@ def scan_available_libraries():
     available_libs = []
     if os.path.exists(lib_dir):
         for root, dirs, files in os.walk(lib_dir):
-            # Prüfe ob es ein Library-Verzeichnis ist
             has_code = any(f.endswith(('.h', '.hpp', '.cpp', '.c', '.ino')) for f in files)
             has_config = any(f in files for f in ['library.json', 'library.properties'])
             
@@ -45,26 +82,21 @@ def scan_available_libraries():
 
 def capture_ldf_results():
     """Erfasst die LDF-Ergebnisse nach dem Build"""
-    # Alle verfügbaren Libraries
     available_libs = scan_available_libraries()
     
-    # Aktuell ignorierte Libraries (diese sind ungenutzt)
     current_ignore = env.get("LIB_IGNORE", [])
     if isinstance(current_ignore, str):
         current_ignore = [current_ignore]
     elif current_ignore is None:
         current_ignore = []
     
-    # Verwendete Libraries = Verfügbare - Ignorierte
     ignored_libs = set(current_ignore)
     used_libs = [lib for lib in available_libs if lib not in ignored_libs]
     
-    # Zusätzlich: Externe lib_deps
     external_deps = env.get("LIB_DEPS", [])
     if external_deps:
         for dep in external_deps:
             if isinstance(dep, str) and not dep.startswith("${"):
-                # Extrahiere Library-Namen aus externen Dependencies
                 lib_name = dep.split('/')[-1].split('@')[0]
                 if lib_name:
                     used_libs.append(lib_name)
@@ -106,7 +138,6 @@ def load_ldf_cache():
         with open(cache_file, 'r') as f:
             cache_data = json.load(f)
         
-        # Prüfe Cache-Gültigkeit
         if cache_data.get("config_hash") == get_config_hash():
             ldf_results = cache_data.get("ldf_results")
             if ldf_results:
@@ -122,61 +153,40 @@ def load_ldf_cache():
     
     return None
 
-def apply_cached_ldf(ldf_results):
-    """Wendet gecachte LDF-Ergebnisse an"""
-    # 1. LDF deaktivieren
-    env.Replace(LIB_LDF_MODE="off")
-    
-    # 2. Externe Dependencies setzen
-    external_deps = ldf_results.get("external_deps", [])
-    if external_deps:
-        current_deps = env.get("LIB_DEPS", [])
-        if isinstance(current_deps, str):
-            current_deps = [current_deps]
-        elif current_deps is None:
-            current_deps = []
-        
-        # Kombiniere bestehende und gecachte externe Dependencies
-        all_deps = list(set(current_deps + external_deps))
-        env.Replace(LIB_DEPS=all_deps)
-    
-    # 3. lib_ignore setzen
-    unused_libs = ldf_results.get("unused", [])
-    if unused_libs:
-        current_ignore = env.get("LIB_IGNORE", [])
-        if isinstance(current_ignore, str):
-            current_ignore = [current_ignore]
-        elif current_ignore is None:
-            current_ignore = []
-        
-        # Kombiniere bestehende und gecachte ignores
-        all_ignore = list(set(current_ignore + unused_libs))
-        env.Replace(LIB_IGNORE=all_ignore)
-    
-    print(f"⚡ LDF übersprungen - Build beschleunigt")
-    return True
-
 # =============================================================================
 # HAUPTLOGIK
 # =============================================================================
 
 print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
 
-# Versuche LDF-Cache zu laden
+env_name = env.get("PIOENV")
 cached_ldf = load_ldf_cache()
 
 if cached_ldf is not None:
-    # Cache vorhanden - LDF überspringen
-    if apply_cached_ldf(cached_ldf):
+    # Cache vorhanden - modifiziere platformio.ini für nächsten Build
+    print(f"⚡ LDF Cache gefunden - setze lib_ldf_mode = off für nächsten Build")
+    
+    if modify_platformio_ini(env_name, set_ldf_off=True):
+        unused_libs = cached_ldf.get("unused", [])
+        if unused_libs:
+            current_ignore = env.get("LIB_IGNORE", [])
+            if isinstance(current_ignore, str):
+                current_ignore = [current_ignore]
+            elif current_ignore is None:
+                current_ignore = []
+            
+            all_ignore = list(set(current_ignore + unused_libs))
+            env.Replace(LIB_IGNORE=all_ignore)
+        
         used_count = len(cached_ldf.get("used", []))
         unused_count = len(cached_ldf.get("unused", []))
-        print(f"✅ Cache angewendet: {used_count} Libraries verwendet, {unused_count} ignoriert")
-    else:
-        print(f"⚠ Fehler beim Anwenden des Caches")
+        print(f"✅ Nächster Build wird LDF überspringen: {used_count} verwendet, {unused_count} ignoriert")
+        print(f"⚠ HINWEIS: Starten Sie den Build erneut, um die LDF-Optimierung zu nutzen")
 
 else:
-    # Kein Cache - LDF normal laufen lassen und Ergebnisse erfassen
-    print(f"📝 Erster Build - LDF wird ausgeführt und Ergebnisse gecacht")
+    # Kein Cache - stelle sicher, dass LDF aktiviert ist
+    print(f"📝 Erster Build - stelle sicher dass LDF aktiviert ist")
+    modify_platformio_ini(env_name, set_ldf_off=False)
     
     def post_build_cache_ldf(source, target, env):
         """Erfasst LDF-Ergebnisse nach erfolgreichem Build"""
@@ -194,11 +204,9 @@ else:
         print(f"   Ignorierte Libraries: {unused_count}")
         
         if unused_count > 0:
-            print(f"\n💡 Beim nächsten Build werden {unused_count} Libraries übersprungen")
-            print(f"   Erwartete Zeitersparnis: Deutlich schnellerer LDF-Scan")
+            print(f"\n💡 Führen Sie den Build erneut aus, um {unused_count} Libraries zu überspringen")
     
-    # Registriere Post-Build Action
     env.AddPostAction("buildprog", post_build_cache_ldf)
 
-print(f"🏁 LDF Cache Setup abgeschlossen für {env.get('PIOENV')}\n")
+print(f"🏁 LDF Cache Setup abgeschlossen für {env_name}\n")
 
