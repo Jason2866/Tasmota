@@ -40,11 +40,11 @@ def backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
         
         if set_ldf_off:
             config.set(section_name, "lib_ldf_mode", "off")
-            print(f"✓ lib_ldf_mode = off direkt in platformio.ini gesetzt für {env_name}")
+            print(f"✓ lib_ldf_mode = off für nächsten Build gesetzt")
         else:
             if config.has_option(section_name, "lib_ldf_mode"):
                 config.remove_option(section_name, "lib_ldf_mode")
-                print(f"✓ lib_ldf_mode aus platformio.ini entfernt für {env_name} (zurück zu Standard)")
+                print(f"✓ lib_ldf_mode entfernt (zurück zu Standard)")
         
         # Schreibe zurück
         with open(ini_file, 'w', encoding='utf-8') as f:
@@ -218,7 +218,7 @@ def clear_ldf_cache():
     restore_platformio_ini()
 
 # =============================================================================
-# HAUPTLOGIK - KORRIGIERT
+# HAUPTLOGIK - FEHLERBEREINIGT
 # =============================================================================
 
 print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
@@ -229,25 +229,13 @@ print(f"📊 Aktueller LDF-Modus: {current_ldf_mode}")
 
 cached_ldf = load_ldf_cache()
 
-# WICHTIG: Prüfe ob Cache GÜLTIG und VOLLSTÄNDIG ist
+# Prüfe ob Cache GÜLTIG und VOLLSTÄNDIG ist
 cache_is_valid = (cached_ldf is not None and 
                   cached_ldf.get("used") is not None and 
                   len(cached_ldf.get("used", [])) > 0)
 
-if cache_is_valid and current_ldf_mode != 'off':
-    # Gültiger Cache vorhanden aber LDF noch nicht deaktiviert
-    print(f"⚡ Gültiger LDF Cache gefunden - setze lib_ldf_mode = off")
-    
-    if backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
-        print(f"✅ platformio.ini modifiziert")
-        print(f"⚠ WICHTIG: Starten Sie den Build ERNEUT für lib_ldf_mode = off")
-        
-        used_count = len(cached_ldf.get("used", []))
-        unused_count = len(cached_ldf.get("unused", []))
-        print(f"📊 Cache: {used_count} verwendet, {unused_count} werden ignoriert")
-    
-elif cache_is_valid and current_ldf_mode == 'off':
-    # Gültiger Cache und LDF bereits deaktiviert - optimierter Build
+if cache_is_valid and current_ldf_mode == 'off':
+    # Cache ist gültig UND LDF bereits deaktiviert - optimierter Build
     print(f"⚡ LDF bereits deaktiviert - Build läuft optimiert")
     
     unused_libs = cached_ldf.get("unused", [])
@@ -263,22 +251,23 @@ elif cache_is_valid and current_ldf_mode == 'off':
         print(f"✅ {len(unused_libs)} Libraries ignoriert - Build beschleunigt")
 
 else:
-    # Kein gültiger Cache - erster Build oder Cache ungültig
-    print(f"📝 Erster Build oder ungültiger Cache - LDF sammelt Dependencies")
+    # Kein gültiger Cache ODER LDF noch nicht deaktiviert
+    if cache_is_valid and current_ldf_mode != 'off':
+        print(f"⚡ Gültiger Cache vorhanden - LDF wird nach diesem Build deaktiviert")
+    else:
+        print(f"📝 Sammle Dependencies - LDF läuft normal")
     
-    # Stelle sicher, dass LDF aktiviert ist
+    # Stelle sicher, dass LDF aktiviert ist für Dependency-Sammlung
     if current_ldf_mode == 'off':
         backup_and_modify_platformio_ini(env_name, set_ldf_off=False)
         print(f"✓ LDF reaktiviert für Dependency-Sammlung")
-        print(f"⚠ Starten Sie den Build ERNEUT für LDF-Sammlung")
     
-    def post_build_cache_ldf(source, target, env):
-        """Erfasst LDF-Ergebnisse nach erfolgreichem Build"""
-        print(f"\n🔄 Erfasse LDF-Ergebnisse...")
+    def post_build_action(source, target, env):
+        """Wird nach erfolgreichem Build ausgeführt"""
+        print(f"\n🔄 Post-Build: Verarbeite LDF-Ergebnisse...")
         
         ldf_results = capture_ldf_results()
         
-        # Prüfe ob sinnvolle Ergebnisse gefunden wurden
         if len(ldf_results["used"]) > 0:
             save_ldf_cache(ldf_results)
             
@@ -297,13 +286,17 @@ else:
                 if len(ldf_results["unused"]) > 5:
                     print(f"   ... und {len(ldf_results['unused']) - 5} weitere")
             
-            print(f"\n💡 Führen Sie den Build erneut aus für optimierte Kompilierung")
-            print(f"   Erwartete Zeitersparnis: Deutlich schnellerer Build ohne LDF-Scan")
+            # JETZT erst für den nächsten Build LDF deaktivieren
+            if backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
+                print(f"\n✅ lib_ldf_mode = off für nächsten Build gesetzt")
+                print(f"💡 Nächster Build wird {unused_count} Libraries überspringen")
+                print(f"⚠ Führen Sie 'pio run' erneut aus für optimierten Build")
+            
         else:
             print(f"⚠ Keine verwendeten Libraries gefunden - Cache nicht erstellt")
             print(f"   Möglicherweise sind alle Libraries bereits in lib_ignore definiert")
     
-    env.AddPostAction("buildprog", post_build_cache_ldf)
+    env.AddPostAction("buildprog", post_build_action)
 
 print(f"🏁 LDF Cache Setup abgeschlossen für {env_name}")
 print(f"💡 Tipp: Löschen Sie '.pio/ldf_cache/' um den Cache zurückzusetzen\n")
