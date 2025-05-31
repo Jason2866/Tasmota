@@ -2,8 +2,8 @@ Import("env")
 import os
 import json
 import hashlib
-import glob
 import configparser
+import shutil
 
 def get_cache_file_path():
     """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""
@@ -13,147 +13,87 @@ def get_cache_file_path():
     os.makedirs(cache_dir, exist_ok=True)
     return os.path.join(cache_dir, f"{env_name}_ldf_cache.json")
 
-def find_all_platformio_files():
-    """Findet alle platformio*.ini Dateien im Projekt"""
+def backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
+    """Modifiziert die originale platformio.ini direkt"""
     project_dir = env.get("PROJECT_DIR")
-    ini_files = glob.glob(os.path.join(project_dir, 'platformio*.ini'))
+    ini_file = os.path.join(project_dir, "platformio.ini")
+    backup_file = os.path.join(project_dir, "platformio.ini.ldf_backup")
     
-    # Sortiere um Priorität zu gewährleisten (override sollte zuletzt kommen)
-    ini_files.sort(key=lambda x: ('override' in os.path.basename(x), x))
+    if not os.path.exists(ini_file):
+        print(f"⚠ platformio.ini nicht gefunden")
+        return False
     
-    print(f"📁 Gefundene PlatformIO Konfigurationsdateien:")
-    for ini_file in ini_files:
-        print(f"   - {os.path.basename(ini_file)}")
-    
-    return ini_files
-
-def find_env_definition_file(env_name):
-    """Findet die Datei, die das spezifische Environment definiert"""
-    project_dir = env.get("PROJECT_DIR")
-    ini_files = find_all_platformio_files()
-    
-    for ini_file in ini_files:
-        try:
-            config = configparser.ConfigParser(allow_no_value=True)
-            config.read(ini_file, encoding='utf-8')
-            
-            section_name = f"env:{env_name}"
-            if config.has_section(section_name):
-                print(f"✓ Environment [{section_name}] gefunden in: {os.path.basename(ini_file)}")
-                return ini_file
-                
-        except Exception as e:
-            print(f"⚠ Fehler beim Lesen von {ini_file}: {e}")
-            continue
-    
-    print(f"⚠ Environment [env:{env_name}] nicht in PlatformIO-Dateien gefunden")
-    return None
-
-def get_current_ldf_mode(env_name):
-    """Ermittelt den aktuellen LDF-Modus für das Environment"""
-    ini_files = find_all_platformio_files()
-    
-    # Lade alle Konfigurationen in der richtigen Reihenfolge
-    combined_config = configparser.ConfigParser(allow_no_value=True)
-    
-    for ini_file in ini_files:
-        try:
-            temp_config = configparser.ConfigParser(allow_no_value=True)
-            temp_config.read(ini_file, encoding='utf-8')
-            
-            # Merge Konfigurationen
-            for section in temp_config.sections():
-                if not combined_config.has_section(section):
-                    combined_config.add_section(section)
-                for key, value in temp_config.items(section):
-                    combined_config.set(section, key, value)
-                    
-        except Exception as e:
-            print(f"⚠ Fehler beim Lesen von {ini_file}: {e}")
-            continue
-    
-    # Prüfe LDF-Modus
-    section_name = f"env:{env_name}"
-    if combined_config.has_section(section_name):
-        if combined_config.has_option(section_name, 'lib_ldf_mode'):
-            return combined_config.get(section_name, 'lib_ldf_mode')
-    
-    # Fallback: Prüfe [env] Sektion
-    if combined_config.has_section('env'):
-        if combined_config.has_option('env', 'lib_ldf_mode'):
-            return combined_config.get('env', 'lib_ldf_mode')
-    
-    return 'chain'  # PlatformIO Standard
-
-def modify_ldf_mode_in_override(env_name, set_ldf_off=True):
-    """Modifiziert LDF-Modus in platformio_override.ini"""
-    project_dir = env.get("PROJECT_DIR")
-    override_file = os.path.join(project_dir, "platformio_override.ini")
-    
-    # Erstelle platformio_override.ini falls nicht vorhanden
-    if not os.path.exists(override_file):
-        print(f"📝 Erstelle {override_file}")
-        with open(override_file, 'w') as f:
-            f.write("; PlatformIO Override Configuration\n")
-            f.write("; This file is used to override settings from other platformio*.ini files\n\n")
+    # Erstelle Backup nur einmal
+    if not os.path.exists(backup_file):
+        shutil.copy2(ini_file, backup_file)
+        print(f"✓ Backup erstellt: platformio.ini.ldf_backup")
     
     try:
         config = configparser.ConfigParser(allow_no_value=True)
-        config.read(override_file, encoding='utf-8')
+        config.read(ini_file, encoding='utf-8')
         
         section_name = f"env:{env_name}"
         
-        # Erstelle Sektion falls nicht vorhanden
         if not config.has_section(section_name):
-            config.add_section(section_name)
-            print(f"📝 Sektion [{section_name}] zu {os.path.basename(override_file)} hinzugefügt")
+            print(f"⚠ Sektion [env:{env_name}] nicht gefunden")
+            return False
         
         if set_ldf_off:
             config.set(section_name, "lib_ldf_mode", "off")
-            print(f"✓ lib_ldf_mode = off gesetzt in {os.path.basename(override_file)}")
+            print(f"✓ lib_ldf_mode = off direkt in platformio.ini gesetzt für {env_name}")
         else:
-            # Entferne lib_ldf_mode Override (zurück zum Standard)
             if config.has_option(section_name, "lib_ldf_mode"):
                 config.remove_option(section_name, "lib_ldf_mode")
-                print(f"✓ lib_ldf_mode Override entfernt aus {os.path.basename(override_file)}")
+                print(f"✓ lib_ldf_mode aus platformio.ini entfernt für {env_name} (zurück zu Standard)")
         
-        # Schreibe Konfiguration zurück
-        with open(override_file, 'w') as f:
+        # Schreibe zurück
+        with open(ini_file, 'w', encoding='utf-8') as f:
             config.write(f, space_around_delimiters=True)
         
         return True
         
     except Exception as e:
-        print(f"⚠ Fehler beim Modifizieren von {override_file}: {e}")
+        print(f"⚠ Fehler beim Modifizieren der platformio.ini: {e}")
         return False
 
-def get_config_hash():
-    """Erstellt Hash aller relevanten Konfigurationsdateien"""
+def get_current_ldf_mode(env_name):
+    """Ermittelt aktuellen LDF-Modus aus platformio.ini"""
     project_dir = env.get("PROJECT_DIR")
-    ini_files = find_all_platformio_files()
+    ini_file = os.path.join(project_dir, "platformio.ini")
     
-    config_content = []
+    try:
+        config = configparser.ConfigParser(allow_no_value=True)
+        config.read(ini_file, encoding='utf-8')
+        
+        section_name = f"env:{env_name}"
+        if config.has_section(section_name):
+            if config.has_option(section_name, 'lib_ldf_mode'):
+                return config.get(section_name, 'lib_ldf_mode')
+        
+        # Fallback: [env] Sektion
+        if config.has_section('env'):
+            if config.has_option('env', 'lib_ldf_mode'):
+                return config.get('env', 'lib_ldf_mode')
+        
+        return 'chain'  # PlatformIO Standard
+        
+    except Exception:
+        return 'unknown'
+
+def restore_platformio_ini():
+    """Stellt die ursprüngliche platformio.ini wieder her"""
+    project_dir = env.get("PROJECT_DIR")
+    ini_file = os.path.join(project_dir, "platformio.ini")
+    backup_file = os.path.join(project_dir, "platformio.ini.ldf_backup")
     
-    for ini_file in ini_files:
-        try:
-            with open(ini_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                config_content.append(f"{os.path.basename(ini_file)}:{content}")
-        except Exception:
-            continue
-    
-    # Zusätzliche Environment-spezifische Werte
-    config_content.extend([
-        str(env.get("BUILD_FLAGS", [])),
-        env.get("BOARD", ""),
-        env.get("PLATFORM", "")
-    ])
-    
-    config_string = "|".join(config_content)
-    return hashlib.md5(config_string.encode()).hexdigest()
+    if os.path.exists(backup_file):
+        shutil.copy2(backup_file, ini_file)
+        print(f"✓ platformio.ini aus Backup wiederhergestellt")
+        return True
+    return False
 
 def scan_available_libraries():
-    """Scannt alle verfügbaren Libraries im lib/ Ordner"""
+    """Scannt alle verfügbaren Libraries im lib/ Ordner rekursiv"""
     project_dir = env.get("PROJECT_DIR")
     lib_dir = os.path.join(project_dir, "lib")
     
@@ -184,6 +124,7 @@ def capture_ldf_results():
     ignored_libs = set(current_ignore)
     used_libs = [lib for lib in available_libs if lib not in ignored_libs]
     
+    # Externe Dependencies hinzufügen
     external_deps = env.get("LIB_DEPS", [])
     if external_deps:
         for dep in external_deps:
@@ -201,6 +142,29 @@ def capture_ldf_results():
         "unused": unused_libs,
         "external_deps": external_deps if external_deps else []
     }
+
+def get_config_hash():
+    """Erstellt Hash der relevanten Konfiguration"""
+    project_dir = env.get("PROJECT_DIR")
+    ini_file = os.path.join(project_dir, "platformio.ini")
+    
+    config_items = []
+    
+    # Lese platformio.ini
+    if os.path.exists(ini_file):
+        with open(ini_file, 'r', encoding='utf-8') as f:
+            config_items.append(f.read())
+    
+    # Zusätzliche Environment-Werte
+    config_items.extend([
+        str(env.get("BUILD_FLAGS", [])),
+        env.get("BOARD", ""),
+        env.get("PLATFORM", ""),
+        env.get("PIOENV", "")
+    ])
+    
+    config_string = "|".join(config_items)
+    return hashlib.md5(config_string.encode()).hexdigest()
 
 def save_ldf_cache(ldf_results):
     """Speichert LDF-Ergebnisse im Cache"""
@@ -244,6 +208,15 @@ def load_ldf_cache():
     
     return None
 
+def clear_ldf_cache():
+    """Löscht den LDF Cache und stellt platformio.ini wieder her"""
+    cache_file = get_cache_file_path()
+    if os.path.exists(cache_file):
+        os.remove(cache_file)
+        print(f"✓ LDF Cache gelöscht")
+    
+    restore_platformio_ini()
+
 # =============================================================================
 # HAUPTLOGIK
 # =============================================================================
@@ -251,38 +224,50 @@ def load_ldf_cache():
 print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
 
 env_name = env.get("PIOENV")
-
-# Zeige aktuelle Konfiguration
 current_ldf_mode = get_current_ldf_mode(env_name)
 print(f"📊 Aktueller LDF-Modus: {current_ldf_mode}")
 
 cached_ldf = load_ldf_cache()
 
-if cached_ldf is not None:
-    # Cache vorhanden - setze LDF auf off in override
-    print(f"⚡ LDF Cache gefunden - setze lib_ldf_mode = off in platformio_override.ini")
+if cached_ldf is not None and current_ldf_mode != 'off':
+    # Cache vorhanden aber LDF noch nicht deaktiviert
+    print(f"⚡ LDF Cache gefunden - setze lib_ldf_mode = off direkt in platformio.ini")
     
-    if modify_ldf_mode_in_override(env_name, set_ldf_off=True):
-        unused_libs = cached_ldf.get("unused", [])
-        if unused_libs:
-            current_ignore = env.get("LIB_IGNORE", [])
-            if isinstance(current_ignore, str):
-                current_ignore = [current_ignore]
-            elif current_ignore is None:
-                current_ignore = []
-            
-            all_ignore = list(set(current_ignore + unused_libs))
-            env.Replace(LIB_IGNORE=all_ignore)
+    if backup_and_modify_platformio_ini(env_name, set_ldf_off=True):
+        print(f"✅ platformio.ini direkt modifiziert")
+        print(f"⚠ WICHTIG: Starten Sie den Build ERNEUT, um lib_ldf_mode = off zu aktivieren")
         
+        # Zeige Statistiken
         used_count = len(cached_ldf.get("used", []))
         unused_count = len(cached_ldf.get("unused", []))
-        print(f"✅ Override gesetzt: {used_count} verwendet, {unused_count} ignoriert")
-        print(f"⚠ HINWEIS: Starten Sie den Build erneut, um die LDF-Optimierung zu nutzen")
+        print(f"📊 Cache-Statistiken: {used_count} verwendet, {unused_count} werden ignoriert")
+    
+elif cached_ldf is not None and current_ldf_mode == 'off':
+    # Cache vorhanden und LDF bereits deaktiviert
+    print(f"⚡ LDF bereits deaktiviert - Build läuft optimiert")
+    
+    # Setze lib_ignore für ungenutzte Libraries
+    unused_libs = cached_ldf.get("unused", [])
+    if unused_libs:
+        current_ignore = env.get("LIB_IGNORE", [])
+        if isinstance(current_ignore, str):
+            current_ignore = [current_ignore]
+        elif current_ignore is None:
+            current_ignore = []
+        
+        all_ignore = list(set(current_ignore + unused_libs))
+        env.Replace(LIB_IGNORE=all_ignore)
+        print(f"✅ {len(unused_libs)} Libraries werden ignoriert - Build beschleunigt")
 
 else:
-    # Kein Cache - stelle sicher, dass LDF aktiviert ist
-    print(f"📝 Erster Build - stelle sicher dass LDF aktiviert ist")
-    modify_ldf_mode_in_override(env_name, set_ldf_off=False)
+    # Kein Cache - erster Build mit LDF
+    print(f"📝 Erster Build - LDF sammelt Dependencies")
+    
+    # Stelle sicher, dass LDF aktiviert ist (entferne off falls gesetzt)
+    if current_ldf_mode == 'off':
+        backup_and_modify_platformio_ini(env_name, set_ldf_off=False)
+        print(f"✓ LDF reaktiviert für Dependency-Sammlung")
+        print(f"⚠ WICHTIG: Starten Sie den Build ERNEUT für LDF-Sammlung")
     
     def post_build_cache_ldf(source, target, env):
         """Erfasst LDF-Ergebnisse nach erfolgreichem Build"""
@@ -300,9 +285,19 @@ else:
         print(f"   Ignorierte Libraries: {unused_count}")
         
         if unused_count > 0:
-            print(f"\n💡 Führen Sie den Build erneut aus, um {unused_count} Libraries zu überspringen")
+            print(f"\n💡 Führen Sie den Build erneut aus für optimierte Kompilierung")
+            print(f"   Erwartete Zeitersparnis: Deutlich schnellerer Build ohne LDF-Scan")
+        
+        # Debug-Ausgabe der ersten paar Libraries
+        if ldf_results["unused"]:
+            print(f"\n🚫 Beispiele ignorierter Libraries:")
+            for lib in sorted(ldf_results["unused"])[:5]:
+                print(f"   - {lib}")
+            if len(ldf_results["unused"]) > 5:
+                print(f"   ... und {len(ldf_results['unused']) - 5} weitere")
     
     env.AddPostAction("buildprog", post_build_cache_ldf)
 
-print(f"🏁 LDF Cache Setup abgeschlossen für {env_name}\n")
+print(f"🏁 LDF Cache Setup abgeschlossen für {env_name}")
+print(f"💡 Tipp: Verwenden Sie 'pio run --target clean' um den Cache zu löschen und neu zu starten\n")
 
