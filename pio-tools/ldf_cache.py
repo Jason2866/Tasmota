@@ -7,9 +7,7 @@ import glob
 import time
 import importlib.util
 
-# Globale Variablen für Stabilität-Tracking
-_ldf_history = []
-_stability_threshold = 3
+# Globale Variablen
 _backup_created = False
 
 def get_cache_file_path():
@@ -143,53 +141,6 @@ def determine_path_source(path):
         return "PACKAGES"
     else:
         return "UNKNOWN"
-
-def track_ldf_stability():
-    """Verfolgt LDF-Stabilität über mehrere Middleware-Aufrufe"""
-    global _ldf_history
-    
-    current_state = {
-        'cpppath_count': len(env.get('CPPPATH', [])),
-        'libs_count': len(env.get('LIBS', [])),
-        'piobuildfiles_count': len(env.get('PIOBUILDFILES', [])),
-        'timestamp': time.time()
-    }
-    
-    _ldf_history.append(current_state)
-    
-    # Behalte nur letzte 5 Einträge
-    if len(_ldf_history) > 5:
-        _ldf_history = _ldf_history[-5:]
-    
-    # Prüfe Stabilität (mindestens 3 ähnliche Messungen)
-    if len(_ldf_history) >= _stability_threshold:
-        recent = _ldf_history[-_stability_threshold:]
-        
-        # Prüfe ob CPPPATH und LIBS stabil sind (±2 Toleranz)
-        cpppath_stable = all(abs(s['cpppath_count'] - recent[0]['cpppath_count']) <= 2 for s in recent)
-        libs_stable = all(abs(s['libs_count'] - recent[0]['libs_count']) <= 2 for s in recent)
-        
-        # Realistische Werte basierend auf Beobachtungen
-        realistic_values = (
-            recent[-1]['cpppath_count'] > 70 and  # Beobachtung: 111 Pfade
-            recent[-1]['libs_count'] < 70 and  # Beobachtung: 20 LIBS (finale)
-            recent[-1]['libs_count'] > 2 and  # Mindestens einige LIBS
-            recent[-1]['piobuildfiles_count'] > 0  # Build-Dateien vorhanden
-        )
-        
-        stability_info = {
-            'cpppath_stable': cpppath_stable,
-            'libs_stable': libs_stable,
-            'realistic_values': realistic_values,
-            'history_length': len(_ldf_history),
-            'recent_states': recent
-        }
-        
-        is_stable = cpppath_stable and libs_stable and realistic_values
-        
-        return is_stable, current_state, stability_info
-    
-    return False, current_state, {'history_length': len(_ldf_history)}
 
 def debug_all_scons_variables():
     """Zeigt ALLE SCons-Variablen für LDF-Analyse"""
@@ -466,15 +417,15 @@ def freeze_exact_scons_configuration_local(local_dict):
     
     try:
         with open(temp_file, 'w', encoding='utf-8') as f:
-            f.write("# SCons Environment Snapshot - STABILITÄT-BASIERT ERFASST\n")
+            f.write("# SCons Environment Snapshot - POST-COMPILE ACTION\n")
             f.write("# SCons objects → paths, String paths unchanged\n")
             f.write("# Auto-generated - do not edit manually\n")
             f.write(f"# Generated: {time.ctime()}\n")
             f.write(f"# Environment: {env.get('PIOENV')}\n")
-            f.write(f"# Stability History: {len(_ldf_history)} measurements\n\n")
+            f.write(f"# Captured after compile, before linking\n\n")
             
             f.write("def restore_environment(target_env):\n")
-            f.write('    """Stellt das stabilität-erfasste SCons-Environment wieder her"""\n')
+            f.write('    """Stellt das post-compile erfasste SCons-Environment wieder her"""\n')
             f.write('    restored_count = 0\n')
             f.write('    conversion_stats = {"file_paths": 0, "builders": 0, "functions": 0, "other": 0}\n')
             f.write('    \n')
@@ -513,7 +464,7 @@ def freeze_exact_scons_configuration_local(local_dict):
             f.write(f'    conversion_stats["other"] = {conversion_stats["other"]}\n')
             f.write('    \n')
             
-            f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt (Stabilität-basiert)")\n')
+            f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt (Post-Compile)")\n')
             f.write('    print(f"✓ {{conversion_stats[\'file_paths\']}} SCons-Objekt-Pfade konvertiert")\n')
             f.write('    print(f"✓ {{conversion_stats[\'builders\']}} Builder-Objekte konvertiert")\n')
             f.write('    print(f"✓ {{conversion_stats[\'functions\']}} Funktionen konvertiert")\n')
@@ -529,7 +480,6 @@ def freeze_exact_scons_configuration_local(local_dict):
             f.write(f'CONVERTED_BUILDERS = {conversion_stats["builders"]}\n')
             f.write(f'CONVERTED_FUNCTIONS = {conversion_stats["functions"]}\n')
             f.write(f'CONVERTED_OTHER = {conversion_stats["other"]}\n')
-            f.write(f'STABILITY_MEASUREMENTS = {len(_ldf_history)}\n')
         
         # Atomarer Move
         shutil.move(temp_file, cache_file)
@@ -537,10 +487,9 @@ def freeze_exact_scons_configuration_local(local_dict):
         file_size = os.path.getsize(cache_file)
         total_conversions = sum(conversion_stats.values())
         
-        print(f"✓ Stabilität-basiertes Environment gespeichert:")
+        print(f"✓ Post-Compile Environment gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
         print(f"   📊 {var_count} SCons-Variablen")
-        print(f"   📈 {len(_ldf_history)} Stabilität-Messungen")
         print(f"   🔄 {total_conversions} SCons-Objekte konvertiert:")
         print(f"      📄 {conversion_stats['file_paths']} SCons-Objekt-Pfade")
         print(f"      🔨 {conversion_stats['builders']} Builder-Objekte")
@@ -551,45 +500,43 @@ def freeze_exact_scons_configuration_local(local_dict):
         return True
         
     except Exception as e:
-        print(f"❌ Stabilität-Environment-Konvertierung fehlgeschlagen: {e}")
+        print(f"❌ Post-Compile Environment-Konvertierung fehlgeschlagen: {e}")
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return False
 
-def capture_middleware(env, node):
-    """Middleware mit Stabilität-basierter LDF-Erkennung"""
+def post_compile_action(target, source, env):
+    """SCons Action: Erfasst Environment nach Compile, vor Linking"""
     global _backup_created
     
     if _backup_created:
-        return node
+        print("✓ Environment bereits erfasst - überspringe Post-Compile Action")
+        return None
     
     try:
-        # Sichere Node-Behandlung
-        if hasattr(node, 'srcnode'):
-            node_name = str(node)
-        elif hasattr(node, 'name'):
-            node_name = str(node.name)
-        else:
-            node_name = str(node)
+        print(f"\n🎯 POST-COMPILE ACTION: Erfasse finales SCons-Environment")
+        print(f"   Target: {[str(t) for t in target]}")
+        print(f"   Source: {len(source)} Dateien")
         
-        node_name = os.path.basename(node_name)
+        # Analysiere aktuellen Environment-Zustand
+        cpppath = env.get('CPPPATH', [])
+        libs = env.get('LIBS', [])
+        piobuildfiles = env.get('PIOBUILDFILES', [])
         
-        # LDF-Stabilität prüfen
-        is_stable, current_state, stability_info = track_ldf_stability()
+        print(f"   📊 Environment-Status:")
+        print(f"      CPPPATH: {len(cpppath)} Pfade")
+        print(f"      LIBS: {len(libs)} Bibliotheken")
+        print(f"      PIOBUILDFILES: {len(piobuildfiles)} Listen")
         
-        print(f"\n🔄 Middleware: {node_name}")
-        print(f"   CPPPATH: {current_state['cpppath_count']}")
-        print(f"   LIBS: {current_state['libs_count']}")
-        print(f"   PIOBUILDFILES: {current_state['piobuildfiles_count']}")
-        print(f"   History: {stability_info['history_length']} Messungen")
-        print(f"   Stabil: {'✅' if is_stable else '⏳'}")
+        # Prüfe ob realistische Werte vorhanden sind
+        realistic_values = (
+            len(cpppath) > 50 and  # Mindestens 50 Include-Pfade
+            len(libs) > 5 and len(libs) < 50 and  # Realistische LIBS-Anzahl
+            len(piobuildfiles) > 0  # Build-Dateien vorhanden
+        )
         
-        if is_stable:
-            print(f"✅ LDF-Konfiguration STABIL - erfasse finales Environment")
-            print(f"   📊 Stabilität-Details:")
-            print(f"      CPPPATH stabil: {'✅' if stability_info['cpppath_stable'] else '❌'}")
-            print(f"      LIBS stabil: {'✅' if stability_info['libs_stable'] else '❌'}")
-            print(f"      Realistische Werte: {'✅' if stability_info['realistic_values'] else '❌'}")
+        if realistic_values:
+            print(f"✅ Realistische Environment-Werte - erfasse vollständiges Environment")
             
             # Vollständige Debug-Ausgabe
             debug_all_scons_variables()
@@ -606,25 +553,22 @@ def capture_middleware(env, node):
                 env_name = env.get("PIOENV")
                 if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
                     print(f"✓ lib_ldf_mode = off für Lauf 2 gesetzt")
-                    print(f"🚀 STABILES SCons-Environment erfasst!")
+                    print(f"🚀 POST-COMPILE SCons-Environment erfasst!")
                     _backup_created = True
                 else:
                     print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
             else:
                 print(f"❌ Environment-Backup fehlgeschlagen")
         else:
-            print(f"⏳ LDF noch nicht stabil - sammle weitere Datenpunkte")
-            if 'recent_states' in stability_info:
-                print(f"   📈 Letzte {len(stability_info['recent_states'])} Messungen:")
-                for i, state in enumerate(stability_info['recent_states']):
-                    print(f"      {i+1}: CPPPATH={state['cpppath_count']}, LIBS={state['libs_count']}")
+            print(f"⚠ Unrealistische Environment-Werte - überspringe Erfassung")
+            print(f"   CPPPATH: {len(cpppath)} (erwartet >50)")
+            print(f"   LIBS: {len(libs)} (erwartet 5-50)")
+            print(f"   PIOBUILDFILES: {len(piobuildfiles)} (erwartet >0)")
     
     except Exception as e:
-        print(f"⚠ Middleware-Fehler: {e}")
-        print(f"   Node-Typ: {type(node)}")
-        print(f"   Node-Wert: {repr(node)}")
+        print(f"❌ Post-Compile Action Fehler: {e}")
     
-    return node
+    return None
 
 def restore_exact_scons_configuration():
     """Lädt Environment aus Python-Datei"""
@@ -656,11 +600,9 @@ def restore_exact_scons_configuration():
             converted_builders = getattr(env_module, 'CONVERTED_BUILDERS', 0)
             converted_functions = getattr(env_module, 'CONVERTED_FUNCTIONS', 0)
             converted_other = getattr(env_module, 'CONVERTED_OTHER', 0)
-            stability_measurements = getattr(env_module, 'STABILITY_MEASUREMENTS', 0)
             
-            print(f"✓ Stabilität-basiertes Environment wiederhergestellt:")
+            print(f"✓ Post-Compile Environment wiederhergestellt:")
             print(f"   📊 {var_count} Variablen")
-            print(f"   📈 {stability_measurements} Stabilität-Messungen")
             print(f"   📄 {converted_file_paths} SCons-Objekt-Pfade")
             print(f"   🔨 {converted_builders} Builder-Objekte")
             print(f"   ⚙️  {converted_functions} Funktionen")
@@ -668,7 +610,7 @@ def restore_exact_scons_configuration():
             print(f"   ✅ String-Pfade unverändert")
             
             # Debug-Ausgabe nach Wiederherstellung
-            print(f"\n🔍 Environment nach Stabilität-Cache-Wiederherstellung:")
+            print(f"\n🔍 Environment nach Post-Compile Cache-Wiederherstellung:")
             debug_ldf_resolution()
         
         return success
@@ -679,21 +621,21 @@ def restore_exact_scons_configuration():
 
 def early_cache_check_and_restore():
     """Prüft Cache und stellt SCons-Environment wieder her"""
-    print(f"🔍 Cache-Prüfung (Stabilität-basiertes Environment)...")
+    print(f"🔍 Cache-Prüfung (Post-Compile Environment)...")
     
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
-        print(f"📝 Kein Stabilität-Cache - LDF wird normal ausgeführt")
+        print(f"📝 Kein Post-Compile Cache - LDF wird normal ausgeführt")
         return False
     
     current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
     
     if current_ldf_mode != 'off':
-        print(f"🔄 LDF noch aktiv - Stabilität-Cache wird nach Build erstellt")
+        print(f"🔄 LDF noch aktiv - Post-Compile Cache wird nach Build erstellt")
         return False
     
-    print(f"⚡ Stabilität-Cache verfügbar - stelle Environment wieder her")
+    print(f"⚡ Post-Compile Cache verfügbar - stelle Environment wieder her")
     
     success = restore_exact_scons_configuration()
     return success
@@ -718,8 +660,8 @@ def count_scons_objects_in_value(value, depth=0):
     return count
 
 def verify_frozen_restoration():
-    """Verifikation mit Fokus auf Stabilität-basiertes Environment"""
-    print(f"\n🔍 SCons-Environment-Verifikation (Stabilität-basiert)...")
+    """Verifikation mit Fokus auf Post-Compile Environment"""
+    print(f"\n🔍 SCons-Environment-Verifikation (Post-Compile)...")
     
     critical_scons_vars = [
         "CPPPATH", "CPPDEFINES", "BUILD_FLAGS", "LIBS", 
@@ -795,11 +737,11 @@ def verify_frozen_restoration():
     print(f"   🔄 SCons-Objekte zu Pfaden: {converted_paths}")
     
     if all_ok and scons_objects_found == 0:
-        print(f"✅ Stabilität-basiertes SCons-Environment vollständig wiederhergestellt")
+        print(f"✅ Post-Compile SCons-Environment vollständig wiederhergestellt")
     elif all_ok:
-        print(f"⚠️  Stabilität-basiertes SCons-Environment wiederhergestellt, aber {scons_objects_found} Objekte nicht konvertiert")
+        print(f"⚠️  Post-Compile SCons-Environment wiederhergestellt, aber {scons_objects_found} Objekte nicht konvertiert")
     else:
-        print(f"❌ Stabilität-basiertes SCons-Environment UNVOLLSTÄNDIG")
+        print(f"❌ Post-Compile SCons-Environment UNVOLLSTÄNDIG")
     
     return all_ok
 
@@ -828,28 +770,32 @@ def calculate_config_hash():
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
 # =============================================================================
-# HAUPTLOGIK - STABILITÄT-BASIERTES SCONS-ENVIRONMENT
+# HAUPTLOGIK - POST-COMPILE SCONS-ENVIRONMENT
 # =============================================================================
 
-print(f"\n🎯 Stabilität-basiertes SCons-Environment-Backup für: {env.get('PIOENV')}")
+print(f"\n🎯 Post-Compile SCons-Environment-Backup für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit Stabilität-Environment-Cache - LDF übersprungen!")
+    print(f"🚀 Build mit Post-Compile Environment-Cache - LDF übersprungen!")
     
     if not verify_frozen_restoration():
-        print(f"❌ KRITISCHER FEHLER: Stabilität-SCons-Environment unvollständig!")
+        print(f"❌ KRITISCHER FEHLER: Post-Compile SCons-Environment unvollständig!")
         print(f"💡 Löschen Sie '.pio/ldf_cache/' und starten Sie neu")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - erfasse Environment über Stabilität-Middleware...")
-    print(f"📈 Stabilität-Schwelle: {_stability_threshold} konsistente Messungen")
-    print(f"🎯 Zielwerte: CPPPATH >100, LIBS 5-30, PIOBUILDFILES >0")
+    print(f"📝 Normaler LDF-Durchlauf - erfasse Environment nach Compile-Phase...")
     
-    # Middleware für alle Build-Targets mit korrekter Parameter-Reihenfolge
-    env.AddBuildMiddleware(capture_middleware, "*")
+    # SCons Action: Erfasse Environment nach Compile, vor Linking
+    # Füge Action zu allen Object-Files hinzu (nach Compile, vor Linking)
+    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", post_compile_action)
+    
+    # Alternative: Action für Object-Files
+    # env.AddPostAction("*.o", post_compile_action)
+    
+    print(f"✅ Post-Compile Action registriert für: $BUILD_DIR/${{PROGNAME}}.elf")
 
-print(f"🏁 Stabilität-basiertes SCons-Environment-Backup initialisiert")
+print(f"🏁 Post-Compile SCons-Environment-Backup initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
