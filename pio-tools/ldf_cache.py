@@ -1,12 +1,11 @@
 Import("env")
 import os
-import pickle
-import gzip
 import hashlib
 import configparser
 import shutil
 import glob
 import time
+import importlib.util
 
 def get_cache_file_path():
     """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""
@@ -14,7 +13,7 @@ def get_cache_file_path():
     project_dir = env.get("PROJECT_DIR")
     cache_dir = os.path.join(project_dir, ".pio", "ldf_cache")
     os.makedirs(cache_dir, exist_ok=True)
-    return os.path.join(cache_dir, f"{env_name}_scons_complete.pkl.gz")
+    return os.path.join(cache_dir, f"{env_name}_scons_env.py")
 
 def find_all_platformio_files():
     """Findet alle platformio*.ini Dateien im Projekt"""
@@ -120,84 +119,123 @@ def get_current_ldf_mode(env_name):
     return 'chain'
 
 def freeze_exact_scons_configuration():
-    """Friert die exakte SCons-Konfiguration nach dem ersten LDF-Durchlauf ein"""
+    """Speichert Environment als ausführbare Python-Datei"""
+    cache_file = get_cache_file_path()
+    temp_file = cache_file + ".tmp"
     
-    # Komplettes SCons Dictionary erfassen
-    scons_dict = env.Dictionary()
-    
-    # Exakte Kopie aller Variablen erstellen
-    frozen_config = {}
-    
-    for key, value in scons_dict.items():
-        try:
-            # Tiefe Kopie für Listen und komplexe Strukturen
-            if isinstance(value, list):
-                frozen_config[key] = value[:]  # Shallow copy für Listen
-            elif isinstance(value, dict):
-                frozen_config[key] = value.copy()  # Shallow copy für Dicts
-            elif hasattr(value, '__dict__'):
-                # SCons-Objekte als String-Repräsentation speichern
-                frozen_config[key] = str(value)
-            else:
-                # Primitive Typen direkt kopieren
-                frozen_config[key] = value
-                
-        except Exception as e:
-            # Fallback: String-Repräsentation
-            frozen_config[key] = str(value)
-            print(f"⚠ {key}: Fallback zu String - {e}")
-    
-    return frozen_config
+    try:
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            f.write("# SCons Environment Snapshot\n")
+            f.write("# Auto-generated - do not edit manually\n")
+            f.write(f"# Generated: {time.ctime()}\n")
+            f.write(f"# Environment: {env.get('PIOENV')}\n\n")
+            
+            f.write("def restore_environment(target_env):\n")
+            f.write('    """Stellt das exakte SCons-Environment wieder her"""\n')
+            f.write('    restored_count = 0\n')
+            f.write('    \n')
+            
+            scons_dict = env.Dictionary()
+            var_count = 0
+            
+            for key, value in sorted(scons_dict.items()):
+                try:
+                    # Sichere Python-Repräsentation
+                    f.write(f'    # {key}\n')
+                    f.write(f'    try:\n')
+                    f.write(f'        target_env[{repr(key)}] = {repr(value)}\n')
+                    f.write(f'        restored_count += 1\n')
+                    f.write(f'    except:\n')
+                    f.write(f'        pass\n')
+                    f.write(f'    \n')
+                    var_count += 1
+                except Exception as e:
+                    f.write(f'    # {key}: Fehler - {e}\n')
+                    continue
+            
+            f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt")\n')
+            f.write('    return restored_count > 50\n')
+            f.write('\n')
+            f.write('# Metadata\n')
+            f.write(f'CONFIG_HASH = {repr(calculate_config_hash())}\n')
+            f.write(f'ENV_NAME = {repr(env.get("PIOENV"))}\n')
+            f.write(f'VARIABLE_COUNT = {var_count}\n')
+        
+        # Atomarer Move
+        shutil.move(temp_file, cache_file)
+        
+        file_size = os.path.getsize(cache_file)
+        print(f"✓ Environment als Python-Datei gespeichert:")
+        print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
+        print(f"   📊 {var_count} SCons-Variablen erfasst")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Python-Datei-Speicherung fehlgeschlagen: {e}")
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+        return False
 
-def restore_exact_scons_configuration(frozen_config):
-    """Stellt die exakte SCons-Konfiguration wieder her"""
+def restore_exact_scons_configuration():
+    """Lädt Environment aus Python-Datei"""
+    cache_file = get_cache_file_path()
     
-    if not frozen_config:
+    if not os.path.exists(cache_file):
         return False
     
-    restored_count = 0
-    
-    # Alle Variablen exakt wiederherstellen
-    for key, value in frozen_config.items():
-        try:
-            # Direkte Zuweisung ins SCons Environment
-            env[key] = value
-            restored_count += 1
-            
-        except Exception as e:
-            print(f"⚠ Wiederherstellung {key} fehlgeschlagen: {e}")
-    
-    print(f"✓ {restored_count} SCons-Variablen exakt wiederhergestellt")
-    return restored_count > 0
+    try:
+        # Python-Datei als Modul laden
+        spec = importlib.util.spec_from_file_location("scons_env_cache", cache_file)
+        env_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(env_module)
+        
+        # Hash-Prüfung
+        current_hash = calculate_config_hash()
+        cached_hash = getattr(env_module, 'CONFIG_HASH', None)
+        
+        if cached_hash != current_hash:
+            print("⚠ Konfiguration geändert - Python-Cache ungültig")
+            return False
+        
+        # Environment wiederherstellen
+        success = env_module.restore_environment(env)
+        
+        if success:
+            var_count = getattr(env_module, 'VARIABLE_COUNT', 0)
+            print(f"✓ Environment aus Python-Datei wiederhergestellt ({var_count} Variablen)")
+        
+        return success
+        
+    except Exception as e:
+        print(f"❌ Python-Datei-Wiederherstellung fehlgeschlagen: {e}")
+        return False
 
 def early_cache_check_and_restore():
     """Prüft Cache und stellt SCons-Environment wieder her"""
-    print(f"🔍 Cache-Prüfung (EXAKTE SCons-Konfiguration)...")
+    print(f"🔍 Cache-Prüfung (Python-Datei)...")
     
-    frozen_config = load_frozen_configuration()
+    cache_file = get_cache_file_path()
     
-    if not frozen_config:
-        print(f"📝 Kein SCons-Cache - LDF wird normal ausgeführt")
+    if not os.path.exists(cache_file):
+        print(f"📝 Kein Python-Cache - LDF wird normal ausgeführt")
         return False
     
     current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
     
     if current_ldf_mode != 'off':
-        print(f"🔄 LDF noch aktiv - SCons-Cache wird nach Build erstellt")
+        print(f"🔄 LDF noch aktiv - Python-Cache wird nach Build erstellt")
         return False
     
-    print(f"⚡ SCons-Cache verfügbar - stelle exakte Konfiguration wieder her")
+    print(f"⚡ Python-Cache verfügbar - stelle Environment wieder her")
     
-    # EXAKTE SCons-Konfiguration wiederherstellen
-    success = restore_exact_scons_configuration(frozen_config)
-    
+    success = restore_exact_scons_configuration()
     return success
 
 def verify_frozen_restoration():
     """Verifikation des wiederhergestellten SCons-Environments"""
     print(f"\n🔍 SCons-Environment-Verifikation...")
     
-    # Prüfe kritische SCons-Variablen
     critical_scons_vars = [
         "CPPPATH", "CPPDEFINES", "BUILD_FLAGS", "LIBS", 
         "CCFLAGS", "CXXFLAGS", "LINKFLAGS", "PIOBUILDFILES"
@@ -210,7 +248,6 @@ def verify_frozen_restoration():
                 paths = env[var]
                 print(f"   ✅ {var}: {len(paths)} Include-Pfade")
                 
-                # Kritische lib/default/headers-Prüfung
                 project_dir = env.get("PROJECT_DIR")
                 lib_default = os.path.join(project_dir, "lib", "default", "headers")
                 found = any(lib_default in str(path) for path in paths)
@@ -229,7 +266,6 @@ def verify_frozen_restoration():
             print(f"   ❌ {var}: Fehlt")
             all_ok = False
     
-    # Zusätzliche SCons-spezifische Prüfungen
     scons_dict_size = len(env.Dictionary())
     print(f"   📊 SCons Dictionary: {scons_dict_size} Variablen")
     
@@ -264,129 +300,44 @@ def calculate_config_hash():
     config_string = "|".join(relevant_values)
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
-def save_frozen_configuration(frozen_config):
-    """Speichert die eingefrorene Konfiguration robust"""
-    cache_file = get_cache_file_path()
-    temp_file = cache_file + ".tmp"
-    
-    try:
-        # Metadaten hinzufügen
-        save_data = {
-            'frozen_scons_config': frozen_config,
-            'config_hash': calculate_config_hash(),
-            'freeze_timestamp': time.time(),
-            'env_name': env.get("PIOENV"),
-            'freeze_version': '1.0'
-        }
-        
-        # Atomares Schreiben
-        with gzip.open(temp_file, 'wb') as f:
-            pickle.dump(save_data, f, protocol=pickle.HIGHEST_PROTOCOL)
-        
-        # Validierung der geschriebenen Datei
-        with gzip.open(temp_file, 'rb') as f:
-            test_data = pickle.load(f)
-            if 'frozen_scons_config' not in test_data:
-                raise ValueError("Validierung fehlgeschlagen")
-        
-        # Atomarer Move
-        shutil.move(temp_file, cache_file)
-        
-        file_size = os.path.getsize(cache_file)
-        var_count = len(frozen_config)
-        
-        print(f"✓ Exakte SCons-Konfiguration gespeichert:")
-        print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
-        print(f"   📊 {var_count} SCons-Variablen eingefroren")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Fehler beim Speichern der Konfiguration: {e}")
-        # Cleanup
-        if os.path.exists(temp_file):
-            os.remove(temp_file)
-        return False
-
-def load_frozen_configuration():
-    """Lädt die eingefrorene Konfiguration"""
-    cache_file = get_cache_file_path()
-    
-    if not os.path.exists(cache_file):
-        return None
-    
-    try:
-        with gzip.open(cache_file, 'rb') as f:
-            data = pickle.load(f)
-        
-        # Validierung
-        if 'frozen_scons_config' not in data:
-            print("⚠ Ungültiges Format der eingefrorenen Konfiguration")
-            return None
-        
-        # Hash-Prüfung
-        current_hash = calculate_config_hash()
-        saved_hash = data.get('config_hash')
-        
-        if current_hash != saved_hash:
-            print("⚠ Konfiguration geändert - eingefrorene Konfiguration ungültig")
-            return None
-        
-        frozen_config = data['frozen_scons_config']
-        var_count = len(frozen_config)
-        
-        print(f"✓ Eingefrorene Konfiguration geladen: {var_count} Variablen")
-        return frozen_config
-        
-    except Exception as e:
-        print(f"❌ Fehler beim Laden der eingefrorenen Konfiguration: {e}")
-        return None
-
 # =============================================================================
-# HAUPTLOGIK - EXAKTE SCONS-KONFIGURATION KONSERVIEREN
+# HAUPTLOGIK - TEXTBASIERTE SCONS-KONFIGURATION
 # =============================================================================
 
-print(f"\n🎯 Exakte SCons-Konfigurationskonservierung für: {env.get('PIOENV')}")
+print(f"\n🎯 Textbasierte SCons-Konfigurationskonservierung für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit EXAKTER SCons-Konfiguration - LDF übersprungen!")
+    print(f"🚀 Build mit textbasierter SCons-Konfiguration - LDF übersprungen!")
     
     if not verify_frozen_restoration():
         print(f"❌ KRITISCHER FEHLER: SCons-Environment unvollständig!")
         print(f"💡 Löschen Sie '.pio/ldf_cache/' und starten Sie neu")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - erfasse EXAKTE SCons-Konfiguration...")
+    print(f"📝 Normaler LDF-Durchlauf - erfasse SCons-Konfiguration...")
     
     def post_build_freeze_configuration(source, target, env):
-        """Post-Build: Friere exakte SCons-Konfiguration ein"""
-        print(f"\n❄️  Post-Build: Friere exakte SCons-Konfiguration ein...")
+        """Post-Build: Speichere SCons-Konfiguration als Python-Datei"""
+        print(f"\n📝 Post-Build: Speichere SCons-Konfiguration als Python-Datei...")
         
-        # Erfasse EXAKTE Konfiguration nach LDF-Durchlauf
-        frozen_config = freeze_exact_scons_configuration()
-        
-        if len(frozen_config) > 50:  # Mindestens 50 SCons-Variablen
-            if save_frozen_configuration(frozen_config):
-                print(f"\n🎯 EXAKTE SCons-Konfiguration eingefroren:")
-                print(f"   ❄️  Alle {len(frozen_config)} SCons-Variablen konserviert")
-                
-                # WICHTIG: Setze LDF auf off ERST NACH erfolgreichem Speichern
-                env_name = env.get("PIOENV")
-                if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-                    print(f"✓ lib_ldf_mode = off für Lauf 2 gesetzt")
-                    print(f"🚀 Lauf 2: Identische Konfiguration garantiert!")
-                else:
-                    print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
-                
+        if freeze_exact_scons_configuration():
+            print(f"\n🎯 SCons-Konfiguration als Python-Datei gespeichert:")
+            
+            # Setze LDF auf off ERST NACH erfolgreichem Speichern
+            env_name = env.get("PIOENV")
+            if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+                print(f"✓ lib_ldf_mode = off für Lauf 2 gesetzt")
+                print(f"🚀 Lauf 2: Identische Konfiguration aus Python-Datei!")
             else:
-                print(f"❌ Einfrieren der Konfiguration fehlgeschlagen")
+                print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
+            
         else:
-            print(f"❌ Unvollständige SCons-Konfiguration - nicht eingefroren")
+            print(f"❌ Python-Datei-Speicherung fehlgeschlagen")
     
     env.AddPostAction("buildprog", post_build_freeze_configuration)
 
-print(f"🏁 Exakte Konfigurationskonservierung initialisiert")
+print(f"🏁 Textbasierte Konfigurationskonservierung initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
