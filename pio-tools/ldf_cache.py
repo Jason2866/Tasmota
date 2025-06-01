@@ -278,7 +278,7 @@ def freeze_exact_scons_configuration():
             f.write(f'    conversion_stats["functions"] = {conversion_stats["functions"]}\n')
             f.write(f'    conversion_stats["other"] = {conversion_stats["other"]}\n')
             f.write('    \n')
-
+            
             f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt")\n')
             f.write('    print(f"✓ {{conversion_stats[\'file_paths\']}} SCons-Objekt-Pfade konvertiert")\n')
             f.write('    print(f"✓ {{conversion_stats[\'builders\']}} Builder-Objekte konvertiert")\n')
@@ -537,6 +537,43 @@ else:
     def post_build_freeze_configuration(source, target, env):
         """Post-Build: Speichere SCons-Konfiguration mit selektiver Pfad-Konvertierung"""
         print(f"\n🔄 Post-Build: Selektive SCons-Objekt-Pfad-Konvertierung...")
+        
+        # === DEBUG-FUNKTION ===
+        def debug_all_include_sources():
+            print(f"\n🔍 DEBUG: Suche alle Include-Quellen:")
+            
+            # 1. CPPPATH (bereits bekannt - nur 7)
+            cpppath = env.get('CPPPATH', [])
+            print(f"   CPPPATH: {len(cpppath)} Pfade")
+            for i, path in enumerate(cpppath):
+                print(f"      {i}: {path}")
+            
+            # 2. Compiler-Flags durchsuchen
+            for flag_var in ['CCFLAGS', 'CXXFLAGS', 'CPPFLAGS', 'BUILD_FLAGS']:
+                flags = env.get(flag_var, [])
+                include_flags = [f for f in flags if str(f).startswith('-I')]
+                if include_flags:
+                    print(f"   {flag_var}: {len(include_flags)} -I Flags")
+                    for flag in include_flags:
+                        print(f"      {flag}")
+            
+            # 3. PIOBUILDFILES analysieren
+            piobuildfiles = env.get('PIOBUILDFILES', [])
+            if piobuildfiles:
+                unique_dirs = set()
+                for file_list in piobuildfiles:
+                    for file_obj in file_list:
+                        if hasattr(file_obj, 'abspath'):
+                            file_path = str(file_obj.abspath)
+                            dir_path = os.path.dirname(file_path)
+                            unique_dirs.add(dir_path)
+                
+                print(f"   PIOBUILDFILES: {len(unique_dirs)} Source-Verzeichnisse")
+                for dir_path in sorted(unique_dirs):
+                    print(f"      {dir_path}")
+        
+        # Debug-Funktion ausführen
+        debug_all_include_sources()
         
         if freeze_exact_scons_configuration():
             print(f"\n🎯 Selektive Pfad-Konvertierung erfolgreich:")
