@@ -229,8 +229,7 @@ def capture_complete_scons_environment():
         "platform": env.get("PLATFORM"),
         "board": env.get("BOARD"),
         "framework": env.get("FRAMEWORK"),
-        "capture_timestamp": hashlib.md5(str(os.times()).encode()).hexdigest()[:8],
-        "scons_version": str(env._get_major_minor_revision()) if hasattr(env, '_get_major_minor_revision') else "unknown"
+        "capture_timestamp": hashlib.md5(str(os.times()).encode()).hexdigest()[:8]
     }
     
     total_vars = len(scons_data["dictionary"])
