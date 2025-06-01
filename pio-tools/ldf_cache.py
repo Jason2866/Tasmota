@@ -278,12 +278,12 @@ def freeze_exact_scons_configuration():
             f.write(f'    conversion_stats["functions"] = {conversion_stats["functions"]}\n')
             f.write(f'    conversion_stats["other"] = {conversion_stats["other"]}\n')
             f.write('    \n')
-            
+
             f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt")\n')
-            f.write('    print(f"✓ {{conversion_stats[\"file_paths\"]}} SCons-Objekt-Pfade konvertiert")\n')
-            f.write('    print(f"✓ {{conversion_stats[\"builders\"]}} Builder-Objekte konvertiert")\n')
-            f.write('    print(f"✓ {{conversion_stats[\"functions\"]}} Funktionen konvertiert")\n')
-            f.write('    print(f"✓ {{conversion_stats[\"other\"]}} andere Objekte konvertiert")\n')
+            f.write('    print(f"✓ {{conversion_stats[\'file_paths\']}} SCons-Objekt-Pfade konvertiert")\n')
+            f.write('    print(f"✓ {{conversion_stats[\'builders\']}} Builder-Objekte konvertiert")\n')
+            f.write('    print(f"✓ {{conversion_stats[\'functions\']}} Funktionen konvertiert")\n')
+            f.write('    print(f"✓ {{conversion_stats[\'other\']}} andere Objekte konvertiert")\n')
             f.write('    print("✓ String-Pfade blieben unverändert")\n')
             f.write('    return restored_count > 50\n')
             f.write('\n')
