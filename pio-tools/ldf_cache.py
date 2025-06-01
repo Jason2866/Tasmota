@@ -13,7 +13,7 @@ def get_cache_file_path():
     project_dir = env.get("PROJECT_DIR")
     cache_dir = os.path.join(project_dir, ".pio", "ldf_cache")
     os.makedirs(cache_dir, exist_ok=True)
-    return os.path.join(cache_dir, f"{env_name}_ldf_cache.json")
+    return os.path.join(cache_dir, f"{env_name}_ldf_complete.json")
 
 def find_all_platformio_files():
     """Findet alle platformio*.ini Dateien im Projekt"""
@@ -41,11 +41,6 @@ def find_all_platformio_files():
             return 4
     
     ini_files.sort(key=sort_priority)
-    
-    print(f"📁 Gefundene PlatformIO Konfigurationsdateien:")
-    for ini_file in ini_files:
-        print(f"   - {os.path.basename(ini_file)}")
-    
     return ini_files
 
 def find_env_definition_file(env_name):
@@ -148,55 +143,213 @@ def get_current_ldf_mode(env_name):
     
     return 'chain'
 
-def scan_available_libraries():
-    """Scannt alle verfügbaren Libraries im lib/ Ordner rekursiv"""
+def normalize_path_list(path_list):
+    """Normalisiert Pfad-Listen für konsistente Speicherung"""
+    if not path_list:
+        return []
+    
+    normalized = []
+    for path in path_list:
+        if isinstance(path, str):
+            # Normalisiere Pfade für plattformübergreifende Kompatibilität
+            norm_path = os.path.normpath(path).replace('\\', '/')
+            normalized.append(norm_path)
+        else:
+            normalized.append(str(path))
+    
+    return sorted(list(set(normalized)))
+
+def capture_complete_ldf_environment():
+    """Erfasst ALLE vom LDF generierten Build-Environment-Daten"""
+    print(f"🔍 Erfasse vollständige LDF-Environment-Daten...")
+    
+    # Alle kritischen Environment-Variablen erfassen
+    ldf_environment = {
+        # Library-bezogene Variablen
+        "LIBS": env.get("LIBS", []),
+        "LIBPATH": normalize_path_list(env.get("LIBPATH", [])),
+        "LIB_DEPS": env.get("LIB_DEPS", []),
+        "LIB_IGNORE": env.get("LIB_IGNORE", []),
+        
+        # Include-Pfade und Preprocessor
+        "CPPPATH": normalize_path_list(env.get("CPPPATH", [])),
+        "CPPDEFINES": env.get("CPPDEFINES", []),
+        
+        # Build-Flags
+        "BUILD_FLAGS": env.get("BUILD_FLAGS", []),
+        "CCFLAGS": env.get("CCFLAGS", []),
+        "CXXFLAGS": env.get("CXXFLAGS", []),
+        "LINKFLAGS": env.get("LINKFLAGS", []),
+        
+        # Framework und Platform
+        "FRAMEWORK_DIR": env.get("FRAMEWORK_DIR", ""),
+        "PLATFORM_DIR": env.get("PLATFORM_DIR", ""),
+        "PLATFORM_PACKAGES": env.get("PLATFORM_PACKAGES", {}),
+        
+        # Compiler-Konfiguration
+        "CC": env.get("CC", ""),
+        "CXX": env.get("CXX", ""),
+        "AR": env.get("AR", ""),
+        "RANLIB": env.get("RANLIB", ""),
+        
+        # Source-Filter
+        "SRC_FILTER": env.get("SRC_FILTER", ""),
+        "SRC_BUILD_FLAGS": env.get("SRC_BUILD_FLAGS", []),
+        
+        # Upload-Konfiguration
+        "UPLOAD_PROTOCOL": env.get("UPLOAD_PROTOCOL", ""),
+        "UPLOAD_PORT": env.get("UPLOAD_PORT", ""),
+        
+        # Board-spezifische Einstellungen
+        "BOARD": env.get("BOARD", ""),
+        "BOARD_MCU": env.get("BOARD_MCU", ""),
+        "BOARD_F_CPU": env.get("BOARD_F_CPU", ""),
+        "BOARD_F_FLASH": env.get("BOARD_F_FLASH", ""),
+        "BOARD_FLASH_MODE": env.get("BOARD_FLASH_MODE", ""),
+    }
+    
+    # Zusätzliche Pfad-Analyse für Libraries
+    active_lib_paths = []
+    for path in env.get("CPPPATH", []):
+        path_str = str(path)
+        if any(keyword in path_str.lower() for keyword in ["lib", "libraries", "framework"]):
+            active_lib_paths.append(path_str)
+    
+    ldf_environment["active_lib_paths"] = normalize_path_list(active_lib_paths)
+    
+    # Erfasse verfügbare lokale Libraries
     project_dir = env.get("PROJECT_DIR")
     lib_dir = os.path.join(project_dir, "lib")
+    available_local_libs = []
     
-    available_libs = []
     if os.path.exists(lib_dir):
-        for root, dirs, files in os.walk(lib_dir):
-            has_code = any(f.endswith(('.h', '.hpp', '.cpp', '.c', '.ino')) for f in files)
-            has_config = any(f in files for f in ['library.json', 'library.properties'])
-            
-            if has_code or has_config:
-                rel_path = os.path.relpath(root, lib_dir)
-                if rel_path != '.':
-                    lib_name = os.path.basename(root)
-                    available_libs.append(lib_name)
+        for item in os.listdir(lib_dir):
+            lib_path = os.path.join(lib_dir, item)
+            if os.path.isdir(lib_path):
+                # Prüfe ob es eine gültige Library ist
+                has_code = False
+                for root, dirs, files in os.walk(lib_path):
+                    if any(f.endswith(('.h', '.hpp', '.cpp', '.c', '.ino')) for f in files):
+                        has_code = True
+                        break
+                
+                if has_code:
+                    available_local_libs.append(item)
     
-    return sorted(list(set(available_libs)))
-
-def capture_ldf_results():
-    """Erfasst die LDF-Ergebnisse nach dem Build"""
-    available_libs = scan_available_libraries()
+    ldf_environment["available_local_libs"] = sorted(available_local_libs)
     
-    current_ignore = env.get("LIB_IGNORE", [])
-    if isinstance(current_ignore, str):
-        current_ignore = [current_ignore]
-    elif current_ignore is None:
-        current_ignore = []
-    
-    ignored_libs = set(current_ignore)
-    used_libs = [lib for lib in available_libs if lib not in ignored_libs]
-    
-    external_deps = env.get("LIB_DEPS", [])
-    if external_deps:
-        for dep in external_deps:
-            if isinstance(dep, str) and not dep.startswith("${"):
-                lib_name = dep.split('/')[-1].split('@')[0]
-                if lib_name:
-                    used_libs.append(lib_name)
-    
-    used_libs = sorted(list(set(used_libs)))
-    unused_libs = sorted(list(ignored_libs))
-    
-    return {
-        "available": available_libs,
-        "used": used_libs,
-        "unused": unused_libs,
-        "external_deps": external_deps if external_deps else []
+    # Debug-Ausgabe
+    critical_counts = {
+        "LIBS": len(ldf_environment.get("LIBS", [])),
+        "LIBPATH": len(ldf_environment.get("LIBPATH", [])),
+        "CPPPATH": len(ldf_environment.get("CPPPATH", [])),
+        "BUILD_FLAGS": len(ldf_environment.get("BUILD_FLAGS", [])),
+        "LIB_DEPS": len(ldf_environment.get("LIB_DEPS", [])),
+        "active_lib_paths": len(ldf_environment.get("active_lib_paths", []))
     }
+    
+    print(f"📊 LDF-Environment erfasst:")
+    for key, count in critical_counts.items():
+        print(f"   {key}: {count} Einträge")
+    
+    return ldf_environment
+
+def restore_complete_ldf_environment(cached_data):
+    """Stellt ALLE LDF-Environment-Daten vollständig wieder her"""
+    print(f"🔄 Stelle vollständige LDF-Environment wieder her...")
+    
+    # Kritische Environment-Variablen in der richtigen Reihenfolge setzen
+    restoration_order = [
+        "FRAMEWORK_DIR", "PLATFORM_DIR", "PLATFORM_PACKAGES",
+        "BOARD", "BOARD_MCU", "BOARD_F_CPU", "BOARD_F_FLASH", "BOARD_FLASH_MODE",
+        "CC", "CXX", "AR", "RANLIB",
+        "CPPPATH", "LIBPATH", "LIBS",
+        "CPPDEFINES", "BUILD_FLAGS", "CCFLAGS", "CXXFLAGS", "LINKFLAGS",
+        "LIB_DEPS", "LIB_IGNORE",
+        "SRC_FILTER", "SRC_BUILD_FLAGS",
+        "UPLOAD_PROTOCOL", "UPLOAD_PORT"
+    ]
+    
+    restored_count = 0
+    
+    for var_name in restoration_order:
+        if var_name in cached_data and cached_data[var_name]:
+            cached_value = cached_data[var_name]
+            
+            # Spezielle Behandlung für verschiedene Datentypen
+            if var_name in ["CPPPATH", "LIBPATH", "active_lib_paths"]:
+                # Pfad-Listen: Merge mit existierenden Pfaden
+                current_paths = env.get(var_name, [])
+                if isinstance(current_paths, str):
+                    current_paths = [current_paths]
+                
+                # Kombiniere und dedupliziere
+                all_paths = list(current_paths) + list(cached_value)
+                unique_paths = []
+                seen = set()
+                for path in all_paths:
+                    norm_path = os.path.normpath(str(path))
+                    if norm_path not in seen:
+                        seen.add(norm_path)
+                        unique_paths.append(path)
+                
+                env.Replace(**{var_name: unique_paths})
+                
+            elif var_name in ["BUILD_FLAGS", "CCFLAGS", "CXXFLAGS", "LINKFLAGS", "LIB_DEPS"]:
+                # Flag-Listen: Merge mit existierenden Flags
+                current_flags = env.get(var_name, [])
+                if isinstance(current_flags, str):
+                    current_flags = [current_flags]
+                
+                all_flags = list(current_flags) + list(cached_value)
+                unique_flags = list(dict.fromkeys(all_flags))  # Preserve order, remove duplicates
+                
+                env.Replace(**{var_name: unique_flags})
+                
+            else:
+                # Direkte Zuweisung für andere Variablen
+                env.Replace(**{var_name: cached_value})
+            
+            restored_count += 1
+            
+            # Debug-Ausgabe für wichtige Variablen
+            if var_name in ["LIBS", "LIBPATH", "CPPPATH", "BUILD_FLAGS"]:
+                value_count = len(cached_value) if isinstance(cached_value, (list, dict)) else 1
+                print(f"   ✓ {var_name}: {value_count} Einträge wiederhergestellt")
+    
+    print(f"✅ {restored_count} Environment-Variablen wiederhergestellt")
+    
+    # Zusätzliche Validierung
+    verify_environment_completeness()
+    
+    return True
+
+def verify_environment_completeness():
+    """Prüft ob alle notwendigen Build-Komponenten verfügbar sind"""
+    critical_checks = {
+        "Framework verfügbar": bool(env.get("FRAMEWORK_DIR")),
+        "Libraries gefunden": len(env.get("LIBS", [])) > 0 or len(env.get("LIB_DEPS", [])) > 0,
+        "Include-Pfade gesetzt": len(env.get("CPPPATH", [])) > 0,
+        "Build-Flags vorhanden": len(env.get("BUILD_FLAGS", [])) > 0,
+        "Compiler konfiguriert": bool(env.get("CC")) and bool(env.get("CXX")),
+        "Board definiert": bool(env.get("BOARD"))
+    }
+    
+    print(f"🔍 Environment-Verifikation:")
+    all_ok = True
+    for check, status in critical_checks.items():
+        status_icon = "✅" if status else "❌"
+        print(f"   {status_icon} {check}")
+        if not status:
+            all_ok = False
+    
+    if not all_ok:
+        print(f"⚠️  Unvollständige Build-Environment erkannt!")
+        print(f"💡 Tipp: Löschen Sie '.pio/ldf_cache/' und führen Sie einen Clean-Build durch")
+        return False
+    
+    print(f"✅ Build-Environment vollständig - Compile sollte erfolgreich sein")
+    return True
 
 def calculate_final_config_hash():
     """Berechnet Hash NACH allen Konfigurationsänderungen"""
@@ -219,7 +372,6 @@ def calculate_final_config_hash():
                 
                 env_section = f"env:{env.get('PIOENV')}"
                 if config.has_section(env_section):
-                    # Alle relevanten Optionen einschließlich lib_ldf_mode
                     relevant_options = ['board', 'platform', 'framework', 'build_flags', 'lib_deps', 'lib_ignore', 'lib_ldf_mode']
                     for option in relevant_options:
                         if config.has_option(env_section, option):
@@ -232,139 +384,127 @@ def calculate_final_config_hash():
     config_string = "|".join(relevant_values)
     hash_value = hashlib.md5(config_string.encode()).hexdigest()
     
-    print(f"🔍 Finaler Hash (nach Konfigurationsänderung): {hash_value[:8]}...")
     return hash_value
 
-def save_ldf_cache_with_final_hash(ldf_results):
-    """Speichert LDF-Ergebnisse mit finalem Hash"""
+def save_complete_ldf_cache(ldf_environment):
+    """Speichert vollständige LDF-Environment-Daten"""
     cache_file = get_cache_file_path()
     
-    # Berechne Hash NACH allen Änderungen
     final_hash = calculate_final_config_hash()
     
     cache_data = {
         "config_hash": final_hash,
-        "ldf_results": ldf_results,
-        "env_name": env.get("PIOENV")
+        "ldf_environment": ldf_environment,
+        "env_name": env.get("PIOENV"),
+        "cache_version": "2.0",
+        "timestamp": str(env.get("BUILD_TIME", "unknown"))
     }
     
-    with open(cache_file, 'w') as f:
-        json.dump(cache_data, f, indent=2)
-    
-    used_count = len(ldf_results["used"])
-    unused_count = len(ldf_results["unused"])
-    print(f"✓ LDF Cache mit finalem Hash gespeichert: {used_count} verwendet, {unused_count} ignoriert")
+    try:
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f, indent=2, ensure_ascii=False)
+        
+        env_vars_count = len([k for k, v in ldf_environment.items() if v])
+        print(f"✓ Vollständiger LDF-Cache gespeichert: {env_vars_count} Environment-Variablen")
+        return True
+        
+    except Exception as e:
+        print(f"⚠ Fehler beim Speichern des LDF-Cache: {e}")
+        return False
 
-def load_ldf_cache():
-    """Lädt LDF-Cache und vergleicht mit aktuellem Hash"""
+def load_complete_ldf_cache():
+    """Lädt vollständigen LDF-Cache und vergleicht Hash"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
+        print(f"📝 Kein LDF-Cache gefunden - erster Build-Durchlauf")
         return None
     
     try:
-        with open(cache_file, 'r') as f:
+        with open(cache_file, 'r', encoding='utf-8') as f:
             cache_data = json.load(f)
         
-        # Berechne aktuellen Hash (sollte mit lib_ldf_mode=off übereinstimmen)
+        # Prüfe Cache-Version
+        cache_version = cache_data.get("cache_version", "1.0")
+        if cache_version != "2.0":
+            print(f"⚠ Veraltete Cache-Version ({cache_version}) - wird ignoriert")
+            return None
+        
+        # Hash-Vergleich
         current_hash = calculate_final_config_hash()
         cached_hash = cache_data.get("config_hash")
         
         if cached_hash == current_hash:
-            ldf_results = cache_data.get("ldf_results")
-            if ldf_results:
-                used_count = len(ldf_results.get("used", []))
-                unused_count = len(ldf_results.get("unused", []))
-                
-                print(f"✓ LDF Cache geladen: {used_count} verwendet, {unused_count} ignoriert")
-                return ldf_results
+            ldf_environment = cache_data.get("ldf_environment")
+            if ldf_environment:
+                env_vars_count = len([k for k, v in ldf_environment.items() if v])
+                print(f"✓ Vollständiger LDF-Cache geladen: {env_vars_count} Environment-Variablen")
+                return ldf_environment
         else:
-            print(f"⚠ LDF Cache ungültig - Hash-Mismatch")
+            print(f"⚠ LDF-Cache ungültig - Konfiguration hat sich geändert")
             print(f"  Aktueller Hash: {current_hash[:8]}...")
             print(f"  Gecachter Hash: {cached_hash[:8] if cached_hash else 'None'}...")
             
     except (json.JSONDecodeError, KeyError) as e:
-        print(f"⚠ LDF Cache beschädigt: {e}")
+        print(f"⚠ LDF-Cache beschädigt: {e}")
     
     return None
 
 # =============================================================================
-# HAUPTLOGIK - MIT POST-ACTION HASH-BERECHNUNG
+# HAUPTLOGIK - VOLLSTÄNDIGE LDF-ENVIRONMENT-WIEDERHERSTELLUNG
 # =============================================================================
 
-print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
+print(f"\n🚀 Tasmota LDF-Optimierung für Environment: {env.get('PIOENV')}")
 
 env_name = env.get("PIOENV")
 current_ldf_mode = get_current_ldf_mode(env_name)
 print(f"📊 Aktueller LDF-Modus: {current_ldf_mode}")
 
-cached_ldf = load_ldf_cache()
+# Lade vollständigen LDF-Cache
+cached_ldf_environment = load_complete_ldf_cache()
 
-# Prüfe ob Cache GÜLTIG und VOLLSTÄNDIG ist
-cache_is_valid = (cached_ldf is not None and 
-                  cached_ldf.get("used") is not None and 
-                  len(cached_ldf.get("used", [])) > 0)
-
-if cache_is_valid and current_ldf_mode == 'off':
-    # Cache ist gültig UND LDF bereits deaktiviert - optimierter Build
-    print(f"⚡ LDF bereits deaktiviert - Build läuft optimiert")
+if cached_ldf_environment and current_ldf_mode == 'off':
+    # Cache verfügbar UND LDF deaktiviert - vollständige Environment-Wiederherstellung
+    print(f"⚡ LDF-Cache verfügbar - stelle vollständige Build-Environment wieder her")
     
-    unused_libs = cached_ldf.get("unused", [])
-    if unused_libs:
-        current_ignore = env.get("LIB_IGNORE", [])
-        if isinstance(current_ignore, str):
-            current_ignore = [current_ignore]
-        elif current_ignore is None:
-            current_ignore = []
-        
-        all_ignore = list(set(current_ignore + unused_libs))
-        env.Replace(LIB_IGNORE=all_ignore)
-        print(f"✅ {len(unused_libs)} Libraries ignoriert - Build beschleunigt")
+    if restore_complete_ldf_environment(cached_ldf_environment):
+        print(f"✅ Build-Environment vollständig wiederhergestellt - optimierter Build läuft")
+    else:
+        print(f"⚠ Fehler bei Environment-Wiederherstellung - Build könnte fehlschlagen")
 
 else:
-    # Kein gültiger Cache ODER LDF noch nicht deaktiviert
-    print(f"📝 Sammle Dependencies - LDF läuft normal")
+    # Kein Cache oder LDF noch aktiv - sammle vollständige Environment-Daten
+    if cached_ldf_environment:
+        print(f"🔄 LDF-Cache vorhanden aber LDF noch aktiv - sammle aktualisierte Daten")
+    else:
+        print(f"📝 Erster Build-Durchlauf - sammle vollständige LDF-Environment-Daten")
     
-    def post_build_cache_and_optimize(source, target, env):
-        """SCons Post-Action: Sammle LDF-Daten, ändere Konfiguration, berechne finalen Hash"""
-        print(f"\n🔄 Post-Build: Sammle LDF-Ergebnisse und optimiere für nächsten Build...")
+    def complete_post_build_action(source, target, env):
+        """SCons Post-Action: Sammle ALLE LDF-Environment-Daten"""
+        print(f"\n🔄 Post-Build: Sammle vollständige LDF-Environment-Daten...")
         
-        # 1. Sammle LDF-Ergebnisse
-        ldf_results = capture_ldf_results()
+        # Erfasse vollständige LDF-Environment
+        ldf_environment = capture_complete_ldf_environment()
         
-        if len(ldf_results["used"]) > 0:
-            # 2. Setze lib_ldf_mode = off für nächsten Build
+        if ldf_environment and len([k for k, v in ldf_environment.items() if v]) > 10:
+            # Setze lib_ldf_mode = off für nächsten Build
             env_name = env.get("PIOENV")
             if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
                 print(f"✓ lib_ldf_mode = off für nächsten Build gesetzt")
             
-            # 3. Berechne Hash NACH der Konfigurationsänderung und speichere Cache
-            save_ldf_cache_with_final_hash(ldf_results)
-            
-            used_count = len(ldf_results["used"])
-            unused_count = len(ldf_results["unused"])
-            
-            print(f"📊 LDF-Analyse erfolgreich:")
-            print(f"   Verfügbare Libraries: {len(ldf_results['available'])}")
-            print(f"   Verwendete Libraries: {used_count}")
-            print(f"   Ignorierte Libraries: {unused_count}")
-            
-            if unused_count > 0:
-                print(f"\n🚫 Beispiele ignorierter Libraries:")
-                for lib in sorted(ldf_results["unused"])[:5]:
-                    print(f"   - {lib}")
-                if len(ldf_results["unused"]) > 5:
-                    print(f"   ... und {len(ldf_results['unused']) - 5} weitere")
-            
-            print(f"\n💡 Führen Sie 'pio run' erneut aus für optimierten Build")
-            print(f"   Nächster Build wird {unused_count} Libraries überspringen")
-            
+            # Speichere vollständige Environment-Daten
+            if save_complete_ldf_cache(ldf_environment):
+                print(f"📊 LDF-Environment-Analyse erfolgreich abgeschlossen")
+                print(f"\n💡 Führen Sie 'pio run' erneut aus für optimierten Build")
+                print(f"   Nächster Build wird alle Dependencies aus dem Cache laden")
+                print(f"   und den LDF-Scanner komplett überspringen")
+            else:
+                print(f"⚠ Fehler beim Speichern der Environment-Daten")
         else:
-            print(f"⚠ Keine verwendeten Libraries gefunden")
+            print(f"⚠ Unvollständige LDF-Environment-Daten erfasst")
     
     # Registriere SCons Post-Action
-    env.AddPostAction("buildprog", post_build_cache_and_optimize)
+    env.AddPostAction("buildprog", complete_post_build_action)
 
-print(f"🏁 LDF Cache Setup abgeschlossen für {env_name}")
+print(f"🏁 LDF-Optimierung Setup abgeschlossen für {env_name}")
 print(f"💡 Tipp: Löschen Sie '.pio/ldf_cache/' um den Cache zurückzusetzen\n")
-
