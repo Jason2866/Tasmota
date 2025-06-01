@@ -42,6 +42,11 @@ def find_all_platformio_files():
             return 4
     
     ini_files.sort(key=sort_priority)
+    
+    print(f"📁 Gefundene PlatformIO Konfigurationsdateien:")
+    for ini_file in ini_files:
+        print(f"   - {os.path.basename(ini_file)}")
+    
     return ini_files
 
 def find_env_definition_file(env_name):
@@ -276,37 +281,30 @@ def verify_environment_completeness():
     return all_ok
 
 def calculate_final_config_hash():
-    """Berechnet Hash NACH allen Konfigurationsänderungen"""
+    """Berechnet Hash NACH allen Konfigurationsänderungen (ohne SCons-Objekte)"""
     relevant_values = [
         f"BOARD:{env.get('BOARD', '')}",
         f"PLATFORM:{env.get('PLATFORM', '')}",
-        f"PIOENV:{env.get('PIOENV', '')}",
-        f"BUILD_FLAGS:{str(sorted([str(f) for f in env.get('BUILD_FLAGS', [])]))}", 
-        f"LIB_DEPS:{str(sorted([str(d) for d in env.get('LIB_DEPS', [])]))}"
+        f"PIOENV:{env.get('PIOENV', '')}"
     ]
     
-    # Lese AKTUELLE Konfiguration (nach Änderungen)
+    # Nur INI-Dateien für Hash verwenden (keine problematischen Environment-Variablen)
     ini_files = find_all_platformio_files()
     
     for ini_file in sorted(ini_files):
         if os.path.exists(ini_file) and not ini_file.endswith('.ldf_backup'):
             try:
-                config = configparser.ConfigParser(allow_no_value=True)
-                config.read(ini_file, encoding='utf-8')
-                
-                env_section = f"env:{env.get('PIOENV')}"
-                if config.has_section(env_section):
-                    relevant_options = ['board', 'platform', 'framework', 'build_flags', 'lib_deps', 'lib_ignore', 'lib_ldf_mode']
-                    for option in relevant_options:
-                        if config.has_option(env_section, option):
-                            value = config.get(env_section, option)
-                            relevant_values.append(f"{os.path.basename(ini_file)}:{option}:{value}")
+                with open(ini_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Hash des Dateiinhalts
+                    file_hash = hashlib.md5(content.encode('utf-8')).hexdigest()
+                    relevant_values.append(f"{os.path.basename(ini_file)}:{file_hash}")
             except Exception:
                 pass
     
     relevant_values.sort()
     config_string = "|".join(relevant_values)
-    hash_value = hashlib.md5(config_string.encode()).hexdigest()
+    hash_value = hashlib.md5(config_string.encode('utf-8')).hexdigest()
     
     print(f"🔍 Finaler Hash: {hash_value[:8]}...")
     return hash_value
