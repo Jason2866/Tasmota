@@ -327,6 +327,7 @@ def capture_middleware(env, node):
         return node
     
     try:
+        # Sichere Node-Behandlung
         if hasattr(node, 'srcnode'):
             node_name = str(node)
         elif hasattr(node, 'name'):
@@ -335,15 +336,6 @@ def capture_middleware(env, node):
             node_name = str(node)
         
         print(f"\n🔄 Middleware: Erfasse Environment für {os.path.basename(node_name)}")
-        
-        middleware_cpppath = env.get('CPPPATH', [])
-        print(f"   Middleware CPPPATH: {len(middleware_cpppath)} Pfade")
-        
-    except Exception as e:
-        print(f"⚠ Middleware-Fehler: {e}")
-    
-    return node
-
         
         # === DEBUG-FUNKTION FÜR MIDDLEWARE-ENVIRONMENT ===
         def debug_middleware_environment():
@@ -630,7 +622,7 @@ if cache_restored:
 else:
     print(f"📝 Normaler LDF-Durchlauf - erfasse Environment über Middleware...")
     
-    # Middleware für alle Build-Targets mit robuster Node-Behandlung
+    # Middleware für alle Build-Targets mit korrekter Parameter-Reihenfolge
     env.AddBuildMiddleware(capture_middleware, "*")
 
 print(f"🏁 Middleware SCons-Environment-Backup initialisiert")
