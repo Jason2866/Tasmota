@@ -13,7 +13,7 @@ def get_cache_file_path():
     project_dir = env.get("PROJECT_DIR")
     cache_dir = os.path.join(project_dir, ".pio", "ldf_cache")
     os.makedirs(cache_dir, exist_ok=True)
-    return os.path.join(cache_dir, f"{env_name}_ldf_complete.pkl.gz")
+    return os.path.join(cache_dir, f"{env_name}_scons_complete.pkl.gz")
 
 def find_all_platformio_files():
     """Findet alle platformio*.ini Dateien im Projekt"""
@@ -118,13 +118,12 @@ def get_current_ldf_mode(env_name):
     
     return 'chain'
 
-def safe_convert_for_pickle(obj, max_depth=5, current_depth=0):
-    """Konvertiert Objekte sicher für Pickle"""
+def safe_convert_for_pickle(obj, max_depth=10, current_depth=0):
+    """Konvertiert Objekte sicher für Pickle (SCons-optimiert)"""
     if current_depth > max_depth:
         return str(obj)
     
     try:
-        # Test ob bereits pickle-bar
         pickle.dumps(obj)
         return obj
     except:
@@ -137,215 +136,177 @@ def safe_convert_for_pickle(obj, max_depth=5, current_depth=0):
     elif isinstance(obj, (list, tuple)):
         converted = []
         for i, item in enumerate(obj):
-            if i > 500:  # Erhöht für vollständige Erfassung
+            if i > 2000:  # Erhöht für SCons-Datenstrukturen
                 break
             converted.append(safe_convert_for_pickle(item, max_depth, current_depth + 1))
         return converted
     elif isinstance(obj, dict):
         converted = {}
         for key, value in obj.items():
-            if len(converted) > 200:  # Erhöht für vollständige Erfassung
+            if len(converted) > 1000:  # Erhöht für SCons-Datenstrukturen
                 break
             safe_key = str(key)
             converted[safe_key] = safe_convert_for_pickle(value, max_depth, current_depth + 1)
         return converted
     else:
+        # SCons-spezifische Objekte als String speichern
         return str(obj)
 
-def capture_complete_ldf_data():
-    """Erfasst ALLE LDF-generierten Datenstrukturen (vollständige Analyse)"""
-    print(f"🔍 Erfasse ALLE LDF-generierten Datenstrukturen...")
+def capture_complete_scons_environment():
+    """Erfasst das KOMPLETTE SCons-Environment nach LDF-Durchlauf"""
+    print(f"🔍 Erfasse KOMPLETTES SCons-Environment...")
     
-    # VOLLSTÄNDIGE LDF-Variable-Liste (basierend auf PlatformIO-Dokumentation)
-    complete_ldf_vars = [
-        # === PRIMÄRE LDF-AUSGABEN ===
-        "CPPPATH",                  # Alle Include-Verzeichnisse
-        "CPPDEFINES",               # Preprocessor-Defines (LDF-evaluiert)
-        "LIBPATH",                  # Library-Suchpfade
-        "LIBS",                     # Gefundene Libraries
-        "LIBSOURCE_DIRS",           # Library-Source-Verzeichnisse
-        "PIOBUILDFILES",            # ALLE analysierten Source-Dateien
-        "SRC_FILTER",               # Angewendete Source-Filter
-        
-        # === LDF-KONFIGURATION ===
-        "LIB_LDF_MODE",             # Aktueller LDF-Modus
-        "LIB_DEPS",                 # Aufgelöste Library-Dependencies
-        "LIB_IGNORE",               # Ignorierte Libraries
-        "LIB_EXTRA_DIRS",           # Extra Library-Verzeichnisse
-        "LIB_COMPAT_MODE",          # Library-Kompatibilitätsmodus
-        "LIB_FORCE",                # Erzwungene Libraries
-        "LIB_ARCHIVE",              # Library-Archive
-        
-        # === PLATFORMIO-VERZEICHNISSE ===
-        "PROJECT_DIR",              # Projekt-Root
-        "PROJECT_SRC_DIR",          # Source-Verzeichnis
-        "PROJECT_LIB_DIR",          # Lokales lib/ Verzeichnis
-        "PROJECT_LIBDEPS_DIR",      # .pio/libdeps/{env}/
-        "PROJECT_INCLUDE_DIR",      # Include-Verzeichnis
-        "PROJECT_BUILD_DIR",        # Build-Verzeichnis
-        "PROJECT_DATA_DIR",         # Data-Verzeichnis
-        "PLATFORMIO_CORE_DIR",      # PlatformIO-Core
-        "PLATFORMIO_GLOBALLIB_DIR", # Globale Libraries
-        "PLATFORMIO_PACKAGES_DIR",  # Packages
-        "PLATFORMIO_LIBDEPS_DIR",   # Global LibDeps
-        
-        # === BUILD-FLAGS (LDF-beeinflusst) ===
-        "BUILD_FLAGS",              # Haupt-Build-Flags
-        "CCFLAGS",                  # C-Compiler-Flags
-        "CXXFLAGS",                 # C++-Compiler-Flags
-        "LINKFLAGS",                # Linker-Flags
-        "ASFLAGS",                  # Assembler-Flags
-        "ASPPFLAGS",                # Assembler-Preprocessor-Flags
-        
-        # === FRAMEWORK-SPEZIFISCH ===
-        "ARDUINO_FRAMEWORK_DIR",    # Arduino-Framework-Pfad
-        "ARDUINO_CORE_DIR",         # Arduino-Core-Verzeichnis
-        "ARDUINO_VARIANT_DIR",      # Board-Variant-Verzeichnis
-        "ARDUINO_LIB_DIRS",         # Arduino-Library-Verzeichnisse
-        "BOARD",                    # Board-Typ
-        "BOARD_MCU",                # MCU-Typ
-        "BOARD_F_CPU",              # CPU-Frequenz
-        "BOARD_F_FLASH",            # Flash-Frequenz
-        "PLATFORM",                 # Platform-Name
-        "FRAMEWORK",                # Framework-Name
-        
-        # === ZUSÄTZLICHE BUILD-DATEN ===
-        "EXTRA_LIB_DIRS",           # Extra Library-Verzeichnisse
-        "BUILD_SRC_FILTER",         # Build-Source-Filter
-        "BUILDSRC_DIR",             # Build-Source-Verzeichnis
-        "BUILD_DIR",                # Build-Verzeichnis
-        "LIBDEPS_DIR",              # LibDeps-Verzeichnis
-        
-        # === ERWEITERTE LDF-DATEN ===
-        "LIB_BUILTIN",              # Built-in Libraries
-        "ARDUINO_LIBS",             # Arduino-spezifische Libraries
-        "FRAMEWORK_ARDUINOESPRESSIF32_LIB_BUILDERS"  # ESP32-Builder
-    ]
+    scons_data = {
+        "dictionary": {},
+        "internals": {},
+        "metadata": {}
+    }
     
-    ldf_data = {}
-    found_count = 0
-    
-    for var in complete_ldf_vars:
-        if var in env:
-            original_value = env[var]
-            
+    # 1. KOMPLETTES SCons Dictionary erfassen
+    try:
+        scons_dict = env.Dictionary()
+        print(f"   📊 SCons Dictionary: {len(scons_dict)} Variablen")
+        
+        for key, value in scons_dict.items():
             try:
-                converted_value = safe_convert_for_pickle(original_value)
-                ldf_data[var] = converted_value
-                found_count += 1
+                converted_value = safe_convert_for_pickle(value)
+                scons_data["dictionary"][key] = converted_value
                 
-                # Detaillierte Debug-Ausgabe für kritische Variablen
-                if var == "CPPPATH" and hasattr(converted_value, '__len__'):
-                    print(f"   ✓ {var}: {len(converted_value)} Include-Pfade")
-                    # Prüfe speziell auf lib/default/headers
+                # Debug-Ausgabe für kritische Variablen
+                if key == "CPPPATH" and hasattr(converted_value, '__len__'):
+                    print(f"      ✓ {key}: {len(converted_value)} Include-Pfade")
+                    # Prüfe lib/default/headers
                     project_dir = env.get("PROJECT_DIR")
                     lib_default = os.path.join(project_dir, "lib", "default", "headers")
-                    found_lib_default = any(lib_default in str(path) for path in converted_value)
-                    if found_lib_default:
-                        print(f"      ✅ lib/default/headers gefunden!")
+                    found = any(lib_default in str(path) for path in converted_value)
+                    if found:
+                        print(f"         ✅ lib/default/headers: GEFUNDEN")
                     else:
-                        print(f"      ⚠️  lib/default/headers NICHT gefunden")
-                elif var in ["PROJECT_LIB_DIR", "PROJECT_LIBDEPS_DIR", "LIBDEPS_DIR"]:
-                    print(f"   ✓ {var}: {converted_value}")
-                elif var == "PIOBUILDFILES" and hasattr(converted_value, '__len__'):
-                    print(f"   ✓ {var}: {len(converted_value)} Source-Dateien")
-                elif var == "LIB_EXTRA_DIRS" and hasattr(converted_value, '__len__'):
-                    print(f"   ✓ {var}: {len(converted_value)} Extra-Verzeichnisse")
-                elif hasattr(converted_value, '__len__') and not isinstance(converted_value, str):
-                    print(f"   ✓ {var}: {len(converted_value)} Elemente")
-                else:
-                    print(f"   ✓ {var}: Erfasst")
-                        
+                        print(f"         ⚠️  lib/default/headers: NICHT GEFUNDEN")
+                elif key in ["CPPDEFINES", "BUILD_FLAGS", "LIBS"] and hasattr(converted_value, '__len__'):
+                    print(f"      ✓ {key}: {len(converted_value)} Einträge")
+                elif key in ["PROJECT_DIR", "PROJECT_LIB_DIR", "PLATFORM", "BOARD"]:
+                    print(f"      ✓ {key}: {converted_value}")
+                    
             except Exception as e:
-                print(f"   ⚠ {var}: Fehler - {e}")
-                ldf_data[var] = str(original_value)[:500]
-        else:
-            print(f"   - {var}: Nicht vorhanden")
+                print(f"      ⚠ {key}: Konvertierungsfehler - {e}")
+                scons_data["dictionary"][key] = str(value)[:500]
+                
+    except Exception as e:
+        print(f"   ❌ SCons Dictionary-Fehler: {e}")
     
-    print(f"✅ {found_count}/{len(complete_ldf_vars)} LDF-Variablen erfasst")
-    return ldf_data
+    # 2. SCons-Interna erfassen (soweit möglich)
+    try:
+        # SCons Builder-Informationen
+        if hasattr(env, '_builders') and env._builders:
+            builders_data = {}
+            for name, builder in env._builders.items():
+                try:
+                    builders_data[name] = str(builder)
+                except:
+                    builders_data[name] = "Builder-Object"
+            scons_data["internals"]["builders"] = builders_data
+            print(f"   ✓ SCons Builders: {len(builders_data)} erfasst")
+        
+        # SCons Scanner-Informationen  
+        if hasattr(env, '_scanners') and env._scanners:
+            scanners_data = {}
+            for scanner in env._scanners:
+                try:
+                    scanners_data[str(scanner)] = str(scanner)
+                except:
+                    scanners_data[str(scanner)] = "Scanner-Object"
+            scons_data["internals"]["scanners"] = scanners_data
+            print(f"   ✓ SCons Scanners: {len(scanners_data)} erfasst")
+            
+    except Exception as e:
+        print(f"   ⚠ SCons-Interna: {e}")
+    
+    # 3. Metadata
+    scons_data["metadata"] = {
+        "pioenv": env.get("PIOENV"),
+        "project_dir": env.get("PROJECT_DIR"),
+        "platform": env.get("PLATFORM"),
+        "board": env.get("BOARD"),
+        "framework": env.get("FRAMEWORK"),
+        "capture_timestamp": hashlib.md5(str(os.times()).encode()).hexdigest()[:8],
+        "scons_version": str(env._get_major_minor_revision()) if hasattr(env, '_get_major_minor_revision') else "unknown"
+    }
+    
+    total_vars = len(scons_data["dictionary"])
+    print(f"✅ SCons-Environment komplett erfasst: {total_vars} Variablen")
+    
+    return scons_data
 
-def early_cache_check_and_restore():
-    """Prüft Cache und stellt ALLE LDF-Daten wieder her"""
-    print(f"🔍 Cache-Prüfung (VOLLSTÄNDIGE LDF-Daten)...")
+def restore_complete_scons_environment(scons_data):
+    """Stellt das KOMPLETTE SCons-Environment wieder her"""
+    print(f"⚡ Stelle KOMPLETTES SCons-Environment wieder her...")
     
-    cached_data = load_ldf_cache()
-    
-    if not cached_data:
-        print(f"📝 Kein Cache - LDF wird normal ausgeführt")
-        return False
-    
-    current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
-    
-    if current_ldf_mode != 'off':
-        print(f"🔄 LDF noch aktiv - Cache wird nach Build erstellt")
-        return False
-    
-    print(f"⚡ Cache verfügbar - stelle ALLE LDF-Daten wieder her")
-    
-    # ALLE LDF-Daten wiederherstellen
     restored_count = 0
     
-    for var_name, cached_value in cached_data.items():
-        if var_name.startswith('_'):
-            continue  # Skip Metadaten
-            
-        try:
-            # Direkte Zuweisung ALLER LDF-Daten
-            env[var_name] = cached_value
-            restored_count += 1
-            
-            # Debug-Ausgabe für kritische Variablen
-            if var_name == "CPPPATH" and hasattr(cached_value, '__len__'):
-                print(f"   ✓ {var_name}: {len(cached_value)} Include-Pfade")
-                # Prüfe lib/default/headers
-                project_dir = env.get("PROJECT_DIR")
-                lib_default = os.path.join(project_dir, "lib", "default", "headers")
-                found_lib_default = any(lib_default in str(path) for path in cached_value)
-                if found_lib_default:
-                    print(f"      ✅ lib/default/headers wiederhergestellt!")
-            elif var_name in ["PROJECT_LIB_DIR", "PROJECT_LIBDEPS_DIR", "LIBDEPS_DIR"]:
-                print(f"   ✓ {var_name}: {cached_value}")
-            elif var_name == "PIOBUILDFILES" and hasattr(cached_value, '__len__'):
-                print(f"   ✓ {var_name}: {len(cached_value)} Source-Dateien")
-            elif hasattr(cached_value, '__len__') and not isinstance(cached_value, str):
-                print(f"   ✓ {var_name}: {len(cached_value)} Elemente")
-            else:
-                print(f"   ✓ {var_name}: OK")
+    # 1. ALLE SCons Dictionary-Variablen wiederherstellen
+    if "dictionary" in scons_data:
+        for key, value in scons_data["dictionary"].items():
+            try:
+                # Direkte SCons-Environment-Zuweisung
+                env[key] = value
+                restored_count += 1
                 
+                # Debug-Ausgabe für kritische Variablen
+                if key == "CPPPATH" and hasattr(value, '__len__'):
+                    print(f"   ✓ {key}: {len(value)} Include-Pfade wiederhergestellt")
+                    # Prüfe lib/default/headers
+                    project_dir = env.get("PROJECT_DIR")
+                    lib_default = os.path.join(project_dir, "lib", "default", "headers")
+                    found = any(lib_default in str(path) for path in value)
+                    if found:
+                        print(f"      ✅ lib/default/headers: WIEDERHERGESTELLT")
+                    else:
+                        print(f"      ❌ lib/default/headers: FEHLT IMMER NOCH")
+                elif key in ["CPPDEFINES", "BUILD_FLAGS", "LIBS"] and hasattr(value, '__len__'):
+                    print(f"   ✓ {key}: {len(value)} Einträge")
+                elif key in ["PROJECT_DIR", "PROJECT_LIB_DIR", "PLATFORM", "BOARD"]:
+                    print(f"   ✓ {key}: {value}")
+                    
+            except Exception as e:
+                print(f"   ⚠ {key}: Wiederherstellungsfehler - {e}")
+    
+    # 2. SCons-Interna wiederherstellen (soweit möglich)
+    if "internals" in scons_data:
+        try:
+            # Builder-Wiederherstellung ist komplex und möglicherweise nicht nötig
+            # da diese meist zur Laufzeit generiert werden
+            pass
         except Exception as e:
-            print(f"   ⚠ {var_name}: Fehler - {e}")
+            print(f"   ⚠ SCons-Interna-Wiederherstellung: {e}")
     
-    print(f"✅ {restored_count} LDF-Variablen wiederhergestellt")
-    return restored_count > 10  # Mindestens 10 kritische Variablen
+    print(f"✅ {restored_count} SCons-Variablen wiederhergestellt")
+    return restored_count > 20  # Mindestens 20 wichtige SCons-Variablen
 
-def verify_complete_ldf_data():
-    """Vollständige Verifikation ALLER LDF-Daten"""
-    print(f"\n🔍 Vollständige LDF-Daten-Verifikation...")
+def verify_complete_scons_environment():
+    """Verifikation des wiederhergestellten SCons-Environments"""
+    print(f"\n🔍 SCons-Environment-Verifikation...")
     
-    critical_vars = [
-        "CPPPATH", 
-        "CPPDEFINES", 
-        "BUILD_FLAGS",
-        "PROJECT_LIB_DIR",
-        "PIOBUILDFILES",
-        "LIB_EXTRA_DIRS"
+    # Prüfe kritische SCons-Variablen
+    critical_scons_vars = [
+        "CPPPATH", "CPPDEFINES", "BUILD_FLAGS", "LIBS", 
+        "CCFLAGS", "CXXFLAGS", "LINKFLAGS", "PIOBUILDFILES"
     ]
     
     all_ok = True
-    for var in critical_vars:
+    for var in critical_scons_vars:
         if var in env and env[var]:
             if var == "CPPPATH":
                 paths = env[var]
                 print(f"   ✅ {var}: {len(paths)} Include-Pfade")
                 
-                # Spezielle Prüfung für lib/default/headers
+                # Kritische lib/default/headers-Prüfung
                 project_dir = env.get("PROJECT_DIR")
                 lib_default = os.path.join(project_dir, "lib", "default", "headers")
                 found = any(lib_default in str(path) for path in paths)
                 
                 if found:
-                    print(f"      ✅ lib/default/headers: GEFUNDEN")
+                    print(f"      ✅ lib/default/headers: VERFÜGBAR")
                 else:
                     print(f"      ❌ lib/default/headers: FEHLT")
                     all_ok = False
@@ -358,12 +319,39 @@ def verify_complete_ldf_data():
             print(f"   ❌ {var}: Fehlt")
             all_ok = False
     
+    # Zusätzliche SCons-spezifische Prüfungen
+    scons_dict_size = len(env.Dictionary())
+    print(f"   📊 SCons Dictionary: {scons_dict_size} Variablen")
+    
     if all_ok:
-        print(f"✅ ALLE LDF-Daten vollständig verfügbar")
+        print(f"✅ SCons-Environment vollständig wiederhergestellt")
     else:
-        print(f"❌ LDF-Daten UNVOLLSTÄNDIG - Build wird fehlschlagen")
+        print(f"❌ SCons-Environment UNVOLLSTÄNDIG")
     
     return all_ok
+
+def early_cache_check_and_restore():
+    """Prüft Cache und stellt SCons-Environment wieder her"""
+    print(f"🔍 Cache-Prüfung (KOMPLETTES SCons-Environment)...")
+    
+    cached_data = load_scons_cache()
+    
+    if not cached_data:
+        print(f"📝 Kein SCons-Cache - LDF wird normal ausgeführt")
+        return False
+    
+    current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
+    
+    if current_ldf_mode != 'off':
+        print(f"🔄 LDF noch aktiv - SCons-Cache wird nach Build erstellt")
+        return False
+    
+    print(f"⚡ SCons-Cache verfügbar - stelle komplettes Environment wieder her")
+    
+    # KOMPLETTES SCons-Environment wiederherstellen
+    success = restore_complete_scons_environment(cached_data)
+    
+    return success
 
 def calculate_config_hash():
     """Berechnet Hash der Konfiguration"""
@@ -389,8 +377,8 @@ def calculate_config_hash():
     config_string = "|".join(relevant_values)
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
-def save_ldf_cache(ldf_data):
-    """Speichert vollständigen LDF-Cache"""
+def save_scons_cache(scons_data):
+    """Speichert KOMPLETTEN SCons-Cache"""
     cache_file = get_cache_file_path()
     
     try:
@@ -400,29 +388,29 @@ def save_ldf_cache(ldf_data):
         cache_data = {
             "config_hash": calculate_config_hash(),
             "env_name": env.get("PIOENV"),
-            "cache_version": "6.0",  # Neue Version für vollständige LDF-Erfassung
-            "_cache_type": "complete_ldf_data"
+            "cache_version": "8.0",  # Neue Version für SCons-Environment
+            "_cache_type": "complete_scons_environment"
         }
         
-        cache_data.update(ldf_data)
+        cache_data.update(scons_data)
         
         with gzip.open(cache_file, 'wb') as f:
             pickle.dump(cache_data, f, protocol=pickle.HIGHEST_PROTOCOL)
         
         file_size = os.path.getsize(cache_file)
         
-        print(f"✓ Vollständiger LDF-Cache gespeichert:")
+        print(f"✓ KOMPLETTER SCons-Cache gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
-        print(f"   📊 LDF-Variablen: {len(ldf_data)}")
+        print(f"   📊 SCons-Variablen: {len(scons_data.get('dictionary', {}))}")
         
         return True
         
     except Exception as e:
-        print(f"❌ Cache-Speicherfehler: {e}")
+        print(f"❌ SCons-Cache-Speicherfehler: {e}")
         return False
 
-def load_ldf_cache():
-    """Lädt vollständigen LDF-Cache"""
+def load_scons_cache():
+    """Lädt KOMPLETTEN SCons-Cache"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
@@ -433,7 +421,7 @@ def load_ldf_cache():
             cache_data = pickle.load(f)
         
         cache_version = cache_data.get("cache_version", "1.0")
-        if cache_version != "6.0":
+        if cache_version != "8.0":
             print(f"⚠ Veraltete Cache-Version {cache_version} - wird ignoriert")
             return None
         
@@ -441,58 +429,59 @@ def load_ldf_cache():
         cached_hash = cache_data.get("config_hash")
         
         if cached_hash == current_hash:
-            ldf_data = {k: v for k, v in cache_data.items() 
-                       if not k.startswith('_') and k not in ['config_hash', 'env_name', 'cache_version']}
-            return ldf_data
+            # Entferne Metadaten und gib SCons-Daten zurück
+            scons_data = {k: v for k, v in cache_data.items() 
+                         if not k.startswith('_') and k not in ['config_hash', 'env_name', 'cache_version']}
+            return scons_data
         else:
-            print(f"⚠ Cache ungültig - Konfiguration geändert")
+            print(f"⚠ SCons-Cache ungültig - Konfiguration geändert")
         
     except Exception as e:
-        print(f"⚠ Cache-Ladefehler: {e}")
+        print(f"⚠ SCons-Cache-Ladefehler: {e}")
     
     return None
 
 # =============================================================================
-# HAUPTLOGIK - VOLLSTÄNDIGE LDF-DATEN CACHING
+# HAUPTLOGIK - KOMPLETTES SCONS-ENVIRONMENT CACHING
 # =============================================================================
 
-print(f"\n🚀 Tasmota LDF-Optimierung (VOLLSTÄNDIGE LDF-Erfassung) für: {env.get('PIOENV')}")
+print(f"\n🚀 Tasmota LDF-Optimierung (KOMPLETTES SCons-Environment) für: {env.get('PIOENV')}")
 
-# Cache-Prüfung und vollständige Wiederherstellung
+# Cache-Prüfung und SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit VOLLSTÄNDIGEM LDF-Cache - LDF übersprungen!")
+    print(f"🚀 Build mit KOMPLETTEM SCons-Cache - LDF übersprungen!")
     
-    if not verify_complete_ldf_data():
-        print(f"❌ KRITISCHER FEHLER: LDF-Daten unvollständig!")
+    if not verify_complete_scons_environment():
+        print(f"❌ KRITISCHER FEHLER: SCons-Environment unvollständig!")
         print(f"💡 Löschen Sie '.pio/ldf_cache/' und starten Sie neu")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - erfasse ALLE LDF-Daten...")
+    print(f"📝 Normaler LDF-Durchlauf - erfasse KOMPLETTES SCons-Environment...")
     
-    def post_build_complete_cache(source, target, env):
-        """Post-Build: Vollständiger LDF-Cache"""
-        print(f"\n🔄 Post-Build: Erstelle VOLLSTÄNDIGEN LDF-Cache...")
+    def post_build_scons_cache(source, target, env):
+        """Post-Build: KOMPLETTER SCons-Environment-Cache"""
+        print(f"\n🔄 Post-Build: Erstelle KOMPLETTEN SCons-Cache...")
         
-        complete_ldf_data = capture_complete_ldf_data()
+        complete_scons_data = capture_complete_scons_environment()
         
-        if len(complete_ldf_data) > 15:  # Mindestens 15 kritische Variablen
+        if len(complete_scons_data.get("dictionary", {})) > 30:  # Mindestens 30 SCons-Variablen
             env_name = env.get("PIOENV")
             if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
                 print(f"✓ lib_ldf_mode = off gesetzt")
             
-            if save_ldf_cache(complete_ldf_data):
-                print(f"\n📊 VOLLSTÄNDIGER LDF-Cache erstellt:")
-                print(f"   📊 Variablen: {len(complete_ldf_data)}")
-                print(f"   🎯 Erfasst: ALLE LDF-generierten Datenstrukturen")
+            if save_scons_cache(complete_scons_data):
+                print(f"\n📊 KOMPLETTER SCons-Cache erstellt:")
+                print(f"   🎯 KOMPLETTES SCons-Environment erfasst")
+                print(f"   📊 Dictionary-Variablen: {len(complete_scons_data.get('dictionary', {}))}")
                 print(f"   🚀 Nächster Build: Komplett ohne LDF!")
             else:
-                print(f"❌ Cache-Erstellung fehlgeschlagen")
+                print(f"❌ SCons-Cache-Erstellung fehlgeschlagen")
         else:
-            print(f"❌ Unvollständige LDF-Daten - Cache nicht erstellt")
+            print(f"❌ Unvollständiges SCons-Environment - Cache nicht erstellt")
     
-    env.AddPostAction("buildprog", post_build_complete_cache)
+    env.AddPostAction("buildprog", post_build_scons_cache)
 
-print(f"🏁 VOLLSTÄNDIGE LDF-Optimierung initialisiert")
+print(f"🏁 KOMPLETTE SCons-Environment-Optimierung initialisiert")
 print(f"💡 Cache-Reset: rm -rf .pio/ldf_cache/\n")
