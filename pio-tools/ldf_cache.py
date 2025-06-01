@@ -118,14 +118,14 @@ def get_current_ldf_mode(env_name):
     
     return 'chain'
 
-def convert_all_scons_objects_to_text(value, key="", depth=0):
-    """Konvertiert ALLE SCons-Objekte rekursiv in Klartext"""
+def convert_scons_objects_selective(value, key="", depth=0):
+    """Konvertiert NUR SCons-Objekte zu Pfaden, String-Pfade bleiben unverändert"""
     
     # Schutz vor zu tiefer Rekursion
     if depth > 10:
         return str(value)
     
-    # 1. SCons.Node.FS.File und ähnliche Node-Objekte
+    # 1. SCons.Node.FS.File und ähnliche Node-Objekte → Pfade konvertieren
     if hasattr(value, 'abspath'):
         return str(value.abspath)
     elif hasattr(value, 'path'):
@@ -163,7 +163,7 @@ def convert_all_scons_objects_to_text(value, key="", depth=0):
     elif isinstance(value, list):
         converted_list = []
         for item in value:
-            converted_item = convert_all_scons_objects_to_text(item, key, depth + 1)
+            converted_item = convert_scons_objects_selective(item, key, depth + 1)
             converted_list.append(converted_item)
         return converted_list
     
@@ -171,7 +171,7 @@ def convert_all_scons_objects_to_text(value, key="", depth=0):
     elif isinstance(value, tuple):
         converted_items = []
         for item in value:
-            converted_item = convert_all_scons_objects_to_text(item, key, depth + 1)
+            converted_item = convert_scons_objects_selective(item, key, depth + 1)
             converted_items.append(converted_item)
         return tuple(converted_items)
     
@@ -179,8 +179,8 @@ def convert_all_scons_objects_to_text(value, key="", depth=0):
     elif isinstance(value, dict):
         converted_dict = {}
         for dict_key, dict_value in value.items():
-            converted_key = convert_all_scons_objects_to_text(dict_key, key, depth + 1)
-            converted_value = convert_all_scons_objects_to_text(dict_value, key, depth + 1)
+            converted_key = convert_scons_objects_selective(dict_key, key, depth + 1)
+            converted_value = convert_scons_objects_selective(dict_value, key, depth + 1)
             converted_dict[converted_key] = converted_value
         return converted_dict
     
@@ -192,25 +192,13 @@ def convert_all_scons_objects_to_text(value, key="", depth=0):
     elif hasattr(value, '__class__') and 'environ' in str(value.__class__).lower():
         return dict(value)  # Konvertiere zu normalem Dictionary
     
-    # 12. Spezielle SCons-Klassen mit String-Repräsentation
+    # 12. Andere SCons-Objekte (nicht Pfad-bezogen)
     elif hasattr(value, '__class__') and 'SCons' in str(value.__class__):
-        # Versuche verschiedene Methoden für String-Konvertierung
-        if hasattr(value, 'get_contents'):
-            try:
-                return str(value.get_contents())
-            except:
-                pass
-        if hasattr(value, 'get_text_contents'):
-            try:
-                return str(value.get_text_contents())
-            except:
-                pass
-        # Fallback zu String-Repräsentation
         return str(value)
     
-    # 13. Primitive Typen direkt zurückgeben
+    # 13. String-Pfade und primitive Typen UNVERÄNDERT lassen
     elif isinstance(value, (str, int, float, bool, type(None))):
-        return value
+        return value  # KEINE ÄNDERUNG an String-Pfaden!
     
     # 14. Alles andere als String
     else:
@@ -223,7 +211,7 @@ def count_conversions(value, stats, depth=0):
         return
     
     if hasattr(value, 'abspath') or hasattr(value, 'path'):
-        stats["files"] += 1
+        stats["file_paths"] += 1
     elif hasattr(value, '__class__') and 'SCons.Builder' in str(value.__class__):
         stats["builders"] += 1
     elif callable(value):
@@ -238,31 +226,32 @@ def count_conversions(value, stats, depth=0):
             count_conversions(dict_value, stats, depth + 1)
 
 def freeze_exact_scons_configuration():
-    """Speichert Environment mit vollständiger SCons-Objekt-Konvertierung"""
+    """Speichert Environment mit selektiver SCons-Objekt-Pfad-Konvertierung"""
     cache_file = get_cache_file_path()
     temp_file = cache_file + ".tmp"
     
     try:
         with open(temp_file, 'w', encoding='utf-8') as f:
-            f.write("# SCons Environment Snapshot - ALL OBJECTS CONVERTED TO TEXT\n")
+            f.write("# SCons Environment Snapshot - SELECTIVE PATH CONVERSION\n")
+            f.write("# SCons objects → paths, String paths unchanged\n")
             f.write("# Auto-generated - do not edit manually\n")
             f.write(f"# Generated: {time.ctime()}\n")
             f.write(f"# Environment: {env.get('PIOENV')}\n\n")
             
             f.write("def restore_environment(target_env):\n")
-            f.write('    """Stellt das SCons-Environment mit konvertierten Objekten wieder her"""\n')
+            f.write('    """Stellt das SCons-Environment mit selektiver Pfad-Konvertierung wieder her"""\n')
             f.write('    restored_count = 0\n')
-            f.write('    conversion_stats = {"files": 0, "builders": 0, "functions": 0, "other": 0}\n')
+            f.write('    conversion_stats = {"file_paths": 0, "builders": 0, "functions": 0, "other": 0}\n')
             f.write('    \n')
             
             scons_dict = env.Dictionary()
             var_count = 0
-            conversion_stats = {"files": 0, "builders": 0, "functions": 0, "other": 0}
+            conversion_stats = {"file_paths": 0, "builders": 0, "functions": 0, "other": 0}
             
             for key, value in sorted(scons_dict.items()):
                 try:
-                    # Vollständige Konvertierung aller SCons-Objekte
-                    converted_value = convert_all_scons_objects_to_text(value, key)
+                    # Selektive Konvertierung: Nur SCons-Objekte, String-Pfade bleiben unverändert
+                    converted_value = convert_scons_objects_selective(value, key)
                     
                     # Statistiken sammeln
                     count_conversions(value, conversion_stats)
@@ -284,24 +273,25 @@ def freeze_exact_scons_configuration():
             
             # Konvertierungs-Statistiken
             f.write('    # === KONVERTIERUNGS-STATISTIKEN ===\n')
-            f.write(f'    conversion_stats["files"] = {conversion_stats["files"]}\n')
+            f.write(f'    conversion_stats["file_paths"] = {conversion_stats["file_paths"]}\n')
             f.write(f'    conversion_stats["builders"] = {conversion_stats["builders"]}\n')
             f.write(f'    conversion_stats["functions"] = {conversion_stats["functions"]}\n')
             f.write(f'    conversion_stats["other"] = {conversion_stats["other"]}\n')
             f.write('    \n')
             
             f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt")\n')
-            f.write('    print(f"✓ {{conversion_stats[\"files\"]}} Datei-Objekte konvertiert")\n')
+            f.write('    print(f"✓ {{conversion_stats[\"file_paths\"]}} SCons-Objekt-Pfade konvertiert")\n')
             f.write('    print(f"✓ {{conversion_stats[\"builders\"]}} Builder-Objekte konvertiert")\n')
             f.write('    print(f"✓ {{conversion_stats[\"functions\"]}} Funktionen konvertiert")\n')
             f.write('    print(f"✓ {{conversion_stats[\"other\"]}} andere Objekte konvertiert")\n')
+            f.write('    print("✓ String-Pfade blieben unverändert")\n')
             f.write('    return restored_count > 50\n')
             f.write('\n')
             f.write('# Metadata\n')
             f.write(f'CONFIG_HASH = {repr(calculate_config_hash())}\n')
             f.write(f'ENV_NAME = {repr(env.get("PIOENV"))}\n')
             f.write(f'VARIABLE_COUNT = {var_count}\n')
-            f.write(f'CONVERTED_FILES = {conversion_stats["files"]}\n')
+            f.write(f'CONVERTED_FILE_PATHS = {conversion_stats["file_paths"]}\n')
             f.write(f'CONVERTED_BUILDERS = {conversion_stats["builders"]}\n')
             f.write(f'CONVERTED_FUNCTIONS = {conversion_stats["functions"]}\n')
             f.write(f'CONVERTED_OTHER = {conversion_stats["other"]}\n')
@@ -312,19 +302,20 @@ def freeze_exact_scons_configuration():
         file_size = os.path.getsize(cache_file)
         total_conversions = sum(conversion_stats.values())
         
-        print(f"✓ Environment mit vollständiger Objekt-Konvertierung gespeichert:")
+        print(f"✓ Environment mit selektiver Pfad-Konvertierung gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
         print(f"   📊 {var_count} SCons-Variablen")
-        print(f"   🔄 {total_conversions} Objekte konvertiert:")
-        print(f"      📄 {conversion_stats['files']} Datei-Objekte")
+        print(f"   🔄 {total_conversions} SCons-Objekte konvertiert:")
+        print(f"      📄 {conversion_stats['file_paths']} SCons-Objekt-Pfade")
         print(f"      🔨 {conversion_stats['builders']} Builder-Objekte")
         print(f"      ⚙️  {conversion_stats['functions']} Funktionen")
         print(f"      📦 {conversion_stats['other']} andere Objekte")
+        print(f"   ✅ String-Pfade blieben unverändert")
         
         return True
         
     except Exception as e:
-        print(f"❌ Vollständige Objekt-Konvertierung fehlgeschlagen: {e}")
+        print(f"❌ Selektive Pfad-Konvertierung fehlgeschlagen: {e}")
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return False
@@ -355,17 +346,18 @@ def restore_exact_scons_configuration():
         
         if success:
             var_count = getattr(env_module, 'VARIABLE_COUNT', 0)
-            converted_files = getattr(env_module, 'CONVERTED_FILES', 0)
+            converted_file_paths = getattr(env_module, 'CONVERTED_FILE_PATHS', 0)
             converted_builders = getattr(env_module, 'CONVERTED_BUILDERS', 0)
             converted_functions = getattr(env_module, 'CONVERTED_FUNCTIONS', 0)
             converted_other = getattr(env_module, 'CONVERTED_OTHER', 0)
             
             print(f"✓ Environment aus Python-Datei wiederhergestellt:")
             print(f"   📊 {var_count} Variablen")
-            print(f"   📄 {converted_files} Datei-Objekte")
+            print(f"   📄 {converted_file_paths} SCons-Objekt-Pfade")
             print(f"   🔨 {converted_builders} Builder-Objekte")
             print(f"   ⚙️  {converted_functions} Funktionen")
             print(f"   📦 {converted_other} andere Objekte")
+            print(f"   ✅ String-Pfade unverändert")
         
         return success
         
@@ -375,7 +367,7 @@ def restore_exact_scons_configuration():
 
 def early_cache_check_and_restore():
     """Prüft Cache und stellt SCons-Environment wieder her"""
-    print(f"🔍 Cache-Prüfung (Vollständige Objekt-Konvertierung)...")
+    print(f"🔍 Cache-Prüfung (Selektive Pfad-Konvertierung)...")
     
     cache_file = get_cache_file_path()
     
@@ -414,8 +406,8 @@ def count_scons_objects_in_value(value, depth=0):
     return count
 
 def verify_frozen_restoration():
-    """Erweiterte Verifikation mit Objekt-Konvertierungs-Check"""
-    print(f"\n🔍 SCons-Environment-Verifikation (Vollständige Objekt-Konvertierung)...")
+    """Verifikation mit Fokus auf Pfad-Erhaltung"""
+    print(f"\n🔍 SCons-Environment-Verifikation (Selektive Pfad-Konvertierung)...")
     
     critical_scons_vars = [
         "CPPPATH", "CPPDEFINES", "BUILD_FLAGS", "LIBS", 
@@ -424,6 +416,8 @@ def verify_frozen_restoration():
     
     all_ok = True
     scons_objects_found = 0
+    string_paths_preserved = 0
+    converted_paths = 0
     
     for var in critical_scons_vars:
         if var in env and env[var]:
@@ -448,18 +442,27 @@ def verify_frozen_restoration():
                     print(f"      ❌ lib/default/headers: FEHLT")
                     all_ok = False
                 
-                # Prüfe auf String-Pfade (keine Objekte mehr)
-                string_paths = [p for p in paths if isinstance(p, str)]
-                print(f"      ✅ String-Pfade: {len(string_paths)}/{len(paths)}")
+                # Zähle String-Pfade vs. konvertierte Pfade
+                for path in paths:
+                    if isinstance(path, str):
+                        if path.startswith('/') or path.startswith('./'):
+                            string_paths_preserved += 1
+                        else:
+                            converted_paths += 1
+                
+                print(f"      ✅ String-Pfade erhalten: {string_paths_preserved}")
+                print(f"      🔄 Konvertierte Pfade: {converted_paths}")
                 
             elif var == "PIOBUILDFILES":
-                # Prüfe ob Datei-Objekte zu Strings konvertiert wurden
+                # Prüfe ob SCons-File-Objekte zu Pfaden konvertiert wurden
                 if isinstance(value, list):
-                    string_files = 0
+                    valid_paths = 0
                     for item_list in value:
                         if isinstance(item_list, list):
-                            string_files += sum(1 for item in item_list if isinstance(item, str))
-                    print(f"   ✅ {var}: {string_files} Dateien als Strings")
+                            for item in item_list:
+                                if isinstance(item, str) and (item.startswith('/') or os.path.exists(item)):
+                                    valid_paths += 1
+                    print(f"   ✅ {var}: {valid_paths} gültige Dateipfade")
                 else:
                     print(f"   ✅ {var}: Vorhanden")
                     
@@ -476,9 +479,11 @@ def verify_frozen_restoration():
     scons_dict_size = len(env.Dictionary())
     print(f"   📊 SCons Dictionary: {scons_dict_size} Variablen")
     print(f"   🔄 Verbleibende SCons-Objekte: {scons_objects_found}")
+    print(f"   ✅ String-Pfade erhalten: {string_paths_preserved}")
+    print(f"   🔄 SCons-Objekte zu Pfaden: {converted_paths}")
     
     if all_ok and scons_objects_found == 0:
-        print(f"✅ SCons-Environment vollständig konvertiert und wiederhergestellt")
+        print(f"✅ SCons-Environment mit selektiver Pfad-Konvertierung vollständig")
     elif all_ok:
         print(f"⚠️  SCons-Environment wiederhergestellt, aber {scons_objects_found} Objekte nicht konvertiert")
     else:
@@ -511,43 +516,43 @@ def calculate_config_hash():
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
 # =============================================================================
-# HAUPTLOGIK - UNIVERSELLE SCONS-OBJEKT-KONVERTIERUNG
+# HAUPTLOGIK - SELEKTIVE SCONS-OBJEKT-PFAD-KONVERTIERUNG
 # =============================================================================
 
-print(f"\n🎯 Universelle SCons-Objekt-Konvertierung für: {env.get('PIOENV')}")
+print(f"\n🎯 Selektive SCons-Objekt-Pfad-Konvertierung für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit vollständig konvertierter SCons-Konfiguration - LDF übersprungen!")
+    print(f"🚀 Build mit selektiver Pfad-Konvertierung - LDF übersprungen!")
     
     if not verify_frozen_restoration():
         print(f"❌ KRITISCHER FEHLER: SCons-Environment unvollständig!")
         print(f"💡 Löschen Sie '.pio/ldf_cache/' und starten Sie neu")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - konvertiere ALLE SCons-Objekte...")
+    print(f"📝 Normaler LDF-Durchlauf - konvertiere nur SCons-Objekt-Pfade...")
     
     def post_build_freeze_configuration(source, target, env):
-        """Post-Build: Speichere SCons-Konfiguration mit vollständiger Objekt-Konvertierung"""
-        print(f"\n🔄 Post-Build: Konvertiere ALLE SCons-Objekte zu Klartext...")
+        """Post-Build: Speichere SCons-Konfiguration mit selektiver Pfad-Konvertierung"""
+        print(f"\n🔄 Post-Build: Selektive SCons-Objekt-Pfad-Konvertierung...")
         
         if freeze_exact_scons_configuration():
-            print(f"\n🎯 ALLE SCons-Objekte erfolgreich konvertiert:")
+            print(f"\n🎯 Selektive Pfad-Konvertierung erfolgreich:")
             
             # Setze LDF auf off ERST NACH erfolgreichem Speichern
             env_name = env.get("PIOENV")
             if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
                 print(f"✓ lib_ldf_mode = off für Lauf 2 gesetzt")
-                print(f"🚀 Lauf 2: Vollständig konvertierte Konfiguration!")
+                print(f"🚀 Lauf 2: SCons-Objekte → Pfade, String-Pfade unverändert!")
             else:
                 print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
             
         else:
-            print(f"❌ Universelle Objekt-Konvertierung fehlgeschlagen")
+            print(f"❌ Selektive Pfad-Konvertierung fehlgeschlagen")
     
     env.AddPostAction("buildprog", post_build_freeze_configuration)
 
-print(f"🏁 Universelle SCons-Objekt-Konvertierung initialisiert")
+print(f"🏁 Selektive SCons-Objekt-Pfad-Konvertierung initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
