@@ -225,30 +225,29 @@ def count_conversions(value, stats, depth=0):
         for dict_value in value.values():
             count_conversions(dict_value, stats, depth + 1)
 
-def freeze_exact_scons_configuration():
-    """Speichert Environment mit selektiver SCons-Objekt-Pfad-Konvertierung"""
+def freeze_exact_scons_configuration_local(local_dict):
+    """Speichert lokales Environment mit selektiver SCons-Objekt-Pfad-Konvertierung"""
     cache_file = get_cache_file_path()
     temp_file = cache_file + ".tmp"
     
     try:
         with open(temp_file, 'w', encoding='utf-8') as f:
-            f.write("# SCons Environment Snapshot - SELECTIVE PATH CONVERSION\n")
+            f.write("# SCons Environment Snapshot - LOCAL ENVIRONMENT\n")
             f.write("# SCons objects → paths, String paths unchanged\n")
             f.write("# Auto-generated - do not edit manually\n")
             f.write(f"# Generated: {time.ctime()}\n")
             f.write(f"# Environment: {env.get('PIOENV')}\n\n")
             
             f.write("def restore_environment(target_env):\n")
-            f.write('    """Stellt das SCons-Environment mit selektiver Pfad-Konvertierung wieder her"""\n')
+            f.write('    """Stellt das lokale SCons-Environment mit selektiver Pfad-Konvertierung wieder her"""\n')
             f.write('    restored_count = 0\n')
             f.write('    conversion_stats = {"file_paths": 0, "builders": 0, "functions": 0, "other": 0}\n')
             f.write('    \n')
             
-            scons_dict = env.Dictionary()
             var_count = 0
             conversion_stats = {"file_paths": 0, "builders": 0, "functions": 0, "other": 0}
             
-            for key, value in sorted(scons_dict.items()):
+            for key, value in sorted(local_dict.items()):
                 try:
                     # Selektive Konvertierung: Nur SCons-Objekte, String-Pfade bleiben unverändert
                     converted_value = convert_scons_objects_selective(value, key)
@@ -302,7 +301,7 @@ def freeze_exact_scons_configuration():
         file_size = os.path.getsize(cache_file)
         total_conversions = sum(conversion_stats.values())
         
-        print(f"✓ Environment mit selektiver Pfad-Konvertierung gespeichert:")
+        print(f"✓ Lokales Environment mit selektiver Pfad-Konvertierung gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
         print(f"   📊 {var_count} SCons-Variablen")
         print(f"   🔄 {total_conversions} SCons-Objekte konvertiert:")
@@ -315,10 +314,78 @@ def freeze_exact_scons_configuration():
         return True
         
     except Exception as e:
-        print(f"❌ Selektive Pfad-Konvertierung fehlgeschlagen: {e}")
+        print(f"❌ Lokale Environment-Konvertierung fehlgeschlagen: {e}")
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return False
+
+def create_local_environment_backup(target, source, env):
+    """Erstellt Backup mit lokalem Environment"""
+    print(f"\n🔄 Lokales Environment-Backup: {target}")
+    
+    # Lokales Environment mit ALLEN aktuellen Variablen erstellen
+    local_env = env.Clone()
+    
+    # === DEBUG-FUNKTION FÜR LOKALES ENVIRONMENT ===
+    def debug_local_environment():
+        print(f"\n🔍 DEBUG: Lokales Environment-Analyse:")
+        
+        # 1. CPPPATH im lokalen Environment
+        local_cpppath = local_env.get('CPPPATH', [])
+        print(f"   Lokales CPPPATH: {len(local_cpppath)} Pfade")
+        for i, path in enumerate(local_cpppath):
+            print(f"      {i}: {path}")
+        
+        # 2. Compiler-Flags im lokalen Environment
+        for flag_var in ['CCFLAGS', 'CXXFLAGS', 'CPPFLAGS', 'BUILD_FLAGS', 'ASFLAGS']:
+            flags = local_env.get(flag_var, [])
+            include_flags = [f for f in flags if any(prefix in str(f) for prefix in ['-I', '-iprefix', '-iwithprefix'])]
+            if include_flags:
+                print(f"   Lokales {flag_var}: {len(include_flags)} Include-Flags")
+                for flag in include_flags:
+                    print(f"      {flag}")
+        
+        # 3. PIOBUILDFILES im lokalen Environment
+        piobuildfiles = local_env.get('PIOBUILDFILES', [])
+        if piobuildfiles:
+            unique_dirs = set()
+            for file_list in piobuildfiles:
+                for file_obj in file_list:
+                    if hasattr(file_obj, 'abspath'):
+                        file_path = str(file_obj.abspath)
+                        dir_path = os.path.dirname(file_path)
+                        unique_dirs.add(dir_path)
+            
+            print(f"   Lokales PIOBUILDFILES: {len(unique_dirs)} Source-Verzeichnisse")
+            for dir_path in sorted(unique_dirs):
+                print(f"      {dir_path}")
+    
+    # Debug-Funktion ausführen
+    debug_local_environment()
+    
+    # Lokales Environment Dictionary erfassen
+    local_dict = local_env.Dictionary()
+    
+    # Prüfe ob genügend Include-Pfade vorhanden sind
+    local_cpppath = local_env.get('CPPPATH', [])
+    if len(local_cpppath) > 7:  # Mehr als die 7 Basis-Pfade
+        print(f"✓ LDF-Include-Pfade im lokalen Environment gefunden - erstelle Backup")
+        
+        if freeze_exact_scons_configuration_local(local_dict):
+            # Setze LDF auf off für nächsten Lauf
+            env_name = env.get("PIOENV")
+            if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+                print(f"✓ lib_ldf_mode = off für Lauf 2 gesetzt")
+                print(f"🚀 Lauf 2: Lokales Environment mit LDF-Pfaden!")
+                
+                # Entferne weitere PreActions um mehrfache Ausführung zu vermeiden
+                return True
+        else:
+            print(f"❌ Lokales Environment-Backup fehlgeschlagen")
+    else:
+        print(f"⚠ Zu wenige Include-Pfade im lokalen Environment: {len(local_cpppath)}")
+    
+    return False
 
 def restore_exact_scons_configuration():
     """Lädt Environment aus Python-Datei"""
@@ -351,7 +418,7 @@ def restore_exact_scons_configuration():
             converted_functions = getattr(env_module, 'CONVERTED_FUNCTIONS', 0)
             converted_other = getattr(env_module, 'CONVERTED_OTHER', 0)
             
-            print(f"✓ Environment aus Python-Datei wiederhergestellt:")
+            print(f"✓ Lokales Environment aus Python-Datei wiederhergestellt:")
             print(f"   📊 {var_count} Variablen")
             print(f"   📄 {converted_file_paths} SCons-Objekt-Pfade")
             print(f"   🔨 {converted_builders} Builder-Objekte")
@@ -367,7 +434,7 @@ def restore_exact_scons_configuration():
 
 def early_cache_check_and_restore():
     """Prüft Cache und stellt SCons-Environment wieder her"""
-    print(f"🔍 Cache-Prüfung (Selektive Pfad-Konvertierung)...")
+    print(f"🔍 Cache-Prüfung (Lokales Environment)...")
     
     cache_file = get_cache_file_path()
     
@@ -381,7 +448,7 @@ def early_cache_check_and_restore():
         print(f"🔄 LDF noch aktiv - Python-Cache wird nach Build erstellt")
         return False
     
-    print(f"⚡ Python-Cache verfügbar - stelle Environment wieder her")
+    print(f"⚡ Python-Cache verfügbar - stelle lokales Environment wieder her")
     
     success = restore_exact_scons_configuration()
     return success
@@ -406,8 +473,8 @@ def count_scons_objects_in_value(value, depth=0):
     return count
 
 def verify_frozen_restoration():
-    """Verifikation mit Fokus auf Pfad-Erhaltung"""
-    print(f"\n🔍 SCons-Environment-Verifikation (Selektive Pfad-Konvertierung)...")
+    """Verifikation mit Fokus auf lokales Environment"""
+    print(f"\n🔍 SCons-Environment-Verifikation (Lokales Environment)...")
     
     critical_scons_vars = [
         "CPPPATH", "CPPDEFINES", "BUILD_FLAGS", "LIBS", 
@@ -483,11 +550,11 @@ def verify_frozen_restoration():
     print(f"   🔄 SCons-Objekte zu Pfaden: {converted_paths}")
     
     if all_ok and scons_objects_found == 0:
-        print(f"✅ SCons-Environment mit selektiver Pfad-Konvertierung vollständig")
+        print(f"✅ Lokales SCons-Environment vollständig wiederhergestellt")
     elif all_ok:
-        print(f"⚠️  SCons-Environment wiederhergestellt, aber {scons_objects_found} Objekte nicht konvertiert")
+        print(f"⚠️  Lokales SCons-Environment wiederhergestellt, aber {scons_objects_found} Objekte nicht konvertiert")
     else:
-        print(f"❌ SCons-Environment UNVOLLSTÄNDIG")
+        print(f"❌ Lokales SCons-Environment UNVOLLSTÄNDIG")
     
     return all_ok
 
@@ -515,81 +582,41 @@ def calculate_config_hash():
     config_string = "|".join(relevant_values)
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
+# Global flag to prevent multiple executions
+_backup_created = False
+
 # =============================================================================
-# HAUPTLOGIK - SELEKTIVE SCONS-OBJEKT-PFAD-KONVERTIERUNG
+# HAUPTLOGIK - LOKALES SCONS-ENVIRONMENT
 # =============================================================================
 
-print(f"\n🎯 Selektive SCons-Objekt-Pfad-Konvertierung für: {env.get('PIOENV')}")
+print(f"\n🎯 Lokales SCons-Environment-Backup für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit selektiver Pfad-Konvertierung - LDF übersprungen!")
+    print(f"🚀 Build mit lokalem Environment-Cache - LDF übersprungen!")
     
     if not verify_frozen_restoration():
-        print(f"❌ KRITISCHER FEHLER: SCons-Environment unvollständig!")
+        print(f"❌ KRITISCHER FEHLER: Lokales SCons-Environment unvollständig!")
         print(f"💡 Löschen Sie '.pio/ldf_cache/' und starten Sie neu")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - konvertiere nur SCons-Objekt-Pfade...")
+    print(f"📝 Normaler LDF-Durchlauf - erfasse lokales SCons-Environment...")
     
-    def post_build_freeze_configuration(source, target, env):
-        """Post-Build: Speichere SCons-Konfiguration mit selektiver Pfad-Konvertierung"""
-        print(f"\n🔄 Post-Build: Selektive SCons-Objekt-Pfad-Konvertierung...")
+    def local_environment_backup_wrapper(target, source, env):
+        """Wrapper um mehrfache Ausführung zu vermeiden"""
+        global _backup_created
         
-        # === DEBUG-FUNKTION ===
-        def debug_all_include_sources():
-            print(f"\n🔍 DEBUG: Suche alle Include-Quellen:")
-            
-            # 1. CPPPATH (bereits bekannt - nur 7)
-            cpppath = env.get('CPPPATH', [])
-            print(f"   CPPPATH: {len(cpppath)} Pfade")
-            for i, path in enumerate(cpppath):
-                print(f"      {i}: {path}")
-            
-            # 2. Compiler-Flags durchsuchen
-            for flag_var in ['CCFLAGS', 'CXXFLAGS', 'CPPFLAGS', 'BUILD_FLAGS']:
-                flags = env.get(flag_var, [])
-                include_flags = [f for f in flags if str(f).startswith('-I')]
-                if include_flags:
-                    print(f"   {flag_var}: {len(include_flags)} -I Flags")
-                    for flag in include_flags:
-                        print(f"      {flag}")
-            
-            # 3. PIOBUILDFILES analysieren
-            piobuildfiles = env.get('PIOBUILDFILES', [])
-            if piobuildfiles:
-                unique_dirs = set()
-                for file_list in piobuildfiles:
-                    for file_obj in file_list:
-                        if hasattr(file_obj, 'abspath'):
-                            file_path = str(file_obj.abspath)
-                            dir_path = os.path.dirname(file_path)
-                            unique_dirs.add(dir_path)
-                
-                print(f"   PIOBUILDFILES: {len(unique_dirs)} Source-Verzeichnisse")
-                for dir_path in sorted(unique_dirs):
-                    print(f"      {dir_path}")
+        if not _backup_created:
+            success = create_local_environment_backup(target, source, env)
+            if success:
+                _backup_created = True
         
-        # Debug-Funktion ausführen
-        debug_all_include_sources()
-        
-        if freeze_exact_scons_configuration():
-            print(f"\n🎯 Selektive Pfad-Konvertierung erfolgreich:")
-            
-            # Setze LDF auf off ERST NACH erfolgreichem Speichern
-            env_name = env.get("PIOENV")
-            if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-                print(f"✓ lib_ldf_mode = off für Lauf 2 gesetzt")
-                print(f"🚀 Lauf 2: SCons-Objekte → Pfade, String-Pfade unverändert!")
-            else:
-                print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
-            
-        else:
-            print(f"❌ Selektive Pfad-Konvertierung fehlgeschlagen")
+        return None
     
-    env.AddPreAction("$BUILD_DIR/${PROGNAME}.elf", post_build_freeze_configuration)
+    # Hook an erste Kompilierung
+    env.AddPreAction("*.cpp", local_environment_backup_wrapper)
 
-print(f"🏁 Selektive SCons-Objekt-Pfad-Konvertierung initialisiert")
+print(f"🏁 Lokales SCons-Environment-Backup initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
