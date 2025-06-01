@@ -225,6 +225,71 @@ def count_conversions(value, stats, depth=0):
         for dict_value in value.values():
             count_conversions(dict_value, stats, depth + 1)
 
+def debug_all_possible_include_locations(env):
+    """Debuggt ALLE möglichen Include-Speicherorte"""
+    print(f"\n🔍 DEBUG: ALLE möglichen Include-Speicherorte:")
+    
+    all_vars = env.Dictionary()
+    
+    # 1. Prüfe ALLE Variablen mit Include-relevanten Namen
+    include_keywords = ['INC', 'PATH', 'DIR', 'HEADER', 'FLAG', 'COM', 'CPP', 'CC', 'CXX']
+    
+    print(f"\n   === ALLE INCLUDE-RELEVANTEN VARIABLEN ===")
+    for key, value in sorted(all_vars.items()):
+        key_upper = key.upper()
+        if any(keyword in key_upper for keyword in include_keywords):
+            print(f"   {key}: {value}")
+    
+    # 2. Spezielle Prüfung auf versteckte Include-Flags
+    print(f"\n   === COMPILER-FLAGS ANALYSE ===")
+    for flag_var in ['CCFLAGS', 'CXXFLAGS', 'CPPFLAGS', 'BUILD_FLAGS', 'ASFLAGS']:
+        flags = env.get(flag_var, [])
+        if flags:
+            print(f"   {flag_var}: {flags}")
+            
+            # Prüfe auf LDF-spezifische Pfade
+            all_flags_str = ' '.join(str(f) for f in flags)
+            if any(keyword in all_flags_str for keyword in ['/libdeps/', 'lib/default', '.pio']):
+                print(f"      *** {flag_var} enthält LDF-Pfade!")
+    
+    # 3. Prüfe auf versteckte SCons-Variablen
+    print(f"\n   === VERSTECKTE SCONS-VARIABLEN ===")
+    hidden_vars = ['_CPPINCFLAGS', '_CCCOMCOM', '_CPPDEFFLAGS', '_LIBDIRFLAGS', '_LIBFLAGS']
+    for var in hidden_vars:
+        if var in all_vars:
+            print(f"   {var}: {all_vars[var]}")
+    
+    # 4. Prüfe PIOBUILDFILES auf LDF-Pfade
+    print(f"\n   === PIOBUILDFILES ANALYSE ===")
+    piobuildfiles = env.get('PIOBUILDFILES', [])
+    if piobuildfiles:
+        unique_dirs = set()
+        ldf_dirs = set()
+        
+        for file_list in piobuildfiles:
+            for file_obj in file_list:
+                if hasattr(file_obj, 'abspath'):
+                    file_path = str(file_obj.abspath)
+                    dir_path = os.path.dirname(file_path)
+                    unique_dirs.add(dir_path)
+                    
+                    # Prüfe auf LDF-spezifische Pfade
+                    if any(keyword in file_path for keyword in ['/libdeps/', 'lib/default', '.pio']):
+                        ldf_dirs.add(dir_path)
+        
+        print(f"   PIOBUILDFILES: {len(unique_dirs)} Source-Verzeichnisse")
+        print(f"   LDF-Verzeichnisse: {len(ldf_dirs)}")
+        
+        for ldf_dir in sorted(ldf_dirs):
+            print(f"      LDF: {ldf_dir}")
+    
+    # 5. Prüfe auf Environment-Variablen
+    print(f"\n   === ENVIRONMENT-VARIABLEN ===")
+    env_dict = env.get('ENV', {})
+    for key, value in env_dict.items():
+        if any(keyword in key.upper() for keyword in ['PATH', 'INC', 'LIB']):
+            print(f"   ENV[{key}]: {value}")
+
 def freeze_exact_scons_configuration_local(local_dict):
     """Speichert lokales Environment mit selektiver SCons-Objekt-Pfad-Konvertierung"""
     cache_file = get_cache_file_path()
@@ -320,7 +385,7 @@ def freeze_exact_scons_configuration_local(local_dict):
         return False
 
 def capture_middleware(env, node):
-    """Middleware um lokales Environment zu erfassen - mit korrekter Parameter-Reihenfolge"""
+    """Middleware um lokales Environment zu erfassen - mit umfassendem Debugging"""
     global _backup_created
     
     if _backup_created:
@@ -337,66 +402,32 @@ def capture_middleware(env, node):
         
         print(f"\n🔄 Middleware: Erfasse Environment für {os.path.basename(node_name)}")
         
-        # === DEBUG-FUNKTION FÜR MIDDLEWARE-ENVIRONMENT ===
-        def debug_middleware_environment():
-            print(f"\n🔍 DEBUG: Middleware-Environment-Analyse:")
-            
-            # 1. CPPPATH im Middleware-Environment
-            middleware_cpppath = env.get('CPPPATH', [])
-            print(f"   Middleware CPPPATH: {len(middleware_cpppath)} Pfade")
-            for i, path in enumerate(middleware_cpppath):
-                print(f"      {i}: {path}")
-            
-            # 2. Compiler-Flags im Middleware-Environment
-            for flag_var in ['CCFLAGS', 'CXXFLAGS', 'CPPFLAGS', 'BUILD_FLAGS', 'ASFLAGS']:
-                flags = env.get(flag_var, [])
-                include_flags = [f for f in flags if any(prefix in str(f) for prefix in ['-I', '-iprefix', '-iwithprefix'])]
-                if include_flags:
-                    print(f"   Middleware {flag_var}: {len(include_flags)} Include-Flags")
-                    for flag in include_flags:
-                        print(f"      {flag}")
-            
-            # 3. PIOBUILDFILES im Middleware-Environment
-            piobuildfiles = env.get('PIOBUILDFILES', [])
-            if piobuildfiles:
-                unique_dirs = set()
-                for file_list in piobuildfiles:
-                    for file_obj in file_list:
-                        if hasattr(file_obj, 'abspath'):
-                            file_path = str(file_obj.abspath)
-                            dir_path = os.path.dirname(file_path)
-                            unique_dirs.add(dir_path)
-                
-                print(f"   Middleware PIOBUILDFILES: {len(unique_dirs)} Source-Verzeichnisse")
-                for dir_path in sorted(unique_dirs):
-                    print(f"      {dir_path}")
-        
-        # Debug-Funktion ausführen
-        debug_middleware_environment()
+        # === UMFASSENDES DEBUGGING ===
+        debug_all_possible_include_locations(env)
         
         # Lokales Environment erfassen
         local_env = env.Clone()
         local_cpppath = local_env.get('CPPPATH', [])
         
-        print(f"   Middleware lokales CPPPATH: {len(local_cpppath)} Pfade")
+        print(f"\n   Middleware lokales CPPPATH: {len(local_cpppath)} Pfade")
+        for i, path in enumerate(local_cpppath):
+            print(f"      {i}: {path}")
         
-        if len(local_cpppath) > 7:  # LDF-Ergebnisse vorhanden
-            print(f"✓ Middleware: LDF-Include-Pfade gefunden - erstelle Backup")
-            
-            local_dict = local_env.Dictionary()
-            
-            if freeze_exact_scons_configuration_local(local_dict):
-                env_name = env.get("PIOENV")
-                if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-                    print(f"✓ Middleware: lib_ldf_mode = off für Lauf 2 gesetzt")
-                    print(f"🚀 Middleware: Lokales Environment mit LDF-Pfaden gesichert!")
-                    _backup_created = True
-                else:
-                    print(f"⚠ Middleware: lib_ldf_mode konnte nicht gesetzt werden")
+        # Backup erstellen (auch wenn nur 7 Pfade, um zu sehen was gespeichert wird)
+        print(f"✓ Middleware: Erstelle Backup (auch mit {len(local_cpppath)} Pfaden für Analyse)")
+        
+        local_dict = local_env.Dictionary()
+        
+        if freeze_exact_scons_configuration_local(local_dict):
+            env_name = env.get("PIOENV")
+            if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+                print(f"✓ Middleware: lib_ldf_mode = off für Lauf 2 gesetzt")
+                print(f"🚀 Middleware: Environment gesichert (für Analyse)!")
+                _backup_created = True
             else:
-                print(f"❌ Middleware: Environment-Backup fehlgeschlagen")
+                print(f"⚠ Middleware: lib_ldf_mode konnte nicht gesetzt werden")
         else:
-            print(f"⚠ Middleware: Zu wenige Include-Pfade: {len(local_cpppath)}")
+            print(f"❌ Middleware: Environment-Backup fehlgeschlagen")
     
     except Exception as e:
         print(f"⚠ Middleware-Fehler: {e}")
@@ -604,10 +635,10 @@ def calculate_config_hash():
 _backup_created = False
 
 # =============================================================================
-# HAUPTLOGIK - MIDDLEWARE SCONS-ENVIRONMENT
+# HAUPTLOGIK - MIDDLEWARE SCONS-ENVIRONMENT MIT DEBUGGING
 # =============================================================================
 
-print(f"\n🎯 Middleware SCons-Environment-Backup für: {env.get('PIOENV')}")
+print(f"\n🎯 Middleware SCons-Environment-Backup mit umfassendem Debugging für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
@@ -620,10 +651,10 @@ if cache_restored:
         print(f"💡 Löschen Sie '.pio/ldf_cache/' und starten Sie neu")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - erfasse Environment über Middleware...")
+    print(f"📝 Normaler LDF-Durchlauf - erfasse Environment über Middleware mit Debugging...")
     
-    # Middleware für alle Build-Targets mit korrekter Parameter-Reihenfolge
+    # Middleware für alle Build-Targets mit umfassendem Debugging
     env.AddBuildMiddleware(capture_middleware, "*")
 
-print(f"🏁 Middleware SCons-Environment-Backup initialisiert")
+print(f"🏁 Middleware SCons-Environment-Backup mit Debugging initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
