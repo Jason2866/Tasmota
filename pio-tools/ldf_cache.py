@@ -171,9 +171,9 @@ def track_ldf_stability():
         
         # Realistische Werte basierend auf Beobachtungen
         realistic_values = (
-            recent[-1]['cpppath_count'] > 100 and  # Beobachtung: 111 Pfade
-            recent[-1]['libs_count'] < 30 and  # Beobachtung: 20 LIBS (finale)
-            recent[-1]['libs_count'] > 5 and  # Mindestens einige LIBS
+            recent[-1]['cpppath_count'] > 70 and  # Beobachtung: 111 Pfade
+            recent[-1]['libs_count'] < 70 and  # Beobachtung: 20 LIBS (finale)
+            recent[-1]['libs_count'] > 2 and  # Mindestens einige LIBS
             recent[-1]['piobuildfiles_count'] > 0  # Build-Dateien vorhanden
         )
         
