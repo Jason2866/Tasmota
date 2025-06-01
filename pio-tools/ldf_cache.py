@@ -153,18 +153,33 @@ def safe_convert_for_pickle(obj, max_depth=5, current_depth=0):
         return str(obj)
 
 def capture_ldf_build_data_only():
-    """Erfasst NUR LDF-generierte Build-Daten (ohne Tools/Toolchain)"""
-    print(f"🔍 Erfasse LDF-Build-Daten (ohne Tools/Toolchain)...")
+    """Erfasst ALLE LDF-generierten Build-Daten (erweiterte Variable-Liste)"""
+    print(f"🔍 Erfasse vollständige LDF-Build-Daten...")
     
-    # NUR LDF-generierte Build-Daten cachen
+    # ERWEITERTE LDF-generierte Build-Daten (basierend auf unserer Diskussion)
     ldf_generated_vars = [
-        # Include-Pfade (wichtigste Variable!)
+        # Include-Pfade (kritisch!)
         "CPPPATH",
         
         # Library-Pfade und -Konfiguration
         "LIBPATH",
         "LIBSOURCE_DIRS", 
         "EXTRA_LIB_DIRS",
+        "LIB_EXTRA_DIRS",           # NEU: Zusätzliche Library-Pfade
+        
+        # Projekt-Verzeichnisse (kritisch für lokale Libraries!)
+        "PROJECT_LIBDEPS_DIR",      # NEU: .pio/libdeps/{env}/
+        "PROJECT_LIB_DIR",          # NEU: Lokales lib/ Verzeichnis
+        "LIBDEPS_DIR",              # NEU: Library-Dependencies-Verzeichnis
+        
+        # Build-Verzeichnisse
+        "BUILD_DIR",                # NEU: Build-Output-Verzeichnis
+        "BUILDSRC_DIR",             # NEU: Build-Source-Verzeichnis
+        
+        # Source-Dateien (vom LDF aufgelöst)
+        "PIOBUILDFILES",            # NEU: Alle zu kompilierenden Dateien
+        "BUILD_SRC_FILTER",         # NEU: Aufgelöste Source-Filter
+        "SRC_FILTER",               # Source-Filter-Definitionen
         
         # Preprocessor-Defines
         "CPPDEFINES",
@@ -179,14 +194,24 @@ def capture_ldf_build_data_only():
         "LIBS",
         "LIB_DEPS",
         "LIB_IGNORE",
+        "LIB_ARCHIVE",              # NEU: Library-Archive-Pfade
         
-        # Board-spezifische Build-Daten (nicht Pfade!)
+        # Library-Konfiguration
+        "LIB_BUILTIN",              # NEU: Built-in Library-Konfiguration
+        "LIB_COMPAT_MODE",          # NEU: Kompatibilitätsmodus
+        "LIB_FORCE",                # NEU: Force-Flags
+        
+        # Board-spezifische Build-Daten
         "BOARD",
         "PLATFORM", 
         "FRAMEWORK",
         "BOARD_MCU",
         "BOARD_F_CPU",
-        "BOARD_F_FLASH"
+        "BOARD_F_FLASH",
+        
+        # Framework-spezifische LDF-Ergebnisse
+        "ARDUINO_LIBS",             # NEU: Arduino-spezifische Libraries
+        "FRAMEWORK_ARDUINOESPRESSIF32_LIB_BUILDERS"  # NEU: ESP32-spezifische Builder
     ]
     
     ldf_data = {}
@@ -199,13 +224,17 @@ def capture_ldf_build_data_only():
                 converted_value = safe_convert_for_pickle(original_value)
                 ldf_data[var] = converted_value
                 
-                # Debug-Ausgabe für Include-Pfade
+                # Debug-Ausgabe für wichtige Pfad-Variablen
                 if var == "CPPPATH" and hasattr(converted_value, '__len__'):
                     print(f"   ✓ {var}: {len(converted_value)} Include-Pfade erfasst")
                     for i, path in enumerate(converted_value[:3]):  # Zeige erste 3
                         print(f"     {i+1}. {path}")
                     if len(converted_value) > 3:
                         print(f"     ... und {len(converted_value) - 3} weitere")
+                elif var in ["PROJECT_LIB_DIR", "PROJECT_LIBDEPS_DIR", "LIBDEPS_DIR"]:
+                    print(f"   ✓ {var}: {converted_value}")
+                elif var == "PIOBUILDFILES" and hasattr(converted_value, '__len__'):
+                    print(f"   ✓ {var}: {len(converted_value)} Source-Dateien")
                 elif hasattr(converted_value, '__len__') and not isinstance(converted_value, str):
                     print(f"   ✓ {var}: {len(converted_value)} Elemente")
                 else:
@@ -214,13 +243,15 @@ def capture_ldf_build_data_only():
             except Exception as e:
                 print(f"   ⚠ {var}: Fehler - {e}")
                 ldf_data[var] = str(original_value)[:200]
+        else:
+            print(f"   - {var}: Nicht vorhanden")
     
     print(f"✅ {len(ldf_data)} LDF-Build-Variablen erfasst")
     return ldf_data
 
 def early_cache_check_and_restore():
     """Prüft Cache und stellt LDF-Build-Daten wieder her"""
-    print(f"🔍 Frühe Cache-Prüfung (LDF-Build-Daten)...")
+    print(f"🔍 Frühe Cache-Prüfung (erweiterte LDF-Build-Daten)...")
     
     cached_data = load_ldf_build_cache()
     
@@ -234,7 +265,7 @@ def early_cache_check_and_restore():
         print(f"🔄 LDF noch aktiv - Cache wird nach Build erstellt")
         return False
     
-    print(f"⚡ Cache verfügbar - stelle LDF-Build-Daten wieder her")
+    print(f"⚡ Cache verfügbar - stelle erweiterte LDF-Build-Daten wieder her")
     
     # LDF-Build-Daten direkt wiederherstellen
     restored_count = 0
@@ -248,9 +279,13 @@ def early_cache_check_and_restore():
             env[var_name] = cached_value
             restored_count += 1
             
-            # Debug-Ausgabe für Include-Pfade
+            # Debug-Ausgabe für wichtige Variablen
             if var_name == "CPPPATH" and hasattr(cached_value, '__len__'):
                 print(f"   ✓ {var_name}: {len(cached_value)} Include-Pfade wiederhergestellt")
+            elif var_name in ["PROJECT_LIB_DIR", "PROJECT_LIBDEPS_DIR", "LIBDEPS_DIR"]:
+                print(f"   ✓ {var_name}: {cached_value}")
+            elif var_name == "PIOBUILDFILES" and hasattr(cached_value, '__len__'):
+                print(f"   ✓ {var_name}: {len(cached_value)} Source-Dateien")
             elif hasattr(cached_value, '__len__') and not isinstance(cached_value, str):
                 print(f"   ✓ {var_name}: {len(cached_value)} Elemente")
             else:
@@ -260,19 +295,29 @@ def early_cache_check_and_restore():
             print(f"   ⚠ {var_name}: Fehler - {e}")
     
     print(f"✅ {restored_count} LDF-Build-Variablen wiederhergestellt")
-    return restored_count > 3  # Mindestens CPPPATH, CPPDEFINES, BUILD_FLAGS
+    return restored_count > 5  # Mindestens CPPPATH, PROJECT_LIB_DIR, PIOBUILDFILES, etc.
 
 def verify_ldf_data_completeness():
-    """Verifikation der LDF-Build-Daten"""
-    print(f"\n🔍 LDF-Build-Daten-Verifikation...")
+    """Erweiterte Verifikation der LDF-Build-Daten"""
+    print(f"\n🔍 Erweiterte LDF-Build-Daten-Verifikation...")
     
-    critical_ldf_vars = ["CPPPATH", "CPPDEFINES", "BUILD_FLAGS"]
+    critical_ldf_vars = [
+        "CPPPATH", 
+        "CPPDEFINES", 
+        "BUILD_FLAGS",
+        "PROJECT_LIB_DIR",      # NEU: Kritisch für lokale Libraries
+        "PIOBUILDFILES"         # NEU: Kritisch für Source-Dateien
+    ]
     
     all_ok = True
     for var in critical_ldf_vars:
         if var in env and env[var]:
             if var == "CPPPATH":
                 print(f"   ✅ {var}: {len(env[var])} Include-Pfade")
+            elif var == "PIOBUILDFILES":
+                print(f"   ✅ {var}: {len(env[var])} Source-Dateien")
+            elif var == "PROJECT_LIB_DIR":
+                print(f"   ✅ {var}: {env[var]}")
             elif hasattr(env[var], '__len__'):
                 print(f"   ✅ {var}: {len(env[var])} Einträge")
             else:
@@ -282,7 +327,7 @@ def verify_ldf_data_completeness():
             all_ok = False
     
     if all_ok:
-        print(f"✅ LDF-Build-Daten vollständig")
+        print(f"✅ Erweiterte LDF-Build-Daten vollständig")
     else:
         print(f"⚠️  LDF-Build-Daten unvollständig")
     
@@ -315,7 +360,7 @@ def calculate_final_config_hash():
     return hash_value
 
 def save_ldf_build_cache(ldf_data):
-    """Speichert LDF-Build-Cache"""
+    """Speichert erweiterten LDF-Build-Cache"""
     cache_file = get_cache_file_path()
     
     try:
@@ -328,8 +373,8 @@ def save_ldf_build_cache(ldf_data):
         cache_data = {
             "config_hash": final_hash,
             "env_name": env.get("PIOENV"),
-            "cache_version": "4.0",  # Neue Version ohne Tools
-            "_cache_type": "ldf_build_data_only"
+            "cache_version": "5.0",  # Neue Version mit erweiterten Variablen
+            "_cache_type": "ldf_build_data_extended"
         }
         
         # LDF-Build-Daten hinzufügen
@@ -340,7 +385,7 @@ def save_ldf_build_cache(ldf_data):
         
         file_size = os.path.getsize(cache_file)
         
-        print(f"✓ LDF-Build-Cache (ohne Tools) gespeichert:")
+        print(f"✓ Erweiterter LDF-Build-Cache gespeichert:")
         print(f"   📁 Datei: {os.path.basename(cache_file)} ({file_size} Bytes)")
         print(f"   📊 LDF-Build-Variablen: {len(ldf_data)}")
         
@@ -351,7 +396,7 @@ def save_ldf_build_cache(ldf_data):
         return False
 
 def load_ldf_build_cache():
-    """Lädt LDF-Build-Cache"""
+    """Lädt erweiterten LDF-Build-Cache"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
@@ -362,7 +407,7 @@ def load_ldf_build_cache():
             cache_data = pickle.load(f)
         
         cache_version = cache_data.get("cache_version", "1.0")
-        if cache_version not in ["3.0", "4.0"]:
+        if cache_version not in ["4.0", "5.0"]:
             print(f"⚠ Veraltete Cache-Version {cache_version} - wird ignoriert")
             return None
         
@@ -383,16 +428,16 @@ def load_ldf_build_cache():
     return None
 
 # =============================================================================
-# HAUPTLOGIK - LDF-BUILD-DATEN CACHING (OHNE TOOLS)
+# HAUPTLOGIK - ERWEITERTE LDF-BUILD-DATEN CACHING
 # =============================================================================
 
-print(f"\n🚀 Tasmota LDF-Optimierung (Build-Daten ohne Tools) für Environment: {env.get('PIOENV')}")
+print(f"\n🚀 Tasmota LDF-Optimierung (Erweiterte Build-Daten) für Environment: {env.get('PIOENV')}")
 
 # Cache-Prüfung und Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build läuft mit LDF-Build-Cache - LDF übersprungen!")
+    print(f"🚀 Build läuft mit erweitertem LDF-Build-Cache - LDF übersprungen!")
     
     if not verify_ldf_data_completeness():
         print(f"⚠️  LDF-Build-Daten unvollständig")
@@ -401,28 +446,29 @@ else:
     print(f"📝 Führe normalen LDF-Durchlauf durch...")
     
     def post_build_cache_creation(source, target, env):
-        """Post-Build: Erstelle LDF-Build-Cache"""
-        print(f"\n🔄 Post-Build: Erstelle LDF-Build-Cache...")
+        """Post-Build: Erstelle erweiterten LDF-Build-Cache"""
+        print(f"\n🔄 Post-Build: Erstelle erweiterten LDF-Build-Cache...")
         
         ldf_build_data = capture_ldf_build_data_only()
         
-        if len(ldf_build_data) > 3:  # Mindestens CPPPATH, CPPDEFINES, BUILD_FLAGS
+        if len(ldf_build_data) > 5:  # Mindestens CPPPATH, PROJECT_LIB_DIR, PIOBUILDFILES, etc.
             env_name = env.get("PIOENV")
             if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
                 print(f"✓ lib_ldf_mode = off für nächsten Build gesetzt")
             
             if save_ldf_build_cache(ldf_build_data):
-                print(f"\n📊 LDF-Build-Cache erfolgreich erstellt:")
+                print(f"\n📊 Erweiterter LDF-Build-Cache erfolgreich erstellt:")
                 print(f"   📊 Build-Variablen: {len(ldf_build_data)}")
+                print(f"   🆕 Neue Variablen: PROJECT_LIB_DIR, PIOBUILDFILES, LIB_EXTRA_DIRS")
                 print(f"   🚫 Tools/Toolchain: Nicht gecacht (PlatformIO verwaltet das)")
                 print(f"\n💡 Führen Sie 'pio run' erneut aus für optimierten Build")
                 print(f"   Nächster Build überspringt LDF-Scan!")
             else:
-                print(f"⚠ Fehler beim Erstellen des LDF-Build-Cache")
+                print(f"⚠ Fehler beim Erstellen des erweiterten LDF-Build-Cache")
         else:
             print(f"⚠ Unvollständige LDF-Build-Daten erfasst")
     
     env.AddPostAction("buildprog", post_build_cache_creation)
 
-print(f"🏁 LDF-Optimierung (Build-Daten ohne Tools) Setup abgeschlossen")
+print(f"🏁 Erweiterte LDF-Optimierung Setup abgeschlossen")
 print(f"💡 Tipp: Löschen Sie '.pio/ldf_cache/' um den Cache zurückzusetzen\n")
