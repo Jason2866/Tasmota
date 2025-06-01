@@ -225,6 +225,30 @@ def count_conversions(value, stats, depth=0):
         for dict_value in value.values():
             count_conversions(dict_value, stats, depth + 1)
 
+def capture_middleware(node, env):
+    """Middleware um lokales Environment zu erfassen"""
+    global _backup_created
+    
+    if not _backup_created:
+        print(f"\n🔄 Middleware: Erfasse lokales Environment für {node}")
+        
+        # Lokales Environment erfassen
+        local_env = env.Clone()
+        local_cpppath = local_env.get('CPPPATH', [])
+        
+        print(f"   Middleware CPPPATH: {len(local_cpppath)} Pfade")
+        
+        if len(local_cpppath) > 7:  # LDF-Ergebnisse vorhanden
+            local_dict = local_env.Dictionary()
+            
+            if freeze_exact_scons_configuration_local(local_dict):
+                env_name = env.get("PIOENV")
+                backup_and_modify_correct_ini_file(env_name, set_ldf_off=True)
+                print(f"✓ Middleware: Lokales Environment gesichert!")
+                _backup_created = True
+    
+    return node
+
 def freeze_exact_scons_configuration_local(local_dict):
     """Speichert lokales Environment mit selektiver SCons-Objekt-Pfad-Konvertierung"""
     cache_file = get_cache_file_path()
@@ -615,8 +639,7 @@ else:
         
         return None
     
-    # Hook an erste Kompilierung
-    env.AddPreAction("*.cpp", local_environment_backup_wrapper)
+    env.AddBuildMiddleware(capture_middleware, "*")
 
 print(f"🏁 Lokales SCons-Environment-Backup initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
