@@ -19,21 +19,14 @@ def find_all_platformio_files():
     """Findet alle platformio*.ini Dateien im Projekt"""
     project_dir = env.get("PROJECT_DIR")
     
-    # Suche nach allen platformio*.ini Dateien
-    ini_patterns = [
-        'platformio.ini',
-        'platformio_*.ini'
-    ]
-    
+    ini_patterns = ['platformio.ini', 'platformio_*.ini']
     ini_files = []
     for pattern in ini_patterns:
         found_files = glob.glob(os.path.join(project_dir, pattern))
         ini_files.extend(found_files)
     
-    # Entferne Duplikate und sortiere
     ini_files = list(set(ini_files))
     
-    # Sortiere nach Priorität: Basis-Dateien zuerst, Override zuletzt
     def sort_priority(filepath):
         filename = os.path.basename(filepath).lower()
         if filename == 'platformio.ini':
@@ -78,8 +71,6 @@ def find_env_definition_file(env_name):
 
 def backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
     """Findet und modifiziert die korrekte platformio*.ini Datei"""
-    
-    # Finde die Datei, die das Environment definiert
     env_file = find_env_definition_file(env_name)
     
     if not env_file:
@@ -91,7 +82,6 @@ def backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
         print(f"⚠ Datei nicht gefunden: {env_file}")
         return False
     
-    # Erstelle Backup
     backup_file = f"{env_file}.ldf_backup"
     if not os.path.exists(backup_file):
         shutil.copy2(env_file, backup_file)
@@ -115,7 +105,6 @@ def backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
                 config.remove_option(section_name, "lib_ldf_mode")
                 print(f"✓ lib_ldf_mode entfernt aus {os.path.basename(env_file)}")
         
-        # Schreibe zurück
         with open(env_file, 'w', encoding='utf-8') as f:
             config.write(f, space_around_delimiters=True)
         
@@ -128,8 +117,6 @@ def backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
 def get_current_ldf_mode(env_name):
     """Ermittelt aktuellen LDF-Modus aus allen platformio*.ini Dateien"""
     ini_files = find_all_platformio_files()
-    
-    # Lade alle Konfigurationen in der richtigen Reihenfolge
     merged_config = configparser.ConfigParser(allow_no_value=True)
     
     for ini_file in ini_files:
@@ -137,7 +124,6 @@ def get_current_ldf_mode(env_name):
             temp_config = configparser.ConfigParser(allow_no_value=True)
             temp_config.read(ini_file, encoding='utf-8')
             
-            # Merge alle Sektionen (spätere Dateien überschreiben frühere)
             for section_name in temp_config.sections():
                 if not merged_config.has_section(section_name):
                     merged_config.add_section(section_name)
@@ -149,40 +135,18 @@ def get_current_ldf_mode(env_name):
             print(f"⚠ Fehler beim Lesen von {os.path.basename(ini_file)}: {e}")
             continue
     
-    # Prüfe spezifisches Environment
     section_name = f"env:{env_name}"
     if merged_config.has_section(section_name):
         if merged_config.has_option(section_name, 'lib_ldf_mode'):
             mode = merged_config.get(section_name, 'lib_ldf_mode')
             return mode
     
-    # Fallback: Prüfe [env] Basis-Sektion
     if merged_config.has_section('env'):
         if merged_config.has_option('env', 'lib_ldf_mode'):
             mode = merged_config.get('env', 'lib_ldf_mode')
             return mode
     
-    return 'chain'  # PlatformIO Standard
-
-def restore_platformio_ini():
-    """Stellt alle ursprünglichen platformio*.ini Dateien wieder her"""
-    project_dir = env.get("PROJECT_DIR")
-    
-    # Finde alle Backup-Dateien
-    backup_files = glob.glob(os.path.join(project_dir, "platformio*.ini.ldf_backup"))
-    
-    restored_count = 0
-    for backup_file in backup_files:
-        original_file = backup_file.replace('.ldf_backup', '')
-        if os.path.exists(backup_file):
-            shutil.copy2(backup_file, original_file)
-            print(f"✓ {os.path.basename(original_file)} wiederhergestellt")
-            restored_count += 1
-    
-    if restored_count > 0:
-        print(f"✓ {restored_count} Dateien wiederhergestellt")
-        return True
-    return False
+    return 'chain'
 
 def scan_available_libraries():
     """Scannt alle verfügbaren Libraries im lib/ Ordner rekursiv"""
@@ -216,7 +180,6 @@ def capture_ldf_results():
     ignored_libs = set(current_ignore)
     used_libs = [lib for lib in available_libs if lib not in ignored_libs]
     
-    # Externe Dependencies hinzufügen
     external_deps = env.get("LIB_DEPS", [])
     if external_deps:
         for dep in external_deps:
@@ -235,9 +198,8 @@ def capture_ldf_results():
         "external_deps": external_deps if external_deps else []
     }
 
-def get_config_hash_simple():
-    """Erstellt vereinfachten Hash nur auf wirklich relevante Werte"""
-    # Nur die wichtigsten Konfigurationswerte hashen
+def calculate_final_config_hash():
+    """Berechnet Hash NACH allen Konfigurationsänderungen"""
     relevant_values = [
         f"BOARD:{env.get('BOARD', '')}",
         f"PLATFORM:{env.get('PLATFORM', '')}",
@@ -246,7 +208,7 @@ def get_config_hash_simple():
         f"LIB_DEPS:{str(sorted(env.get('LIB_DEPS', [])))}"
     ]
     
-    # Zusätzlich: Nur relevante Teile aus platformio*.ini (ohne lib_ldf_mode)
+    # Lese AKTUELLE Konfiguration (nach Änderungen)
     ini_files = find_all_platformio_files()
     
     for ini_file in sorted(ini_files):
@@ -257,8 +219,8 @@ def get_config_hash_simple():
                 
                 env_section = f"env:{env.get('PIOENV')}"
                 if config.has_section(env_section):
-                    # Nur spezifische Optionen hashen (ohne lib_ldf_mode)
-                    relevant_options = ['board', 'platform', 'framework', 'build_flags', 'lib_deps', 'lib_ignore']
+                    # Alle relevanten Optionen einschließlich lib_ldf_mode
+                    relevant_options = ['board', 'platform', 'framework', 'build_flags', 'lib_deps', 'lib_ignore', 'lib_ldf_mode']
                     for option in relevant_options:
                         if config.has_option(env_section, option):
                             value = config.get(env_section, option)
@@ -266,22 +228,24 @@ def get_config_hash_simple():
             except Exception:
                 pass
     
-    # Sortiere für konsistenten Hash
     relevant_values.sort()
     config_string = "|".join(relevant_values)
     hash_value = hashlib.md5(config_string.encode()).hexdigest()
     
-    print(f"🔍 Vereinfachter Hash: {hash_value[:8]}...")
+    print(f"🔍 Finaler Hash (nach Konfigurationsänderung): {hash_value[:8]}...")
     return hash_value
 
-def save_ldf_cache(ldf_results):
-    """Speichert LDF-Ergebnisse im Cache mit vereinfachtem Hash"""
+def save_ldf_cache_with_final_hash(ldf_results):
+    """Speichert LDF-Ergebnisse mit finalem Hash"""
     cache_file = get_cache_file_path()
+    
+    # Berechne Hash NACH allen Änderungen
+    final_hash = calculate_final_config_hash()
+    
     cache_data = {
-        "config_hash": get_config_hash_simple(),  # Vereinfachter Hash
+        "config_hash": final_hash,
         "ldf_results": ldf_results,
-        "env_name": env.get("PIOENV"),
-        "ldf_mode_modified": False
+        "env_name": env.get("PIOENV")
     }
     
     with open(cache_file, 'w') as f:
@@ -289,27 +253,10 @@ def save_ldf_cache(ldf_results):
     
     used_count = len(ldf_results["used"])
     unused_count = len(ldf_results["unused"])
-    print(f"✓ LDF Cache gespeichert: {used_count} verwendet, {unused_count} ignoriert")
-
-def mark_ldf_mode_modified():
-    """Markiert dass lib_ldf_mode vom Script geändert wurde"""
-    cache_file = get_cache_file_path()
-    if os.path.exists(cache_file):
-        try:
-            with open(cache_file, 'r') as f:
-                cache_data = json.load(f)
-            
-            cache_data["ldf_mode_modified"] = True
-            
-            with open(cache_file, 'w') as f:
-                json.dump(cache_data, f, indent=2)
-            
-            print(f"✓ LDF-Modus-Änderung im Cache markiert")
-        except Exception as e:
-            print(f"⚠ Fehler beim Markieren der LDF-Änderung: {e}")
+    print(f"✓ LDF Cache mit finalem Hash gespeichert: {used_count} verwendet, {unused_count} ignoriert")
 
 def load_ldf_cache():
-    """Lädt LDF-Cache falls vorhanden und gültig"""
+    """Lädt LDF-Cache und vergleicht mit aktuellem Hash"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
@@ -319,7 +266,8 @@ def load_ldf_cache():
         with open(cache_file, 'r') as f:
             cache_data = json.load(f)
         
-        current_hash = get_config_hash_simple()
+        # Berechne aktuellen Hash (sollte mit lib_ldf_mode=off übereinstimmen)
+        current_hash = calculate_final_config_hash()
         cached_hash = cache_data.get("config_hash")
         
         if cached_hash == current_hash:
@@ -327,15 +275,11 @@ def load_ldf_cache():
             if ldf_results:
                 used_count = len(ldf_results.get("used", []))
                 unused_count = len(ldf_results.get("unused", []))
-                ldf_modified = cache_data.get("ldf_mode_modified", False)
                 
                 print(f"✓ LDF Cache geladen: {used_count} verwendet, {unused_count} ignoriert")
-                if ldf_modified:
-                    print(f"  (lib_ldf_mode wurde bereits vom Script modifiziert)")
-                
                 return ldf_results
         else:
-            print(f"⚠ LDF Cache ungültig - Konfiguration geändert")
+            print(f"⚠ LDF Cache ungültig - Hash-Mismatch")
             print(f"  Aktueller Hash: {current_hash[:8]}...")
             print(f"  Gecachter Hash: {cached_hash[:8] if cached_hash else 'None'}...")
             
@@ -344,17 +288,8 @@ def load_ldf_cache():
     
     return None
 
-def clear_ldf_cache():
-    """Löscht den LDF Cache und stellt alle platformio*.ini wieder her"""
-    cache_file = get_cache_file_path()
-    if os.path.exists(cache_file):
-        os.remove(cache_file)
-        print(f"✓ LDF Cache gelöscht")
-    
-    restore_platformio_ini()
-
 # =============================================================================
-# HAUPTLOGIK - MIT VEREINFACHTEM HASH
+# HAUPTLOGIK - MIT POST-ACTION HASH-BERECHNUNG
 # =============================================================================
 
 print(f"\n🔍 Tasmota LDF Cache für Environment: {env.get('PIOENV')}")
@@ -386,47 +321,25 @@ if cache_is_valid and current_ldf_mode == 'off':
         env.Replace(LIB_IGNORE=all_ignore)
         print(f"✅ {len(unused_libs)} Libraries ignoriert - Build beschleunigt")
 
-elif cache_is_valid and current_ldf_mode != 'off':
-    # Cache ist gültig aber LDF noch nicht deaktiviert
-    print(f"⚡ Gültiger Cache gefunden - deaktiviere LDF")
-    
-    if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-        # Markiere dass wir lib_ldf_mode geändert haben
-        mark_ldf_mode_modified()
-        
-        print(f"✅ lib_ldf_mode = off gesetzt")
-        print(f"⚠ WICHTIG: Starten Sie den Build ERNEUT für optimierten Build")
-        
-        # Setze auch lib_ignore für den Fall dass der Build trotzdem läuft
-        unused_libs = cached_ldf.get("unused", [])
-        if unused_libs:
-            current_ignore = env.get("LIB_IGNORE", [])
-            if isinstance(current_ignore, str):
-                current_ignore = [current_ignore]
-            elif current_ignore is None:
-                current_ignore = []
-            
-            all_ignore = list(set(current_ignore + unused_libs))
-            env.Replace(LIB_IGNORE=all_ignore)
-
 else:
-    # Kein gültiger Cache - sammle Dependencies
+    # Kein gültiger Cache ODER LDF noch nicht deaktiviert
     print(f"📝 Sammle Dependencies - LDF läuft normal")
     
-    # Stelle sicher, dass LDF aktiviert ist
-    if current_ldf_mode == 'off':
-        backup_and_modify_correct_ini_file(env_name, set_ldf_off=False)
-        print(f"✓ LDF reaktiviert für Dependency-Sammlung")
-        print(f"⚠ Starten Sie den Build ERNEUT für LDF-Sammlung")
-    
-    def post_build_action(source, target, env):
-        """Wird nach erfolgreichem Build ausgeführt - NUR für Cache-Erstellung"""
-        print(f"\n🔄 Post-Build: Sammle LDF-Ergebnisse...")
+    def post_build_cache_and_optimize(source, target, env):
+        """SCons Post-Action: Sammle LDF-Daten, ändere Konfiguration, berechne finalen Hash"""
+        print(f"\n🔄 Post-Build: Sammle LDF-Ergebnisse und optimiere für nächsten Build...")
         
+        # 1. Sammle LDF-Ergebnisse
         ldf_results = capture_ldf_results()
         
         if len(ldf_results["used"]) > 0:
-            save_ldf_cache(ldf_results)
+            # 2. Setze lib_ldf_mode = off für nächsten Build
+            env_name = env.get("PIOENV")
+            if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+                print(f"✓ lib_ldf_mode = off für nächsten Build gesetzt")
+            
+            # 3. Berechne Hash NACH der Konfigurationsänderung und speichere Cache
+            save_ldf_cache_with_final_hash(ldf_results)
             
             used_count = len(ldf_results["used"])
             unused_count = len(ldf_results["unused"])
@@ -443,13 +356,14 @@ else:
                 if len(ldf_results["unused"]) > 5:
                     print(f"   ... und {len(ldf_results['unused']) - 5} weitere")
             
-            print(f"\n💡 Cache erstellt - führen Sie 'pio run' erneut aus")
+            print(f"\n💡 Führen Sie 'pio run' erneut aus für optimierten Build")
             print(f"   Nächster Build wird {unused_count} Libraries überspringen")
             
         else:
             print(f"⚠ Keine verwendeten Libraries gefunden")
     
-    env.AddPostAction("buildprog", post_build_action)
+    # Registriere SCons Post-Action
+    env.AddPostAction("buildprog", post_build_cache_and_optimize)
 
 print(f"🏁 LDF Cache Setup abgeschlossen für {env_name}")
 print(f"💡 Tipp: Löschen Sie '.pio/ldf_cache/' um den Cache zurückzusetzen\n")
