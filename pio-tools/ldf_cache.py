@@ -149,107 +149,246 @@ def get_current_ldf_mode(env_name):
     
     return 'chain'
 
-def capture_complete_ldf_environment():
-    """Erfasst ALLE vom LDF generierten Build-Environment-Daten (ohne Konvertierung)"""
-    print(f"🔍 Erfasse vollständige LDF-Environment-Daten...")
+def handle_special_scons_objects(obj):
+    """Spezialbehandlung für bekannte SCons-Objekttypen"""
+    obj_type = str(type(obj))
     
-    # Alle kritischen Environment-Variablen direkt erfassen (keine String-Konvertierung!)
-    critical_vars = [
+    if 'Scanner' in obj_type:
+        # Scanner-Objekte: Extrahiere wichtige Attribute
+        scanner_data = {
+            '__scons_type__': 'Scanner',
+            'name': getattr(obj, 'name', 'unknown'),
+            'suffixes': getattr(obj, 'skeys', []),
+            'function': str(getattr(obj, 'function', 'unknown')),
+            'original_type': obj_type
+        }
+        return scanner_data
+    elif 'Builder' in obj_type:
+        # Builder-Objekte: Extrahiere Konfiguration
+        builder_data = {
+            '__scons_type__': 'Builder',
+            'name': str(obj),
+            'action': str(getattr(obj, 'action', 'unknown')),
+            'suffix': getattr(obj, 'suffix', ''),
+            'original_type': obj_type
+        }
+        return builder_data
+    elif 'NodeList' in obj_type:
+        # NodeList: Konvertiere zu String-Liste
+        return {
+            '__scons_type__': 'NodeList',
+            'nodes': [str(node) for node in obj],
+            'original_type': obj_type
+        }
+    elif 'Node' in obj_type:
+        # Einzelne Nodes
+        return {
+            '__scons_type__': 'Node',
+            'path': str(obj),
+            'original_type': obj_type
+        }
+    else:
+        return {
+            '__scons_type__': 'Unknown',
+            'string_repr': str(obj),
+            'original_type': obj_type
+        }
+
+def safe_deep_convert_for_pickle(obj, max_depth=15, current_depth=0, seen_objects=None):
+    """Konvertiert SCons-Objekte rekursiv zu pickle-baren Datenstrukturen"""
+    if seen_objects is None:
+        seen_objects = set()
+    
+    # Schutz vor Endlosschleifen
+    obj_id = id(obj)
+    if obj_id in seen_objects or current_depth > max_depth:
+        return f"<CIRCULAR_REF_OR_MAX_DEPTH:{str(obj)[:50]}>"
+    
+    seen_objects.add(obj_id)
+    
+    try:
+        # Test ob bereits pickle-bar
+        pickle.dumps(obj)
+        seen_objects.remove(obj_id)
+        return obj
+    except:
+        pass
+    
+    try:
+        # Konvertierung basierend auf Typ
+        if obj is None:
+            result = None
+        elif isinstance(obj, (str, int, float, bool)):
+            result = obj
+        elif isinstance(obj, (list, tuple)):
+            converted = []
+            for i, item in enumerate(obj):
+                if i > 1000:  # Schutz vor sehr großen Listen
+                    converted.append(f"<TRUNCATED_AT_{i}_ITEMS>")
+                    break
+                converted.append(safe_deep_convert_for_pickle(item, max_depth, current_depth + 1, seen_objects.copy()))
+            result = converted
+        elif isinstance(obj, dict):
+            converted = {}
+            item_count = 0
+            for key, value in obj.items():
+                if item_count > 500:  # Schutz vor sehr großen Dictionaries
+                    converted["<TRUNCATED>"] = f"<TRUNCATED_AT_{item_count}_ITEMS>"
+                    break
+                try:
+                    safe_key = str(key)
+                    converted[safe_key] = safe_deep_convert_for_pickle(value, max_depth, current_depth + 1, seen_objects.copy())
+                    item_count += 1
+                except:
+                    converted[f"<FAILED_KEY_{item_count}>"] = str(value)[:100]
+                    item_count += 1
+            result = converted
+        elif hasattr(obj, '__dict__'):
+            # Objekt mit Attributen - versuche SCons-spezifische Behandlung
+            if any(keyword in str(type(obj)) for keyword in ['Scanner', 'Builder', 'Node']):
+                result = handle_special_scons_objects(obj)
+            else:
+                # Generische Objekt-Konvertierung
+                try:
+                    obj_dict = {'__original_type__': str(type(obj))}
+                    attr_count = 0
+                    for attr_name in dir(obj):
+                        if attr_count > 100:  # Begrenze Attribute
+                            break
+                        if not attr_name.startswith('_') and attr_name not in ['im_func', 'im_self']:
+                            try:
+                                attr_value = getattr(obj, attr_name)
+                                if not callable(attr_value):
+                                    obj_dict[attr_name] = safe_deep_convert_for_pickle(attr_value, max_depth, current_depth + 1, seen_objects.copy())
+                                    attr_count += 1
+                            except:
+                                pass
+                    result = obj_dict
+                except:
+                    result = handle_special_scons_objects(obj)
+        elif hasattr(obj, '__iter__') and not isinstance(obj, str):
+            # Iterable Objekte (NodeList, etc.)
+            if any(keyword in str(type(obj)) for keyword in ['NodeList', 'Scanner', 'Builder']):
+                result = handle_special_scons_objects(obj)
+            else:
+                try:
+                    converted = []
+                    item_count = 0
+                    for item in obj:
+                        if item_count > 500:  # Begrenze Iterationen
+                            converted.append(f"<TRUNCATED_AT_{item_count}_ITEMS>")
+                            break
+                        converted.append(safe_deep_convert_for_pickle(item, max_depth, current_depth + 1, seen_objects.copy()))
+                        item_count += 1
+                    result = converted
+                except:
+                    result = handle_special_scons_objects(obj)
+        else:
+            # Fallback: SCons-spezifische Behandlung oder String
+            result = handle_special_scons_objects(obj)
+        
+        seen_objects.remove(obj_id)
+        return result
+        
+    except Exception as e:
+        seen_objects.discard(obj_id)
+        return f"<CONVERSION_ERROR:{str(e)[:100]}:{str(obj)[:50]}>"
+
+def capture_complete_ldf_environment():
+    """Erfasst ALLE LDF-Environment-Daten mit rekursiver Deep-Conversion"""
+    print(f"🔍 Erfasse vollständige LDF-Environment-Daten (rekursive Deep-Conversion)...")
+    
+    # ALLE Environment-Variablen erfassen
+    all_vars = [
         "LIBS", "LIBPATH", "CPPPATH", "CPPDEFINES", 
         "BUILD_FLAGS", "CCFLAGS", "CXXFLAGS", "LINKFLAGS",
         "LIB_DEPS", "LIB_IGNORE", "FRAMEWORK_DIR", "PLATFORM_DIR",
         "PLATFORM_PACKAGES", "CC", "CXX", "AR", "RANLIB",
         "LIBSOURCE_DIRS", "EXTRA_LIB_DIRS", "PIOENV", 
-        "BOARD", "PLATFORM", "FRAMEWORK"
+        "BOARD", "PLATFORM", "FRAMEWORK", "SCANNERS",
+        "BUILDERS", "TOOLS", "ENV", "CPPFLAGS", "ASFLAGS"
     ]
     
     ldf_environment = {}
+    conversion_stats = {'success': 0, 'failed': 0, 'converted': 0}
     
-    for var in critical_vars:
+    for var in all_vars:
         if var in env:
-            value = env[var]
-            ldf_environment[var] = value
+            original_value = env[var]
             
-            # Debug-Info über erfasste Daten
-            if hasattr(value, '__len__') and not isinstance(value, str):
-                print(f"   📊 {var}: {type(value).__name__} mit {len(value)} Elementen")
-            else:
-                print(f"   📊 {var}: {type(value).__name__}")
+            print(f"   🔄 Konvertiere {var}: {type(original_value).__name__}...")
+            
+            try:
+                # Rekursive Deep-Conversion
+                converted_value = safe_deep_convert_for_pickle(original_value)
+                
+                # Test ob konvertierter Wert pickle-bar ist
+                pickle.dumps(converted_value)
+                
+                ldf_environment[var] = converted_value
+                conversion_stats['success'] += 1
+                
+                if hasattr(converted_value, '__len__') and not isinstance(converted_value, str):
+                    print(f"   ✓ {var}: {len(converted_value)} Elemente erfolgreich konvertiert")
+                else:
+                    print(f"   ✓ {var}: Erfolgreich konvertiert")
+                    
+            except Exception as e:
+                print(f"   ⚠ {var}: Konvertierungsfehler - {e}")
+                # Notfall-Fallback
+                ldf_environment[var] = {
+                    '__conversion_failed__': True,
+                    'error': str(e),
+                    'string_repr': str(original_value)[:500],
+                    'type': str(type(original_value))
+                }
+                conversion_stats['failed'] += 1
     
-    # Zusätzliche Library-Pfad-Analyse
-    lib_include_paths = []
-    for path in env.get("CPPPATH", []):
-        path_str = str(path)
-        if any(keyword in path_str.lower() for keyword in ['lib', 'libraries', 'framework']):
-            lib_include_paths.append(path)
+    # Zusätzliche SCons-Environment-Metadaten
+    try:
+        env_keys = list(env.keys())
+        ldf_environment["_ENV_KEYS"] = env_keys
+        ldf_environment["_CONVERSION_STATS"] = conversion_stats
+        print(f"   📊 Environment-Schlüssel: {len(env_keys)} erfasst")
+    except:
+        pass
     
-    if lib_include_paths:
-        ldf_environment["LIB_INCLUDE_PATHS"] = lib_include_paths
-        print(f"   📊 LIB_INCLUDE_PATHS: {len(lib_include_paths)} Pfade")
-    
-    # Framework-spezifische Defines erfassen
-    framework_defines = []
-    for define in env.get("CPPDEFINES", []):
-        define_str = str(define)
-        if any(keyword in define_str.upper() for keyword in ['ARDUINO', 'ESP32', 'FRAMEWORK']):
-            framework_defines.append(define)
-    
-    if framework_defines:
-        ldf_environment["FRAMEWORK_DEFINES"] = framework_defines
-        print(f"   📊 FRAMEWORK_DEFINES: {len(framework_defines)} Defines")
-    
-    print(f"✅ {len(ldf_environment)} Environment-Variablen erfasst")
+    print(f"✅ {len(ldf_environment)} Environment-Variablen vollständig konvertiert")
+    print(f"   📊 Erfolgreich: {conversion_stats['success']}, Fehlgeschlagen: {conversion_stats['failed']}")
     return ldf_environment
 
 def restore_complete_ldf_environment(cached_env_data):
-    """Stellt ALLE LDF-Environment-Daten vollständig wieder her"""
+    """Stellt ALLE konvertierten Environment-Daten wieder her"""
     print(f"🔄 Stelle vollständige LDF-Environment wieder her...")
     
-    # Kritische Variablen die direkt gesetzt werden müssen
-    critical_vars = [
-        "LIBS", "LIBPATH", "CPPPATH", "CPPDEFINES", 
-        "BUILD_FLAGS", "CCFLAGS", "CXXFLAGS", "LINKFLAGS",
-        "LIB_DEPS", "LIB_IGNORE"
-    ]
-    
     restored_count = 0
+    failed_count = 0
     
-    for var_name in critical_vars:
-        if var_name in cached_env_data:
-            cached_value = cached_env_data[var_name]
+    for var_name, cached_value in cached_env_data.items():
+        if var_name.startswith('_'):
+            continue  # Skip Metadaten
             
-            try:
-                # Direkte Zuweisung - keine Konvertierung!
-                env[var_name] = cached_value
-                restored_count += 1
+        try:
+            # Prüfe ob Konvertierung fehlgeschlagen war
+            if isinstance(cached_value, dict) and cached_value.get('__conversion_failed__'):
+                print(f"   ⚠ {var_name}: War nicht konvertierbar - überspringe")
+                failed_count += 1
+                continue
+            
+            # Direkte Zuweisung der konvertierten Daten
+            env[var_name] = cached_value
+            restored_count += 1
+            
+            if hasattr(cached_value, '__len__') and not isinstance(cached_value, str):
+                print(f"   ✓ {var_name}: {len(cached_value)} Elemente wiederhergestellt")
+            else:
+                print(f"   ✓ {var_name}: Wiederhergestellt")
                 
-                # Debug-Info
-                if hasattr(cached_value, '__len__') and not isinstance(cached_value, str):
-                    print(f"   ✓ {var_name}: {type(cached_value).__name__} mit {len(cached_value)} Elementen")
-                else:
-                    print(f"   ✓ {var_name}: {type(cached_value).__name__}")
-                    
-            except Exception as e:
-                print(f"   ⚠ {var_name}: Fehler bei Wiederherstellung - {e}")
+        except Exception as e:
+            print(f"   ⚠ {var_name}: Wiederherstellungsfehler - {e}")
+            failed_count += 1
     
-    # Framework-Verzeichnis explizit setzen
-    if "FRAMEWORK_DIR" in cached_env_data and cached_env_data["FRAMEWORK_DIR"]:
-        env["FRAMEWORK_DIR"] = cached_env_data["FRAMEWORK_DIR"]
-        print(f"   ✓ FRAMEWORK_DIR: {cached_env_data['FRAMEWORK_DIR']}")
-    
-    # Platform-Verzeichnis setzen
-    if "PLATFORM_DIR" in cached_env_data and cached_env_data["PLATFORM_DIR"]:
-        env["PLATFORM_DIR"] = cached_env_data["PLATFORM_DIR"]
-        print(f"   ✓ PLATFORM_DIR: {cached_env_data['PLATFORM_DIR']}")
-    
-    # Compiler-Pfade setzen
-    compiler_vars = ["CC", "CXX", "AR", "RANLIB"]
-    for var in compiler_vars:
-        if var in cached_env_data and cached_env_data[var]:
-            env[var] = cached_env_data[var]
-            print(f"   ✓ {var}: {cached_env_data[var]}")
-    
-    print(f"✅ {restored_count} kritische Environment-Variablen wiederhergestellt")
+    print(f"✅ {restored_count} Environment-Variablen wiederhergestellt, {failed_count} übersprungen")
     return True
 
 def verify_environment_completeness():
@@ -288,7 +427,7 @@ def calculate_final_config_hash():
         f"PIOENV:{env.get('PIOENV', '')}"
     ]
     
-    # Nur INI-Dateien für Hash verwenden (keine problematischen Environment-Variablen)
+    # Nur INI-Dateien für Hash verwenden (keine Environment-Variablen mit SCons-Objekten)
     ini_files = find_all_platformio_files()
     
     for ini_file in sorted(ini_files):
@@ -324,10 +463,14 @@ def save_complete_ldf_cache(ldf_environment):
         
         cache_data = {
             "config_hash": final_hash,
-            "ldf_environment": ldf_environment,  # Originale SCons-Objekte!
+            "ldf_environment": ldf_environment,  # Konvertierte SCons-Objekte!
             "env_name": env.get("PIOENV"),
-            "cache_version": "2.0"
+            "cache_version": "2.1"  # Neue Version für rekursive Konvertierung
         }
+        
+        # Test der kompletten Serialisierung
+        test_data = pickle.dumps(cache_data)
+        print(f"   🔍 Pickle-Test erfolgreich: {len(test_data)} Bytes")
         
         # Komprimiert mit Pickle speichern
         with gzip.open(cache_file, 'wb') as f:
@@ -335,14 +478,13 @@ def save_complete_ldf_cache(ldf_environment):
         
         # Statistiken
         env_var_count = len(ldf_environment)
-        lib_count = len(ldf_environment.get("LIBS", []))
-        path_count = len(ldf_environment.get("CPPPATH", []))
+        conversion_stats = ldf_environment.get("_CONVERSION_STATS", {})
         
         print(f"✓ LDF-Cache (Pickle) erfolgreich gespeichert:")
         print(f"   📁 Datei: {os.path.basename(cache_file)}")
         print(f"   📊 Environment-Variablen: {env_var_count}")
-        print(f"   📚 Libraries: {lib_count}")
-        print(f"   📂 Include-Pfade: {path_count}")
+        print(f"   ✅ Erfolgreich konvertiert: {conversion_stats.get('success', 0)}")
+        print(f"   ⚠ Fehlgeschlagen: {conversion_stats.get('failed', 0)}")
         
         return True
         
@@ -365,7 +507,7 @@ def load_complete_ldf_cache():
         
         # Prüfe Cache-Version
         cache_version = cache_data.get("cache_version", "1.0")
-        if cache_version != "2.0":
+        if cache_version not in ["2.0", "2.1"]:
             print(f"⚠ Veraltete Cache-Version {cache_version} - wird ignoriert")
             return None
         
@@ -377,13 +519,12 @@ def load_complete_ldf_cache():
             ldf_environment = cache_data.get("ldf_environment")
             if ldf_environment:
                 env_var_count = len(ldf_environment)
-                lib_count = len(ldf_environment.get("LIBS", []))
-                path_count = len(ldf_environment.get("CPPPATH", []))
+                conversion_stats = ldf_environment.get("_CONVERSION_STATS", {})
                 
                 print(f"✓ LDF-Cache (Pickle) erfolgreich geladen:")
                 print(f"   📊 Environment-Variablen: {env_var_count}")
-                print(f"   📚 Libraries: {lib_count}")
-                print(f"   📂 Include-Pfade: {path_count}")
+                print(f"   ✅ Erfolgreich konvertiert: {conversion_stats.get('success', 0)}")
+                print(f"   ⚠ Fehlgeschlagen: {conversion_stats.get('failed', 0)}")
                 
                 return ldf_environment
         else:
@@ -398,7 +539,7 @@ def load_complete_ldf_cache():
     return None
 
 # =============================================================================
-# HAUPTLOGIK - VOLLSTÄNDIGE LDF-ENVIRONMENT-WIEDERHERSTELLUNG MIT PICKLE
+# HAUPTLOGIK - VOLLSTÄNDIGE LDF-ENVIRONMENT-WIEDERHERSTELLUNG MIT REKURSIVER CONVERSION
 # =============================================================================
 
 print(f"\n🚀 Tasmota LDF-Optimierung für Environment: {env.get('PIOENV')}")
@@ -411,9 +552,8 @@ cached_ldf_env = load_complete_ldf_cache()
 
 # Prüfe ob vollständiger Cache verfügbar ist
 cache_is_complete = (cached_ldf_env is not None and 
-                    cached_ldf_env.get("LIBS") is not None and 
-                    cached_ldf_env.get("CPPPATH") is not None and
-                    len(cached_ldf_env.get("CPPPATH", [])) > 0)
+                    len(cached_ldf_env) > 5 and
+                    cached_ldf_env.get("CPPPATH") is not None)
 
 if cache_is_complete and current_ldf_mode == 'off':
     # Cache ist vollständig UND LDF bereits deaktiviert
@@ -435,13 +575,13 @@ else:
         print(f"📝 Erster Build-Durchlauf - sammle vollständige LDF-Environment-Daten")
     
     def complete_post_build_action(source, target, env):
-        """SCons Post-Action: Erfasse ALLE LDF-Daten mit Pickle"""
-        print(f"\n🔄 Post-Build: Erfasse vollständige LDF-Environment (Pickle)...")
+        """SCons Post-Action: Erfasse ALLE LDF-Daten mit rekursiver Pickle-Conversion"""
+        print(f"\n🔄 Post-Build: Erfasse vollständige LDF-Environment (rekursive Conversion)...")
         
-        # Erfasse ALLE LDF-Environment-Daten (originale SCons-Objekte!)
+        # Erfasse ALLE LDF-Environment-Daten mit rekursiver Deep-Conversion
         complete_ldf_env = capture_complete_ldf_environment()
         
-        if len(complete_ldf_env.get("CPPPATH", [])) > 0:
+        if len(complete_ldf_env) > 5:
             # Setze lib_ldf_mode = off für nächsten Build
             env_name = env.get("PIOENV")
             if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
@@ -449,18 +589,15 @@ else:
             
             # Speichere vollständige Environment-Daten mit Pickle
             if save_complete_ldf_cache(complete_ldf_env):
-                lib_count = len(complete_ldf_env.get("LIBS", []))
-                path_count = len(complete_ldf_env.get("CPPPATH", []))
-                define_count = len(complete_ldf_env.get("CPPDEFINES", []))
+                conversion_stats = complete_ldf_env.get("_CONVERSION_STATS", {})
                 
                 print(f"\n📊 LDF-Environment erfolgreich erfasst:")
-                print(f"   📚 Libraries: {lib_count}")
-                print(f"   📂 Include-Pfade: {path_count}")
-                print(f"   🏷️  Defines: {define_count}")
-                print(f"   🔧 Framework: {complete_ldf_env.get('FRAMEWORK_DIR', 'N/A')}")
+                print(f"   📚 Variablen erfasst: {len(complete_ldf_env)}")
+                print(f"   ✅ Erfolgreich: {conversion_stats.get('success', 0)}")
+                print(f"   ⚠ Fehlgeschlagen: {conversion_stats.get('failed', 0)}")
                 
                 print(f"\n💡 Führen Sie 'pio run' erneut aus für optimierten Build")
-                print(f"   Nächster Build verwendet gespeicherte LDF-Environment (Pickle)")
+                print(f"   Nächster Build verwendet gespeicherte LDF-Environment (rekursive Pickle)")
             else:
                 print(f"⚠ Fehler beim Speichern der LDF-Environment")
         else:
