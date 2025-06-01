@@ -323,12 +323,16 @@ def capture_middleware(node, env):
     """Middleware um lokales Environment zu erfassen"""
     global _backup_created
     
-    if not _backup_created:
-        print(f"\n🔄 Middleware: Erfasse Environment für {os.path.basename(str(node))}")
-        
-        # === DEBUG-FUNKTION FÜR MIDDLEWARE-ENVIRONMENT ===
-        def debug_middleware_environment():
-            print(f"\n🔍 DEBUG: Middleware-Environment-Analyse:")
+    if _backup_created:
+        return node
+    
+    # Prüfe ob node ein SCons-Node-Objekt ist
+    if hasattr(node, 'srcnode'):
+        node_name = str(node)
+    else:
+        node_name = str(node)  # node ist bereits ein String
+    
+    print(f"\n🔄 Middleware: Erfasse Environment für {os.path.basename(node_name)}")
             
             # 1. CPPPATH im Middleware-Environment
             middleware_cpppath = env.get('CPPPATH', [])
