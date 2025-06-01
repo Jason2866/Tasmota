@@ -319,29 +319,31 @@ def freeze_exact_scons_configuration_local(local_dict):
             os.remove(temp_file)
         return False
 
-def capture_middleware(node, env):
-    """Middleware um lokales Environment zu erfassen - mit robuster Node-Behandlung"""
+def capture_middleware(env, node):
+    """Middleware um lokales Environment zu erfassen - mit korrekter Parameter-Reihenfolge"""
     global _backup_created
     
     if _backup_created:
         return node
     
     try:
-        # Sichere Node-Behandlung
         if hasattr(node, 'srcnode'):
-            # SCons-Node-Objekt
             node_name = str(node)
         elif hasattr(node, 'name'):
-            # Objekt mit name-Attribut
             node_name = str(node.name)
-        elif hasattr(node, '__str__'):
-            # Objekt mit String-Repräsentation
-            node_name = str(node)
         else:
-            # Fallback
-            node_name = repr(node)
+            node_name = str(node)
         
         print(f"\n🔄 Middleware: Erfasse Environment für {os.path.basename(node_name)}")
+        
+        middleware_cpppath = env.get('CPPPATH', [])
+        print(f"   Middleware CPPPATH: {len(middleware_cpppath)} Pfade")
+        
+    except Exception as e:
+        print(f"⚠ Middleware-Fehler: {e}")
+    
+    return node
+
         
         # === DEBUG-FUNKTION FÜR MIDDLEWARE-ENVIRONMENT ===
         def debug_middleware_environment():
