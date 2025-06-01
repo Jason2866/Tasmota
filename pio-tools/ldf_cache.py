@@ -552,7 +552,7 @@ else:
         else:
             print(f"❌ Selektive Pfad-Konvertierung fehlgeschlagen")
     
-    env.AddPreAction("$BUILD_DIR/${PROGNAME}.elf", post_build_freeze_configuration)
+    env.AddPreAction("*.o", post_build_freeze_configuration)
 
 print(f"🏁 Selektive SCons-Objekt-Pfad-Konvertierung initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
