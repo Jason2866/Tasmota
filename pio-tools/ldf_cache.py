@@ -332,6 +332,14 @@ def convert_scons_objects_selective(value, key="", depth=0):
     if depth > 10:
         return str(value)
     
+    # NEUE BEHANDLUNG FÜR CLVar-Objekte (SYNTAX-FEHLER-FIX)
+    if hasattr(value, '__class__') and 'CLVar' in str(value.__class__):
+        # CLVar zu Liste von Strings konvertieren
+        try:
+            return list(str(value).split())
+        except:
+            return str(value)
+    
     # 1. SCons.Node.FS.File und ähnliche Node-Objekte → Pfade konvertieren
     if hasattr(value, 'abspath'):
         return str(value.abspath)
@@ -934,11 +942,85 @@ def post_build_complete_capture(target, source, env):
 
 print(f"\n🎯 Vollständige CPPPATH-aus-allen-Quellen-SCons-Environment-Erfassung für: {env.get('PIOENV')}")
 
+# NEUES DEBUG-LOGGING - IMMER AUSFÜHREN
+print(f"\n🔍 DEBUG: Aktueller Environment-Zustand:")
+current_cpppath = env.get('CPPPATH', [])
+print(f"   📋 Aktueller CPPPATH: {len(current_cpppath)} Einträge")
+
+# Suche nach KNX-Pfaden BEVOR Cache-Prüfung
+knx_paths_before = []
+for path in current_cpppath:
+    path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+    if 'knx' in path_str.lower() or 'esp-knx' in path_str.lower():
+        knx_paths_before.append(path_str)
+
+print(f"   🔍 KNX-Pfade VOR Cache-Prüfung: {len(knx_paths_before)}")
+for knx_path in knx_paths_before:
+    exists = os.path.exists(knx_path)
+    print(f"      {'✓' if exists else '✗'} {knx_path}")
+
+# Suche nach esp-knx-ip.h in aktuellen Pfaden
+print(f"   🔍 Suche nach esp-knx-ip.h VOR Cache-Prüfung:")
+found_knx_header = False
+for path in current_cpppath:
+    path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+    header_file = os.path.join(path_str, 'esp-knx-ip.h')
+    if os.path.exists(header_file):
+        print(f"      ✅ GEFUNDEN: {header_file}")
+        found_knx_header = True
+
+if not found_knx_header:
+    print(f"      ❌ esp-knx-ip.h NICHT in aktuellen CPPPATH gefunden!")
+
 # Cache-Prüfung und vollständige SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
     print(f"🚀 Build mit CPPPATH-aus-allen-Quellen-Environment-Cache - LDF übersprungen!")
+    
+    # ZUSÄTZLICHES DEBUG NACH Cache-Wiederherstellung
+    print(f"\n🔍 DEBUG: Environment-Zustand NACH Cache-Wiederherstellung:")
+    restored_cpppath = env.get('CPPPATH', [])
+    print(f"   📋 Wiederhergestellter CPPPATH: {len(restored_cpppath)} Einträge")
+    
+    # Suche nach KNX-Pfaden NACH Wiederherstellung
+    knx_paths_after = []
+    for path in restored_cpppath:
+        path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+        if 'knx' in path_str.lower() or 'esp-knx' in path_str.lower():
+            knx_paths_after.append(path_str)
+    
+    print(f"   🔍 KNX-Pfade NACH Cache-Wiederherstellung: {len(knx_paths_after)}")
+    for knx_path in knx_paths_after:
+        exists = os.path.exists(knx_path)
+        print(f"      {'✓' if exists else '✗'} {knx_path}")
+    
+    # Suche nach esp-knx-ip.h NACH Wiederherstellung
+    print(f"   🔍 Suche nach esp-knx-ip.h NACH Cache-Wiederherstellung:")
+    found_knx_header_after = False
+    for path in restored_cpppath:
+        path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+        header_file = os.path.join(path_str, 'esp-knx-ip.h')
+        if os.path.exists(header_file):
+            print(f"      ✅ GEFUNDEN: {header_file}")
+            found_knx_header_after = True
+    
+    if not found_knx_header_after:
+        print(f"      ❌ esp-knx-ip.h NICHT in wiederhergestellten CPPPATH gefunden!")
+        print(f"      🚨 PROBLEM: Include-Pfad für KNX fehlt nach Cache-Wiederherstellung!")
+    
+    # Vergleiche CPPPATH vor und nach Wiederherstellung
+    print(f"\n📊 CPPPATH-Vergleich:")
+    print(f"   Vor Cache: {len(knx_paths_before)} KNX-Pfade")
+    print(f"   Nach Cache: {len(knx_paths_after)} KNX-Pfade")
+    
+    if len(knx_paths_before) != len(knx_paths_after):
+        print(f"   🚨 UNTERSCHIED: KNX-Pfade haben sich geändert!")
+        missing_paths = set(knx_paths_before) - set(knx_paths_after)
+        if missing_paths:
+            print(f"   ❌ Fehlende KNX-Pfade:")
+            for missing in missing_paths:
+                print(f"      - {missing}")
 
 else:
     print(f"📝 Normaler LDF-Durchlauf - CPPPATH-aus-allen-Quellen-Erfassung nach Build...")
