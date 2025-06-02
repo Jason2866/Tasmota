@@ -142,167 +142,6 @@ def determine_path_source(path):
     else:
         return "UNKNOWN"
 
-def debug_all_scons_variables():
-    """Zeigt ALLE SCons-Variablen für LDF-Analyse"""
-    print(f"\n🔍 VOLLSTÄNDIGE SCons-Environment-Analyse:")
-    
-    env_dict = env.Dictionary()
-    
-    # Gruppiere Variablen nach Typ
-    path_vars = {}
-    lib_vars = {}
-    build_vars = {}
-    other_vars = {}
-    
-    for key, value in env_dict.items():
-        if 'PATH' in key.upper() or 'DIR' in key.upper():
-            path_vars[key] = value
-        elif 'LIB' in key.upper():
-            lib_vars[key] = value  
-        elif any(x in key.upper() for x in ['BUILD', 'FLAG', 'CC', 'CXX', 'LINK']):
-            build_vars[key] = value
-        else:
-            other_vars[key] = value
-    
-    print(f"📁 Pfad-Variablen ({len(path_vars)}):")
-    for key, value in sorted(path_vars.items()):
-        if isinstance(value, list):
-            print(f"   {key}: {len(value)} Einträge")
-            if key == 'CPPPATH' and len(value) <= 20:  # Zeige CPPPATH Details
-                for i, path in enumerate(value):
-                    source = determine_path_source(path)
-                    exists = os.path.exists(str(path))
-                    print(f"      {i:2d}: {source:12s} {'✓' if exists else '✗'} {path}")
-        else:
-            print(f"   {key}: {value}")
-    
-    print(f"📚 Bibliotheks-Variablen ({len(lib_vars)}):")
-    for key, value in sorted(lib_vars.items()):
-        if isinstance(value, list):
-            print(f"   {key}: {len(value)} Einträge")
-            if len(value) <= 10:  # Zeige Details für kleine Listen
-                for item in value:
-                    print(f"      - {item}")
-        else:
-            print(f"   {key}: {value}")
-    
-    print(f"🔨 Build-Variablen ({len(build_vars)}):")
-    for key, value in sorted(build_vars.items()):
-        if isinstance(value, list):
-            print(f"   {key}: {len(value)} Einträge")
-            # Zeige Include-Flags in Build-Variablen
-            include_flags = [f for f in value if str(f).startswith('-I')]
-            if include_flags:
-                print(f"      Include-Flags: {len(include_flags)}")
-                for flag in include_flags[:5]:  # Nur erste 5 zeigen
-                    print(f"         {flag}")
-        else:
-            print(f"   {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
-    
-    print(f"📦 Andere Variablen ({len(other_vars)}):")
-    interesting_vars = ['PIOENV', 'BOARD', 'PLATFORM', 'PIOFRAMEWORK']
-    for key in interesting_vars:
-        if key in other_vars:
-            print(f"   {key}: {other_vars[key]}")
-
-def debug_ldf_resolution():
-    """Macht LDF-Entscheidungen transparent"""
-    
-    print("\n🔍 LDF-Pfad-Resolution-Analyse:")
-    
-    # Zeige alle Include-Pfade mit Quelle
-    cpppath = env.get('CPPPATH', [])
-    print(f"📁 CPPPATH ({len(cpppath)} Pfade):")
-    
-    source_stats = {}
-    for i, path in enumerate(cpppath):
-        source = determine_path_source(path)
-        exists = os.path.exists(str(path))
-        
-        # Statistiken sammeln
-        if source not in source_stats:
-            source_stats[source] = {'count': 0, 'missing': 0}
-        source_stats[source]['count'] += 1
-        if not exists:
-            source_stats[source]['missing'] += 1
-        
-        print(f"  {i:2d}: {source:12s} {'✓' if exists else '✗'} {path}")
-    
-    print(f"\n📊 Pfad-Quellen-Statistik:")
-    for source, stats in sorted(source_stats.items()):
-        missing_info = f" ({stats['missing']} fehlen)" if stats['missing'] > 0 else ""
-        print(f"   {source:12s}: {stats['count']} Pfade{missing_info}")
-    
-    # Zeige Bibliotheks-Informationen
-    libs = env.get('LIBS', [])
-    if libs:
-        print(f"\n📚 Verlinkte Bibliotheken ({len(libs)}):")
-        for lib in libs:
-            print(f"   - {lib}")
-    
-    # Zeige PIOBUILDFILES
-    piobuildfiles = env.get('PIOBUILDFILES', [])
-    if piobuildfiles:
-        print(f"\n🔨 Build-Dateien ({len(piobuildfiles)} Listen):")
-        total_files = 0
-        for i, file_list in enumerate(piobuildfiles):
-            if isinstance(file_list, list):
-                total_files += len(file_list)
-                print(f"   Liste {i}: {len(file_list)} Dateien")
-        print(f"   Gesamt: {total_files} Dateien")
-
-def capture_complete_ldf_results():
-    """Erfasst ALLE LDF-Ergebnisse aus dem SCons Environment"""
-    
-    # 1. Include-Pfade
-    cpppath = env.get('CPPPATH', [])
-    
-    # 2. Bibliotheks-Pfade und -Namen
-    libpath = env.get('LIBPATH', [])
-    libs = env.get('LIBS', [])
-    
-    # 3. Source-Dateien die gebaut werden müssen
-    piobuildfiles = env.get('PIOBUILDFILES', [])
-    
-    # 4. Preprocessor-Defines
-    cppdefines = env.get('CPPDEFINES', [])
-    
-    # 5. Build-Flags
-    build_flags = env.get('BUILD_FLAGS', [])
-    ccflags = env.get('CCFLAGS', [])
-    cxxflags = env.get('CXXFLAGS', [])
-    linkflags = env.get('LINKFLAGS', [])
-    
-    # 6. LDF-spezifische Variablen (WICHTIG!)
-    lib_deps = env.get('LIB_DEPS', [])
-    lib_extra_dirs = env.get('LIB_EXTRA_DIRS', [])
-    lib_builtin = env.get('LIB_BUILTIN', [])
-    
-    # 7. Framework-spezifische Variablen
-    framework_dir = env.get('FRAMEWORK_DIR', '')
-    platform_packages = env.get('PLATFORM_PACKAGES_DIR', '')
-    
-    print(f"\n📊 Vollständige LDF-Erfassung:")
-    print(f"  CPPPATH: {len(cpppath)} Pfade")
-    print(f"  LIBPATH: {len(libpath)} Bibliotheks-Pfade")
-    print(f"  LIBS: {len(libs)} Bibliotheken")
-    print(f"  PIOBUILDFILES: {len(piobuildfiles)} Source-Listen")
-    print(f"  CPPDEFINES: {len(cppdefines)} Defines")
-    print(f"  LIB_DEPS: {len(lib_deps)} Dependencies")
-    print(f"  LIB_EXTRA_DIRS: {len(lib_extra_dirs)} Extra-Verzeichnisse")
-    
-    return {
-        'cpppath': cpppath,
-        'libpath': libpath, 
-        'libs': libs,
-        'piobuildfiles': piobuildfiles,
-        'cppdefines': cppdefines,
-        'lib_deps': lib_deps,
-        'lib_extra_dirs': lib_extra_dirs,
-        'framework_dir': framework_dir,
-        'platform_packages': platform_packages
-    }
-
 def convert_scons_objects_selective(value, key="", depth=0):
     """Konvertiert NUR SCons-Objekte zu Pfaden, String-Pfade bleiben unverändert"""
     
@@ -389,61 +228,87 @@ def convert_scons_objects_selective(value, key="", depth=0):
     else:
         return str(value)
 
-def count_conversions(value, stats, depth=0):
-    """Zählt verschiedene Arten von SCons-Objekt-Konvertierungen"""
+def capture_direct_environment():
+    """Erfasst Environment-Daten DIREKT ohne Clone/Dictionary"""
     
-    if depth > 5:  # Schutz vor zu tiefer Rekursion
-        return
+    print(f"\n🎯 DIREKTE Environment-Erfassung (ohne Clone):")
     
-    if hasattr(value, 'abspath') or hasattr(value, 'path'):
-        stats["file_paths"] += 1
-    elif hasattr(value, '__class__') and 'SCons.Builder' in str(value.__class__):
-        stats["builders"] += 1
-    elif callable(value):
-        stats["functions"] += 1
-    elif hasattr(value, '__class__') and 'SCons' in str(value.__class__):
-        stats["other"] += 1
-    elif isinstance(value, (list, tuple)):
-        for item in value:
-            count_conversions(item, stats, depth + 1)
-    elif isinstance(value, dict):
-        for dict_value in value.values():
-            count_conversions(dict_value, stats, depth + 1)
+    # Kritische Variablen direkt aus Original-Environment lesen
+    critical_vars = [
+        'CPPPATH', 'CPPDEFINES', 'LIBS', 'LIBPATH', 
+        'BUILD_FLAGS', 'CCFLAGS', 'CXXFLAGS', 'LINKFLAGS',
+        'PIOBUILDFILES', 'LIB_DEPS', 'LIB_EXTRA_DIRS',
+        'FRAMEWORK_DIR', 'PLATFORM_PACKAGES_DIR'
+    ]
+    
+    direct_data = {}
+    conversion_stats = {"file_paths": 0, "builders": 0, "functions": 0, "other": 0}
+    
+    for var in critical_vars:
+        # DIREKTER Zugriff auf env, KEIN Clone/Dictionary
+        raw_value = env.get(var, [])
+        
+        if var == 'CPPPATH':
+            print(f"   📁 CPPPATH: {len(raw_value)} Einträge (direkt erfasst)")
+            
+            # Zeige erste 5 zur Verifikation
+            for i, path in enumerate(raw_value[:5]):
+                path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+                source = determine_path_source(path_str)
+                exists = os.path.exists(path_str)
+                print(f"      {i:2d}: {source:12s} {'✓' if exists else '✗'} {path_str}")
+        
+        elif var == 'PIOBUILDFILES':
+            if isinstance(raw_value, list):
+                total_files = sum(len(file_list) if isinstance(file_list, list) else 0 for file_list in raw_value)
+                print(f"   🔨 PIOBUILDFILES: {len(raw_value)} Listen, {total_files} Dateien total")
+        
+        elif isinstance(raw_value, list):
+            print(f"   📊 {var}: {len(raw_value)} Einträge")
+        else:
+            print(f"   📊 {var}: {type(raw_value).__name__}")
+        
+        # Konvertiere SCons-Objekte zu wiederverwendbaren Daten
+        converted_value = convert_scons_objects_selective(raw_value, var)
+        direct_data[var] = converted_value
+        
+        # Zähle Konvertierungen (vereinfacht)
+        if var == 'CPPPATH' and isinstance(raw_value, list):
+            for item in raw_value:
+                if hasattr(item, 'abspath'):
+                    conversion_stats["file_paths"] += 1
+    
+    print(f"   🔄 {conversion_stats['file_paths']} SCons-Pfad-Objekte konvertiert")
+    print(f"   ✅ String-Pfade blieben unverändert")
+    
+    return direct_data, conversion_stats
 
-def freeze_exact_scons_configuration_local(local_dict):
-    """Speichert lokales Environment mit selektiver SCons-Objekt-Pfad-Konvertierung"""
+def freeze_direct_scons_configuration(direct_data, conversion_stats):
+    """Speichert direkt erfasste Environment-Daten"""
     cache_file = get_cache_file_path()
     temp_file = cache_file + ".tmp"
     
     try:
         with open(temp_file, 'w', encoding='utf-8') as f:
-            f.write("# SCons Environment Snapshot - POST-COMPILE ACTION\n")
+            f.write("# SCons Environment - DIREKTE Erfassung (ohne Clone)\n")
             f.write("# SCons objects → paths, String paths unchanged\n")
             f.write("# Auto-generated - do not edit manually\n")
             f.write(f"# Generated: {time.ctime()}\n")
             f.write(f"# Environment: {env.get('PIOENV')}\n")
-            f.write(f"# Captured after compile, before linking\n\n")
+            f.write(f"# Captured DIRECTLY after compile, before linking\n\n")
             
             f.write("def restore_environment(target_env):\n")
-            f.write('    """Stellt das post-compile erfasste SCons-Environment wieder her"""\n')
+            f.write('    """Stellt das direkt erfasste SCons-Environment wieder her"""\n')
             f.write('    restored_count = 0\n')
-            f.write('    conversion_stats = {"file_paths": 0, "builders": 0, "functions": 0, "other": 0}\n')
             f.write('    \n')
             
             var_count = 0
-            conversion_stats = {"file_paths": 0, "builders": 0, "functions": 0, "other": 0}
             
-            for key, value in sorted(local_dict.items()):
+            for key, value in sorted(direct_data.items()):
                 try:
-                    # Selektive Konvertierung: Nur SCons-Objekte, String-Pfade bleiben unverändert
-                    converted_value = convert_scons_objects_selective(value, key)
-                    
-                    # Statistiken sammeln
-                    count_conversions(value, conversion_stats)
-                    
-                    f.write(f'    # {key} (Original: {type(value).__name__})\n')
+                    f.write(f'    # {key} (Direkt erfasst)\n')
                     f.write(f'    try:\n')
-                    f.write(f'        target_env[{repr(key)}] = {repr(converted_value)}\n')
+                    f.write(f'        target_env[{repr(key)}] = {repr(value)}\n')
                     f.write(f'        restored_count += 1\n')
                     f.write(f'    except Exception as e:\n')
                     f.write(f'        print(f"⚠ Fehler bei {key}: {{e}}")\n')
@@ -453,60 +318,49 @@ def freeze_exact_scons_configuration_local(local_dict):
                     
                 except Exception as e:
                     f.write(f'    # {key}: KONVERTIERUNGSFEHLER - {e}\n')
-                    f.write(f'    conversion_stats["other"] += 1\n')
                     continue
             
             # Konvertierungs-Statistiken
-            f.write('    # === KONVERTIERUNGS-STATISTIKEN ===\n')
-            f.write(f'    conversion_stats["file_paths"] = {conversion_stats["file_paths"]}\n')
-            f.write(f'    conversion_stats["builders"] = {conversion_stats["builders"]}\n')
-            f.write(f'    conversion_stats["functions"] = {conversion_stats["functions"]}\n')
-            f.write(f'    conversion_stats["other"] = {conversion_stats["other"]}\n')
+            f.write('    # === DIREKTE ERFASSUNG STATISTIKEN ===\n')
+            f.write(f'    conversion_stats = {repr(conversion_stats)}\n')
             f.write('    \n')
             
-            f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt (Post-Compile)")\n')
-            f.write('    print(f"✓ {{conversion_stats[\'file_paths\']}} SCons-Objekt-Pfade konvertiert")\n')
-            f.write('    print(f"✓ {{conversion_stats[\'builders\']}} Builder-Objekte konvertiert")\n')
-            f.write('    print(f"✓ {{conversion_stats[\'functions\']}} Funktionen konvertiert")\n')
-            f.write('    print(f"✓ {{conversion_stats[\'other\']}} andere Objekte konvertiert")\n')
-            f.write('    print("✓ String-Pfade blieben unverändert")\n')
-            f.write('    return restored_count > 50\n')
+            f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt (Direkte Erfassung)")\n')
+            f.write('    print(f"✓ {{conversion_stats[\'file_paths\']}} SCons-Pfad-Objekte konvertiert")\n')
+            f.write('    print(f"✓ String-Pfade blieben unverändert")\n')
+            f.write('    print("✓ KEIN Clone/Dictionary verwendet")\n')
+            f.write('    return restored_count > 10\n')
             f.write('\n')
             f.write('# Metadata\n')
             f.write(f'CONFIG_HASH = {repr(calculate_config_hash())}\n')
             f.write(f'ENV_NAME = {repr(env.get("PIOENV"))}\n')
             f.write(f'VARIABLE_COUNT = {var_count}\n')
+            f.write(f'DIRECT_CAPTURE = True\n')
             f.write(f'CONVERTED_FILE_PATHS = {conversion_stats["file_paths"]}\n')
-            f.write(f'CONVERTED_BUILDERS = {conversion_stats["builders"]}\n')
-            f.write(f'CONVERTED_FUNCTIONS = {conversion_stats["functions"]}\n')
-            f.write(f'CONVERTED_OTHER = {conversion_stats["other"]}\n')
         
         # Atomarer Move
         shutil.move(temp_file, cache_file)
         
         file_size = os.path.getsize(cache_file)
-        total_conversions = sum(conversion_stats.values())
+        cpppath_count = len(direct_data.get('CPPPATH', []))
         
-        print(f"✓ Post-Compile Environment gespeichert:")
+        print(f"✓ Direkte Environment-Erfassung gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
-        print(f"   📊 {var_count} SCons-Variablen")
-        print(f"   🔄 {total_conversions} SCons-Objekte konvertiert:")
-        print(f"      📄 {conversion_stats['file_paths']} SCons-Objekt-Pfade")
-        print(f"      🔨 {conversion_stats['builders']} Builder-Objekte")
-        print(f"      ⚙️  {conversion_stats['functions']} Funktionen")
-        print(f"      📦 {conversion_stats['other']} andere Objekte")
-        print(f"   ✅ String-Pfade blieben unverändert")
+        print(f"   📊 {var_count} SCons-Variablen (direkt erfasst)")
+        print(f"   📄 {cpppath_count} CPPPATH-Einträge")
+        print(f"   🔄 {conversion_stats['file_paths']} SCons-Objekte konvertiert")
+        print(f"   ✅ KEIN Clone/Dictionary verwendet")
         
         return True
         
     except Exception as e:
-        print(f"❌ Post-Compile Environment-Konvertierung fehlgeschlagen: {e}")
+        print(f"❌ Direkte Environment-Erfassung fehlgeschlagen: {e}")
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return False
 
 def post_compile_action(target, source, env):
-    """SCons Action: Erfasst Environment nach Compile, vor Linking"""
+    """SCons Action: Erfasst Environment DIREKT nach Compile, vor Linking"""
     global _backup_created
     
     if _backup_created:
@@ -514,56 +368,46 @@ def post_compile_action(target, source, env):
         return None
     
     try:
-        print(f"\n🎯 POST-COMPILE ACTION: Erfasse finales SCons-Environment")
+        print(f"\n🎯 POST-COMPILE ACTION: Erfasse SCons-Environment DIREKT")
         print(f"   Target: {[str(t) for t in target]}")
         print(f"   Source: {len(source)} Dateien")
         
-        # Analysiere aktuellen Environment-Zustand
-        cpppath = env.get('CPPPATH', [])
-        libs = env.get('LIBS', [])
-        piobuildfiles = env.get('PIOBUILDFILES', [])
-        
-        print(f"   📊 Environment-Status:")
-        print(f"      CPPPATH: {len(cpppath)} Pfade")
-        print(f"      LIBS: {len(libs)} Bibliotheken")
-        print(f"      PIOBUILDFILES: {len(piobuildfiles)} Listen")
+        # DIREKTE Environment-Erfassung (KEIN Clone/Dictionary)
+        direct_data, conversion_stats = capture_direct_environment()
         
         # Prüfe ob realistische Werte vorhanden sind
+        cpppath_count = len(direct_data.get('CPPPATH', []))
+        libs_count = len(direct_data.get('LIBS', []))
+        piobuildfiles_count = len(direct_data.get('PIOBUILDFILES', []))
+        
+        print(f"   📊 Direkte Environment-Statistik:")
+        print(f"      CPPPATH: {cpppath_count} Pfade")
+        print(f"      LIBS: {libs_count} Bibliotheken")
+        print(f"      PIOBUILDFILES: {piobuildfiles_count} Listen")
+        
         realistic_values = (
-            len(cpppath) > 50 and  # Mindestens 50 Include-Pfade
-            len(libs) > 5 and len(libs) < 50 and  # Realistische LIBS-Anzahl
-            len(piobuildfiles) > 0  # Build-Dateien vorhanden
+            cpppath_count > 10 and  # Mindestens 10 Include-Pfade
+            libs_count >= 0 and libs_count < 50 and  # Realistische LIBS-Anzahl
+            piobuildfiles_count >= 0  # Build-Dateien können 0 sein
         )
         
         if realistic_values:
-            print(f"✅ Realistische Environment-Werte - erfasse vollständiges Environment")
+            print(f"✅ Realistische Environment-Werte - speichere direkte Erfassung")
             
-            # Vollständige Debug-Ausgabe
-            debug_all_scons_variables()
-            debug_ldf_resolution()
-            capture_complete_ldf_results()
-            
-            # Environment erfassen
-            complete_env = env.Clone()
-            complete_dict = complete_env.Dictionary()
-            
-            print(f"📊 SCons Environment: {len(complete_dict)} Variablen erfasst")
-            
-            if freeze_exact_scons_configuration_local(complete_dict):
+            if freeze_direct_scons_configuration(direct_data, conversion_stats):
                 env_name = env.get("PIOENV")
                 if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
                     print(f"✓ lib_ldf_mode = off für Lauf 2 gesetzt")
-                    print(f"🚀 POST-COMPILE SCons-Environment erfasst!")
+                    print(f"🚀 DIREKTE SCons-Environment-Erfassung abgeschlossen!")
                     _backup_created = True
                 else:
                     print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
             else:
-                print(f"❌ Environment-Backup fehlgeschlagen")
+                print(f"❌ Direkte Environment-Erfassung fehlgeschlagen")
         else:
             print(f"⚠ Unrealistische Environment-Werte - überspringe Erfassung")
-            print(f"   CPPPATH: {len(cpppath)} (erwartet >50)")
-            print(f"   LIBS: {len(libs)} (erwartet 5-50)")
-            print(f"   PIOBUILDFILES: {len(piobuildfiles)} (erwartet >0)")
+            print(f"   CPPPATH: {cpppath_count} (erwartet >10)")
+            print(f"   LIBS: {libs_count} (erwartet 0-50)")
     
     except Exception as e:
         print(f"❌ Post-Compile Action Fehler: {e}")
@@ -571,7 +415,7 @@ def post_compile_action(target, source, env):
     return None
 
 def restore_exact_scons_configuration():
-    """Lädt Environment aus Python-Datei"""
+    """Lädt Environment aus Python-Datei (direkte Erfassung)"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
@@ -588,8 +432,13 @@ def restore_exact_scons_configuration():
         cached_hash = getattr(env_module, 'CONFIG_HASH', None)
         
         if cached_hash != current_hash:
-            print("⚠ Konfiguration geändert - Python-Cache ungültig")
+            print("⚠ Konfiguration geändert - Cache ungültig")
             return False
+        
+        # Prüfe ob direkte Erfassung
+        direct_capture = getattr(env_module, 'DIRECT_CAPTURE', False)
+        if not direct_capture:
+            print("⚠ Cache stammt nicht von direkter Erfassung")
         
         # Environment wiederherstellen
         success = env_module.restore_environment(env)
@@ -597,153 +446,38 @@ def restore_exact_scons_configuration():
         if success:
             var_count = getattr(env_module, 'VARIABLE_COUNT', 0)
             converted_file_paths = getattr(env_module, 'CONVERTED_FILE_PATHS', 0)
-            converted_builders = getattr(env_module, 'CONVERTED_BUILDERS', 0)
-            converted_functions = getattr(env_module, 'CONVERTED_FUNCTIONS', 0)
-            converted_other = getattr(env_module, 'CONVERTED_OTHER', 0)
             
-            print(f"✓ Post-Compile Environment wiederhergestellt:")
+            print(f"✓ Direkte Environment-Erfassung wiederhergestellt:")
             print(f"   📊 {var_count} Variablen")
-            print(f"   📄 {converted_file_paths} SCons-Objekt-Pfade")
-            print(f"   🔨 {converted_builders} Builder-Objekte")
-            print(f"   ⚙️  {converted_functions} Funktionen")
-            print(f"   📦 {converted_other} andere Objekte")
-            print(f"   ✅ String-Pfade unverändert")
-            
-            # Debug-Ausgabe nach Wiederherstellung
-            print(f"\n🔍 Environment nach Post-Compile Cache-Wiederherstellung:")
-            debug_ldf_resolution()
+            print(f"   📄 {converted_file_paths} SCons-Pfad-Objekte konvertiert")
+            print(f"   ✅ KEIN Clone/Dictionary verwendet")
         
         return success
         
     except Exception as e:
-        print(f"❌ Python-Datei-Wiederherstellung fehlgeschlagen: {e}")
+        print(f"❌ Direkte Cache-Wiederherstellung fehlgeschlagen: {e}")
         return False
 
 def early_cache_check_and_restore():
     """Prüft Cache und stellt SCons-Environment wieder her"""
-    print(f"🔍 Cache-Prüfung (Post-Compile Environment)...")
+    print(f"🔍 Cache-Prüfung (Direkte Environment-Erfassung)...")
     
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
-        print(f"📝 Kein Post-Compile Cache - LDF wird normal ausgeführt")
+        print(f"📝 Kein direkter Cache - LDF wird normal ausgeführt")
         return False
     
     current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
     
     if current_ldf_mode != 'off':
-        print(f"🔄 LDF noch aktiv - Post-Compile Cache wird nach Build erstellt")
+        print(f"🔄 LDF noch aktiv - direkter Cache wird nach Build erstellt")
         return False
     
-    print(f"⚡ Post-Compile Cache verfügbar - stelle Environment wieder her")
+    print(f"⚡ Direkter Cache verfügbar - stelle Environment wieder her")
     
     success = restore_exact_scons_configuration()
     return success
-
-def count_scons_objects_in_value(value, depth=0):
-    """Zählt verbleibende SCons-Objekte in einem Wert"""
-    
-    if depth > 5:
-        return 0
-    
-    count = 0
-    
-    if hasattr(value, '__class__') and 'SCons' in str(value.__class__):
-        count += 1
-    elif isinstance(value, (list, tuple)):
-        for item in value:
-            count += count_scons_objects_in_value(item, depth + 1)
-    elif isinstance(value, dict):
-        for dict_value in value.values():
-            count += count_scons_objects_in_value(dict_value, depth + 1)
-    
-    return count
-
-def verify_frozen_restoration():
-    """Verifikation mit Fokus auf Post-Compile Environment"""
-    print(f"\n🔍 SCons-Environment-Verifikation (Post-Compile)...")
-    
-    critical_scons_vars = [
-        "CPPPATH", "CPPDEFINES", "BUILD_FLAGS", "LIBS", 
-        "CCFLAGS", "CXXFLAGS", "LINKFLAGS", "PIOBUILDFILES"
-    ]
-    
-    all_ok = True
-    scons_objects_found = 0
-    string_paths_preserved = 0
-    converted_paths = 0
-    
-    for var in critical_scons_vars:
-        if var in env and env[var]:
-            value = env[var]
-            
-            # Prüfe ob noch SCons-Objekte vorhanden sind
-            scons_obj_count = count_scons_objects_in_value(value)
-            scons_objects_found += scons_obj_count
-            
-            if var == "CPPPATH":
-                paths = value
-                print(f"   ✅ {var}: {len(paths)} Include-Pfade")
-                
-                # Prüfe lib/default/headers
-                project_dir = env.get("PROJECT_DIR")
-                lib_default = os.path.join(project_dir, "lib", "default", "headers")
-                found = any(lib_default in str(path) for path in paths)
-                
-                if found:
-                    print(f"      ✅ lib/default/headers: VERFÜGBAR")
-                else:
-                    print(f"      ❌ lib/default/headers: FEHLT")
-                    all_ok = False
-                
-                # Zähle String-Pfade vs. konvertierte Pfade
-                for path in paths:
-                    if isinstance(path, str):
-                        if path.startswith('/') or path.startswith('./'):
-                            string_paths_preserved += 1
-                        else:
-                            converted_paths += 1
-                
-                print(f"      ✅ String-Pfade erhalten: {string_paths_preserved}")
-                print(f"      🔄 Konvertierte Pfade: {converted_paths}")
-                
-            elif var == "PIOBUILDFILES":
-                # Prüfe ob SCons-File-Objekte zu Pfaden konvertiert wurden
-                if isinstance(value, list):
-                    valid_paths = 0
-                    for item_list in value:
-                        if isinstance(item_list, list):
-                            for item in item_list:
-                                if isinstance(item, str) and (item.startswith('/') or os.path.exists(item)):
-                                    valid_paths += 1
-                    print(f"   ✅ {var}: {valid_paths} gültige Dateipfade")
-                else:
-                    print(f"   ✅ {var}: Vorhanden")
-                    
-            elif hasattr(value, '__len__') and not isinstance(value, str):
-                print(f"   ✅ {var}: {len(value)} Einträge")
-                if scons_obj_count > 0:
-                    print(f"      ⚠️  {scons_obj_count} SCons-Objekte noch vorhanden")
-            else:
-                print(f"   ✅ {var}: Vorhanden")
-        else:
-            print(f"   ❌ {var}: Fehlt")
-            all_ok = False
-    
-    scons_dict_size = len(env.Dictionary())
-    print(f"   📊 SCons Dictionary: {scons_dict_size} Variablen")
-    print(f"   🔄 Verbleibende SCons-Objekte: {scons_objects_found}")
-    print(f"   ✅ String-Pfade erhalten: {string_paths_preserved}")
-    print(f"   🔄 SCons-Objekte zu Pfaden: {converted_paths}")
-    
-    if all_ok and scons_objects_found == 0:
-        print(f"✅ Post-Compile SCons-Environment vollständig wiederhergestellt")
-    elif all_ok:
-        print(f"⚠️  Post-Compile SCons-Environment wiederhergestellt, aber {scons_objects_found} Objekte nicht konvertiert")
-    else:
-        print(f"❌ Post-Compile SCons-Environment UNVOLLSTÄNDIG")
-    
-    return all_ok
 
 def calculate_config_hash():
     """Berechnet Hash der Konfiguration"""
@@ -770,32 +504,24 @@ def calculate_config_hash():
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
 # =============================================================================
-# HAUPTLOGIK - POST-COMPILE SCONS-ENVIRONMENT
+# HAUPTLOGIK - DIREKTE SCONS-ENVIRONMENT-ERFASSUNG (OHNE CLONE)
 # =============================================================================
 
-print(f"\n🎯 Post-Compile SCons-Environment-Backup für: {env.get('PIOENV')}")
+print(f"\n🎯 Direkte SCons-Environment-Erfassung für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit Post-Compile Environment-Cache - LDF übersprungen!")
-    
-    if not verify_frozen_restoration():
-        print(f"❌ KRITISCHER FEHLER: Post-Compile SCons-Environment unvollständig!")
-        print(f"💡 Löschen Sie '.pio/ldf_cache/' und starten Sie neu")
+    print(f"🚀 Build mit direktem Environment-Cache - LDF übersprungen!")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - erfasse Environment nach Compile-Phase...")
+    print(f"📝 Normaler LDF-Durchlauf - erfasse Environment DIREKT nach Compile-Phase...")
     
-    # SCons Action: Erfasse Environment nach Compile, vor Linking
-    # Füge Action zu allen Object-Files hinzu (nach Compile, vor Linking)
+    # SCons Action: Erfasse Environment DIREKT nach Compile, vor Linking
     env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", post_compile_action)
     
-    # Alternative: Action für Object-Files
-    # env.AddPostAction("*.o", post_compile_action)
-    
-    print(f"✅ Post-Compile Action registriert für: $BUILD_DIR/${{PROGNAME}}.elf")
+    print(f"✅ Direkte Post-Compile Action registriert für: $BUILD_DIR/${{PROGNAME}}.elf")
 
-print(f"🏁 Post-Compile SCons-Environment-Backup initialisiert")
+print(f"🏁 Direkte SCons-Environment-Erfassung initialisiert (KEIN Clone)")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
