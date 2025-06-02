@@ -989,9 +989,130 @@ def freeze_complete_scons_configuration(complete_data):
             os.remove(temp_file)
         return False
 
+def should_disable_ldf():
+    """Prüft ob LDF deaktiviert werden sollte"""
+    env_name = env.get("PIOENV")
+    if not env_name:
+        return False
+    
+    current_mode = get_current_ldf_mode(env_name)
+    print(f"[INFO] Aktueller LDF-Modus: {current_mode}")
+    
+    # Deaktiviere LDF wenn nicht bereits "off"
+    return current_mode != "off"
+
+def manage_ldf_mode():
+    """Verwaltet LDF-Modus für Cache-Erstellung"""
+    env_name = env.get("PIOENV")
+    if not env_name:
+        return False
+    
+    print(f"\n[LDF] LDF-MODUS-VERWALTUNG:")
+    
+    # Prüfe aktuellen LDF-Modus
+    if should_disable_ldf():
+        print(f"[INFO] Deaktiviere LDF für vollständige Library-Erfassung...")
+        
+        # Erstelle Backup und setze LDF auf "off"
+        if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+            print(f"[OK] LDF-Modus auf 'off' gesetzt")
+            return True
+        else:
+            print(f"[WARNUNG] Konnte LDF-Modus nicht ändern")
+            return False
+    else:
+        print(f"[INFO] LDF bereits deaktiviert")
+        return True
+
+def restore_ldf_mode():
+    """Stellt ursprünglichen LDF-Modus wieder her"""
+    env_name = env.get("PIOENV")
+    if not env_name:
+        return
+    
+    print(f"\n[LDF] LDF-MODUS-WIEDERHERSTELLUNG:")
+    
+    try:
+        # Finde Backup-Datei
+        env_file = find_env_definition_file(env_name)
+        if not env_file:
+            project_dir = env.get("PROJECT_DIR")
+            env_file = os.path.join(project_dir, "platformio.ini")
+        
+        backup_file = f"{env_file}.ldf_backup"
+        
+        if os.path.exists(backup_file):
+            # Stelle Original wieder her
+            shutil.copy2(backup_file, env_file)
+            print(f"[OK] Ursprünglicher LDF-Modus wiederhergestellt")
+            
+            # Entferne Backup
+            os.remove(backup_file)
+            print(f"[OK] Backup-Datei entfernt")
+        else:
+            print(f"[INFO] Kein LDF-Backup gefunden")
+            
+    except Exception as e:
+        print(f"[WARNUNG] Fehler bei LDF-Wiederherstellung: {e}")
+
+def create_cache_with_ldf_management():
+    """Erstellt Cache mit LDF-Management"""
+    print(f"\n[START] CACHE-ERSTELLUNG MIT LDF-MANAGEMENT:")
+    
+    # 1. LDF-Modus verwalten
+    ldf_managed = manage_ldf_mode()
+    
+    if not ldf_managed:
+        print(f"[WARNUNG] LDF-Management fehlgeschlagen - Cache wird trotzdem erstellt")
+    
+    try:
+        # 2. Cache erstellen
+        complete_data = capture_complete_scons_environment()
+        cache_created = freeze_complete_scons_configuration(complete_data)
+        
+        if cache_created:
+            print(f"[OK] Cache erfolgreich erstellt")
+            
+            # Zeige Statistiken
+            scons_vars = complete_data.get('SCONS_VARS', {})
+            ldf_vars = complete_data.get('LDF_VARS', {})
+            
+            print(f"\n[STATS] CACHE-STATISTIKEN:")
+            print(f"   SCons-Variablen: {len(scons_vars)}")
+            print(f"   LDF-Kategorien: {len(ldf_vars)}")
+            
+            # CPPPATH-Statistik
+            complete_cpppath = ldf_vars.get('LIB_VARS', {}).get('CPPPATH_COMPLETE', [])
+            knx_paths = [p for p in complete_cpppath if 'knx' in p.lower()]
+            print(f"   CPPPATH-Einträge: {len(complete_cpppath)}")
+            print(f"   KNX-Pfade: {len(knx_paths)}")
+            
+            if knx_paths:
+                print(f"   [TARGET] KNX-Pfade gefunden:")
+                for knx_path in knx_paths[:3]:  # Zeige erste 3
+                    print(f"      {knx_path}")
+                if len(knx_paths) > 3:
+                    print(f"      ... und {len(knx_paths) - 3} weitere")
+            
+            # Compile-Variablen-Statistik
+            compile_vars = ['CPPPATH', 'CPPDEFINES', 'LIBS', 'LIBPATH', 'ASFLAGS', 'ASPPFLAGS', 'CFLAGS', 'CXXFLAGS', 'CCFLAGS', 'LINKFLAGS']
+            cached_compile_vars = sum(1 for var in compile_vars if var in scons_vars)
+            print(f"   Compile-Variablen gecacht: {cached_compile_vars}/{len(compile_vars)}")
+            
+            return True
+        else:
+            print(f"[FEHLER] Cache-Erstellung fehlgeschlagen")
+            return False
+            
+    finally:
+        # 3. LDF-Modus immer wiederherstellen
+        if ldf_managed:
+            restore_ldf_mode()
+
+
 # Hauptlogik
 def main():
-    """Hauptfunktion des LDF-Cache-Systems"""
+    """Hauptfunktion des LDF-Cache-Systems mit LDF-Management"""
     print(f"\n[START] TASMOTA LDF CACHE SYSTEM - VOLLSTÄNDIGE COMPILE-VAR-SICHERUNG")
     print(f"Environment: {env.get('PIOENV')}")
     print(f"Projekt: {env.get('PROJECT_DIR')}")
@@ -1000,6 +1121,15 @@ def main():
     if not env_name:
         print("[FEHLER] Kein PIOENV gefunden")
         return
+    
+    # Verwende neue Cache-Erstellung mit LDF-Management
+    success = create_cache_with_ldf_management()
+    
+    if success:
+        print(f"[OK] LDF-Cache-System erfolgreich abgeschlossen")
+    else:
+        print(f"[FEHLER] LDF-Cache-System mit Fehlern beendet")
+
     
     # Erfasse vollständige SCons-Environment
     complete_data = capture_complete_scons_environment()
