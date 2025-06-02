@@ -11,7 +11,6 @@ from datetime import datetime
 
 # Globale Variablen
 _backup_created = False
-original_object_builder = None
 
 def get_cache_file_path():
     """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""
@@ -124,9 +123,73 @@ def get_current_ldf_mode(env_name):
     
     return 'chain'
 
+def ensure_complete_ldf_processing():
+    """
+    Stellt sicher, dass LDF vollständig durchgelaufen ist
+    """
+    try:
+        print("🔄 Erzwinge vollständige LDF-Verarbeitung...")
+        
+        # 1. Alle Library Builders durchgehen
+        lib_builders = env.GetLibBuilders()
+        processed_count = 0
+        
+        for lb in lib_builders:
+            try:
+                lib_name = getattr(lb, 'name', 'Unknown')
+                
+                # Erzwinge vollständige Dependency-Verarbeitung
+                if hasattr(lb, 'search_deps_recursive'):
+                    lb.search_deps_recursive()
+                
+                # Erzwinge Include-Directory-Verarbeitung
+                if hasattr(lb, 'get_include_dirs'):
+                    include_dirs = lb.get_include_dirs()
+                    if include_dirs:
+                        processed_count += 1
+                
+                # Erzwinge Build-Verarbeitung (ohne tatsächliches Kompilieren)
+                if hasattr(lb, 'process_dependencies'):
+                    lb.process_dependencies()
+                
+                print(f"   ✓ LDF für {lib_name} verarbeitet")
+                
+            except Exception as e:
+                print(f"   ⚠ LDF-Verarbeitung für {getattr(lb, 'name', 'Unknown')} fehlgeschlagen: {e}")
+        
+        # 2. Warte kurz auf Environment-Propagation
+        time.sleep(0.1)
+        
+        # 3. Environment-Update prüfen
+        current_cpppath = env.get('CPPPATH', [])
+        print(f"   📊 CPPPATH nach LDF: {len(current_cpppath)} Einträge")
+        
+        # 4. Prüfe ob lib/-Pfade jetzt vorhanden sind
+        project_dir = env.get('PROJECT_DIR', '')
+        lib_paths_found = []
+        
+        for path in current_cpppath:
+            path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+            normalized_path = path_str.replace('\\', '/')
+            project_lib_pattern = f'{project_dir}/lib/'.replace('\\', '/')
+            
+            if project_lib_pattern in normalized_path:
+                lib_paths_found.append(path_str)
+        
+        print(f"   📚 Projekt-lib-Pfade gefunden: {len(lib_paths_found)}")
+        for i, lib_path in enumerate(lib_paths_found[:3]):  # Erste 3 zeigen
+            rel_path = os.path.relpath(lib_path, project_dir) if project_dir else lib_path
+            print(f"      ✓ {rel_path}")
+        
+        return len(lib_paths_found) > 0, processed_count
+        
+    except Exception as e:
+        print(f"❌ LDF-Vollständig-Verarbeitung fehlgeschlagen: {e}")
+        return False, 0
+
 def capture_ldf_cpppath():
     """
-    Erfasst CPPPATH-Einträge nach LDF-Verarbeitung
+    Erfasst CPPPATH-Einträge nach vollständiger LDF-Verarbeitung
     """
     # Sammle CPPPATH aus verschiedenen Quellen
     cpppath_sources = {
@@ -156,15 +219,11 @@ def capture_ldf_cpppath():
         lib_builders = env.GetLibBuilders()
         for lb in lib_builders:
             try:
-                # Erzwinge LDF-Verarbeitung falls noch nicht geschehen
-                if not getattr(lb, '_deps_are_processed', False):
-                    lb.search_deps_recursive()
-                
-                # Sammle Include-Verzeichnisse
+                # Include-Verzeichnisse sammeln
                 include_dirs = lb.get_include_dirs()
                 cpppath_sources['lib_include_dirs'].extend(include_dirs)
                 
-                # Sammle auch CPPPATH aus dem Library Environment
+                # CPPPATH aus dem Library Environment sammeln
                 lib_cpppath = lb.env.get('CPPPATH', [])
                 cpppath_sources['dependency_include_dirs'].extend(lib_cpppath)
                 
@@ -190,22 +249,6 @@ def export_ldf_variables_extended():
     """
     Erweiterte Exportfunktion mit vollständiger CPPPATH-Erfassung
     """
-    # Erzwinge LDF-Verarbeitung für alle Libraries
-    try:
-        lib_builders = env.GetLibBuilders()
-        for lb in lib_builders:
-            if not getattr(lb, 'is_built', False):
-                try:
-                    # Triggere Dependency-Suche
-                    lb.search_deps_recursive()
-                    # Triggere Build-Prozess (ohne tatsächliches Kompilieren)
-                    if hasattr(lb, 'process_dependencies'):
-                        lb.process_dependencies()
-                except:
-                    pass
-    except:
-        pass
-    
     # Erfasse CPPPATH nach LDF-Verarbeitung
     cpppath_data = capture_ldf_cpppath()
     
@@ -224,7 +267,7 @@ def export_ldf_variables_extended():
     # Aktualisierte LDF-Variablen
     ldf_variables = {}
     
-    # Build-Environment Variablen (mit aktualisierter CPPPATH)
+    # Build-Environment Variablen
     ldf_variables['BUILD_VARS'] = {
         'BUILD_DIR': env.get('BUILD_DIR', ''),
         'PROJECT_DIR': env.get('PROJECT_DIR', ''),
@@ -237,9 +280,9 @@ def export_ldf_variables_extended():
         'BUILD_TYPE': env.get('BUILD_TYPE', ''),
     }
     
-    # Erweiterte Library-Variablen mit detaillierter CPPPATH-Analyse
+    # Erweiterte Library-Variablen
     ldf_variables['LIB_VARS'] = {
-        'LIBSOURCE_DIRS': env.get('LIBSOURCE_DIRS', []),
+        'LIBSOURCE_DIRS': [str(p.abspath) if hasattr(p, 'abspath') else str(p) for p in env.get('LIBSOURCE_DIRS', [])],
         'CPPPATH_ORIGINAL': [str(p.abspath) if hasattr(p, 'abspath') else str(p) for p in env.get('CPPPATH', [])],
         'CPPPATH_COMPLETE': sorted(list(all_cpppath)),
         'CPPPATH_SOURCES': {k: [str(p.abspath) if hasattr(p, 'abspath') else str(p) for p in v] for k, v in cpppath_data.items()},
@@ -273,7 +316,6 @@ def export_ldf_variables_extended():
     try:
         lib_builders = env.GetLibBuilders()
         for lb in lib_builders:
-            # Erfasse Environment-Zustand nach LDF-Verarbeitung
             lib_env_cpppath = lb.env.get('CPPPATH', []) if hasattr(lb, 'env') else []
             
             builder_info = {
@@ -316,11 +358,9 @@ def export_ldf_variables_extended():
 def convert_scons_objects_selective(value, key="", depth=0):
     """Konvertiert NUR SCons-Objekte zu Pfaden, String-Pfade bleiben unverändert"""
     
-    # Schutz vor zu tiefer Rekursion
     if depth > 10:
         return str(value)
     
-    # 1. SCons.Node.FS.File und ähnliche Node-Objekte → Pfade konvertieren
     if hasattr(value, 'abspath'):
         return str(value.abspath)
     elif hasattr(value, 'path'):
@@ -330,84 +370,50 @@ def convert_scons_objects_selective(value, key="", depth=0):
             return str(value.get_path())
         except:
             return str(value)
-    
-    # 2. SCons.Builder-Objekte
     elif hasattr(value, '__class__') and 'SCons.Builder' in str(value.__class__):
         return f"<Builder:{getattr(value, 'name', 'Unknown')}>"
-    
-    # 3. SCons.Scanner-Objekte
     elif hasattr(value, '__class__') and 'SCons.Scanner' in str(value.__class__):
         return f"<Scanner:{getattr(value, 'name', 'Unknown')}>"
-    
-    # 4. SCons.Environment-Objekte
     elif hasattr(value, '__class__') and 'SCons.Environment' in str(value.__class__):
         return "<Environment>"
-    
-    # 5. SCons.Defaults-Objekte (Variable_Method_Caller etc.)
     elif hasattr(value, '__class__') and 'SCons.Defaults' in str(value.__class__):
         return f"<Default:{value.__class__.__name__}>"
-    
-    # 6. Funktionen und Callables
     elif callable(value):
         if hasattr(value, '__name__'):
             return f"<Function:{value.__name__}>"
         else:
             return f"<Callable:{value.__class__.__name__}>"
-    
-    # 7. Listen rekursiv verarbeiten
     elif isinstance(value, list):
-        converted_list = []
-        for item in value:
-            converted_item = convert_scons_objects_selective(item, key, depth + 1)
-            converted_list.append(converted_item)
-        return converted_list
-    
-    # 8. Tupel rekursiv verarbeiten
+        return [convert_scons_objects_selective(item, key, depth + 1) for item in value]
     elif isinstance(value, tuple):
-        converted_items = []
-        for item in value:
-            converted_item = convert_scons_objects_selective(item, key, depth + 1)
-            converted_items.append(converted_item)
-        return tuple(converted_items)
-    
-    # 9. Dictionaries rekursiv verarbeiten
+        return tuple(convert_scons_objects_selective(item, key, depth + 1) for item in value)
     elif isinstance(value, dict):
-        converted_dict = {}
-        for dict_key, dict_value in value.items():
-            converted_key = convert_scons_objects_selective(dict_key, key, depth + 1)
-            converted_value = convert_scons_objects_selective(dict_value, key, depth + 1)
-            converted_dict[converted_key] = converted_value
-        return converted_dict
-    
-    # 10. deque (collections.deque) - wie bei CPPDEFINES
+        return {convert_scons_objects_selective(k, key, depth + 1): convert_scons_objects_selective(v, key, depth + 1) for k, v in value.items()}
     elif hasattr(value, '__class__') and value.__class__.__name__ == 'deque':
-        return list(value)  # Konvertiere deque zu normaler Liste
-    
-    # 11. os.environ und ähnliche Mapping-Objekte
+        return list(value)
     elif hasattr(value, '__class__') and 'environ' in str(value.__class__).lower():
-        return dict(value)  # Konvertiere zu normalem Dictionary
-    
-    # 12. Andere SCons-Objekte (nicht Pfad-bezogen)
+        return dict(value)
     elif hasattr(value, '__class__') and 'SCons' in str(value.__class__):
         return str(value)
-    
-    # 13. String-Pfade und primitive Typen UNVERÄNDERT lassen
     elif isinstance(value, (str, int, float, bool, type(None))):
-        return value  # KEINE ÄNDERUNG an String-Pfaden!
-    
-    # 14. Alles andere als String
+        return value
     else:
         return str(value)
 
 def capture_complete_scons_environment():
-    """Erfasst vollständige SCons-Environment mit LDF-Daten"""
+    """Erfasst vollständige SCons-Environment NACH vollständiger LDF-Verarbeitung"""
     
-    print(f"\n🎯 VOLLSTÄNDIGE SCons-Environment-Erfassung mit LDF-Daten:")
+    print(f"\n🎯 VOLLSTÄNDIGE SCons-Environment-Erfassung NACH LDF:")
     
-    # 1. Erweiterte LDF-Variablen erfassen
-    ldf_variables = export_ldf_variables_extended()
+    # 1. ERST vollständige LDF-Verarbeitung sicherstellen
+    ldf_complete, processed_libs = ensure_complete_ldf_processing()
     
-    # 2. Kritische SCons-Variablen direkt erfassen
+    if not ldf_complete:
+        print("⚠ Keine Projekt-lib-Pfade gefunden - möglicherweise keine vorhanden")
+    else:
+        print(f"✅ LDF-Verarbeitung vollständig - {processed_libs} Libraries verarbeitet")
+    
+    # 2. DANN Environment erfassen (sollte jetzt vollständig sein)
     critical_vars = [
         'CPPPATH', 'CPPDEFINES', 'LIBS', 'LIBPATH', 
         'BUILD_FLAGS', 'CCFLAGS', 'CXXFLAGS', 'LINKFLAGS',
@@ -423,20 +429,39 @@ def capture_complete_scons_environment():
         raw_value = env.get(var, [])
         
         if var == 'CPPPATH':
-            print(f"   📁 CPPPATH: {len(raw_value)} Einträge (vollständig erfasst)")
+            print(f"   📁 CPPPATH: {len(raw_value)} Einträge (nach vollständiger LDF)")
             
-            # Zeige erste 5 zur Verifikation
-            for i, path in enumerate(raw_value[:5]):
+            # Analysiere Quellen
+            project_dir = env.get('PROJECT_DIR', '')
+            lib_paths = []
+            framework_paths = []
+            libdeps_paths = []
+            
+            for path in raw_value:
                 path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
-                exists = os.path.exists(path_str)
-                print(f"      {i:2d}: {'✓' if exists else '✗'} {path_str}")
+                
+                if project_dir and 'lib/' in path_str and project_dir in path_str:
+                    lib_paths.append(path_str)
+                elif 'framework-' in path_str:
+                    framework_paths.append(path_str)
+                elif '.pio/libdeps/' in path_str:
+                    libdeps_paths.append(path_str)
+            
+            print(f"      📚 Projekt-lib: {len(lib_paths)}")
+            print(f"      🔧 Framework: {len(framework_paths)}")
+            print(f"      📦 LibDeps: {len(libdeps_paths)}")
+            
+            # Zeige erste Projekt-lib-Pfade
+            for i, lib_path in enumerate(lib_paths[:3]):
+                rel_path = os.path.relpath(lib_path, project_dir) if project_dir else lib_path
+                print(f"         {i+1}: {rel_path}")
         
         elif isinstance(raw_value, list):
             print(f"   📊 {var}: {len(raw_value)} Einträge")
         else:
             print(f"   📊 {var}: {type(raw_value).__name__}")
         
-        # Konvertiere SCons-Objekte zu wiederverwendbaren Daten
+        # Konvertiere für Speicherung
         converted_value = convert_scons_objects_selective(raw_value, var)
         scons_data[var] = converted_value
         
@@ -446,18 +471,18 @@ def capture_complete_scons_environment():
                 if hasattr(item, 'abspath'):
                     conversion_stats["file_paths"] += 1
     
-    # 3. Kombiniere SCons-Daten mit LDF-Variablen
-    complete_data = {
-        'SCONS_VARS': scons_data,
-        'LDF_VARS': ldf_variables,
-        'CONVERSION_STATS': conversion_stats
-    }
+    # 3. LDF-Variablen erfassen (sollten jetzt vollständig sein)
+    ldf_variables = export_ldf_variables_extended()
     
     print(f"   🔄 {conversion_stats['file_paths']} SCons-Pfad-Objekte konvertiert")
-    print(f"   ✅ String-Pfade blieben unverändert")
     print(f"   📊 LDF-Variablen: {len(ldf_variables)} Kategorien")
     
-    return complete_data
+    return {
+        'SCONS_VARS': scons_data,
+        'LDF_VARS': ldf_variables,
+        'LDF_PROCESSING_COMPLETE': ldf_complete,
+        'CONVERSION_STATS': conversion_stats
+    }
 
 def freeze_complete_scons_configuration(complete_data):
     """Speichert vollständige SCons-Environment mit LDF-Daten"""
@@ -543,6 +568,7 @@ def freeze_complete_scons_configuration(complete_data):
             f.write(f'ENV_NAME = {repr(env.get("PIOENV"))}\n')
             f.write(f'SCONS_VAR_COUNT = {len(complete_data["SCONS_VARS"])}\n')
             f.write(f'LDF_CATEGORIES = {len(complete_data["LDF_VARS"])}\n')
+            f.write(f'LDF_PROCESSING_COMPLETE = {complete_data["LDF_PROCESSING_COMPLETE"]}\n')
             f.write(f'COMPLETE_CAPTURE = True\n')
             f.write(f'CONVERTED_FILE_PATHS = {complete_data["CONVERSION_STATS"]["file_paths"]}\n')
             
@@ -640,8 +666,10 @@ def restore_complete_scons_configuration():
         
         # Prüfe ob vollständige Erfassung
         complete_capture = getattr(env_module, 'COMPLETE_CAPTURE', False)
-        if complete_capture:
-            print("✅ Cache stammt von vollständiger LDF-Erfassung")
+        ldf_processing_complete = getattr(env_module, 'LDF_PROCESSING_COMPLETE', False)
+        
+        if complete_capture and ldf_processing_complete:
+            print("✅ Cache stammt von vollständiger LDF-Erfassung mit Projekt-lib-Unterstützung")
         
         # Environment wiederherstellen
         success = env_module.restore_environment(env)
@@ -655,7 +683,7 @@ def restore_complete_scons_configuration():
             print(f"   📊 {scons_var_count} SCons-Variablen")
             print(f"   📋 {ldf_categories} LDF-Kategorien")
             print(f"   📄 {converted_file_paths} SCons-Pfad-Objekte konvertiert")
-            print(f"   ✅ Vollständige LDF-Erfassung verwendet")
+            print(f"   ✅ Vollständige LDF-Erfassung mit Projekt-lib-Support")
         
         return success
         
@@ -665,7 +693,7 @@ def restore_complete_scons_configuration():
 
 def early_cache_check_and_restore():
     """Prüft Cache und stellt vollständige SCons-Environment wieder her"""
-    print(f"🔍 Cache-Prüfung (vollständige LDF-Environment)...")
+    print(f"🔍 Cache-Prüfung (vollständige LDF-Environment mit verbessertem Timing)...")
     
     cache_file = get_cache_file_path()
     
@@ -708,32 +736,33 @@ def calculate_config_hash():
     config_string = "|".join(relevant_values)
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
-def post_build_complete_capture(target, source, env):
-    """Post-Build Hook: Vollständige SCons-Environment-Erfassung mit LDF-Daten"""
+def pre_link_complete_capture(target, source, env):
+    """PRE-LINK Hook: Vollständige SCons-Environment-Erfassung NACH Compile, VOR Link"""
     global _backup_created
     
     if _backup_created:
-        print("✓ Vollständige Environment bereits erfasst - überspringe Post-Build Action")
+        print("✓ Vollständige Environment bereits erfasst - überspringe Pre-Link Action")
         return None
     
     try:
-        print(f"\n🎯 POST-BUILD: Vollständige SCons-Environment-Erfassung mit LDF-Daten")
+        print(f"\n🎯 PRE-LINK: Vollständige SCons-Environment-Erfassung (verbessertes Timing)")
         print(f"   Target: {[str(t) for t in target]}")
         print(f"   Source: {len(source)} Dateien")
+        print(f"   🕐 Timing: Nach Compile, vor Link - LDF sollte vollständig sein")
         
         # Vollständige Environment-Erfassung mit LDF-Daten
         trigger_complete_environment_capture()
         
     except Exception as e:
-        print(f"❌ Post-Build vollständige Erfassung Fehler: {e}")
+        print(f"❌ Pre-Link vollständige Erfassung Fehler: {e}")
     
     return None
 
 # =============================================================================
-# HAUPTLOGIK - VOLLSTÄNDIGE LDF-SCONS-ENVIRONMENT-ERFASSUNG (1-STUFIG)
+# HAUPTLOGIK - VOLLSTÄNDIGE LDF-SCONS-ENVIRONMENT-ERFASSUNG (VERBESSERTES TIMING)
 # =============================================================================
 
-print(f"\n🎯 Vollständige LDF-SCons-Environment-Erfassung für: {env.get('PIOENV')}")
+print(f"\n🎯 Vollständige LDF-SCons-Environment-Erfassung (verbessertes Timing) für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und vollständige SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
@@ -742,12 +771,14 @@ if cache_restored:
     print(f"🚀 Build mit vollständigem LDF-Environment-Cache - LDF übersprungen!")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - vollständige Erfassung nach Build...")
+    print(f"📝 Normaler LDF-Durchlauf - vollständige Erfassung mit verbessertem Timing...")
     
-    # Post-Build Hook für vollständige Environment-Erfassung
-    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", post_build_complete_capture)
-    print(f"✅ Post-Build Hook für vollständige LDF-Erfassung registriert")
+    # PRE-LINK Hook für vollständige Environment-Erfassung (besseres Timing)
+    env.AddPreAction("$BUILD_DIR/${PROGNAME}.elf", pre_link_complete_capture)
+    print(f"✅ Pre-Link Hook für vollständige LDF-Erfassung registriert")
+    print(f"🕐 Timing: Nach Compile-Phase, vor Link-Phase - optimaler Zeitpunkt")
 
-print(f"🏁 Vollständige LDF-SCons-Environment-Erfassung initialisiert")
+print(f"🏁 Vollständige LDF-SCons-Environment-Erfassung (verbessertes Timing) initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/")
-print(f"💡 Nach erfolgreichem Build: lib_ldf_mode = off für nachfolgende Builds\n")
+print(f"💡 Nach erfolgreichem Build: lib_ldf_mode = off für nachfolgende Builds")
+print(f"⏰ Verbessertes Timing: Pre-Link Hook erfasst Environment nach vollständiger LDF-Verarbeitung\n")
