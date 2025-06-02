@@ -169,49 +169,345 @@ def convert_scons_objects_selective(value, key="", depth=0):
     else:
         return str(value)
 
-def capture_dynamic_include_paths():
-    """Erfasst zur Laufzeit generierte Include-Pfade"""
-    print(f"\n🔄 DYNAMISCHE INCLUDE-PFAD-ERFASSUNG:")
+def debug_environment_restoration_detailed():
+    """Detaillierte Debug-Analyse der Environment-Wiederherstellung"""
+    cache_file = get_cache_file_path()
     
-    dynamic_paths = set()
+    if not os.path.exists(cache_file):
+        print(f"❌ Cache-Datei existiert nicht: {cache_file}")
+        return False
     
-    # Prüfe ob CPPPATH-Modifier existieren
-    cpppath_modifiers = [
-        'PrependUnique', 'AppendUnique', 'Prepend', 'Append'
-    ]
+    print(f"\n🔍 DETAILLIERTE ENVIRONMENT-WIEDERHERSTELLUNG-DEBUG:")
+    print(f"   📁 Cache-Datei: {os.path.basename(cache_file)}")
+    print(f"   📊 Cache-Größe: {os.path.getsize(cache_file)} Bytes")
     
-    for modifier in cpppath_modifiers:
-        if hasattr(env, modifier):
-            print(f"   🔄 CPPPATH-Modifier gefunden: {modifier}")
-    
-    # Erfasse aktuelle CPPPATH nach allen Modifikationen
-    final_cpppath = env.get('CPPPATH', [])
-    if isinstance(final_cpppath, list):
-        print(f"   📊 Finale CPPPATH-Einträge: {len(final_cpppath)}")
-        for i, path in enumerate(final_cpppath):
-            path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
-            dynamic_paths.add(path_str)
-            if i < 5:  # Zeige erste 5
-                print(f"      {i}: {path_str}")
-    
-    # Prüfe auf dynamisch generierte Framework-Pfade
-    framework_dirs = env.get('FRAMEWORK_DIR', [])
-    if framework_dirs:
-        if isinstance(framework_dirs, list):
-            for fdir in framework_dirs:
-                fdir_str = str(fdir.abspath) if hasattr(fdir, 'abspath') else str(fdir)
-                dynamic_paths.add(fdir_str)
+    try:
+        # CPPPATH vor Wiederherstellung erfassen
+        cpppath_before = list(env.get('CPPPATH', []))
+        print(f"   📊 CPPPATH vor Wiederherstellung: {len(cpppath_before)} Einträge")
+        
+        # Zeige aktuelle CPPPATH-Einträge
+        if len(cpppath_before) > 0:
+            print(f"   📄 Aktuelle CPPPATH (erste 3):")
+            for i, path in enumerate(cpppath_before[:3]):
+                path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+                print(f"      {i+1}: {path_str}")
+        
+        # Cache laden und analysieren
+        print(f"   🔄 Lade Cache-Modul...")
+        spec = importlib.util.spec_from_file_location("scons_env_cache", cache_file)
+        env_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(env_module)
+        print(f"   ✅ Cache-Modul erfolgreich geladen")
+        
+        # Cache-Inhalt analysieren
+        comprehensive_data = getattr(env_module, 'COMPREHENSIVE_DATA', {})
+        all_env_vars = comprehensive_data.get('all_environment_vars', {})
+        cached_cpppath = all_env_vars.get('CPPPATH', [])
+        
+        print(f"   💾 Cache-Analyse:")
+        print(f"      📊 Gespeicherte Environment-Variablen: {len(all_env_vars)}")
+        print(f"      📊 Gespeicherte CPPPATH-Einträge: {len(cached_cpppath)}")
+        
+        # Zeige gespeicherte CPPPATH-Einträge
+        if len(cached_cpppath) > 0:
+            print(f"   📄 Gespeicherte CPPPATH (erste 5):")
+            for i, path in enumerate(cached_cpppath[:5]):
+                print(f"      {i+1}: {path} ({type(path).__name__})")
+        
+        # Prüfe auf lib-Pfade im Cache
+        project_dir = env.get('PROJECT_DIR', '')
+        cached_lib_paths = []
+        if project_dir:
+            for path in cached_cpppath:
+                path_str = str(path)
+                if '/lib/' in path_str and project_dir in path_str:
+                    cached_lib_paths.append(path_str)
+        
+        print(f"   📚 Lib-Pfade im Cache: {len(cached_lib_paths)}")
+        for i, lib_path in enumerate(cached_lib_paths[:3]):
+            rel_path = os.path.relpath(lib_path, project_dir) if project_dir else lib_path
+            print(f"      {i+1}: {rel_path}")
+        
+        # Wiederherstellung ausführen
+        print(f"   🔄 Führe Environment-Wiederherstellung aus...")
+        
+        # Prüfe restore_environment Funktion
+        if hasattr(env_module, 'restore_environment'):
+            print(f"   ✅ restore_environment Funktion gefunden")
+            
+            try:
+                success = env_module.restore_environment(env)
+                print(f"   📊 Wiederherstellung Return-Wert: {success}")
+            except Exception as e:
+                print(f"   ❌ Wiederherstellung-Fehler: {e}")
+                return False
         else:
-            fdir_str = str(framework_dirs.abspath) if hasattr(framework_dirs, 'abspath') else str(framework_dirs)
-            dynamic_paths.add(fdir_str)
+            print(f"   ❌ restore_environment Funktion NICHT gefunden!")
+            return False
+        
+        # CPPPATH nach Wiederherstellung prüfen
+        cpppath_after = list(env.get('CPPPATH', []))
+        print(f"   📊 CPPPATH nach Wiederherstellung: {len(cpppath_after)} Einträge")
+        
+        # Detaillierter Vergleich
+        if len(cpppath_after) > len(cpppath_before):
+            added_count = len(cpppath_after) - len(cpppath_before)
+            print(f"   ✅ CPPPATH wurde erweitert: +{added_count} Pfade")
+            
+            # Zeige hinzugefügte Pfade
+            if len(cpppath_after) > len(cpppath_before):
+                added_paths = cpppath_after[len(cpppath_before):]
+                print(f"   📄 Hinzugefügte Pfade:")
+                for i, path in enumerate(added_paths[:5]):
+                    path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+                    print(f"      +{i+1}: {path_str}")
+            
+            return True
+        elif len(cpppath_after) == len(cpppath_before):
+            print(f"   ⚠ CPPPATH-Länge unverändert - prüfe Inhalt...")
+            
+            # Prüfe ob Inhalte unterschiedlich sind
+            before_set = set(str(p.abspath) if hasattr(p, 'abspath') else str(p) for p in cpppath_before)
+            after_set = set(str(p.abspath) if hasattr(p, 'abspath') else str(p) for p in cpppath_after)
+            
+            if before_set != after_set:
+                print(f"   ✅ CPPPATH-Inhalte wurden geändert")
+                new_paths = after_set - before_set
+                print(f"   📄 Neue Pfade: {len(new_paths)}")
+                for i, path in enumerate(list(new_paths)[:3]):
+                    print(f"      +{i+1}: {path}")
+                return True
+            else:
+                print(f"   ❌ CPPPATH-Inhalte unverändert!")
+                return False
+        else:
+            print(f"   ❌ CPPPATH wurde verkürzt! ({len(cpppath_before)} -> {len(cpppath_after)})")
+            return False
+        
+    except Exception as e:
+        print(f"   ❌ Debug-Wiederherstellung fehlgeschlagen: {e}")
+        import traceback
+        print(f"   📄 Traceback: {traceback.format_exc()}")
+        return False
+
+def debug_scons_variable_types_detailed():
+    """Detaillierte Debug-Analyse der SCons-Variable-Typen"""
     
-    print(f"   ✅ Dynamische Pfade erfasst: {len(dynamic_paths)}")
-    return dynamic_paths
+    print(f"\n🔍 DETAILLIERTE SCONS-VARIABLE-TYPEN-DEBUG:")
+    
+    # Aktuelle CPPPATH analysieren
+    current_cpppath = env.get('CPPPATH', [])
+    print(f"   📊 Aktuelle CPPPATH: {len(current_cpppath)} Einträge")
+    print(f"   📊 CPPPATH-Typ: {type(current_cpppath).__name__}")
+    
+    if current_cpppath:
+        # Analysiere Typen der ersten 5 Einträge
+        print(f"   📄 CPPPATH-Einträge-Typen:")
+        for i, item in enumerate(current_cpppath[:5]):
+            item_type = type(item).__name__
+            item_class = str(item.__class__)
+            
+            if hasattr(item, 'abspath'):
+                item_value = str(item.abspath)
+                print(f"      {i+1}: {item_type} ({item_class})")
+                print(f"          -> abspath: {item_value}")
+                print(f"          -> str: {str(item)}")
+            else:
+                item_value = str(item)
+                print(f"      {i+1}: {item_type} -> {item_value}")
+    
+    # Prüfe andere kritische Variablen
+    critical_vars = ['LIBS', 'LIBPATH', 'CCFLAGS', 'CXXFLAGS', 'BUILD_FLAGS']
+    for var in critical_vars:
+        value = env.get(var, None)
+        if value is not None:
+            if hasattr(value, '__len__'):
+                print(f"   📊 {var}: {type(value).__name__} mit {len(value)} Einträgen")
+            else:
+                print(f"   📊 {var}: {type(value).__name__} = {value}")
+    
+    # Prüfe Cache-Datei-Inhalt
+    cache_file = get_cache_file_path()
+    if os.path.exists(cache_file):
+        try:
+            spec = importlib.util.spec_from_file_location("scons_env_cache", cache_file)
+            env_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(env_module)
+            
+            comprehensive_data = getattr(env_module, 'COMPREHENSIVE_DATA', {})
+            all_env_vars = comprehensive_data.get('all_environment_vars', {})
+            cached_cpppath = all_env_vars.get('CPPPATH', [])
+            
+            print(f"   💾 Cache-CPPPATH-Typen:")
+            print(f"      📊 Cache-CPPPATH: {type(cached_cpppath).__name__} mit {len(cached_cpppath)} Einträgen")
+            
+            for i, item in enumerate(cached_cpppath[:5]):
+                item_type = type(item).__name__
+                print(f"      {i+1}: {item_type} -> {item}")
+                
+                # Problem: Sind alle Cache-Einträge Strings?
+                if not isinstance(item, str):
+                    print(f"         ⚠ Nicht-String-Typ im Cache: {item_type}")
+        
+        except Exception as e:
+            print(f"   ❌ Cache-Analyse fehlgeschlagen: {e}")
+
+def test_manual_cpppath_extension():
+    """Testet manuelle CPPPATH-Erweiterung"""
+    
+    print(f"\n🧪 TEST: MANUELLE CPPPATH-ERWEITERUNG:")
+    
+    # Aktuelle CPPPATH
+    current_cpppath = list(env.get('CPPPATH', []))
+    print(f"   📊 Aktuelle CPPPATH: {len(current_cpppath)} Einträge")
+    
+    # Füge Test-Pfad hinzu
+    project_dir = env.get('PROJECT_DIR', '')
+    test_lib_path = os.path.join(project_dir, 'lib', 'test_lib_debug')
+    
+    print(f"   🧪 Füge Test-Pfad hinzu: {test_lib_path}")
+    
+    try:
+        # Verschiedene Methoden testen
+        print(f"   🔄 Teste verschiedene CPPPATH-Erweiterungsmethoden:")
+        
+        # Methode 1: Direkte Zuweisung
+        print(f"      1. Direkte Zuweisung...")
+        extended_cpppath = current_cpppath + [test_lib_path]
+        env['CPPPATH'] = extended_cpppath
+        
+        new_cpppath_1 = list(env.get('CPPPATH', []))
+        success_1 = len(new_cpppath_1) > len(current_cpppath)
+        print(f"         Erfolg: {success_1} ({len(current_cpppath)} -> {len(new_cpppath_1)})")
+        
+        # Methode 2: Append
+        if not success_1:
+            print(f"      2. env.Append...")
+            env.Append(CPPPATH=[test_lib_path + "_append"])
+            
+            new_cpppath_2 = list(env.get('CPPPATH', []))
+            success_2 = len(new_cpppath_2) > len(new_cpppath_1)
+            print(f"         Erfolg: {success_2} ({len(new_cpppath_1)} -> {len(new_cpppath_2)})")
+        
+        # Methode 3: PrependUnique
+        if not success_1:
+            print(f"      3. env.PrependUnique...")
+            env.PrependUnique(CPPPATH=[test_lib_path + "_prepend"])
+            
+            new_cpppath_3 = list(env.get('CPPPATH', []))
+            success_3 = len(new_cpppath_3) > len(current_cpppath)
+            print(f"         Erfolg: {success_3} ({len(current_cpppath)} -> {len(new_cpppath_3)})")
+        
+        # Finale CPPPATH prüfen
+        final_cpppath = list(env.get('CPPPATH', []))
+        final_success = len(final_cpppath) > len(current_cpppath)
+        
+        print(f"   📊 Finale CPPPATH: {len(final_cpppath)} Einträge")
+        print(f"   ✅ Manuelle CPPPATH-Erweiterung funktioniert: {final_success}")
+        
+        if final_success:
+            # Zeige hinzugefügte Pfade
+            added_paths = final_cpppath[len(current_cpppath):]
+            print(f"   📄 Hinzugefügte Test-Pfade:")
+            for i, path in enumerate(added_paths):
+                path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+                print(f"      +{i+1}: {path_str}")
+        
+        return final_success
+        
+    except Exception as e:
+        print(f"   ❌ Manuelle CPPPATH-Erweiterung fehlgeschlagen: {e}")
+        return False
+
+def debug_cache_file_content():
+    """Debuggt den Cache-Datei-Inhalt im Detail"""
+    
+    cache_file = get_cache_file_path()
+    if not os.path.exists(cache_file):
+        print(f"❌ Cache-Datei existiert nicht für Debug")
+        return
+    
+    print(f"\n📄 CACHE-DATEI-INHALT-DEBUG:")
+    print(f"   📁 Datei: {cache_file}")
+    print(f"   📊 Größe: {os.path.getsize(cache_file)} Bytes")
+    
+    try:
+        # Erste 20 Zeilen der Cache-Datei lesen
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        print(f"   📄 Erste 10 Zeilen:")
+        for i, line in enumerate(lines[:10]):
+            print(f"      {i+1:2d}: {line.rstrip()}")
+        
+        # Suche nach COMPREHENSIVE_DATA
+        comprehensive_line = None
+        for i, line in enumerate(lines):
+            if 'COMPREHENSIVE_DATA' in line:
+                comprehensive_line = i
+                break
+        
+        if comprehensive_line:
+            print(f"   📊 COMPREHENSIVE_DATA gefunden in Zeile {comprehensive_line + 1}")
+        else:
+            print(f"   ❌ COMPREHENSIVE_DATA NICHT gefunden!")
+        
+        # Suche nach restore_environment
+        restore_line = None
+        for i, line in enumerate(lines):
+            if 'def restore_environment' in line:
+                restore_line = i
+                break
+        
+        if restore_line:
+            print(f"   📊 restore_environment Funktion gefunden in Zeile {restore_line + 1}")
+            # Zeige die Funktion
+            print(f"   📄 restore_environment (erste 5 Zeilen):")
+            for j in range(5):
+                if restore_line + j < len(lines):
+                    print(f"      {restore_line + j + 1:2d}: {lines[restore_line + j].rstrip()}")
+        else:
+            print(f"   ❌ restore_environment Funktion NICHT gefunden!")
+    
+    except Exception as e:
+        print(f"   ❌ Cache-Datei-Lesen fehlgeschlagen: {e}")
+
+def focused_debug_analysis():
+    """Fokussierte Debug-Analyse auf Problem 1 (Environment-Wiederherstellung)"""
+    
+    print(f"\n🎯 FOKUSSIERTE DEBUG-ANALYSE (Environment-Wiederherstellung):")
+    
+    # Debug 1: Cache-Datei-Inhalt
+    debug_cache_file_content()
+    
+    # Debug 2: SCons-Variable-Typen
+    debug_scons_variable_types_detailed()
+    
+    # Debug 3: Manuelle CPPPATH-Erweiterung
+    manual_works = test_manual_cpppath_extension()
+    
+    # Debug 4: Environment-Wiederherstellung (Haupttest)
+    restoration_works = debug_environment_restoration_detailed()
+    
+    print(f"\n📊 FOKUSSIERTE DEBUG-ZUSAMMENFASSUNG:")
+    print(f"   🧪 Manuelle CPPPATH-Erweiterung funktioniert: {manual_works}")
+    print(f"   🔄 Environment-Wiederherstellung funktioniert: {restoration_works}")
+    
+    if not manual_works:
+        print(f"   🎯 GRUNDPROBLEM: SCons-CPPPATH kann nicht erweitert werden!")
+        print(f"      -> SCons-Environment ist read-only oder gesperrt")
+    elif not restoration_works:
+        print(f"   🎯 HAUPTPROBLEM: Environment-Wiederherstellung funktioniert nicht!")
+        print(f"      -> Cache-Daten werden nicht korrekt in Environment geladen")
+    else:
+        print(f"   ✅ Beide Tests funktionieren - Problem liegt woanders")
+        print(f"      -> Möglicherweise Timing oder andere Ursache")
 
 def capture_all_include_related_variables():
-    """Erfasst ALLE möglichen SCons-Variablen mit Include-Informationen - ERWEITERT"""
+    """Erfasst ALLE möglichen SCons-Variablen mit Include-Informationen"""
     
-    # Erweiterte Include-Variablen-Liste
+    # Alle potentiellen Include-Variablen
     include_vars = [
         # Primäre Include-Variablen
         'CPPPATH', 'CCFLAGS', 'CXXFLAGS', 'CPPFLAGS',
@@ -232,23 +528,6 @@ def capture_all_include_related_variables():
         'PIOBUILDFILES', 'LIB_DEPS', 'LIB_EXTRA_DIRS',
         'LIBSOURCE_DIRS', 'PROJECT_LIBDEPS_DIR',
         
-        # KRITISCH: Neue wichtige Variablen
-        'CPPPATH_DYNAMIC',      # Dynamisch generierte Include-Pfade
-        'EXTRA_LIB_DIRS',       # Zusätzliche Library-Verzeichnisse
-        'BUILD_UNFLAGS',        # Entfernte Flags (wichtig!)
-        'SRC_FILTER',           # Source-Filter (kann Pfade beeinflussen)
-        'LIB_IGNORE',           # Ignorierte Libraries
-        'UPLOAD_PROTOCOL',      # Kann Include-Pfade beeinflussen
-        
-        # ESP32-spezifische Variablen
-        'ESP32_EXCEPTION_DEBUG', 
-        'ARDUINO_VARIANT',
-        'BOARD_MCU',
-        
-        # Compiler-Toolchain-Variablen
-        'CC', 'CXX', 'AR', 'RANLIB',
-        'CCCOM', 'CXXCOM', 'LINKCOM',
-        
         # Weitere potentielle Variablen
         'ASFLAGS', 'LINKFLAGS', 'SHLINKFLAGS',
         
@@ -259,7 +538,7 @@ def capture_all_include_related_variables():
         'CPPDEFINES', 'CPPDEFPREFIX', 'CPPDEFSUFFIX'
     ]
     
-    print(f"\n🔍 ERWEITERTE INCLUDE-VARIABLE-ANALYSE:")
+    print(f"\n🔍 VOLLSTÄNDIGE INCLUDE-VARIABLE-ANALYSE:")
     
     all_include_paths = set()
     project_dir = env.get('PROJECT_DIR', '')
@@ -287,7 +566,7 @@ def capture_all_include_related_variables():
                 item_str = str(item.abspath) if hasattr(item, 'abspath') else str(item)
                 variable_info['content'].append(item_str)
                 
-                # Suche nach Include-Pfaden
+                # Suche nach Include-Pfaden (weniger restriktiv für Debug)
                 if any(pattern in item_str for pattern in ['/include', '/lib/', '-I']):
                     is_project_lib = project_dir and '/lib/' in item_str and project_dir in item_str
                     marker = "📚 PROJEKT-LIB" if is_project_lib else "📁 INCLUDE"
@@ -346,7 +625,7 @@ def capture_internal_scons_variables():
     
     print(f"\n🔧 INTERNE SCONS-VARIABLEN:")
     
-    # Erweiterte interne Variablen
+    # Interne Variablen die aufbereitete Flags enthalten
     internal_vars = [
         '_CPPINCFLAGS',    # Aufbereitete Include-Flags
         '_LIBFLAGS',       # Aufbereitete Library-Flags  
@@ -355,11 +634,6 @@ def capture_internal_scons_variables():
         'TEMPFILE',        # Temporary-File-Handling
         '_CPPDEFFLAGS',    # Define-Flags
         '_FRAMEWORKPATH',  # Framework-Pfade
-        '_CCCOMCOM',       # Compiler-Command-Common
-        '_CXXCOMCOM',      # CXX-Compiler-Command-Common
-        '_LINKCOM',        # Linker-Command
-        'BUILDERS',        # SCons-Builder
-        'SCANNERS',        # SCons-Scanner
     ]
     
     internal_analysis = {}
@@ -431,7 +705,7 @@ def comprehensive_environment_scan():
                 else:
                     value_str = str(value)
                 
-                # Suche nach Projekt-lib-Pfaden
+                # Suche nach Projekt-lib-Pfaden (weniger restriktiv für Debug)
                 if project_dir and '/lib/' in value_str and project_dir in value_str:
                     lib_containing_vars.append(key)
                     
@@ -467,70 +741,38 @@ def comprehensive_environment_scan():
     
     return additional_lib_paths, environment_vars
 
-def validate_restored_include_paths():
-    """Validiert wiederhergestellte Include-Pfade"""
-    print(f"\n🔍 INCLUDE-PFAD-VALIDIERUNG:")
-    
-    cpppath = env.get('CPPPATH', [])
-    project_dir = env.get('PROJECT_DIR', '')
-    
-    valid_paths = 0
-    invalid_paths = 0
-    
-    for path in cpppath:
-        path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
-        
-        if os.path.exists(path_str):
-            valid_paths += 1
-            if project_dir in path_str:
-                print(f"   ✅ Projekt-Pfad: {os.path.relpath(path_str, project_dir)}")
-        else:
-            invalid_paths += 1
-            print(f"   ❌ Ungültig: {path_str}")
-    
-    print(f"   📊 Gültige Pfade: {valid_paths}, Ungültige: {invalid_paths}")
-    return invalid_paths == 0
-
 def comprehensive_variable_capture():
-    """Erweiterte umfassende Erfassung aller relevanten SCons-Variablen"""
+    """Umfassende Erfassung aller relevanten SCons-Variablen"""
     
-    print(f"\n🎯 ERWEITERTE UMFASSENDE SCONS-VARIABLE-ERFASSUNG:")
+    print(f"\n🎯 UMFASSENDE SCONS-VARIABLE-ERFASSUNG:")
     
-    # 1. Erweiterte Include-Analyse
+    # 1. Standard Include-Analyse
     project_lib_paths, variable_analysis = capture_all_include_related_variables()
     
-    # 2. NEU: Dynamische Include-Pfade
-    dynamic_paths = capture_dynamic_include_paths()
-    
-    # 3. Interne SCons-Variablen
+    # 2. Interne SCons-Variablen
     internal_analysis = capture_internal_scons_variables()
     
-    # 4. Vollständige Environment-Durchsuchung
+    # 3. Vollständige Environment-Durchsuchung
     additional_lib_paths, all_environment_vars = comprehensive_environment_scan()
     
-    # 5. NEU: Include-Pfad-Validierung
-    validate_restored_include_paths()
+    # 4. Kombiniere alle gefundenen lib-Pfade
+    all_lib_paths = project_lib_paths.union(additional_lib_paths)
     
-    # Kombiniere alle gefundenen lib-Pfade
-    all_lib_paths = project_lib_paths.union(additional_lib_paths).union(dynamic_paths)
-    
-    print(f"\n   📊 ERWEITERTE ZUSAMMENFASSUNG:")
+    print(f"\n   📊 ZUSAMMENFASSUNG:")
     print(f"      📚 Gesamt lib-Pfade gefunden: {len(all_lib_paths)}")
-    print(f"      🔄 Dynamische Pfade: {len(dynamic_paths)}")
     print(f"      📋 Analysierte Variablen: {len(variable_analysis)}")
     print(f"      🔧 Interne Variablen: {len(internal_analysis)}")
     print(f"      🌐 Gesamt Environment-Variablen: {len(all_environment_vars)}")
     
     return {
         'lib_paths': all_lib_paths,
-        'dynamic_paths': dynamic_paths,  # NEU
         'variable_analysis': variable_analysis,
         'internal_analysis': internal_analysis,
         'all_environment_vars': all_environment_vars
     }
 
 def freeze_comprehensive_scons_configuration(comprehensive_data):
-    """Speichert umfassende SCons-Environment-Daten mit verbesserter Restore-Funktion"""
+    """Speichert umfassende SCons-Environment-Daten"""
     cache_file = get_cache_file_path()
     temp_file = cache_file + ".tmp"
     
@@ -539,93 +781,69 @@ def freeze_comprehensive_scons_configuration(comprehensive_data):
             f.write("#!/usr/bin/env python3\n")
             f.write("# -*- coding: utf-8 -*-\n")
             f.write('"""\n')
-            f.write('PlatformIO LDF SCons Variables Export - Erweiterte umfassende Erfassung\n')
+            f.write('PlatformIO LDF SCons Variables Export - Umfassende Erfassung mit Debug\n')
             f.write(f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
             f.write(f'Environment: {env.get("PIOENV")}\n')
             f.write('"""\n\n')
             
-            f.write('import os\n\n')
-            
             # Umfassende Daten
-            f.write('# Erweiterte umfassende SCons Environment Daten\n')
+            f.write('# Umfassende SCons Environment Daten\n')
             f.write('COMPREHENSIVE_DATA = ')
             f.write(repr(comprehensive_data))
             f.write('\n\n')
             
-            # Verbesserte Restore-Funktion
+            # Verbesserte Restore-Funktion mit Debug
             f.write('def restore_environment(target_env):\n')
-            f.write('    """Stellt erweiterte umfassende SCons-Environment wieder her"""\n')
+            f.write('    """Stellt umfassende SCons-Environment wieder her (mit Debug)"""\n')
             f.write('    restored_count = 0\n')
-            f.write('    critical_restored = 0\n')
+            f.write('    failed_count = 0\n')
             f.write('    \n')
-            f.write('    # Kritische Variablen zuerst wiederherstellen\n')
-            f.write('    critical_vars = [\n')
-            f.write('        "CPPPATH", "CCFLAGS", "CXXFLAGS", "CPPFLAGS",\n')
-            f.write('        "_CPPINCFLAGS", "INCPREFIX", "INCSUFFIX",\n')
-            f.write('        "LIBPATH", "LIBS", "_LIBFLAGS",\n')
-            f.write('        "FRAMEWORK_DIR", "FRAMEWORKPATH",\n')
-            f.write('        "BUILD_FLAGS", "SRC_BUILD_FLAGS",\n')
-            f.write('        "BOARD", "PLATFORM", "PIOENV",\n')
-            f.write('        "CC", "CXX", "AR", "RANLIB"\n')
-            f.write('    ]\n')
+            f.write('    print("🔄 Starte Environment-Wiederherstellung...")\n')
             f.write('    \n')
+            f.write('    # Alle Environment-Variablen wiederherstellen\n')
             f.write('    all_vars = COMPREHENSIVE_DATA.get("all_environment_vars", {})\n')
+            f.write('    print(f"   📊 Wiederherzustellende Variablen: {len(all_vars)}")\n')
             f.write('    \n')
-            f.write('    # 1. Kritische Variablen zuerst\n')
-            f.write('    print("   🎯 Kritische Variablen wiederherstellen:")\n')
-            f.write('    for var in critical_vars:\n')
-            f.write('        if var in all_vars:\n')
-            f.write('            try:\n')
-            f.write('                target_env[var] = all_vars[var]\n')
-            f.write('                critical_restored += 1\n')
-            f.write('                print(f"      ✓ Kritisch: {var}")\n')
-            f.write('            except Exception as e:\n')
-            f.write('                print(f"      ❌ Kritisch fehlgeschlagen: {var} - {e}")\n')
-            f.write('    \n')
-            f.write('    # 2. Alle anderen Variablen\n')
-            f.write('    print("   🌐 Weitere Variablen wiederherstellen:")\n')
             f.write('    for key, value in all_vars.items():\n')
-            f.write('        if key not in critical_vars:\n')
-            f.write('            try:\n')
-            f.write('                if not key.startswith("__") and not callable(value):\n')
-            f.write('                    target_env[key] = value\n')
-            f.write('                    restored_count += 1\n')
-            f.write('            except:\n')
-            f.write('                pass  # Überspringe problematische Variablen\n')
-            f.write('    \n')
-            f.write('    # 3. Include-Pfad-Validierung\n')
-            f.write('    print("   🔍 Include-Pfad-Validierung:")\n')
-            f.write('    cpppath = target_env.get("CPPPATH", [])\n')
-            f.write('    valid_paths = 0\n')
-            f.write('    invalid_paths = 0\n')
-            f.write('    \n')
-            f.write('    for path in cpppath:\n')
-            f.write('        path_str = str(path.abspath) if hasattr(path, "abspath") else str(path)\n')
-            f.write('        if os.path.exists(path_str):\n')
-            f.write('            valid_paths += 1\n')
-            f.write('        else:\n')
-            f.write('            invalid_paths += 1\n')
+            f.write('        try:\n')
+            f.write('            # Überspringe problematische Variablen\n')
+            f.write('            if key.startswith("__") or "function" in str(type(value)).lower():\n')
+            f.write('                continue\n')
+            f.write('            \n')
+            f.write('            # Spezielle Behandlung für CPPPATH\n')
+            f.write('            if key == "CPPPATH":\n')
+            f.write('                print(f"   📁 Stelle CPPPATH wieder her: {len(value)} Einträge")\n')
+            f.write('                target_env[key] = value\n')
+            f.write('                restored_count += 1\n')
+            f.write('            # Andere wichtige Variablen\n')
+            f.write('            elif key in ["LIBS", "LIBPATH", "CCFLAGS", "CXXFLAGS", "BUILD_FLAGS"]:\n')
+            f.write('                target_env[key] = value\n')
+            f.write('                restored_count += 1\n')
+            f.write('            # Alle anderen Variablen\n')
+            f.write('            elif not key.startswith("_") or key in ["_CPPINCFLAGS", "_LIBFLAGS"]:\n')
+            f.write('                target_env[key] = value\n')
+            f.write('                restored_count += 1\n')
+            f.write('        except Exception as e:\n')
+            f.write('            failed_count += 1\n')
+            f.write('            if key == "CPPPATH":\n')
+            f.write('                print(f"   ❌ CPPPATH-Wiederherstellung fehlgeschlagen: {e}")\n')
             f.write('    \n')
             f.write('    lib_paths = COMPREHENSIVE_DATA.get("lib_paths", [])\n')
-            f.write('    dynamic_paths = COMPREHENSIVE_DATA.get("dynamic_paths", [])\n')
+            f.write('    print(f"   ✅ {restored_count} Variablen wiederhergestellt")\n')
+            f.write('    print(f"   ❌ {failed_count} Variablen fehlgeschlagen")\n')
+            f.write('    print(f"   📚 {len(lib_paths)} Projekt-lib-Pfade verfügbar")\n')
             f.write('    \n')
-            f.write('    print(f"✓ {critical_restored} kritische SCons-Variablen wiederhergestellt")\n')
-            f.write('    print(f"✓ {restored_count} weitere SCons-Variablen wiederhergestellt")\n')
-            f.write('    print(f"✓ {len(lib_paths)} Projekt-lib-Pfade verfügbar")\n')
-            f.write('    print(f"✓ {len(dynamic_paths)} dynamische Pfade verfügbar")\n')
-            f.write('    print(f"✓ Include-Pfade: {valid_paths} gültig, {invalid_paths} ungültig")\n')
+            f.write('    # Prüfe ob CPPPATH erfolgreich wiederhergestellt wurde\n')
+            f.write('    final_cpppath = target_env.get("CPPPATH", [])\n')
+            f.write('    print(f"   📊 Finale CPPPATH: {len(final_cpppath)} Einträge")\n')
             f.write('    \n')
-            f.write('    return critical_restored >= 5 and restored_count > 10\n')
+            f.write('    return restored_count > 10 and len(final_cpppath) > 5\n')
             f.write('\n')
             
             # Convenience-Funktionen
             f.write('def get_all_lib_paths():\n')
             f.write('    """Gibt alle gefundenen lib-Pfade zurück"""\n')
             f.write('    return list(COMPREHENSIVE_DATA.get("lib_paths", []))\n\n')
-            
-            f.write('def get_dynamic_paths():\n')
-            f.write('    """Gibt dynamische Include-Pfade zurück"""\n')
-            f.write('    return list(COMPREHENSIVE_DATA.get("dynamic_paths", []))\n\n')
             
             f.write('def get_variable_analysis():\n')
             f.write('    """Gibt Variable-Analyse zurück"""\n')
@@ -641,18 +859,15 @@ def freeze_comprehensive_scons_configuration(comprehensive_data):
             f.write(f'ENV_NAME = {repr(env.get("PIOENV"))}\n')
             f.write(f'TOTAL_VARIABLES = {len(comprehensive_data.get("all_environment_vars", {}))}\n')
             f.write(f'LIB_PATHS_FOUND = {len(comprehensive_data.get("lib_paths", []))}\n')
-            f.write(f'DYNAMIC_PATHS_FOUND = {len(comprehensive_data.get("dynamic_paths", []))}\n')
             f.write(f'COMPREHENSIVE_CAPTURE = True\n')
-            f.write(f'ENHANCED_VERSION = True\n')
+            f.write(f'DEBUG_VERSION = True\n')
             
             # Main-Block
             f.write('\nif __name__ == "__main__":\n')
-            f.write('    print("PlatformIO LDF SCons Variables Export (Erweitert umfassend)")\n')
+            f.write('    print("PlatformIO LDF SCons Variables Export (Umfassend mit Debug)")\n')
             f.write('    lib_paths = get_all_lib_paths()\n')
-            f.write('    dynamic_paths = get_dynamic_paths()\n')
             f.write('    var_analysis = get_variable_analysis()\n')
             f.write('    print(f"Projekt-lib-Pfade: {len(lib_paths)}")\n')
-            f.write('    print(f"Dynamische Pfade: {len(dynamic_paths)}")\n')
             f.write('    print(f"Analysierte Variablen: {len(var_analysis)}")\n')
             f.write('    if lib_paths:\n')
             f.write('        print("Gefundene lib-Pfade:")\n')
@@ -669,81 +884,24 @@ def freeze_comprehensive_scons_configuration(comprehensive_data):
         
         file_size = os.path.getsize(cache_file)
         lib_paths_count = len(comprehensive_data.get('lib_paths', []))
-        dynamic_paths_count = len(comprehensive_data.get('dynamic_paths', []))
         
-        print(f"✓ Erweiterte umfassende SCons-Environment gespeichert:")
+        print(f"✓ Umfassende SCons-Environment gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
         print(f"   📊 {len(comprehensive_data.get('all_environment_vars', {}))} Environment-Variablen")
         print(f"   📚 {lib_paths_count} Projekt-lib-Pfade")
-        print(f"   🔄 {dynamic_paths_count} dynamische Pfade")
         print(f"   📋 JSON-Export: {os.path.basename(json_file)}")
+        print(f"   🔍 Debug-Version mit verbesserter Wiederherstellung")
         
         return True
         
     except Exception as e:
-        print(f"❌ Erweiterte umfassende Environment-Speicherung fehlgeschlagen: {e}")
+        print(f"❌ Umfassende Environment-Speicherung fehlgeschlagen: {e}")
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return False
 
-def enhanced_cache_validation():
-    """Erweiterte Cache-Gültigkeitsprüfung"""
-    print(f"🔍 Erweiterte Cache-Validierung...")
-    
-    cache_file = get_cache_file_path()
-    
-    if not os.path.exists(cache_file):
-        print(f"📝 Kein Cache vorhanden")
-        return False
-    
-    try:
-        # Lade Cache-Modul
-        spec = importlib.util.spec_from_file_location("scons_env_cache", cache_file)
-        env_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(env_module)
-        
-        # Prüfe ob erweiterte Version
-        enhanced_version = getattr(env_module, 'ENHANCED_VERSION', False)
-        if not enhanced_version:
-            print("⚠️ Cache ist nicht von erweiterter Version")
-            return False
-        
-        # Prüfe kritische Variablen
-        comprehensive_data = getattr(env_module, 'COMPREHENSIVE_DATA', {})
-        all_vars = comprehensive_data.get('all_environment_vars', {})
-        
-        critical_vars_present = all([
-            var in all_vars for var in [
-                'CPPPATH', 'CCFLAGS', 'LIBPATH', 'BOARD'
-            ]
-        ])
-        
-        if not critical_vars_present:
-            print("⚠️ Cache fehlen kritische Variablen")
-            return False
-        
-        # Prüfe Include-Pfad-Anzahl
-        lib_paths = comprehensive_data.get('lib_paths', [])
-        dynamic_paths = comprehensive_data.get('dynamic_paths', [])
-        
-        if len(lib_paths) == 0:
-            print("⚠️ Cache enthält keine lib-Pfade")
-            return False
-        
-        print(f"✅ Erweiterte Cache-Validierung erfolgreich:")
-        print(f"   📊 {len(all_vars)} Variablen")
-        print(f"   📚 {len(lib_paths)} lib-Pfade")
-        print(f"   🔄 {len(dynamic_paths)} dynamische Pfade")
-        print(f"   ✨ Erweiterte Version")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Erweiterte Cache-Validierung fehlgeschlagen: {e}")
-        return False
-
 def restore_comprehensive_scons_configuration():
-    """Lädt erweiterte umfassende Environment aus Python-Datei"""
+    """Lädt umfassende Environment aus Python-Datei"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
@@ -763,16 +921,14 @@ def restore_comprehensive_scons_configuration():
             print("⚠ Konfiguration geändert - Cache ungültig")
             return False
         
-        # Prüfe ob erweiterte umfassende Erfassung
+        # Prüfe ob umfassende Erfassung
         comprehensive_capture = getattr(env_module, 'COMPREHENSIVE_CAPTURE', False)
-        enhanced_version = getattr(env_module, 'ENHANCED_VERSION', False)
+        debug_version = getattr(env_module, 'DEBUG_VERSION', False)
         
-        if comprehensive_capture and enhanced_version:
-            print("✅ Cache stammt von erweiterter umfassender SCons-Variable-Erfassung")
-        elif comprehensive_capture:
+        if comprehensive_capture:
             print("✅ Cache stammt von umfassender SCons-Variable-Erfassung")
-        else:
-            print("⚠️ Cache stammt von älterer Version")
+        if debug_version:
+            print("✅ Cache enthält Debug-Version mit verbesserter Wiederherstellung")
         
         # Environment wiederherstellen
         success = env_module.restore_environment(env)
@@ -780,35 +936,35 @@ def restore_comprehensive_scons_configuration():
         if success:
             total_vars = getattr(env_module, 'TOTAL_VARIABLES', 0)
             lib_paths_found = getattr(env_module, 'LIB_PATHS_FOUND', 0)
-            dynamic_paths_found = getattr(env_module, 'DYNAMIC_PATHS_FOUND', 0)
             
-            print(f"✓ Erweiterte umfassende Environment wiederhergestellt:")
+            print(f"✓ Umfassende Environment wiederhergestellt:")
             print(f"   📊 {total_vars} Environment-Variablen")
             print(f"   📚 {lib_paths_found} Projekt-lib-Pfade")
-            print(f"   🔄 {dynamic_paths_found} dynamische Pfade")
-            print(f"   ✅ Erweiterte umfassende SCons-Variable-Erfassung")
+            print(f"   ✅ Umfassende SCons-Variable-Erfassung mit Debug")
         
         return success
         
     except Exception as e:
-        print(f"❌ Erweiterte umfassende Cache-Wiederherstellung fehlgeschlagen: {e}")
+        print(f"❌ Umfassende Cache-Wiederherstellung fehlgeschlagen: {e}")
         return False
 
 def early_cache_check_and_restore():
-    """Prüft Cache und stellt erweiterte umfassende SCons-Environment wieder her"""
-    print(f"🔍 Erweiterte Cache-Prüfung (umfassende SCons-Variable-Erfassung)...")
+    """Prüft Cache und stellt umfassende SCons-Environment wieder her"""
+    print(f"🔍 Cache-Prüfung (umfassende SCons-Variable-Erfassung mit Debug)...")
     
-    # Erweiterte Cache-Validierung
-    if not enhanced_cache_validation():
+    cache_file = get_cache_file_path()
+    
+    if not os.path.exists(cache_file):
+        print(f"📝 Kein umfassender Cache - LDF wird normal ausgeführt")
         return False
     
     current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
     
     if current_ldf_mode != 'off':
-        print(f"🔄 LDF noch aktiv - erweiterte umfassende Cache wird nach Build erstellt")
+        print(f"🔄 LDF noch aktiv - umfassender Cache wird nach Build erstellt")
         return False
     
-    print(f"⚡ Erweiterte umfassende Cache verfügbar - stelle Environment wieder her")
+    print(f"⚡ Umfassender Cache verfügbar - stelle Environment wieder her")
     
     success = restore_comprehensive_scons_configuration()
     return success
@@ -838,35 +994,33 @@ def calculate_config_hash():
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
 def comprehensive_environment_capture(target, source, env):
-    """Erweiterte umfassende Environment-Erfassung mit allen SCons-Variablen"""
+    """Umfassende Environment-Erfassung mit allen SCons-Variablen"""
     global _backup_created
     
     if _backup_created:
-        print("✓ Environment bereits erfasst - überspringe erweiterte umfassende Erfassung")
+        print("✓ Environment bereits erfasst - überspringe umfassende Erfassung")
         return None
     
     try:
-        print(f"\n🎯 ERWEITERTE UMFASSENDE ENVIRONMENT-ERFASSUNG:")
+        print(f"\n🎯 UMFASSENDE ENVIRONMENT-ERFASSUNG MIT DEBUG:")
         print(f"   Target: {[str(t) for t in target]}")
         print(f"   🕐 Timing: VOR Linken - alle SCons-Variablen verfügbar")
         
-        # Erweiterte umfassende Variable-Erfassung
+        # Umfassende Variable-Erfassung
         comprehensive_data = comprehensive_variable_capture()
         
         lib_paths_count = len(comprehensive_data.get('lib_paths', []))
-        dynamic_paths_count = len(comprehensive_data.get('dynamic_paths', []))
         total_vars = len(comprehensive_data.get('all_environment_vars', {}))
         
-        print(f"\n   📊 ERWEITERTE ERFASSUNG ABGESCHLOSSEN:")
+        print(f"\n   📊 ERFASSUNG ABGESCHLOSSEN:")
         print(f"      📚 Projekt-lib-Pfade: {lib_paths_count}")
-        print(f"      🔄 Dynamische Pfade: {dynamic_paths_count}")
         print(f"      📋 Environment-Variablen: {total_vars}")
         
         if total_vars > 50:  # Realistische Anzahl für vollständiges Environment
             if freeze_comprehensive_scons_configuration(comprehensive_data):
                 env_name = env.get("PIOENV")
                 if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-                    print(f"🚀 Erweiterte umfassende Environment-Erfassung erfolgreich!")
+                    print(f"🚀 Umfassende Environment-Erfassung mit Debug erfolgreich!")
                     _backup_created = True
                 else:
                     print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
@@ -876,32 +1030,35 @@ def comprehensive_environment_capture(target, source, env):
             print(f"⚠ Zu wenige Environment-Variablen ({total_vars})")
         
     except Exception as e:
-        print(f"❌ Erweiterte umfassende Environment-Erfassung Fehler: {e}")
+        print(f"❌ Umfassende Environment-Erfassung Fehler: {e}")
     
     return None
 
 # =============================================================================
-# HAUPTLOGIK - ERWEITERTE UMFASSENDE SCONS-VARIABLE-ERFASSUNG
+# HAUPTLOGIK - UMFASSENDE SCONS-VARIABLE-ERFASSUNG MIT DEBUG
 # =============================================================================
 
-print(f"\n🎯 Erweiterte umfassende SCons-Variable-Erfassung für: {env.get('PIOENV')}")
+print(f"\n🎯 Umfassende SCons-Variable-Erfassung mit Debug für: {env.get('PIOENV')}")
 
-# Cache-Prüfung und erweiterte umfassende SCons-Environment-Wiederherstellung
+# Cache-Prüfung und umfassende SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit erweiterter umfassender Environment-Cache - LDF übersprungen!")
+    print(f"🚀 Build mit umfassender Environment-Cache - LDF übersprungen!")
+    
+    # Führe fokussierte Debug-Analyse durch
+    focused_debug_analysis()
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - erweiterte umfassende Variable-Erfassung...")
+    print(f"📝 Normaler LDF-Durchlauf - umfassende Variable-Erfassung mit Debug...")
     
-    # Pre-Link Hook für erweiterte umfassende Environment-Erfassung
+    # Pre-Link Hook für umfassende Environment-Erfassung
     env.AddPreAction("$BUILD_DIR/${PROGNAME}.elf", comprehensive_environment_capture)
-    print(f"✅ Pre-Link Hook für erweiterte umfassende SCons-Variable-Erfassung registriert")
-    print(f"🔍 Erfasst ALLE SCons-Variablen inkl. interne, dynamische und lib-spezifische")
+    print(f"✅ Pre-Link Hook für umfassende SCons-Variable-Erfassung registriert")
+    print(f"🔍 Erfasst ALLE SCons-Variablen inkl. interne und lib-spezifische")
 
-print(f"🏁 Erweiterte umfassende SCons-Variable-Erfassung initialisiert")
+print(f"🏁 Umfassende SCons-Variable-Erfassung mit Debug initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/")
-print(f"📊 Erfasst: Alle Environment-Variablen + Include-Variablen + interne + dynamische SCons-Variablen")
+print(f"📊 Erfasst: Alle Environment-Variablen + Include-Variablen + interne SCons-Variablen")
 print(f"🔍 Sucht: Projekt-lib-Pfade in ALLEN verfügbaren SCons-Variablen")
-print(f"✨ Erweiterte Version mit verbesserter Validierung und kritischer Variable-Wiederherstellung\n")
+print(f"🐛 Debug: Detaillierte Analyse der Environment-Wiederherstellung\n")
