@@ -667,11 +667,11 @@ def capture_complete_scons_environment():
     # 1. Erweiterte LDF-Variablen erfassen (mit rekursiver lib-Sicherung)
     ldf_variables = export_ldf_variables_extended()
     
-    # 2. Kritische SCons-Variablen direkt erfassen
+    # 2. Kritische SCons-Variablen direkt erfassen - ERWEITERT UM ALLE COMPILE-RELEVANTEN
     critical_vars = [
         'CPPPATH', 'CPPDEFINES', 'LIBS', 'LIBPATH', 
-        'BUILD_FLAGS', 'CCFLAGS', 'CXXFLAGS', 'LINKFLAGS',
-        'PIOBUILDFILES', 'LIB_DEPS', 'LIB_EXTRA_DIRS',
+        'ASFLAGS', 'ASPPFLAGS', 'CFLAGS', 'CXXFLAGS', 'CCFLAGS', 'LINKFLAGS',
+        'BUILD_FLAGS', 'PIOBUILDFILES', 'LIB_DEPS', 'LIB_EXTRA_DIRS',
         'FRAMEWORK_DIR', 'PLATFORM_PACKAGES_DIR',
         'LIBSOURCE_DIRS', 'PROJECT_LIBDEPS_DIR',
         'BOARD', 'PLATFORM', 'PIOENV', 'PIOFRAMEWORK'
@@ -742,7 +742,7 @@ def freeze_complete_scons_configuration(complete_data):
             f.write("#!/usr/bin/env python3\n")
             f.write("# -*- coding: utf-8 -*-\n")
             f.write('"""\n')
-            f.write('PlatformIO LDF SCons Variables Export - Verbesserte CPPPATH-Wiederherstellung\n')
+            f.write('PlatformIO LDF SCons Variables Export - Vollständige Compile-Variablen-Wiederherstellung\n')
             f.write(f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
             f.write(f'Environment: {env.get("PIOENV")}\n')
             f.write('"""\n\n')
@@ -759,79 +759,187 @@ def freeze_complete_scons_configuration(complete_data):
             f.write(repr(complete_data['LDF_VARS']))
             f.write('\n\n')
             
-            # VERBESSERTE CPPPATH-Wiederherstellung - ERWEITERT STATT ÜBERSCHREIBT
+            # Cache-Pfad-Funktion
+            f.write('def get_cache_file_path():\n')
+            f.write('    """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""\n')
+            f.write(f'    return "{cache_file}"\n\n')
+            
+            # VOLLSTÄNDIGE COMPILE-VAR-WIEDERHERSTELLUNG
             f.write('def restore_environment(target_env):\n')
-            f.write('    """VERBESSERTE CPPPATH-Wiederherstellung - erweitert existierende Pfade"""\n')
+            f.write('    """Vollständige Wiederherstellung aller compile-relevanten SCons-Variablen"""\n')
             f.write('    import os\n')
-            f.write('    restored_count = 0\n')
-            f.write('    critical_restored = 0\n')
             f.write('    \n')
-            f.write('    print("Starte verbesserte CPPPATH-Wiederherstellung...")\n')
+            f.write('    # ALLE compile-relevanten Variablen\n')
+            f.write('    COMPILE_VARS = [\n')
+            f.write('        "CPPPATH",      # Include-Pfade (KRITISCH)\n')
+            f.write('        "CPPDEFINES",   # Präprozessor-Defines\n')
+            f.write('        "LIBS",         # Libraries\n')
+            f.write('        "LIBPATH",      # Library-Pfade\n')
+            f.write('        "ASFLAGS",      # Assembler Flags\n')
+            f.write('        "ASPPFLAGS",    # Assembler Präprozessor Flags\n')
+            f.write('        "CFLAGS",       # C Compiler Flags\n')
+            f.write('        "CXXFLAGS",     # C++ Compiler Flags\n')
+            f.write('        "CCFLAGS",      # C/C++ Common Compiler Flags\n')
+            f.write('        "LINKFLAGS"     # Linker Flags\n')
+            f.write('    ]\n')
             f.write('    \n')
-            f.write('    # Sammle ALLE CPPPATH aus allen Quellen\n')
-            f.write('    all_new_paths = []\n')
+            f.write('    print("🎯 VOLLSTÄNDIGE COMPILE-VAR-WIEDERHERSTELLUNG:")\n')
+            f.write('    restored_vars = 0\n')
+            f.write('    failed_vars = 0\n')
+            f.write('    skipped_vars = 0\n')
             f.write('    \n')
-            f.write('    # Basis-CPPPATH\n')
-            f.write('    complete_cpppath = LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_COMPLETE", [])\n')
-            f.write('    all_new_paths.extend(complete_cpppath)\n')
-            f.write('    print(f"   Basis CPPPATH_COMPLETE: {len(complete_cpppath)} Eintraege")\n')
-            f.write('    \n')
-            f.write('    # Alle CPPPATH-Quellen\n')
-            f.write('    cpppath_sources = LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_SOURCES", {})\n')
-            f.write('    for source_name, source_paths in cpppath_sources.items():\n')
-            f.write('        if isinstance(source_paths, list):\n')
-            f.write('            all_new_paths.extend(source_paths)\n')
-            f.write('            print(f"   {source_name}: {len(source_paths)} Pfade hinzugefuegt")\n')
-            f.write('    \n')
-            f.write('    # ERWEITERE existierende CPPPATH (ueberschreibe NICHT!)\n')
-            f.write('    existing_cpppath = list(target_env.get("CPPPATH", []))\n')
-            f.write('    existing_strings = [str(p) for p in existing_cpppath]\n')
-            f.write('    print(f"   Existierende CPPPATH: {len(existing_strings)} Eintraege")\n')
-            f.write('    \n')
-            f.write('    added_count = 0\n')
-            f.write('    knx_paths_added = 0\n')
-            f.write('    for new_path in all_new_paths:\n')
-            f.write('        if isinstance(new_path, str) and new_path.strip() and new_path not in existing_strings:\n')
-            f.write('            existing_cpppath.append(new_path)\n')
-            f.write('            existing_strings.append(new_path)\n')
-            f.write('            added_count += 1\n')
-            f.write('            \n')
-            f.write('            # Debug fuer KNX-Pfade\n')
-            f.write('            if "knx" in new_path.lower() or "esp-knx" in new_path.lower():\n')
-            f.write('                knx_paths_added += 1\n')
-            f.write('                print(f"      KNX-Pfad hinzugefuegt: {new_path}")\n')
-            f.write('    \n')
-            f.write('    # SETZE erweiterte CPPPATH\n')
-            f.write('    target_env["CPPPATH"] = existing_cpppath\n')
-            f.write('    print(f"   CPPPATH erweitert: +{added_count} = {len(existing_cpppath)} total")\n')
-            f.write('    print(f"   KNX-Pfade hinzugefuegt: {knx_paths_added}")\n')
-            f.write('    critical_restored += 1\n')
-            f.write('    \n')
-            f.write('    # Validierung: Pruefe esp-knx-ip.h\n')
-            f.write('    knx_header_found = False\n')
-            f.write('    for cpppath in existing_cpppath:\n')
-            f.write('        path_str = str(cpppath)\n')
-            f.write('        knx_header = os.path.join(path_str, "esp-knx-ip.h")\n')
-            f.write('        if os.path.exists(knx_header):\n')
-            f.write('            print(f"   esp-knx-ip.h GEFUNDEN: {knx_header}")\n')
-            f.write('            knx_header_found = True\n')
-            f.write('            break\n')
-            f.write('    \n')
-            f.write('    if not knx_header_found:\n')
-            f.write('        print("   WARNUNG: esp-knx-ip.h NICHT gefunden!")\n')
-            f.write('    \n')
-            f.write('    # Andere kritische Variablen\n')
-            f.write('    critical_vars = ["CPPDEFINES", "LIBS", "LIBPATH", "BUILD_FLAGS", "CCFLAGS", "CXXFLAGS", "LINKFLAGS"]\n')
-            f.write('    for var in critical_vars:\n')
-            f.write('        if var in SCONS_VARS:\n')
+            f.write('    # Wiederherstellung aller compile-relevanten Variablen\n')
+            f.write('    for var_name in COMPILE_VARS:\n')
+            f.write('        if var_name in SCONS_VARS:\n')
             f.write('            try:\n')
-            f.write('                target_env[var] = SCONS_VARS[var]\n')
-            f.write('                critical_restored += 1\n')
+            f.write('                cached_value = SCONS_VARS[var_name]\n')
+            f.write('                current_value = target_env.get(var_name, [])\n')
+            f.write('                \n')
+            f.write('                # Spezielle Behandlung für CPPPATH\n')
+            f.write('                if var_name == "CPPPATH":\n')
+            f.write('                    # Verwende vollständige CPPPATH aus LDF-Analyse\n')
+            f.write('                    complete_cpppath = LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_COMPLETE", [])\n')
+            f.write('                    if complete_cpppath:\n')
+            f.write('                        # Filtere nur existierende Pfade\n')
+            f.write('                        valid_paths = [p for p in complete_cpppath if isinstance(p, str) and os.path.exists(p)]\n')
+            f.write('                        target_env.Replace(CPPPATH=valid_paths)\n')
+            f.write('                        \n')
+            f.write('                        # Debug für KNX\n')
+            f.write('                        knx_paths = [p for p in valid_paths if "knx" in p.lower()]\n')
+            f.write('                        print(f"   ✓ CPPPATH: {len(valid_paths)} Pfade, {len(knx_paths)} KNX-Pfade")\n')
+            f.write('                        restored_vars += 1\n')
+            f.write('                    else:\n')
+            f.write('                        # Fallback auf gecachte CPPPATH\n')
+            f.write('                        if isinstance(cached_value, list) and cached_value:\n')
+            f.write('                            valid_cached = [p for p in cached_value if isinstance(p, str) and os.path.exists(p)]\n')
+            f.write('                            target_env.Replace(CPPPATH=valid_cached)\n')
+            f.write('                            print(f"   ✓ CPPPATH (Fallback): {len(valid_cached)} Pfade")\n')
+            f.write('                            restored_vars += 1\n')
+            f.write('                        else:\n')
+            f.write('                            print(f"   ❌ CPPPATH: Keine gültigen Pfade verfügbar")\n')
+            f.write('                            failed_vars += 1\n')
+            f.write('                \n')
+            f.write('                # Spezielle Behandlung für LIBPATH (Pfad-Validierung)\n')
+            f.write('                elif var_name == "LIBPATH":\n')
+            f.write('                    if isinstance(cached_value, list):\n')
+            f.write('                        valid_libpaths = [p for p in cached_value if isinstance(p, str) and os.path.exists(p)]\n')
+            f.write('                        target_env.Replace(LIBPATH=valid_libpaths)\n')
+            f.write('                        print(f"   ✓ LIBPATH: {len(valid_libpaths)} gültige Pfade")\n')
+            f.write('                        restored_vars += 1\n')
+            f.write('                    else:\n')
+            f.write('                        target_env.Replace(LIBPATH=cached_value)\n')
+            f.write('                        print(f"   ✓ LIBPATH: {type(cached_value).__name__}")\n')
+            f.write('                        restored_vars += 1\n')
+            f.write('                \n')
+            f.write('                # Alle anderen Variablen direkt setzen\n')
+            f.write('                else:\n')
+            f.write('                    target_env.Replace(**{var_name: cached_value})\n')
+            f.write('                    \n')
+            f.write('                    if isinstance(cached_value, list):\n')
+            f.write('                        print(f"   ✓ {var_name}: {len(cached_value)} Einträge")\n')
+            f.write('                    elif isinstance(cached_value, str):\n')
+            f.write('                        print(f"   ✓ {var_name}: {len(cached_value)} Zeichen")\n')
+            f.write('                    else:\n')
+            f.write('                        print(f"   ✓ {var_name}: {type(cached_value).__name__}")\n')
+            f.write('                    restored_vars += 1\n')
+            f.write('                \n')
             f.write('            except Exception as e:\n')
-            f.write('                print(f"   Fehler bei {var}: {e}")\n')
+            f.write('                print(f"   ❌ {var_name}: Fehler - {e}")\n')
+            f.write('                failed_vars += 1\n')
+            f.write('        else:\n')
+            f.write('            print(f"   ⚠ {var_name}: Nicht im Cache")\n')
+            f.write('            skipped_vars += 1\n')
             f.write('    \n')
-            f.write('    print(f"Verbesserte Wiederherstellung abgeschlossen: {critical_restored} kritische Variablen")\n')
-            f.write('    return critical_restored >= 2 and knx_header_found\n')
+            f.write('    # Erweiterte Validierung\n')
+            f.write('    print("\\n📋 VALIDIERUNG:")\n')
+            f.write('    \n')
+            f.write('    # 1. CPPPATH-Validierung\n')
+            f.write('    final_cpppath = target_env.get("CPPPATH", [])\n')
+            f.write('    knx_header_found = False\n')
+            f.write('    knx_paths_count = 0\n')
+            f.write('    \n')
+            f.write('    for cpppath in final_cpppath:\n')
+            f.write('        if isinstance(cpppath, str):\n')
+            f.write('            if "knx" in cpppath.lower():\n')
+            f.write('                knx_paths_count += 1\n')
+            f.write('            \n')
+            f.write('            knx_header = os.path.join(cpppath, "esp-knx-ip.h")\n')
+            f.write('            if os.path.exists(knx_header):\n')
+            f.write('                print(f"   🎯 esp-knx-ip.h: {knx_header}")\n')
+            f.write('                knx_header_found = True\n')
+            f.write('    \n')
+            f.write('    print(f"   CPPPATH: {len(final_cpppath)} Pfade, {knx_paths_count} KNX-Pfade")\n')
+            f.write('    \n')
+            f.write('    # 2. LIBS-Validierung\n')
+            f.write('    final_libs = target_env.get("LIBS", [])\n')
+            f.write('    if isinstance(final_libs, list):\n')
+            f.write('        print(f"   LIBS: {len(final_libs)} Libraries")\n')
+            f.write('    else:\n')
+            f.write('        print(f"   LIBS: {type(final_libs).__name__}")\n')
+            f.write('    \n')
+            f.write('    # 3. CPPDEFINES-Validierung\n')
+            f.write('    final_defines = target_env.get("CPPDEFINES", [])\n')
+            f.write('    if isinstance(final_defines, list):\n')
+            f.write('        print(f"   CPPDEFINES: {len(final_defines)} Defines")\n')
+            f.write('    else:\n')
+            f.write('        print(f"   CPPDEFINES: {type(final_defines).__name__}")\n')
+            f.write('    \n')
+            f.write('    # 4. Compiler-Flags-Validierung\n')
+            f.write('    flag_vars = ["CFLAGS", "CXXFLAGS", "CCFLAGS", "LINKFLAGS", "ASFLAGS", "ASPPFLAGS"]\n')
+            f.write('    for flag_var in flag_vars:\n')
+            f.write('        flag_value = target_env.get(flag_var, [])\n')
+            f.write('        if isinstance(flag_value, list):\n')
+            f.write('            print(f"   {flag_var}: {len(flag_value)} Flags")\n')
+            f.write('        elif isinstance(flag_value, str):\n')
+            f.write('            print(f"   {flag_var}: {len(flag_value)} Zeichen")\n')
+            f.write('        else:\n')
+            f.write('            print(f"   {flag_var}: {type(flag_value).__name__}")\n')
+            f.write('    \n')
+            f.write('    # Erfolgs-Bewertung\n')
+            f.write('    min_required_vars = 7  # Mindestens 7 der 10 Variablen sollten wiederhergestellt werden\n')
+            f.write('    success = (restored_vars >= min_required_vars and failed_vars <= 2)\n')
+            f.write('    \n')
+            f.write('    print(f"\\n📊 ZUSAMMENFASSUNG:")\n')
+            f.write('    print(f"   Wiederhergestellt: {restored_vars}/{len(COMPILE_VARS)} Variablen")\n')
+            f.write('    print(f"   Fehlgeschlagen: {failed_vars}")\n')
+            f.write('    print(f"   Übersprungen: {skipped_vars}")\n')
+            f.write('    print(f"   KNX-Header gefunden: {'✅' if knx_header_found else '❌'}")\n')
+            f.write('    print(f"   Status: {'✅ Erfolgreich' if success else '❌ Fehlgeschlagen'}")\n')
+            f.write('    \n')
+            f.write('    return success\n')
+            f.write('\n')
+            
+            # Validierungsfunktionen
+            f.write('def validate_all_compile_vars():\n')
+            f.write('    """Validiert alle compile-relevanten Variablen im aktuellen Environment"""\n')
+            f.write('    compile_vars = ["CPPPATH", "CPPDEFINES", "LIBS", "LIBPATH", "ASFLAGS", \n')
+            f.write('                   "ASPPFLAGS", "CFLAGS", "CXXFLAGS", "CCFLAGS", "LINKFLAGS"]\n')
+            f.write('    \n')
+            f.write('    print("\\n🔍 COMPILE-VARIABLEN-ANALYSE:")\n')
+            f.write('    \n')
+            f.write('    for var_name in compile_vars:\n')
+            f.write('        var_value = env.get(var_name, [])\n')
+            f.write('        \n')
+            f.write('        if isinstance(var_value, list):\n')
+            f.write('            print(f"   {var_name:12s}: {len(var_value):3d} Einträge")\n')
+            f.write('            \n')
+            f.write('            # Spezielle Analyse für Pfad-Variablen\n')
+            f.write('            if var_name in ["CPPPATH", "LIBPATH"]:\n')
+            f.write('                valid_paths = sum(1 for p in var_value if isinstance(p, str) and os.path.exists(str(p)))\n')
+            f.write('                print(f"   {" ":12s}   └─ {valid_paths} gültige Pfade")\n')
+            f.write('                \n')
+            f.write('                if var_name == "CPPPATH":\n')
+            f.write('                    knx_paths = [str(p) for p in var_value if "knx" in str(p).lower()]\n')
+            f.write('                    if knx_paths:\n')
+            f.write('                        print(f"   {" ":12s}   └─ {len(knx_paths)} KNX-Pfade")\n')
+            f.write('        \n')
+            f.write('        elif isinstance(var_value, str):\n')
+            f.write('            print(f"   {var_name:12s}: String ({len(var_value)} Zeichen)")\n')
+            f.write('        \n')
+            f.write('        else:\n')
+            f.write('            print(f"   {var_name:12s}: {type(var_value).__name__}")\n')
+            f.write('    \n')
+            f.write('    return True\n')
             f.write('\n')
             
             # Convenience-Funktionen
@@ -858,476 +966,165 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('    return {\n')
             f.write('        "original_count": len(original),\n')
             f.write('        "complete_count": len(complete),\n')
-            f.write('        "ldf_added": sorted(list(complete - original)),\n')
-            f.write('        "ldf_added_count": len(complete - original)\n')
-            f.write('    }\n\n')
-            
-            f.write('def get_lib_builders_info():\n')
-            f.write('    """Gibt detaillierte Library Builder Information zurück"""\n')
-            f.write('    return LDF_VARS.get("LIB_BUILDERS", [])\n\n')
-            
-            # Metadaten
-            f.write('# Metadata\n')
-            f.write(f'CONFIG_HASH = {repr(calculate_config_hash())}\n')
-            f.write(f'ENV_NAME = {repr(env.get("PIOENV"))}\n')
-            f.write(f'SCONS_VAR_COUNT = {len(complete_data["SCONS_VARS"])}\n')
-            f.write(f'LDF_CATEGORIES = {len(complete_data["LDF_VARS"])}\n')
-            f.write(f'COMPLETE_CAPTURE = True\n')
-            f.write(f'COMPLETE_CPPPATH_FROM_ALL_SOURCES = True\n')
-            f.write(f'RECURSIVE_LIB_CAPTURE = True\n')
-            f.write(f'IMPROVED_CPPPATH_RESTORE = True\n')
-            f.write(f'ALL_INCLUDES_TO_CPPPATH = True\n')
-            f.write(f'CONVERTED_FILE_PATHS = {complete_data["CONVERSION_STATS"]["file_paths"]}\n')
-            f.write(f'CONVERTED_CLVAR_OBJECTS = {complete_data["CONVERSION_STATS"]["clvar_converted"]}\n')
-            
-            # Main-Block
-            f.write('\nif __name__ == "__main__":\n')
-            f.write('    import os\n')
-            f.write('    print("PlatformIO LDF SCons Variables Export (Verbesserte CPPPATH-Wiederherstellung)")\n')
-            f.write('    diff = analyze_cpppath_diff()\n')
-            f.write('    print(f"Original CPPPATH: {diff[\\"original_count\\"]} Eintraege")\n')
-            f.write('    print(f"Vollstaendige CPPPATH: {diff[\\"complete_count\\"]} Eintraege")\n')
-            f.write('    print(f"Vom LDF hinzugefuegt: {diff[\\"ldf_added_count\\"]} Eintraege")\n')
-            f.write('    lib_builders = get_lib_builders_info()\n')
-            f.write('    print(f"Library Builders: {len(lib_builders)}")\n')
-            f.write('    recursive_info = get_recursive_lib_info()\n')
-            f.write('    print(f"Rekursive Lib-Roots: {len(recursive_info[\\"recursive_lib_dirs\\"])}")\n')
-            f.write('    print(f"Rekursive Header-Dirs: {len(recursive_info[\\"recursive_header_dirs\\"])}")\n')
-            f.write('    sources = get_cpppath_sources()\n')
-            f.write('    print("CPPPATH-Quellen:")\n')
-            f.write('    for source_name, source_paths in sources.items():\n')
-            f.write('        if isinstance(source_paths, list):\n')
-            f.write('            print(f"  {source_name}: {len(source_paths)} Pfade")\n')
+            f.write('        "added_paths": list(complete - original),\n')
+            f.write('        "removed_paths": list(original - complete)\n')
+            f.write('    }\n')
         
-        # Atomarer Move
+        # Atomarer Austausch
+        if os.path.exists(cache_file):
+            backup_file = cache_file + ".backup"
+            shutil.move(cache_file, backup_file)
+        
         shutil.move(temp_file, cache_file)
-        
-        # JSON-Export zusätzlich
-        json_file = cache_file.replace('.py', '.json')
-        with open(json_file, 'w', encoding='utf-8') as f:
-            json.dump(complete_data, f, indent=2, ensure_ascii=False, default=str)
-        
-        file_size = os.path.getsize(cache_file)
-        cpppath_count = len(complete_data['LDF_VARS'].get('LIB_VARS', {}).get('CPPPATH_COMPLETE', []))
-        
-        print(f"✓ Vollständige SCons-Environment mit verbesserter CPPPATH-Wiederherstellung gespeichert:")
-        print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
-        print(f"   📊 {len(complete_data['SCONS_VARS'])} SCons-Variablen")
-        print(f"   📄 {cpppath_count} CPPPATH-Einträge (vollständige Erfassung)")
-        print(f"   🔄 {complete_data['CONVERSION_STATS']['file_paths']} SCons-Objekte konvertiert")
-        print(f"   🔄 {complete_data['CONVERSION_STATS']['clvar_converted']} CLVar-Objekte konvertiert")
-        print(f"   📋 JSON-Export: {os.path.basename(json_file)}")
-        print(f"   🔄 Rekursive lib-Sicherung: Aktiviert")
-        print(f"   ✅ Verbesserte CPPPATH-Wiederherstellung: Aktiviert")
+        print(f"✅ Vollständige SCons-Konfiguration gespeichert: {os.path.basename(cache_file)}")
         
         return True
         
     except Exception as e:
-        print(f"❌ Vollständige Environment-Erfassung mit verbesserter CPPPATH fehlgeschlagen: {e}")
+        print(f"❌ Fehler beim Speichern der SCons-Konfiguration: {e}")
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return False
 
-def trigger_complete_environment_capture():
-    """Triggert vollständige Environment-Erfassung mit CPPPATH aus allen Quellen und rekursiver lib-Sicherung"""
-    global _backup_created
+# Hauptlogik
+def main():
+    """Hauptfunktion des LDF-Cache-Systems"""
+    print(f"\n🚀 TASMOTA LDF CACHE SYSTEM - VOLLSTÄNDIGE COMPILE-VAR-SICHERUNG")
+    print(f"Environment: {env.get('PIOENV')}")
+    print(f"Projekt: {env.get('PROJECT_DIR')}")
     
-    if _backup_created:
+    env_name = env.get("PIOENV")
+    if not env_name:
+        print("❌ Kein PIOENV gefunden")
         return
     
-    try:
-        print(f"🎯 Triggere vollständige Environment-Erfassung mit verbesserter CPPPATH...")
-        
-        # Vollständige Environment-Erfassung mit rekursiver lib-Sicherung
-        complete_data = capture_complete_scons_environment()
-        
-        cpppath_count = len(complete_data['LDF_VARS'].get('LIB_VARS', {}).get('CPPPATH_COMPLETE', []))
-        
-        if cpppath_count > 5:
-            if freeze_complete_scons_configuration(complete_data):
-                env_name = env.get("PIOENV")
-                if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-                    print(f"🚀 Vollständige Environment mit verbesserter CPPPATH erfolgreich erfasst!")
-                    _backup_created = True
-                else:
-                    print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
-            else:
-                print(f"❌ Environment-Speicherung fehlgeschlagen")
-        else:
-            print(f"⚠ Zu wenige CPPPATH-Einträge ({cpppath_count}) - LDF möglicherweise unvollständig")
+    # Erfasse vollständige SCons-Environment
+    complete_data = capture_complete_scons_environment()
     
-    except Exception as e:
-        print(f"❌ Vollständige Environment-Erfassung mit verbesserter CPPPATH Fehler: {e}")
+    # Speichere Cache
+    if freeze_complete_scons_configuration(complete_data):
+        print(f"✅ LDF-Cache erfolgreich erstellt")
+        
+        # Zeige Statistiken
+        scons_vars = complete_data.get('SCONS_VARS', {})
+        ldf_vars = complete_data.get('LDF_VARS', {})
+        
+        print(f"\n📊 CACHE-STATISTIKEN:")
+        print(f"   SCons-Variablen: {len(scons_vars)}")
+        print(f"   LDF-Kategorien: {len(ldf_vars)}")
+        
+        # CPPPATH-Statistik
+        complete_cpppath = ldf_vars.get('LIB_VARS', {}).get('CPPPATH_COMPLETE', [])
+        knx_paths = [p for p in complete_cpppath if 'knx' in p.lower()]
+        print(f"   CPPPATH-Einträge: {len(complete_cpppath)}")
+        print(f"   KNX-Pfade: {len(knx_paths)}")
 
-def restore_complete_scons_configuration():
-    """Lädt vollständige Environment mit verbesserter CPPPATH-Wiederherstellung aus Python-Datei"""
+        if knx_paths:
+            print(f"   🎯 KNX-Pfade gefunden:")
+            for knx_path in knx_paths[:3]:  # Zeige erste 3
+                print(f"      {knx_path}")
+            if len(knx_paths) > 3:
+                print(f"      ... und {len(knx_paths) - 3} weitere")
+        
+        # Compile-Variablen-Statistik
+        compile_vars = ['CPPPATH', 'CPPDEFINES', 'LIBS', 'LIBPATH', 'ASFLAGS', 'ASPPFLAGS', 'CFLAGS', 'CXXFLAGS', 'CCFLAGS', 'LINKFLAGS']
+        cached_compile_vars = sum(1 for var in compile_vars if var in scons_vars)
+        print(f"   Compile-Variablen gecacht: {cached_compile_vars}/{len(compile_vars)}")
+        
+    else:
+        print(f"❌ LDF-Cache konnte nicht erstellt werden")
+
+def load_and_restore_cache():
+    """Lädt und wendet den LDF-Cache an"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
+        print(f"⚠ Kein LDF-Cache gefunden: {os.path.basename(cache_file)}")
         return False
     
     try:
-        # Python-Datei als Modul laden
-        spec = importlib.util.spec_from_file_location("scons_env_cache", cache_file)
-        env_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(env_module)
+        print(f"\n🔄 LADE LDF-CACHE:")
+        print(f"   Cache-Datei: {os.path.basename(cache_file)}")
         
-        # Hash-Prüfung
-        current_hash = calculate_config_hash()
-        cached_hash = getattr(env_module, 'CONFIG_HASH', None)
+        # Lade Cache-Daten
+        cache_globals = {}
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            exec(f.read(), cache_globals)
         
-        if cached_hash != current_hash:
-            print("⚠ Konfiguration geändert - Cache ungültig")
+        # Prüfe ob restore_environment verfügbar ist
+        if 'restore_environment' not in cache_globals:
+            print(f"❌ restore_environment Funktion nicht gefunden")
             return False
         
-        # Prüfe ob verbesserte CPPPATH-Wiederherstellung
-        complete_cpppath_all_sources = getattr(env_module, 'COMPLETE_CPPPATH_FROM_ALL_SOURCES', False)
-        complete_capture = getattr(env_module, 'COMPLETE_CAPTURE', False)
-        recursive_lib_capture = getattr(env_module, 'RECURSIVE_LIB_CAPTURE', False)
-        improved_cpppath_restore = getattr(env_module, 'IMPROVED_CPPPATH_RESTORE', False)
-        all_includes_to_cpppath = getattr(env_module, 'ALL_INCLUDES_TO_CPPPATH', False)
-        
-        if all([complete_cpppath_all_sources, complete_capture, recursive_lib_capture, 
-                improved_cpppath_restore, all_includes_to_cpppath]):
-            print("✅ Cache stammt von verbesserter CPPPATH-Wiederherstellung")
-        else:
-            print("⚠️ Cache stammt von älterer Version")
-        
-        # Environment wiederherstellen
-        success = env_module.restore_environment(env)
+        # Führe Wiederherstellung aus
+        restore_func = cache_globals['restore_environment']
+        success = restore_func(env)
         
         if success:
-            scons_var_count = getattr(env_module, 'SCONS_VAR_COUNT', 0)
-            ldf_categories = getattr(env_module, 'LDF_CATEGORIES', 0)
-            converted_file_paths = getattr(env_module, 'CONVERTED_FILE_PATHS', 0)
-            converted_clvar = getattr(env_module, 'CONVERTED_CLVAR_OBJECTS', 0)
-            
-            print(f"✓ Vollständige Environment mit verbesserter CPPPATH wiederhergestellt:")
-            print(f"   📊 {scons_var_count} SCons-Variablen")
-            print(f"   📋 {ldf_categories} LDF-Kategorien")
-            print(f"   📄 {converted_file_paths} SCons-Pfad-Objekte konvertiert")
-            print(f"   🔄 {converted_clvar} CLVar-Objekte konvertiert")
-            print(f"   ✅ Verbesserte CPPPATH-Wiederherstellung erfolgreich")
+            print(f"✅ LDF-Cache erfolgreich angewendet")
+        else:
+            print(f"❌ LDF-Cache-Anwendung fehlgeschlagen")
         
         return success
         
     except Exception as e:
-        print(f"❌ Vollständige Cache-Wiederherstellung mit verbesserter CPPPATH fehlgeschlagen: {e}")
+        print(f"❌ Fehler beim Laden des LDF-Cache: {e}")
         return False
 
-def enhanced_cache_validation():
-    """Erweiterte Cache-Gültigkeitsprüfung mit verbesserter CPPPATH-Wiederherstellung"""
-    print(f"🔍 Erweiterte Cache-Validierung mit verbesserter CPPPATH...")
-    
-    cache_file = get_cache_file_path()
-    
-    if not os.path.exists(cache_file):
-        print(f"📝 Kein Cache vorhanden")
-        return False
-    
+def cleanup_old_backups():
+    """Bereinigt alte Backup-Dateien"""
     try:
-        # Lade Cache-Modul
-        spec = importlib.util.spec_from_file_location("scons_env_cache", cache_file)
-        env_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(env_module)
+        project_dir = env.get("PROJECT_DIR")
+        if not project_dir:
+            return
         
-        # Prüfe alle erforderlichen Features
-        required_features = {
-            'COMPLETE_CPPPATH_FROM_ALL_SOURCES': getattr(env_module, 'COMPLETE_CPPPATH_FROM_ALL_SOURCES', False),
-            'RECURSIVE_LIB_CAPTURE': getattr(env_module, 'RECURSIVE_LIB_CAPTURE', False),
-            'IMPROVED_CPPPATH_RESTORE': getattr(env_module, 'IMPROVED_CPPPATH_RESTORE', False),
-            'ALL_INCLUDES_TO_CPPPATH': getattr(env_module, 'ALL_INCLUDES_TO_CPPPATH', False),
-        }
+        # Suche nach .ldf_backup Dateien
+        backup_files = glob.glob(os.path.join(project_dir, "*.ldf_backup"))
         
-        missing_features = [name for name, present in required_features.items() if not present]
-        
-        if missing_features:
-            print(f"⚠️ Cache fehlen Features: {', '.join(missing_features)}")
-            return False
-        
-        # Prüfe CPPPATH-Vollständigkeit
-        try:
-            complete_cpppath = env_module.get_complete_cpppath()
-            if len(complete_cpppath) < 5:
-                print("⚠️ Cache enthält zu wenige CPPPATH-Einträge")
-                return False
-        except:
-            print("⚠️ Cache-CPPPATH nicht zugänglich")
-            return False
-        
-        # Prüfe kritische Variablen
-        scons_vars = getattr(env_module, 'SCONS_VARS', {})
-        critical_vars_present = all([
-            var in scons_vars for var in [
-                'CPPPATH', 'LIBS', 'LIBPATH', 'BOARD'
-            ]
-        ])
-        
-        if not critical_vars_present:
-            print("⚠️ Cache fehlen kritische Variablen")
-            return False
-        
-        print(f"✅ Erweiterte Cache-Validierung mit verbesserter CPPPATH erfolgreich:")
-        print(f"   📊 {len(scons_vars)} SCons-Variablen")
-        print(f"   📁 {len(complete_cpppath)} CPPPATH-Einträge")
-        print(f"   ✨ Alle erforderlichen Features vorhanden")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Erweiterte Cache-Validierung mit verbesserter CPPPATH fehlgeschlagen: {e}")
-        return False
+        if backup_files:
+            print(f"\n🧹 BACKUP-BEREINIGUNG:")
+            for backup_file in backup_files:
+                try:
+                    # Prüfe Alter der Backup-Datei
+                    backup_age = time.time() - os.path.getmtime(backup_file)
+                    if backup_age > 7 * 24 * 3600:  # Älter als 7 Tage
+                        os.remove(backup_file)
+                        print(f"   ✓ Altes Backup entfernt: {os.path.basename(backup_file)}")
+                except:
+                    pass
+    except:
+        pass
 
-def debug_cache_restore():
-    """Debuggt die tatsächliche Cache-Wiederherstellung mit verbesserter CPPPATH"""
-    cache_file = get_cache_file_path()
-    
-    if not os.path.exists(cache_file):
-        print("❌ Cache-Datei existiert nicht")
-        return
-    
+# Hauptausführung
+if __name__ == "__main__":
     try:
-        spec = importlib.util.spec_from_file_location("cache", cache_file)
-        cache_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(cache_module)
+        # Bereinige alte Backups
+        cleanup_old_backups()
         
-        print(f"\n🔍 CACHE-WIEDERHERSTELLUNG DEBUG (verbesserte CPPPATH):")
+        # Prüfe ob Cache bereits existiert
+        cache_file = get_cache_file_path()
+        cache_exists = os.path.exists(cache_file)
         
-        # Zeige was im Cache steht
-        if hasattr(cache_module, 'get_complete_cpppath'):
-            cached_paths = cache_module.get_complete_cpppath()
-            print(f"   📁 Cache enthält: {len(cached_paths)} CPPPATH-Einträge")
+        if cache_exists:
+            print(f"📋 Existierender Cache gefunden: {os.path.basename(cache_file)}")
             
-            # Suche nach KNX-relevanten Pfaden
-            knx_paths = [p for p in cached_paths if 'knx' in p.lower() or 'esp-knx' in p.lower()]
-            print(f"   🔍 KNX-relevante Pfade im Cache: {len(knx_paths)}")
-            for knx_path in knx_paths:
-                exists = os.path.exists(knx_path)
-                print(f"      {'✓' if exists else '✗'} {knx_path}")
-        
-        # Zeige CPPPATH-Quellen
-        if hasattr(cache_module, 'get_cpppath_sources'):
-            sources = cache_module.get_cpppath_sources()
-            print(f"   📊 CPPPATH-Quellen im Cache:")
-            for source_name, source_paths in sources.items():
-                if isinstance(source_paths, list):
-                    print(f"      {source_name}: {len(source_paths)} Pfade")
-        
-        # Zeige aktuellen CPPPATH vor Wiederherstellung
-        current_cpppath = env.get('CPPPATH', [])
-        print(f"   📋 Aktueller CPPPATH vor Restore: {len(current_cpppath)} Einträge")
-        
-        # Führe Wiederherstellung durch
-        success = cache_module.restore_environment(env)
-        print(f"   🔄 Verbesserte Restore-Funktion Erfolg: {success}")
-        
-        # Zeige CPPPATH nach Wiederherstellung
-        restored_cpppath = env.get('CPPPATH', [])
-        print(f"   📋 CPPPATH nach verbesserter Restore: {len(restored_cpppath)} Einträge")
-        
-        # Suche nach KNX-Pfaden im wiederhergestellten CPPPATH
-        knx_in_restored = []
-        for path in restored_cpppath:
-            path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
-            if 'knx' in path_str.lower() or 'esp-knx' in path_str.lower():
-                knx_in_restored.append(path_str)
-        
-        print(f"   🔍 KNX-Pfade im wiederhergestellten CPPPATH: {len(knx_in_restored)}")
-        for knx_path in knx_in_restored:
-            exists = os.path.exists(knx_path)
-            print(f"      {'✓' if exists else '✗'} {knx_path}")
-        
-        # Suche nach esp-knx-ip.h
-        print(f"   🔍 Suche nach esp-knx-ip.h:")
-        found_files = []
-        for path in restored_cpppath:
-            path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
-            header_file = os.path.join(path_str, 'esp-knx-ip.h')
-            if os.path.exists(header_file):
-                found_files.append(header_file)
-                print(f"      ✅ GEFUNDEN: {header_file}")
-        
-        if not found_files:
-            print(f"      ❌ esp-knx-ip.h NICHT gefunden!")
+            # Versuche Cache-Wiederherstellung
+            if load_and_restore_cache():
+                print(f"🎯 Cache-Wiederherstellung erfolgreich - Build kann fortgesetzt werden")
+            else:
+                print(f"⚠ Cache-Wiederherstellung fehlgeschlagen - Erstelle neuen Cache")
+                main()
+        else:
+            print(f"📋 Kein Cache gefunden - Erstelle neuen Cache")
+            main()
             
+    except KeyboardInterrupt:
+        print(f"\n⚠ Abbruch durch Benutzer")
     except Exception as e:
-        print(f"❌ Cache-Debug fehlgeschlagen: {e}")
+        print(f"\n❌ Unerwarteter Fehler: {e}")
+        import traceback
+        traceback.print_exc()
 
-def early_cache_check_and_restore():
-    """Prüft Cache und stellt vollständige SCons-Environment mit verbesserter CPPPATH wieder her"""
-    print(f"🔍 Cache-Prüfung (verbesserte CPPPATH-Wiederherstellung)...")
-    
-    # Erweiterte Cache-Validierung mit verbesserter CPPPATH
-    if not enhanced_cache_validation():
-        return False
-    
-    current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
-    
-    if current_ldf_mode != 'off':
-        print(f"🔄 LDF noch aktiv - verbesserter CPPPATH-Cache wird nach Build erstellt")
-        return False
-    
-    print(f"⚡ Verbesserter CPPPATH-Cache verfügbar - stelle Environment wieder her")
-    
-    # DEBUG: Zeige detaillierte Wiederherstellung
-    debug_cache_restore()
-    
-    success = restore_complete_scons_configuration()
-    return success
+# Script-Ende-Marker
+print(f"\n🏁 LDF-Cache-Script beendet - Environment: {env.get('PIOENV')}")
 
-def calculate_config_hash():
-    """Berechnet Hash der Konfiguration"""
-    relevant_values = [
-        f"BOARD:{env.get('BOARD', '')}",
-        f"PLATFORM:{env.get('PLATFORM', '')}",
-        f"PIOENV:{env.get('PIOENV', '')}"
-    ]
-    
-    ini_files = find_all_platformio_files()
-    
-    for ini_file in sorted(ini_files):
-        if os.path.exists(ini_file) and not ini_file.endswith('.ldf_backup'):
-            try:
-                with open(ini_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    file_hash = hashlib.md5(content.encode('utf-8')).hexdigest()
-                    relevant_values.append(f"{os.path.basename(ini_file)}:{file_hash}")
-            except:
-                pass
-    
-    relevant_values.sort()
-    config_string = "|".join(relevant_values)
-    return hashlib.md5(config_string.encode('utf-8')).hexdigest()
-
-def post_build_complete_capture(target, source, env):
-    """Post-Build Hook: Vollständige SCons-Environment-Erfassung mit verbesserter CPPPATH"""
-    global _backup_created
-    
-    if _backup_created:
-        print("✓ Vollständige Environment bereits erfasst - überspringe Post-Build Action")
-        return None
-    
-    try:
-        print(f"\n🎯 POST-BUILD: Vollständige SCons-Environment-Erfassung mit verbesserter CPPPATH")
-        print(f"   Target: {[str(t) for t in target]}")
-        print(f"   Source: {len(source)} Dateien")
-        print(f"   🕐 Timing: NACH vollständigem Build - alle LDF-Daten verfügbar")
-        
-        # Vollständige Environment-Erfassung mit verbesserter CPPPATH
-        trigger_complete_environment_capture()
-        
-    except Exception as e:
-        print(f"❌ Post-Build vollständige Erfassung Fehler: {e}")
-    
-    return None
-
-# =============================================================================
-# HAUPTLOGIK - VERBESSERTE CPPPATH-WIEDERHERSTELLUNG
-# =============================================================================
-
-print(f"\n🎯 Vollständige CPPPATH-Erfassung mit verbesserter Wiederherstellung für: {env.get('PIOENV')}")
-
-# NEUES DEBUG-LOGGING - IMMER AUSFÜHREN
-print(f"\n🔍 DEBUG: Aktueller Environment-Zustand:")
-current_cpppath = env.get('CPPPATH', [])
-print(f"   📋 Aktueller CPPPATH: {len(current_cpppath)} Einträge")
-
-# Suche nach KNX-Pfaden BEVOR Cache-Prüfung
-knx_paths_before = []
-for path in current_cpppath:
-    path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
-    if 'knx' in path_str.lower() or 'esp-knx' in path_str.lower():
-        knx_paths_before.append(path_str)
-
-print(f"   🔍 KNX-Pfade VOR Cache-Prüfung: {len(knx_paths_before)}")
-for knx_path in knx_paths_before:
-    exists = os.path.exists(knx_path)
-    print(f"      {'✓' if exists else '✗'} {knx_path}")
-
-# Suche nach esp-knx-ip.h in aktuellen Pfaden
-print(f"   🔍 Suche nach esp-knx-ip.h VOR Cache-Prüfung:")
-found_knx_header = False
-for path in current_cpppath:
-    path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
-    header_file = os.path.join(path_str, 'esp-knx-ip.h')
-    if os.path.exists(header_file):
-        print(f"      ✅ GEFUNDEN: {header_file}")
-        found_knx_header = True
-
-if not found_knx_header:
-    print(f"      ❌ esp-knx-ip.h NICHT in aktuellen CPPPATH gefunden!")
-
-# Cache-Prüfung und vollständige SCons-Environment-Wiederherstellung
-cache_restored = early_cache_check_and_restore()
-
-if cache_restored:
-    print(f"🚀 Build mit verbesserter CPPPATH-Environment-Cache - LDF übersprungen!")
-    
-    # ZUSÄTZLICHES DEBUG NACH Cache-Wiederherstellung
-    print(f"\n🔍 DEBUG: Environment-Zustand NACH verbesserter Cache-Wiederherstellung:")
-    restored_cpppath = env.get('CPPPATH', [])
-    print(f"   📋 Wiederhergestellter CPPPATH: {len(restored_cpppath)} Einträge")
-    
-    # Suche nach KNX-Pfaden NACH Wiederherstellung
-    knx_paths_after = []
-    for path in restored_cpppath:
-        path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
-        if 'knx' in path_str.lower() or 'esp-knx' in path_str.lower():
-            knx_paths_after.append(path_str)
-    
-    print(f"   🔍 KNX-Pfade NACH verbesserter Cache-Wiederherstellung: {len(knx_paths_after)}")
-    for knx_path in knx_paths_after:
-        exists = os.path.exists(knx_path)
-        print(f"      {'✓' if exists else '✗'} {knx_path}")
-    
-    # Suche nach esp-knx-ip.h NACH Wiederherstellung
-    print(f"   🔍 Suche nach esp-knx-ip.h NACH verbesserter Cache-Wiederherstellung:")
-    found_knx_header_after = False
-    for path in restored_cpppath:
-        path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
-        header_file = os.path.join(path_str, 'esp-knx-ip.h')
-        if os.path.exists(header_file):
-            print(f"      ✅ GEFUNDEN: {header_file}")
-            found_knx_header_after = True
-    
-    if not found_knx_header_after:
-        print(f"      ❌ esp-knx-ip.h NICHT in wiederhergestellten CPPPATH gefunden!")
-        print(f"      🚨 PROBLEM: Include-Pfad für KNX fehlt nach verbesserter Cache-Wiederherstellung!")
-    else:
-        print(f"      ✅ SUCCESS: esp-knx-ip.h erfolgreich wiederhergestellt!")
-    
-    # Vergleiche CPPPATH vor und nach Wiederherstellung
-    print(f"\n📊 CPPPATH-Vergleich:")
-    print(f"   Vor Cache: {len(knx_paths_before)} KNX-Pfade")
-    print(f"   Nach Cache: {len(knx_paths_after)} KNX-Pfade")
-    
-    if len(knx_paths_before) != len(knx_paths_after):
-        print(f"   🚨 UNTERSCHIED: KNX-Pfade haben sich geändert!")
-        missing_paths = set(knx_paths_before) - set(knx_paths_after)
-        added_paths = set(knx_paths_after) - set(knx_paths_before)
-        
-        if missing_paths:
-            print(f"   ❌ Fehlende KNX-Pfade:")
-            for missing in missing_paths:
-                print(f"      - {missing}")
-        
-        if added_paths:
-            print(f"   ➕ Neue KNX-Pfade:")
-            for added in added_paths:
-                print(f"      + {added}")
-    else:
-        print(f"   ✅ KNX-Pfade konsistent!")
-
-else:
-    print(f"📝 Normaler LDF-Durchlauf - verbesserte CPPPATH-Erfassung nach Build...")
-    
-    # Post-Build Hook für vollständige Environment-Erfassung mit verbesserter CPPPATH
-    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", post_build_complete_capture)
-    print(f"✅ Post-Build Hook für verbesserte CPPPATH-Erfassung registriert")
-    print(f"🔍 Erfasst ALLE CPPPATH-Einträge durch vollständige LDF-Verarbeitung")
-
-print(f"🏁 Verbesserte CPPPATH-SCons-Environment-Erfassung initialisiert")
-print(f"💡 Reset: rm -rf .pio/ldf_cache/")
-print(f"💡 Nach erfolgreichem Build: lib_ldf_mode = off für nachfolgende Builds")
-print(f"🎯 Garantiert: Rekursive lib-Erfassung und verbesserte CPPPATH-Wiederherstellung")
-print(f"🛡️ Features: lib_dir, lib_extra_dirs, shared_libdeps_dir, erweiterte Wiederherstellung\n")
