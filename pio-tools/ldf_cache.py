@@ -861,7 +861,7 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('        exists = os.path.exists(knx_path)\n')
             f.write('        esp_knx_header = os.path.join(knx_path, "esp-knx-ip.h")\n')
             f.write('        has_header = os.path.exists(esp_knx_header)\n')
-            f.write('        print(f"      {'✓' if exists else '✗'} {knx_path} (Header: {'✓' if has_header else '✗'})")\n')
+            f.write('        print(f"      {\\"✓\\" if exists else \\"✗\\"} {knx_path} (Header: {\\"✓\\" if has_header else \\"✗\\"})")\n')
             f.write('    \n')
             f.write('    # 8. CPPPATH ERWEITERN (NICHT ÜBERSCHREIBEN!)\n')
             f.write('    if all_cpppath:\n')
