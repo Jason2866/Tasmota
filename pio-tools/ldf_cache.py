@@ -125,14 +125,62 @@ def get_current_ldf_mode(env_name):
     return 'chain'
 
 def capture_recursive_lib_directories():
-    """Erfasst ALLE rekursiven Library-Verzeichnisse aus lib_extra_dirs und shared_libdeps_dir"""
+    """Erfasst ALLE rekursiven Library-Verzeichnisse aus lib_dir, lib_extra_dirs und shared_libdeps_dir"""
     print(f"\n📁 REKURSIVE LIBRARY-VERZEICHNIS-ERFASSUNG:")
     
     project_dir = env.get("PROJECT_DIR")
     all_lib_dirs = []
     header_directories = []
     
-    # 1. lib_extra_dirs erfassen
+    # 1. lib_dir erfassen
+    try:
+        lib_dir = env.GetProjectOption('lib_dir', '')
+        if lib_dir:
+            print(f"   📋 lib_dir: {lib_dir}")
+            
+            # lib_dir kann mehrere Pfade enthalten (durch ; oder , getrennt)
+            if isinstance(lib_dir, str):
+                lib_dirs = [d.strip() for d in lib_dir.replace(';', ',').split(',') if d.strip()]
+            else:
+                lib_dirs = [lib_dir]
+            
+            for lib_directory in lib_dirs:
+                # Relativer zu absolutem Pfad
+                if not os.path.isabs(lib_directory):
+                    abs_lib_dir = os.path.join(project_dir, lib_directory)
+                else:
+                    abs_lib_dir = lib_directory
+                
+                if os.path.exists(abs_lib_dir):
+                    print(f"   📂 Durchsuche lib_dir rekursiv: {abs_lib_dir}")
+                    
+                    # VOLLSTÄNDIGE REKURSIVE DURCHSUCHUNG
+                    for root, dirs, files in os.walk(abs_lib_dir):
+                        # Prüfe ob Verzeichnis Header-Dateien enthält
+                        header_files = [f for f in files if f.endswith(('.h', '.hpp', '.hxx', '.inc'))]
+                        
+                        if header_files:
+                            header_directories.append(root)
+                            rel_path = os.path.relpath(root, project_dir)
+                            print(f"      ✓ lib_dir Header-Dir: {rel_path} ({len(header_files)} Headers)")
+                            
+                            # Spezielle Prüfung für kritische Header
+                            for header in header_files:
+                                if header in ['esp-knx-ip.h', 'Arduino.h', 'WiFi.h']:
+                                    print(f"         🎯 {header} GEFUNDEN!")
+                        
+                        # Prüfe auf Library-Manifeste
+                        if any(manifest in files for manifest in ['library.json', 'library.properties', 'module.json']):
+                            if root not in all_lib_dirs:
+                                all_lib_dirs.append(root)
+                                print(f"      📚 lib_dir Library-Root: {os.path.relpath(root, project_dir)}")
+                else:
+                    print(f"   ❌ lib_dir nicht gefunden: {lib_directory}")
+    
+    except Exception as e:
+        print(f"   ⚠ Fehler beim Erfassen von lib_dir: {e}")
+    
+    # 2. lib_extra_dirs erfassen
     try:
         lib_extra_dirs = env.GetProjectOption('lib_extra_dirs', [])
         if isinstance(lib_extra_dirs, str):
@@ -148,7 +196,7 @@ def capture_recursive_lib_directories():
                 abs_extra_dir = extra_dir
             
             if os.path.exists(abs_extra_dir):
-                print(f"   📂 Durchsuche rekursiv: {abs_extra_dir}")
+                print(f"   📂 Durchsuche lib_extra_dirs rekursiv: {abs_extra_dir}")
                 
                 # VOLLSTÄNDIGE REKURSIVE DURCHSUCHUNG
                 for root, dirs, files in os.walk(abs_extra_dir):
@@ -156,20 +204,21 @@ def capture_recursive_lib_directories():
                     header_files = [f for f in files if f.endswith(('.h', '.hpp', '.hxx', '.inc'))]
                     
                     if header_files:
-                        header_directories.append(root)
-                        rel_path = os.path.relpath(root, project_dir)
-                        print(f"      ✓ Header-Dir: {rel_path} ({len(header_files)} Headers)")
-                        
-                        # Spezielle Prüfung für kritische Header
-                        for header in header_files:
-                            if header in ['esp-knx-ip.h', 'Arduino.h', 'WiFi.h']:
-                                print(f"         🎯 {header} GEFUNDEN!")
+                        if root not in header_directories:  # Duplikate vermeiden
+                            header_directories.append(root)
+                            rel_path = os.path.relpath(root, project_dir)
+                            print(f"      ✓ lib_extra_dirs Header-Dir: {rel_path} ({len(header_files)} Headers)")
+                            
+                            # Spezielle Prüfung für kritische Header
+                            for header in header_files:
+                                if header in ['esp-knx-ip.h', 'Arduino.h', 'WiFi.h']:
+                                    print(f"         🎯 {header} GEFUNDEN!")
                     
                     # Prüfe auf Library-Manifeste
                     if any(manifest in files for manifest in ['library.json', 'library.properties', 'module.json']):
                         if root not in all_lib_dirs:
                             all_lib_dirs.append(root)
-                            print(f"      📚 Library-Root: {os.path.relpath(root, project_dir)}")
+                            print(f"      📚 lib_extra_dirs Library-Root: {os.path.relpath(root, project_dir)}")
                     
                     # Prüfe auf src/include Verzeichnisse
                     for subdir in dirs:
@@ -191,7 +240,7 @@ def capture_recursive_lib_directories():
     except Exception as e:
         print(f"   ⚠ Fehler beim Erfassen von lib_extra_dirs: {e}")
     
-    # 2. shared_libdeps_dir erfassen
+    # 3. shared_libdeps_dir erfassen
     try:
         shared_libdeps_dir = env.GetProjectOption('shared_libdeps_dir', '')
         if shared_libdeps_dir:
@@ -218,7 +267,7 @@ def capture_recursive_lib_directories():
     except Exception as e:
         print(f"   ⚠ Fehler beim Erfassen von shared_libdeps_dir: {e}")
     
-    # 3. Standard PlatformIO libdeps erfassen
+    # 4. Standard PlatformIO libdeps erfassen
     try:
         project_libdeps_dir = env.get('PROJECT_LIBDEPS_DIR', '')
         if project_libdeps_dir and os.path.exists(project_libdeps_dir):
@@ -410,12 +459,13 @@ def export_ldf_variables_extended():
         'SRC_BUILD_FLAGS': env.get('SRC_BUILD_FLAGS', ''),
     }
     
-    # Project Options mit lib-Konfiguration
+    # Project Options mit vollständiger lib-Konfiguration
     project_options = {}
     try:
         project_options = {
             'lib_deps': env.GetProjectOption('lib_deps', []),
             'lib_ignore': env.GetProjectOption('lib_ignore', []),
+            'lib_dir': env.GetProjectOption('lib_dir', ''),
             'lib_extra_dirs': env.GetProjectOption('lib_extra_dirs', []),
             'shared_libdeps_dir': env.GetProjectOption('shared_libdeps_dir', ''),
             'lib_ldf_mode': env.GetProjectOption('lib_ldf_mode', 'chain'),
@@ -709,108 +759,100 @@ def freeze_complete_scons_configuration(complete_data):
             f.write(repr(complete_data['LDF_VARS']))
             f.write('\n\n')
             
-            # ERWEITERTE CPPPATH-Wiederherstellung mit rekursiven Pfaden
+            # VOLLSTÄNDIGE CPPPATH-Wiederherstellung mit ALLEN erfassten Pfaden
             f.write('def restore_environment(target_env):\n')
-            f.write('    """Vollständige CPPPATH-Wiederherstellung mit rekursiven Pfaden"""\n')
+            f.write('    """Vollständige CPPPATH-Wiederherstellung mit ALLEN erfassten Pfaden"""\n')
             f.write('    import os\n')
             f.write('    restored_count = 0\n')
             f.write('    critical_restored = 0\n')
             f.write('    \n')
-            f.write('    # 1. Basis-CPPPATH aus LDF_VARS\n')
-            f.write('    complete_cpppath = list(LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_COMPLETE", []))\n')
+            f.write('    # 1. Sammle ALLE CPPPATH-Einträge aus ALLEN Quellen\n')
+            f.write('    all_cpppath = []\n')
             f.write('    \n')
-            f.write('    # 2. ALLE CPPPATH-Quellen sammeln\n')
+            f.write('    # 2. Basis-CPPPATH aus LDF_VARS\n')
+            f.write('    complete_cpppath = LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_COMPLETE", [])\n')
+            f.write('    for path in complete_cpppath:\n')
+            f.write('        if path not in all_cpppath:\n')
+            f.write('            all_cpppath.append(path)\n')
+            f.write('    \n')
+            f.write('    # 3. ALLE CPPPATH-Quellen sammeln und hinzufügen\n')
             f.write('    cpppath_sources = LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_SOURCES", {})\n')
             f.write('    \n')
-            f.write('    # Sammle aus allen Quellen\n')
             f.write('    for source_name, source_paths in cpppath_sources.items():\n')
             f.write('        if isinstance(source_paths, list):\n')
+            f.write('            print(f"      🔄 Verarbeite {source_name}: {len(source_paths)} Pfade")\n')
             f.write('            for path in source_paths:\n')
-            f.write('                if isinstance(path, str) and path not in complete_cpppath:\n')
-            f.write('                    complete_cpppath.append(path)\n')
+            f.write('                if isinstance(path, str) and path not in all_cpppath:\n')
+            f.write('                    all_cpppath.append(path)\n')
+            f.write('                    print(f"         ➕ {path}")\n')
             f.write('    \n')
-            f.write('    # 3. Zusätzliche Include-Pfade aus SCONS_VARS\n')
+            f.write('    # 4. Zusätzliche Include-Pfade aus SCONS_VARS\n')
             f.write('    include_vars = ["CPPPATH", "FRAMEWORK_DIR", "PLATFORM_PACKAGES_DIR"]\n')
             f.write('    for var in include_vars:\n')
             f.write('        if var in SCONS_VARS:\n')
             f.write('            scons_paths = SCONS_VARS[var]\n')
             f.write('            if isinstance(scons_paths, list):\n')
             f.write('                for path in scons_paths:\n')
-            f.write('                    if isinstance(path, str) and path not in complete_cpppath:\n')
-            f.write('                        complete_cpppath.append(path)\n')
-            f.write('            elif isinstance(scons_paths, str) and scons_paths not in complete_cpppath:\n')
-            f.write('                complete_cpppath.append(scons_paths)\n')
+            f.write('                    if isinstance(path, str) and path not in all_cpppath:\n')
+            f.write('                        all_cpppath.append(path)\n')
+            f.write('            elif isinstance(scons_paths, str) and scons_paths not in all_cpppath:\n')
+            f.write('                all_cpppath.append(scons_paths)\n')
             f.write('    \n')
-            f.write('    # 4. REKURSIVE lib_extra_dirs Wiederherstellung\n')
-            f.write('    recursive_header_dirs = cpppath_sources.get("recursive_header_dirs", [])\n')
-            f.write('    if recursive_header_dirs:\n')
-            f.write('        print(f"      🔄 Stelle {len(recursive_header_dirs)} rekursive Header-Verzeichnisse wieder her")\n')
-            f.write('        for recursive_path in recursive_header_dirs:\n')
-            f.write('            if isinstance(recursive_path, str) and recursive_path not in complete_cpppath:\n')
-            f.write('                complete_cpppath.append(recursive_path)\n')
-            f.write('                print(f"         ➕ {recursive_path}")\n')
-            f.write('    \n')
-            f.write('    # 5. REKURSIVE lib-Roots Wiederherstellung\n')
-            f.write('    recursive_lib_dirs = cpppath_sources.get("recursive_lib_dirs", [])\n')
-            f.write('    if recursive_lib_dirs:\n')
-            f.write('        print(f"      🔄 Stelle {len(recursive_lib_dirs)} rekursive Library-Roots wieder her")\n')
-            f.write('        for lib_root in recursive_lib_dirs:\n')
-            f.write('            if isinstance(lib_root, str) and lib_root not in complete_cpppath:\n')
-            f.write('                complete_cpppath.append(lib_root)\n')
-            f.write('                print(f"         ➕ {lib_root}")\n')
-            f.write('    \n')
-            f.write('    # 6. Include-Pfade aus Build-Flags extrahieren\n')
+            f.write('    # 5. Include-Pfade aus Build-Flags extrahieren\n')
             f.write('    build_flags = SCONS_VARS.get("BUILD_FLAGS", [])\n')
             f.write('    if isinstance(build_flags, list):\n')
             f.write('        for flag in build_flags:\n')
             f.write('            if isinstance(flag, str) and flag.startswith("-I"):\n')
             f.write('                include_path = flag[2:].strip()\n')
-            f.write('                if include_path and include_path not in complete_cpppath:\n')
-            f.write('                    complete_cpppath.append(include_path)\n')
+            f.write('                if include_path and include_path not in all_cpppath:\n')
+            f.write('                    all_cpppath.append(include_path)\n')
             f.write('    \n')
-            f.write('    # 7. Include-Pfade aus Compiler-Flags extrahieren\n')
+            f.write('    # 6. Include-Pfade aus Compiler-Flags extrahieren\n')
             f.write('    for flag_var in ["CCFLAGS", "CXXFLAGS", "CPPFLAGS"]:\n')
             f.write('        flags = SCONS_VARS.get(flag_var, [])\n')
             f.write('        if isinstance(flags, list):\n')
             f.write('            for flag in flags:\n')
             f.write('                if isinstance(flag, str) and flag.startswith("-I"):\n')
             f.write('                    include_path = flag[2:].strip()\n')
-            f.write('                    if include_path and include_path not in complete_cpppath:\n')
-            f.write('                        complete_cpppath.append(include_path)\n')
+            f.write('                    if include_path and include_path not in all_cpppath:\n')
+            f.write('                        all_cpppath.append(include_path)\n')
             f.write('    \n')
-            f.write('    # 8. VALIDIERUNG: Prüfe ob kritische Pfade vorhanden sind\n')
-            f.write('    critical_paths_found = 0\n')
+            f.write('    # 7. VALIDIERUNG: Prüfe ob kritische Dateien gefunden werden\n')
+            f.write('    critical_files_found = {}\n')
             f.write('    critical_files = ["esp-knx-ip.h", "Arduino.h", "WiFi.h"]\n')
             f.write('    \n')
             f.write('    for critical_file in critical_files:\n')
-            f.write('        for cpppath in complete_cpppath:\n')
+            f.write('        for cpppath in all_cpppath:\n')
             f.write('            if os.path.exists(os.path.join(cpppath, critical_file)):\n')
-            f.write('                critical_paths_found += 1\n')
+            f.write('                critical_files_found[critical_file] = cpppath\n')
             f.write('                print(f"         ✅ {critical_file} gefunden in {cpppath}")\n')
             f.write('                break\n')
             f.write('    \n')
-            f.write('    # 9. CPPPATH vollständig setzen\n')
-            f.write('    if complete_cpppath:\n')
-            f.write('        # Entferne Duplikate und sortiere\n')
-            f.write('        unique_cpppath = []\n')
-            f.write('        for path in complete_cpppath:\n')
-            f.write('            if path not in unique_cpppath:\n')
-            f.write('                unique_cpppath.append(path)\n')
+            f.write('    # 8. CPPPATH vollständig setzen mit ALLEN erfassten Pfaden\n')
+            f.write('    if all_cpppath:\n')
+            f.write('        # Entferne nur echte Duplikate (normalisiere Pfade)\n')
+            f.write('        normalized_paths = []\n')
+            f.write('        for path in all_cpppath:\n')
+            f.write('            normalized = os.path.normpath(path)\n')
+            f.write('            if normalized not in normalized_paths:\n')
+            f.write('                normalized_paths.append(normalized)\n')
             f.write('        \n')
-            f.write('        target_env["CPPPATH"] = unique_cpppath\n')
-            f.write('        print(f"      ✅ Vollständige CPPPATH mit rekursiven Pfaden wiederhergestellt: {len(unique_cpppath)} Einträge")\n')
-            f.write('        print(f"      🎯 Kritische Dateien gefunden: {critical_paths_found}/{len(critical_files)}")\n')
+            f.write('        target_env["CPPPATH"] = normalized_paths\n')
+            f.write('        print(f"      ✅ VOLLSTÄNDIGE CPPPATH mit ALLEN erfassten Pfaden wiederhergestellt: {len(normalized_paths)} Einträge")\n')
+            f.write('        print(f"      🎯 Kritische Dateien gefunden: {len(critical_files_found)}/{len(critical_files)}")\n')
+            f.write('        \n')
+            f.write('        for file, path in critical_files_found.items():\n')
+            f.write('            print(f"         ✅ {file}: {path}")\n')
+            f.write('        \n')
             f.write('        critical_restored += 1\n')
             f.write('        \n')
-            f.write('        # Debug: Zeige erste und letzte Pfade\n')
-            f.write('        if len(unique_cpppath) > 10:\n')
-            f.write('            print(f"         Erste 5 Pfade:")\n')
-            f.write('            for i, path in enumerate(unique_cpppath[:5]):\n')
-            f.write('                exists = "✓" if os.path.exists(path) else "✗"\n')
-            f.write('                print(f"           {i+1}: {exists} {path}")\n')
-            f.write('            print(f"         ... und {len(unique_cpppath) - 5} weitere")\n')
+            f.write('        # Debug: Zeige CPPPATH-Statistik\n')
+            f.write('        print(f"         📊 CPPPATH-Quellen-Aufschlüsselung:")\n')
+            f.write('        for source_name, source_paths in cpppath_sources.items():\n')
+            f.write('            if isinstance(source_paths, list):\n')
+            f.write('                print(f"            {source_name}: {len(source_paths)} Pfade")\n')
             f.write('    \n')
-            f.write('    # 10. Alle anderen kritischen Variablen\n')
+            f.write('    # 9. Alle anderen kritischen Variablen\n')
             f.write('    critical_vars = [\n')
             f.write('        "CPPDEFINES", "LIBS", "LIBPATH",\n')
             f.write('        "BUILD_FLAGS", "CCFLAGS", "CXXFLAGS", "LINKFLAGS",\n')
@@ -827,9 +869,9 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('                print(f"      ⚠ Fehler bei {var}: {e}")\n')
             f.write('    \n')
             f.write('    print(f"✓ {critical_restored} kritische SCons-Variablen wiederhergestellt")\n')
-            f.write('    print(f"✓ CPPPATH-Validierung: {critical_paths_found} kritische Dateien gefunden")\n')
+            f.write('    print(f"✓ CPPPATH-Validierung: {len(critical_files_found)} kritische Dateien gefunden")\n')
             f.write('    \n')
-            f.write('    return len(complete_cpppath) > 5 and critical_restored >= 5 and critical_paths_found > 0\n')
+            f.write('    return len(all_cpppath) > 5 and critical_restored >= 5 and len(critical_files_found) > 0\n')
             f.write('\n')
             
             # Convenience-Funktionen
@@ -873,13 +915,14 @@ def freeze_complete_scons_configuration(complete_data):
             f.write(f'COMPLETE_CAPTURE = True\n')
             f.write(f'COMPLETE_CPPPATH_FROM_ALL_SOURCES = True\n')
             f.write(f'RECURSIVE_LIB_CAPTURE = True\n')
+            f.write(f'ALL_INCLUDES_TO_CPPPATH = True\n')
             f.write(f'CONVERTED_FILE_PATHS = {complete_data["CONVERSION_STATS"]["file_paths"]}\n')
             f.write(f'CONVERTED_CLVAR_OBJECTS = {complete_data["CONVERSION_STATS"]["clvar_converted"]}\n')
             
             # Main-Block
             f.write('\nif __name__ == "__main__":\n')
             f.write('    import os\n')
-            f.write('    print("PlatformIO LDF SCons Variables Export (Vollständige CPPPATH mit rekursiver lib-Sicherung)")\n')
+            f.write('    print("PlatformIO LDF SCons Variables Export (ALLE Includes zu CPPPATH)")\n')
             f.write('    diff = analyze_cpppath_diff()\n')
             f.write('    print(f"Original CPPPATH: {diff[\\"original_count\\"]} Einträge")\n')
             f.write('    print(f"Vollständige CPPPATH: {diff[\\"complete_count\\"]} Einträge")\n')
@@ -889,10 +932,11 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('    recursive_info = get_recursive_lib_info()\n')
             f.write('    print(f"Rekursive Lib-Roots: {len(recursive_info[\\"recursive_lib_dirs\\"])}")\n')
             f.write('    print(f"Rekursive Header-Dirs: {len(recursive_info[\\"recursive_header_dirs\\"])}")\n')
-            f.write('    if diff["ldf_added"]:\n')
-            f.write('        print("LDF-hinzugefügte Pfade:")\n')
-            f.write('        for path in diff["ldf_added"][:10]:  # Erste 10\n')
-            f.write('            print(f"  {path}")\n')
+            f.write('    sources = get_cpppath_sources()\n')
+            f.write('    print("CPPPATH-Quellen:")\n')
+            f.write('    for source_name, source_paths in sources.items():\n')
+            f.write('        if isinstance(source_paths, list):\n')
+            f.write('            print(f"  {source_name}: {len(source_paths)} Pfade")\n')
         
         # Atomarer Move
         shutil.move(temp_file, cache_file)
@@ -905,19 +949,20 @@ def freeze_complete_scons_configuration(complete_data):
         file_size = os.path.getsize(cache_file)
         cpppath_count = len(complete_data['LDF_VARS'].get('LIB_VARS', {}).get('CPPPATH_COMPLETE', []))
         
-        print(f"✓ Vollständige SCons-Environment mit rekursiver lib-Sicherung gespeichert:")
+        print(f"✓ Vollständige SCons-Environment mit ALLEN Includes zu CPPPATH gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
         print(f"   📊 {len(complete_data['SCONS_VARS'])} SCons-Variablen")
-        print(f"   📄 {cpppath_count} CPPPATH-Einträge (mit rekursiver lib-Sicherung)")
+        print(f"   📄 {cpppath_count} CPPPATH-Einträge (ALLE erfassten Includes)")
         print(f"   🔄 {complete_data['CONVERSION_STATS']['file_paths']} SCons-Objekte konvertiert")
         print(f"   🔄 {complete_data['CONVERSION_STATS']['clvar_converted']} CLVar-Objekte konvertiert")
         print(f"   📋 JSON-Export: {os.path.basename(json_file)}")
         print(f"   🔄 Rekursive lib-Sicherung: Aktiviert")
+        print(f"   ✅ ALLE erfassten Includes werden zu CPPPATH hinzugefügt")
         
         return True
         
     except Exception as e:
-        print(f"❌ Vollständige Environment-Erfassung mit rekursiver lib-Sicherung fehlgeschlagen: {e}")
+        print(f"❌ Vollständige Environment-Erfassung mit ALLEN Includes fehlgeschlagen: {e}")
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return False
@@ -930,7 +975,7 @@ def trigger_complete_environment_capture():
         return
     
     try:
-        print(f"🎯 Triggere vollständige Environment-Erfassung mit rekursiver lib-Sicherung...")
+        print(f"🎯 Triggere vollständige Environment-Erfassung mit ALLEN Includes zu CPPPATH...")
         
         # Vollständige Environment-Erfassung mit rekursiver lib-Sicherung
         complete_data = capture_complete_scons_environment()
@@ -941,7 +986,7 @@ def trigger_complete_environment_capture():
             if freeze_complete_scons_configuration(complete_data):
                 env_name = env.get("PIOENV")
                 if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-                    print(f"🚀 Vollständige Environment mit rekursiver lib-Sicherung erfolgreich erfasst!")
+                    print(f"🚀 Vollständige Environment mit ALLEN Includes zu CPPPATH erfolgreich erfasst!")
                     _backup_created = True
                 else:
                     print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
@@ -951,7 +996,7 @@ def trigger_complete_environment_capture():
             print(f"⚠ Zu wenige CPPPATH-Einträge ({cpppath_count}) - LDF möglicherweise unvollständig")
     
     except Exception as e:
-        print(f"❌ Vollständige Environment-Erfassung mit rekursiver lib-Sicherung Fehler: {e}")
+        print(f"❌ Vollständige Environment-Erfassung mit ALLEN Includes Fehler: {e}")
 
 def restore_complete_scons_configuration():
     """Lädt vollständige Environment mit CPPPATH aus allen Quellen und rekursiver lib-Sicherung aus Python-Datei"""
@@ -978,44 +1023,4 @@ def restore_complete_scons_configuration():
         complete_cpppath_all_sources = getattr(env_module, 'COMPLETE_CPPPATH_FROM_ALL_SOURCES', False)
         complete_capture = getattr(env_module, 'COMPLETE_CAPTURE', False)
         recursive_lib_capture = getattr(env_module, 'RECURSIVE_LIB_CAPTURE', False)
-        
-        if complete_cpppath_all_sources and complete_capture and recursive_lib_capture:
-            print("✅ Cache stammt von vollständiger CPPPATH-Erfassung mit rekursiver lib-Sicherung")
-        else:
-            print("⚠️ Cache stammt von älterer Version ohne rekursive lib-Sicherung")
-        
-        # Environment wiederherstellen
-        success = env_module.restore_environment(env)
-        
-        if success:
-            scons_var_count = getattr(env_module, 'SCONS_VAR_COUNT', 0)
-            ldf_categories = getattr(env_module, 'LDF_CATEGORIES', 0)
-            converted_file_paths = getattr(env_module, 'CONVERTED_FILE_PATHS', 0)
-            converted_clvar = getattr(env_module, 'CONVERTED_CLVAR_OBJECTS', 0)
-            
-            print(f"✓ Vollständige Environment mit rekursiver lib-Sicherung wiederhergestellt:")
-            print(f"   📊 {scons_var_count} SCons-Variablen")
-            print(f"   📋 {ldf_categories} LDF-Kategorien")
-            print(f"   📄 {converted_file_paths} SCons-Pfad-Objekte konvertiert")
-            print(f"   🔄 {converted_clvar} CLVar-Objekte konvertiert")
-            print(f"   ✅ CPPPATH mit rekursiver lib-Sicherung wiederhergestellt")
-        
-        return success
-        
-    except Exception as e:
-        print(f"❌ Vollständige Cache-Wiederherstellung mit rekursiver lib-Sicherung fehlgeschlagen: {e}")
-        return False
-
-def enhanced_cache_validation():
-    """Erweiterte Cache-Gültigkeitsprüfung mit CPPPATH aus allen Quellen und rekursiver lib-Sicherung"""
-    print(f"🔍 Erweiterte Cache-Validierung mit rekursiver lib-Sicherung...")
-    
-    cache_file = get_cache_file_path()
-    
-    if not os.path.exists(cache_file):
-        print(f"📝 Kein Cache vorhanden")
-        return False
-    
-    try:
-        # Lade Cache-Modul
-        spec = importlib.util.spec_from_file_location
+        all_includes_to_cpppath = getattr(env_module, 'ALL
