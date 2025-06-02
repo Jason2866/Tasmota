@@ -9,7 +9,7 @@ import importlib.util
 
 # Globale Variablen
 _backup_created = False
-original_object_builder = None
+original_compile_action = None
 
 def get_cache_file_path():
     """Generiert Pfad zur LDF-Cache-Datei für das aktuelle Environment"""
@@ -229,12 +229,12 @@ def convert_scons_objects_selective(value, key="", depth=0):
     else:
         return str(value)
 
-def capture_direct_environment():
-    """Erfasst Environment-Daten DIREKT ohne Clone/Dictionary"""
+def capture_compile_time_environment(compile_env):
+    """Erfasst Environment-Daten zur COMPILE-ZEIT"""
     
-    print(f"\n🎯 DIREKTE Environment-Erfassung (ohne Clone):")
+    print(f"\n🎯 COMPILE-TIME Environment-Erfassung:")
     
-    # Kritische Variablen direkt aus Original-Environment lesen
+    # Kritische Variablen direkt aus Compile-Environment lesen
     critical_vars = [
         'CPPPATH', 'CPPDEFINES', 'LIBS', 'LIBPATH', 
         'BUILD_FLAGS', 'CCFLAGS', 'CXXFLAGS', 'LINKFLAGS',
@@ -242,22 +242,34 @@ def capture_direct_environment():
         'FRAMEWORK_DIR', 'PLATFORM_PACKAGES_DIR'
     ]
     
-    direct_data = {}
+    compile_data = {}
     conversion_stats = {"file_paths": 0, "builders": 0, "functions": 0, "other": 0}
     
     for var in critical_vars:
-        # DIREKTER Zugriff auf env, KEIN Clone/Dictionary
-        raw_value = env.get(var, [])
+        # DIREKTER Zugriff auf Compile-Environment
+        raw_value = compile_env.get(var, [])
         
         if var == 'CPPPATH':
-            print(f"   📁 CPPPATH: {len(raw_value)} Einträge (direkt erfasst)")
+            print(f"   📁 COMPILE-TIME CPPPATH: {len(raw_value)} Einträge")
             
-            # Zeige erste 5 zur Verifikation
-            for i, path in enumerate(raw_value[:5]):
+            # Analysiere Pfad-Quellen
+            source_stats = {}
+            for i, path in enumerate(raw_value):
                 path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
                 source = determine_path_source(path_str)
                 exists = os.path.exists(path_str)
-                print(f"      {i:2d}: {source:12s} {'✓' if exists else '✗'} {path_str}")
+                
+                if source not in source_stats:
+                    source_stats[source] = 0
+                source_stats[source] += 1
+                
+                # Zeige erste 10 zur Verifikation
+                if i < 10:
+                    print(f"      {i:2d}: {source:12s} {'✓' if exists else '✗'} {path_str}")
+            
+            print(f"   📊 Pfad-Quellen-Verteilung:")
+            for source, count in sorted(source_stats.items()):
+                print(f"      {source:12s}: {count} Pfade")
         
         elif var == 'PIOBUILDFILES':
             if isinstance(raw_value, list):
@@ -271,9 +283,9 @@ def capture_direct_environment():
         
         # Konvertiere SCons-Objekte zu wiederverwendbaren Daten
         converted_value = convert_scons_objects_selective(raw_value, var)
-        direct_data[var] = converted_value
+        compile_data[var] = converted_value
         
-        # Zähle Konvertierungen (vereinfacht)
+        # Zähle Konvertierungen
         if var == 'CPPPATH' and isinstance(raw_value, list):
             for item in raw_value:
                 if hasattr(item, 'abspath'):
@@ -282,32 +294,32 @@ def capture_direct_environment():
     print(f"   🔄 {conversion_stats['file_paths']} SCons-Pfad-Objekte konvertiert")
     print(f"   ✅ String-Pfade blieben unverändert")
     
-    return direct_data, conversion_stats
+    return compile_data, conversion_stats
 
-def freeze_direct_scons_configuration(direct_data, conversion_stats):
-    """Speichert direkt erfasste Environment-Daten"""
+def freeze_compile_time_configuration(compile_data, conversion_stats):
+    """Speichert Compile-Time erfasste Environment-Daten"""
     cache_file = get_cache_file_path()
     temp_file = cache_file + ".tmp"
     
     try:
         with open(temp_file, 'w', encoding='utf-8') as f:
-            f.write("# SCons Environment - DIREKTE Erfassung mit Builder-Wrapper\n")
+            f.write("# SCons Environment - COMPILE-TIME Erfassung\n")
             f.write("# SCons objects → paths, String paths unchanged\n")
             f.write("# Auto-generated - do not edit manually\n")
             f.write(f"# Generated: {time.ctime()}\n")
             f.write(f"# Environment: {env.get('PIOENV')}\n")
-            f.write(f"# Captured via Builder-Wrapper Hook\n\n")
+            f.write(f"# Captured during ACTUAL COMPILATION\n\n")
             
             f.write("def restore_environment(target_env):\n")
-            f.write('    """Stellt das direkt erfasste SCons-Environment wieder her"""\n')
+            f.write('    """Stellt das Compile-Time erfasste SCons-Environment wieder her"""\n')
             f.write('    restored_count = 0\n')
             f.write('    \n')
             
             var_count = 0
             
-            for key, value in sorted(direct_data.items()):
+            for key, value in sorted(compile_data.items()):
                 try:
-                    f.write(f'    # {key} (Builder-Wrapper erfasst)\n')
+                    f.write(f'    # {key} (Compile-Time erfasst)\n')
                     f.write(f'    try:\n')
                     f.write(f'        target_env[{repr(key)}] = {repr(value)}\n')
                     f.write(f'        restored_count += 1\n')
@@ -322,232 +334,151 @@ def freeze_direct_scons_configuration(direct_data, conversion_stats):
                     continue
             
             # Konvertierungs-Statistiken
-            f.write('    # === BUILDER-WRAPPER HOOK STATISTIKEN ===\n')
+            f.write('    # === COMPILE-TIME INTERCEPTOR STATISTIKEN ===\n')
             f.write(f'    conversion_stats = {repr(conversion_stats)}\n')
             f.write('    \n')
             
-            f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt (Builder-Wrapper)")\n')
+            f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt (Compile-Time)")\n')
             f.write('    print(f"✓ {{conversion_stats[\'file_paths\']}} SCons-Pfad-Objekte konvertiert")\n')
             f.write('    print(f"✓ String-Pfade blieben unverändert")\n')
-            f.write('    print("✓ Erfasst via Builder-Wrapper Hook")\n')
+            f.write('    print("✓ Erfasst während tatsächlicher Kompilierung")\n')
             f.write('    return restored_count > 10\n')
             f.write('\n')
             f.write('# Metadata\n')
             f.write(f'CONFIG_HASH = {repr(calculate_config_hash())}\n')
             f.write(f'ENV_NAME = {repr(env.get("PIOENV"))}\n')
             f.write(f'VARIABLE_COUNT = {var_count}\n')
-            f.write(f'BUILDER_WRAPPER_HOOK = True\n')
+            f.write(f'COMPILE_TIME_INTERCEPTOR = True\n')
             f.write(f'CONVERTED_FILE_PATHS = {conversion_stats["file_paths"]}\n')
         
         # Atomarer Move
         shutil.move(temp_file, cache_file)
         
         file_size = os.path.getsize(cache_file)
-        cpppath_count = len(direct_data.get('CPPPATH', []))
+        cpppath_count = len(compile_data.get('CPPPATH', []))
         
-        print(f"✓ Builder-Wrapper Environment-Erfassung gespeichert:")
+        print(f"✓ Compile-Time Environment-Erfassung gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
-        print(f"   📊 {var_count} SCons-Variablen (Builder-Wrapper)")
+        print(f"   📊 {var_count} SCons-Variablen (Compile-Time)")
         print(f"   📄 {cpppath_count} CPPPATH-Einträge")
         print(f"   🔄 {conversion_stats['file_paths']} SCons-Objekte konvertiert")
-        print(f"   ✅ Builder-Wrapper Hook verwendet")
+        print(f"   ✅ Compile-Time Interceptor verwendet")
         
         return True
         
     except Exception as e:
-        print(f"❌ Builder-Wrapper Environment-Erfassung fehlgeschlagen: {e}")
+        print(f"❌ Compile-Time Environment-Erfassung fehlgeschlagen: {e}")
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return False
 
-def trigger_environment_capture():
-    """Triggert Environment-Erfassung"""
-    global _backup_created
+def install_compile_time_interceptor():
+    """Installiert Compile-Time Environment Interceptor"""
     
-    if _backup_created:
-        return
+    global _backup_created, original_compile_action
     
-    try:
-        print(f"🎯 Triggere Environment-Erfassung...")
-        
-        # Direkte Environment-Erfassung
-        direct_data, conversion_stats = capture_direct_environment()
-        
-        cpppath_count = len(direct_data.get('CPPPATH', []))
-        
-        if cpppath_count > 5:
-            if freeze_direct_scons_configuration(direct_data, conversion_stats):
-                env_name = env.get("PIOENV")
-                if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-                    print(f"🚀 Environment erfolgreich erfasst!")
-                    _backup_created = True
-                else:
-                    print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
-            else:
-                print(f"❌ Environment-Speicherung fehlgeschlagen")
-        else:
-            print(f"⚠ Zu wenige CPPPATH-Einträge ({cpppath_count})")
-    
-    except Exception as e:
-        print(f"❌ Environment-Erfassung Fehler: {e}")
-
-def optimal_cpppath_hook():
-    """Optimaler Zeitpunkt für CPPPATH-Erfassung - Builder-Wrapper"""
-    
-    global _backup_created, original_object_builder
-    
-    def cpppath_aware_builder(target, source, env, **kwargs):
-        """Wrapper um Object-Builder - hier ist CPPPATH vollständig"""
+    def compile_time_interceptor(target, source, env):
+        """Interceptor für Compile-Time Environment - hier ist CPPPATH vollständig"""
         
         if not _backup_created:
             try:
-                cpppath = env.get('CPPPATH', [])
+                compile_cpppath = env.get('CPPPATH', [])
                 
-                print(f"🎯 Builder-Wrapper Hook: {len(cpppath)} CPPPATH-Einträge")
+                print(f"🎯 COMPILE-TIME INTERCEPTOR: {len(compile_cpppath)} CPPPATH-Einträge")
                 
                 # Zeige LDF-spezifische Pfade
-                ldf_paths = [p for p in cpppath if any(x in str(p) for x in ['.pio/', 'lib/'])]
-                framework_paths = [p for p in cpppath if 'framework-' in str(p)]
+                ldf_paths = [p for p in compile_cpppath if any(x in str(p) for x in ['.pio/', 'lib/'])]
+                framework_paths = [p for p in compile_cpppath if 'framework-' in str(p)]
                 
                 print(f"   📚 LDF-Pfade: {len(ldf_paths)}")
                 print(f"   🔧 Framework-Pfade: {len(framework_paths)}")
                 
-                # Zeige erste LDF-Pfade zur Verifikation
-                for i, ldf_path in enumerate(ldf_paths[:3]):
-                    path_str = str(ldf_path.abspath) if hasattr(ldf_path, 'abspath') else str(ldf_path)
-                    print(f"      {i}: {path_str}")
-                
-                # Prüfe ob genügend Pfade für Erfassung
-                if len(cpppath) > 10:  # Realistische Anzahl
-                    print(f"✅ Vollständige CPPPATH erfasst - speichere Environment")
-                    trigger_environment_capture()
+                # Prüfe ob vollständige CPPPATH (> 50 erwartet)
+                if len(compile_cpppath) > 50:
+                    print(f"✅ VOLLSTÄNDIGE CPPPATH zur Compile-Zeit erfasst!")
+                    
+                    # Compile-Time Environment erfassen
+                    compile_data, conversion_stats = capture_compile_time_environment(env)
+                    
+                    if freeze_compile_time_configuration(compile_data, conversion_stats):
+                        env_name = env.get("PIOENV")
+                        if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+                            print(f"🚀 Compile-Time Interceptor: Environment erfolgreich erfasst!")
+                            _backup_created = True
+                        else:
+                            print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
+                    else:
+                        print(f"❌ Compile-Time Environment-Speicherung fehlgeschlagen")
+                        
+                elif len(compile_cpppath) > 10:
+                    print(f"⚠ Unvollständige CPPPATH ({len(compile_cpppath)}) - erwarte > 50")
+                    
+                    # Erfasse trotzdem für Debugging
+                    compile_data, conversion_stats = capture_compile_time_environment(env)
+                    
                 else:
-                    print(f"⚠ Zu wenige CPPPATH-Einträge ({len(cpppath)}) - überspringe Erfassung")
+                    print(f"❌ Zu wenige CPPPATH-Einträge ({len(compile_cpppath)}) zur Compile-Zeit")
             
             except Exception as e:
-                print(f"❌ Builder-Wrapper Hook Fehler: {e}")
+                print(f"❌ Compile-Time Interceptor Fehler: {e}")
         
-        # Original Builder aufrufen
-        return original_object_builder(target, source, env, **kwargs)
+        # Original Compile-Action aufrufen
+        return original_compile_action(target, source, env)
     
-    # Hook in Object-Builder integrieren
+    # Hook in Object-Builder Compile-Action integrieren
     try:
-        # Original Builder speichern
-        original_object_builder = env['BUILDERS']['Object']
+        object_builder = env['BUILDERS']['Object']
         
-        # Builder durch Wrapper ersetzen
-        env['BUILDERS']['Object'] = cpppath_aware_builder
-        
-        print(f"✅ Builder-Wrapper Hook erfolgreich installiert")
-        return True
+        if hasattr(object_builder, 'action'):
+            # Original Action speichern
+            original_compile_action = object_builder.action
+            
+            # Action durch Interceptor ersetzen
+            object_builder.action = compile_time_interceptor
+            
+            print(f"✅ Compile-Time Interceptor erfolgreich installiert")
+            return True
+        else:
+            print(f"❌ Object-Builder hat keine action-Attribute")
+            return False
         
     except Exception as e:
-        print(f"❌ Builder-Wrapper Hook Installation fehlgeschlagen: {e}")
+        print(f"❌ Compile-Time Interceptor Installation fehlgeschlagen: {e}")
         return False
 
-def debug_builder_structure():
-    """Debuggt die Builder-Struktur für Hook-Implementierung"""
+def debug_compile_environment():
+    """Debuggt die Compile-Environment-Struktur"""
     
-    print(f"\n🔍 Builder-Struktur-Debug:")
+    print(f"\n🔍 Compile-Environment-Debug:")
     
     try:
         object_builder = env['BUILDERS']['Object']
         print(f"   Object Builder: {type(object_builder)}")
-        print(f"   Object Builder Typ: {object_builder.__class__.__name__}")
-        
-        # Prüfe ob Builder callable ist
-        if callable(object_builder):
-            print(f"   ✅ Builder ist callable - Wrapper-Ansatz möglich")
-        else:
-            print(f"   ❌ Builder ist nicht callable")
-        
-        # Zeige Builder-Attribute
-        builder_attrs = [attr for attr in dir(object_builder) if not attr.startswith('_')]
-        print(f"   Builder Attribute: {builder_attrs[:10]}...")  # Erste 10
         
         if hasattr(object_builder, 'action'):
             action = object_builder.action
-            print(f"   Action: {type(action)}")
+            print(f"   Compile Action: {type(action)}")
+            print(f"   Action ist callable: {callable(action)}")
             
             # Zeige Action-Attribute
-            action_attrs = [attr for attr in dir(action) if not attr.startswith('_')]
-            print(f"   Action Attribute: {action_attrs[:10]}...")  # Erste 10
+            if hasattr(action, '__dict__'):
+                action_attrs = [attr for attr in dir(action) if not attr.startswith('_')]
+                print(f"   Action Attribute: {action_attrs[:10]}...")
         else:
-            print(f"   ❌ Keine action-Attribute")
-            
-        # Zeige alle Builder
-        available_builders = list(env['BUILDERS'].keys())
-        print(f"   Verfügbare Builder: {available_builders[:10]}...")  # Erste 10
+            print(f"   ❌ Keine Compile-Action gefunden")
+        
+        # Zeige Environment-Variablen zur Compile-Zeit
+        current_cpppath = env.get('CPPPATH', [])
+        print(f"   Aktuelle CPPPATH: {len(current_cpppath)} Einträge")
+        
+        # Zeige Compiler-Konfiguration
+        cc = env.get('CC', 'unbekannt')
+        cxx = env.get('CXX', 'unbekannt')
+        print(f"   C Compiler: {cc}")
+        print(f"   C++ Compiler: {cxx}")
         
     except Exception as e:
-        print(f"   ❌ Builder-Debug Fehler: {e}")
-
-def alternative_hook_methods():
-    """Alternative Hook-Methoden falls Builder-Wrapper fehlschlägt"""
-    
-    print(f"🔄 Versuche alternative Hook-Methoden...")
-    
-    # Methode 1: Environment-Wrapper
-    def wrap_environment_append():
-        """Wrapped Environment.Append um CPPPATH-Änderungen zu erfassen"""
-        
-        original_append = env.Append
-        
-        def tracked_append(**kwargs):
-            result = original_append(**kwargs)
-            
-            if 'CPPPATH' in kwargs and not _backup_created:
-                current_cpppath = env.get('CPPPATH', [])
-                print(f"🔄 CPPPATH Append: Jetzt {len(current_cpppath)} Einträge")
-                
-                # Prüfe ob genug für Erfassung
-                if len(current_cpppath) > 15:
-                    print(f"✅ CPPPATH-Threshold erreicht - erfasse Environment")
-                    trigger_environment_capture()
-            
-            return result
-        
-        env.Append = tracked_append
-        print(f"✅ Environment.Append Wrapper installiert")
-    
-    # Methode 2: Pre-Action auf erste Source-Datei
-    def first_source_hook():
-        """Hook auf erste kompilierte Source-Datei"""
-        
-        def first_compile_hook(target, source, env):
-            if not _backup_created:
-                print(f"🎯 Erste Source-Datei Hook: {target}")
-                trigger_environment_capture()
-            return None
-        
-        # Hook auf erste .o Datei
-        env.AddPreAction("*.o", first_compile_hook)
-        print(f"✅ Erste Source-Datei Hook installiert")
-    
-    # Methode 3: Delayed Hook mit Timer
-    def delayed_hook():
-        """Delayed Hook nach kurzer Wartezeit"""
-        
-        def delayed_capture():
-            time.sleep(0.5)  # Kurz warten
-            if not _backup_created:
-                print(f"🕐 Delayed Hook: Erfasse Environment nach Wartezeit")
-                trigger_environment_capture()
-        
-        # Starte delayed capture in separatem Thread (falls möglich)
-        try:
-            import threading
-            thread = threading.Thread(target=delayed_capture)
-            thread.daemon = True
-            thread.start()
-            print(f"✅ Delayed Hook Thread gestartet")
-        except:
-            print(f"❌ Threading nicht verfügbar")
-    
-    # Alle alternativen Methoden versuchen
-    wrap_environment_append()
-    first_source_hook()
-    delayed_hook()
+        print(f"   ❌ Compile-Environment-Debug Fehler: {e}")
 
 def post_compile_action(target, source, env):
     """Fallback SCons Action: Erfasst Environment nach Compile, vor Linking"""
@@ -562,21 +493,19 @@ def post_compile_action(target, source, env):
         print(f"   Target: {[str(t) for t in target]}")
         print(f"   Source: {len(source)} Dateien")
         
-        # DIREKTE Environment-Erfassung (KEIN Clone/Dictionary)
-        direct_data, conversion_stats = capture_direct_environment()
+        # DIREKTE Environment-Erfassung als Fallback
+        compile_data, conversion_stats = capture_compile_time_environment(env)
         
         # Prüfe ob realistische Werte vorhanden sind
-        cpppath_count = len(direct_data.get('CPPPATH', []))
-        libs_count = len(direct_data.get('LIBS', []))
+        cpppath_count = len(compile_data.get('CPPPATH', []))
         
         print(f"   📊 Fallback Environment-Statistik:")
         print(f"      CPPPATH: {cpppath_count} Pfade")
-        print(f"      LIBS: {libs_count} Bibliotheken")
         
         if cpppath_count > 5:  # Mindestens Framework-Pfade
             print(f"✅ Environment-Werte erfasst - speichere Fallback-Daten")
             
-            if freeze_direct_scons_configuration(direct_data, conversion_stats):
+            if freeze_compile_time_configuration(compile_data, conversion_stats):
                 env_name = env.get("PIOENV")
                 if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
                     print(f"✓ lib_ldf_mode = off für Lauf 2 gesetzt")
@@ -595,7 +524,7 @@ def post_compile_action(target, source, env):
     return None
 
 def restore_exact_scons_configuration():
-    """Lädt Environment aus Python-Datei (Builder-Wrapper)"""
+    """Lädt Environment aus Python-Datei (Compile-Time)"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
@@ -615,10 +544,10 @@ def restore_exact_scons_configuration():
             print("⚠ Konfiguration geändert - Cache ungültig")
             return False
         
-        # Prüfe ob Builder-Wrapper verwendet wurde
-        builder_wrapper_hook = getattr(env_module, 'BUILDER_WRAPPER_HOOK', False)
-        if builder_wrapper_hook:
-            print("✅ Cache stammt von Builder-Wrapper Hook")
+        # Prüfe ob Compile-Time Interceptor verwendet wurde
+        compile_time_interceptor = getattr(env_module, 'COMPILE_TIME_INTERCEPTOR', False)
+        if compile_time_interceptor:
+            print("✅ Cache stammt von Compile-Time Interceptor")
         
         # Environment wiederherstellen
         success = env_module.restore_environment(env)
@@ -627,34 +556,34 @@ def restore_exact_scons_configuration():
             var_count = getattr(env_module, 'VARIABLE_COUNT', 0)
             converted_file_paths = getattr(env_module, 'CONVERTED_FILE_PATHS', 0)
             
-            print(f"✓ Builder-Wrapper Environment wiederhergestellt:")
+            print(f"✓ Compile-Time Environment wiederhergestellt:")
             print(f"   📊 {var_count} Variablen")
             print(f"   📄 {converted_file_paths} SCons-Pfad-Objekte konvertiert")
-            print(f"   ✅ Builder-Wrapper Hook verwendet")
+            print(f"   ✅ Compile-Time Interceptor verwendet")
         
         return success
         
     except Exception as e:
-        print(f"❌ Builder-Wrapper Cache-Wiederherstellung fehlgeschlagen: {e}")
+        print(f"❌ Compile-Time Cache-Wiederherstellung fehlgeschlagen: {e}")
         return False
 
 def early_cache_check_and_restore():
     """Prüft Cache und stellt SCons-Environment wieder her"""
-    print(f"🔍 Cache-Prüfung (Builder-Wrapper Environment)...")
+    print(f"🔍 Cache-Prüfung (Compile-Time Environment)...")
     
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
-        print(f"📝 Kein Builder-Wrapper Cache - LDF wird normal ausgeführt")
+        print(f"📝 Kein Compile-Time Cache - LDF wird normal ausgeführt")
         return False
     
     current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
     
     if current_ldf_mode != 'off':
-        print(f"🔄 LDF noch aktiv - Builder-Wrapper wird nach Build erstellt")
+        print(f"🔄 LDF noch aktiv - Compile-Time Interceptor wird nach Build erstellt")
         return False
     
-    print(f"⚡ Builder-Wrapper Cache verfügbar - stelle Environment wieder her")
+    print(f"⚡ Compile-Time Cache verfügbar - stelle Environment wieder her")
     
     success = restore_exact_scons_configuration()
     return success
@@ -684,36 +613,37 @@ def calculate_config_hash():
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
 # =============================================================================
-# HAUPTLOGIK - BUILDER-WRAPPER HOOK FÜR SCONS-ENVIRONMENT
+# HAUPTLOGIK - COMPILE-TIME ENVIRONMENT INTERCEPTOR
 # =============================================================================
 
-print(f"\n🎯 Builder-Wrapper Hook SCons-Environment-Erfassung für: {env.get('PIOENV')}")
+print(f"\n🎯 Compile-Time Environment Interceptor für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit Builder-Wrapper Environment-Cache - LDF übersprungen!")
+    print(f"🚀 Build mit Compile-Time Environment-Cache - LDF übersprungen!")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - installiere Builder-Wrapper Hook...")
+    print(f"📝 Normaler LDF-Durchlauf - installiere Compile-Time Interceptor...")
     
-    # Debug Builder-Struktur
-    debug_builder_structure()
+    # Debug Compile-Environment-Struktur
+    debug_compile_environment()
     
-    # Versuche Builder-Wrapper Hook
-    hook_success = optimal_cpppath_hook()
+    # Installiere Compile-Time Interceptor
+    interceptor_success = install_compile_time_interceptor()
     
-    if hook_success:
-        print(f"✅ Builder-Wrapper Hook erfolgreich installiert")
-        print(f"🎯 Hook wird bei erster Object-File-Erstellung aktiv")
+    if interceptor_success:
+        print(f"✅ Compile-Time Interceptor erfolgreich installiert")
+        print(f"🎯 Interceptor wird während tatsächlicher Kompilierung aktiv")
+        print(f"📊 Erwartet: > 50 CPPPATH-Einträge zur Compile-Zeit")
     else:
-        print(f"❌ Builder-Wrapper Hook fehlgeschlagen - verwende alternative Methoden")
-        alternative_hook_methods()
+        print(f"❌ Compile-Time Interceptor Installation fehlgeschlagen")
+        print(f"💡 Fallback: Verwende Post-Action Hook")
         
         # Fallback auf Post-Action
         env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", post_compile_action)
         print(f"✅ Fallback Post-Action Hook registriert")
 
-print(f"🏁 Builder-Wrapper Hook SCons-Environment-Erfassung initialisiert")
+print(f"🏁 Compile-Time Environment Interceptor initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
