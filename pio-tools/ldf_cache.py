@@ -503,6 +503,20 @@ def calculate_config_hash():
     config_string = "|".join(relevant_values)
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
+def debug_cpppath_evolution(phase_name):
+    """Debuggt CPPPATH zu verschiedenen Zeitpunkten"""
+    def debug_action(target, source, env):
+        cpppath = env.get('CPPPATH', [])
+        print(f"🔍 CPPPATH {phase_name}: {len(cpppath)} Einträge")
+        
+        # Zeige LDF-spezifische Pfade
+        ldf_paths = [p for p in cpppath if any(x in str(p) for x in ['.pio/libdeps/', 'lib/'])]
+        print(f"   📚 LDF-Pfade: {len(ldf_paths)}")
+        
+        return None
+    return debug_action
+
+
 # =============================================================================
 # HAUPTLOGIK - DIREKTE SCONS-ENVIRONMENT-ERFASSUNG (OHNE CLONE)
 # =============================================================================
@@ -518,8 +532,11 @@ if cache_restored:
 else:
     print(f"📝 Normaler LDF-Durchlauf - erfasse Environment DIREKT nach Compile-Phase...")
     
-    # SCons Action: Erfasse Environment DIREKT nach Compile, vor Linking
-    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", post_compile_action)
+    # Mehrere Zeitpunkte testen
+    env.AddPostAction("*.o", debug_cpppath_evolution("POST-OBJECT"))
+    env.AddPostAction("*.a", debug_cpppath_evolution("POST-LIBRARY"))  
+    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", debug_cpppath_evolution("POST-ELF"))
+    env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", debug_cpppath_evolution("POST-BIN"))
     
     print(f"✅ Direkte Post-Compile Action registriert für: $BUILD_DIR/${{PROGNAME}}.elf")
 
