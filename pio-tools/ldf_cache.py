@@ -125,7 +125,7 @@ def get_current_ldf_mode(env_name):
     return 'chain'
 
 def capture_ldf_cpppath():
-    """Erfasst CPPPATH-Einträge nach LDF-Verarbeitung - FUNKTIONIERENDE VERSION"""
+    """Erfasst CPPPATH-Einträge nach LDF-Verarbeitung"""
     print(f"\n📁 VOLLSTÄNDIGE CPPPATH-ERFASSUNG:")
     
     # Sammle CPPPATH aus verschiedenen Quellen
@@ -205,7 +205,7 @@ def capture_ldf_cpppath():
     return cpppath_sources, sorted(list(all_cpppath))
 
 def export_ldf_variables_extended():
-    """Erweiterte Exportfunktion mit vollständiger CPPPATH-Erfassung - FUNKTIONIERENDE VERSION"""
+    """Erweiterte Exportfunktion mit vollständiger CPPPATH-Erfassung"""
     print(f"\n🎯 ERWEITERTE LDF-VARIABLE-ERFASSUNG:")
     
     # Erzwinge LDF-Verarbeitung für alle Libraries
@@ -226,7 +226,7 @@ def export_ldf_variables_extended():
     except:
         pass
     
-    # Erfasse CPPPATH nach LDF-Verarbeitung - FUNKTIONIERENDE METHODE
+    # Erfasse CPPPATH nach LDF-Verarbeitung
     cpppath_sources, complete_cpppath = capture_ldf_cpppath()
     
     # Aktualisierte LDF-Variablen
@@ -249,7 +249,7 @@ def export_ldf_variables_extended():
     ldf_variables['LIB_VARS'] = {
         'LIBSOURCE_DIRS': env.get('LIBSOURCE_DIRS', []),
         'CPPPATH_ORIGINAL': [str(p.abspath) if hasattr(p, 'abspath') else str(p) for p in env.get('CPPPATH', [])],
-        'CPPPATH_COMPLETE': complete_cpppath,  # VOLLSTÄNDIGE CPPPATH-LISTE
+        'CPPPATH_COMPLETE': complete_cpppath,
         'CPPPATH_SOURCES': {k: [str(p.abspath) if hasattr(p, 'abspath') else str(p) for p in v] for k, v in cpppath_sources.items()},
         'LIBPATH': [str(p.abspath) if hasattr(p, 'abspath') else str(p) for p in env.get('LIBPATH', [])],
         'LIBS': env.get('LIBS', []),
@@ -326,7 +326,7 @@ def export_ldf_variables_extended():
     return ldf_variables
 
 def convert_scons_objects_selective(value, key="", depth=0):
-    """Konvertiert NUR SCons-Objekte zu Pfaden, String-Pfade bleiben unverändert - FUNKTIONIERENDE VERSION"""
+    """Konvertiert NUR SCons-Objekte zu Pfaden, String-Pfade bleiben unverändert"""
     
     # Schutz vor zu tiefer Rekursion
     if depth > 10:
@@ -481,7 +481,7 @@ def capture_complete_scons_environment():
     return complete_data
 
 def freeze_complete_scons_configuration(complete_data):
-    """Speichert vollständige SCons-Environment mit funktionierender CPPPATH-Wiederherstellung"""
+    """Speichert vollständige SCons-Environment mit vollständiger CPPPATH-Wiederherstellung aus allen Quellen"""
     cache_file = get_cache_file_path()
     temp_file = cache_file + ".tmp"
     
@@ -490,7 +490,7 @@ def freeze_complete_scons_configuration(complete_data):
             f.write("#!/usr/bin/env python3\n")
             f.write("# -*- coding: utf-8 -*-\n")
             f.write('"""\n')
-            f.write('PlatformIO LDF SCons Variables Export - Funktionierende CPPPATH-Erfassung\n')
+            f.write('PlatformIO LDF SCons Variables Export - Vollständige CPPPATH aus allen Quellen\n')
             f.write(f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
             f.write(f'Environment: {env.get("PIOENV")}\n')
             f.write('"""\n\n')
@@ -502,27 +502,61 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('\n\n')
             
             # LDF-Daten
-            f.write('# LDF Variables (vollständig mit funktionierender CPPPATH)\n')
+            f.write('# LDF Variables (vollständig mit CPPPATH aus allen Quellen)\n')
             f.write('LDF_VARS = ')
             f.write(repr(complete_data['LDF_VARS']))
             f.write('\n\n')
             
-            # Verbesserte Restore-Funktion mit funktionierender CPPPATH-Wiederherstellung
+            # Vollständige CPPPATH-Wiederherstellung aus allen Quellen
             f.write('def restore_environment(target_env):\n')
-            f.write('    """Stellt SCons-Environment mit funktionierender CPPPATH wieder her"""\n')
+            f.write('    """Vollständige CPPPATH-Wiederherstellung aus allen SCONS_VARS Quellen"""\n')
             f.write('    restored_count = 0\n')
             f.write('    critical_restored = 0\n')
             f.write('    \n')
-            f.write('    # KRITISCH: Vollständige CPPPATH zuerst wiederherstellen\n')
-            f.write('    complete_cpppath = LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_COMPLETE", [])\n')
+            f.write('    # 1. Basis-CPPPATH aus LDF_VARS\n')
+            f.write('    complete_cpppath = list(LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_COMPLETE", []))\n')
+            f.write('    \n')
+            f.write('    # 2. Zusätzliche Include-Pfade aus SCONS_VARS sammeln\n')
+            f.write('    include_vars = ["CPPPATH", "FRAMEWORK_DIR", "PLATFORM_PACKAGES_DIR"]\n')
+            f.write('    \n')
+            f.write('    for var in include_vars:\n')
+            f.write('        if var in SCONS_VARS:\n')
+            f.write('            scons_paths = SCONS_VARS[var]\n')
+            f.write('            if isinstance(scons_paths, list):\n')
+            f.write('                for path in scons_paths:\n')
+            f.write('                    if path not in complete_cpppath:\n')
+            f.write('                        complete_cpppath.append(path)\n')
+            f.write('            elif isinstance(scons_paths, str) and scons_paths not in complete_cpppath:\n')
+            f.write('                complete_cpppath.append(scons_paths)\n')
+            f.write('    \n')
+            f.write('    # 3. Include-Pfade aus Build-Flags extrahieren\n')
+            f.write('    build_flags = SCONS_VARS.get("BUILD_FLAGS", [])\n')
+            f.write('    if isinstance(build_flags, list):\n')
+            f.write('        for flag in build_flags:\n')
+            f.write('            if isinstance(flag, str) and flag.startswith("-I"):\n')
+            f.write('                include_path = flag[2:].strip()\n')
+            f.write('                if include_path and include_path not in complete_cpppath:\n')
+            f.write('                    complete_cpppath.append(include_path)\n')
+            f.write('    \n')
+            f.write('    # 4. Include-Pfade aus Compiler-Flags extrahieren\n')
+            f.write('    for flag_var in ["CCFLAGS", "CXXFLAGS", "CPPFLAGS"]:\n')
+            f.write('        flags = SCONS_VARS.get(flag_var, [])\n')
+            f.write('        if isinstance(flags, list):\n')
+            f.write('            for flag in flags:\n')
+            f.write('                if isinstance(flag, str) and flag.startswith("-I"):\n')
+            f.write('                    include_path = flag[2:].strip()\n')
+            f.write('                    if include_path and include_path not in complete_cpppath:\n')
+            f.write('                        complete_cpppath.append(include_path)\n')
+            f.write('    \n')
+            f.write('    # 5. CPPPATH vollständig setzen\n')
             f.write('    if complete_cpppath:\n')
             f.write('        target_env["CPPPATH"] = complete_cpppath\n')
-            f.write('        print(f"      ✅ Vollständige CPPPATH wiederhergestellt: {len(complete_cpppath)} Einträge")\n')
+            f.write('        print(f"      ✅ Vollständige CPPPATH aus allen Quellen wiederhergestellt: {len(complete_cpppath)} Einträge")\n')
             f.write('        critical_restored += 1\n')
             f.write('    \n')
-            f.write('    # Kritische SCons-Variablen wiederherstellen\n')
+            f.write('    # 6. Alle anderen kritischen Variablen\n')
             f.write('    critical_vars = [\n')
-            f.write('        "CPPDEFINES", "LIBS", "LIBPATH",\n')  # CPPPATH bereits behandelt
+            f.write('        "CPPDEFINES", "LIBS", "LIBPATH",\n')
             f.write('        "BUILD_FLAGS", "CCFLAGS", "CXXFLAGS", "LINKFLAGS",\n')
             f.write('        "FRAMEWORK_DIR", "PLATFORM_PACKAGES_DIR",\n')
             f.write('        "BOARD", "PLATFORM", "PIOENV", "PIOFRAMEWORK"\n')
@@ -536,7 +570,7 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('            except Exception as e:\n')
             f.write('                print(f"      ⚠ Fehler bei {var}: {e}")\n')
             f.write('    \n')
-            f.write('    # Alle anderen SCons-Variablen\n')
+            f.write('    # 7. Alle anderen Variablen\n')
             f.write('    for key, value in SCONS_VARS.items():\n')
             f.write('        if key not in critical_vars and key != "CPPPATH":\n')
             f.write('            try:\n')
@@ -546,21 +580,16 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('            except:\n')
             f.write('                pass\n')
             f.write('    \n')
-            f.write('    # Validierung der wiederhergestellten CPPPATH\n')
-            f.write('    final_cpppath = target_env.get("CPPPATH", [])\n')
-            f.write('    valid_paths = sum(1 for path in final_cpppath if os.path.exists(str(path)))\n')
-            f.write('    \n')
-            f.write('    print(f"✓ Vollständige CPPPATH: {len(complete_cpppath)} Einträge")\n')
+            f.write('    print(f"✓ CPPPATH aus allen Quellen: {len(complete_cpppath)} Einträge")\n')
             f.write('    print(f"✓ {critical_restored} kritische SCons-Variablen wiederhergestellt")\n')
             f.write('    print(f"✓ {restored_count} weitere SCons-Variablen wiederhergestellt")\n')
-            f.write('    print(f"✓ CPPPATH-Validierung: {valid_paths} gültige Pfade")\n')
             f.write('    \n')
             f.write('    return len(complete_cpppath) > 5 and critical_restored >= 5\n')
             f.write('\n')
             
             # Convenience-Funktionen
             f.write('def get_complete_cpppath():\n')
-            f.write('    """Gibt vollständige CPPPATH-Einträge zurück"""\n')
+            f.write('    """Gibt vollständige CPPPATH-Einträge aus allen Quellen zurück"""\n')
             f.write('    return LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_COMPLETE", [])\n\n')
             
             f.write('def get_cpppath_sources():\n')
@@ -589,13 +618,13 @@ def freeze_complete_scons_configuration(complete_data):
             f.write(f'SCONS_VAR_COUNT = {len(complete_data["SCONS_VARS"])}\n')
             f.write(f'LDF_CATEGORIES = {len(complete_data["LDF_VARS"])}\n')
             f.write(f'COMPLETE_CAPTURE = True\n')
-            f.write(f'WORKING_CPPPATH_CAPTURE = True\n')
+            f.write(f'COMPLETE_CPPPATH_FROM_ALL_SOURCES = True\n')
             f.write(f'CONVERTED_FILE_PATHS = {complete_data["CONVERSION_STATS"]["file_paths"]}\n')
             
             # Main-Block
             f.write('\nif __name__ == "__main__":\n')
             f.write('    import os\n')
-            f.write('    print("PlatformIO LDF SCons Variables Export (Funktionierende CPPPATH)")\n')
+            f.write('    print("PlatformIO LDF SCons Variables Export (Vollständige CPPPATH aus allen Quellen)")\n')
             f.write('    diff = analyze_cpppath_diff()\n')
             f.write('    print(f"Original CPPPATH: {diff[\\"original_count\\"]} Einträge")\n')
             f.write('    print(f"Vollständige CPPPATH: {diff[\\"complete_count\\"]} Einträge")\n')
@@ -618,10 +647,10 @@ def freeze_complete_scons_configuration(complete_data):
         file_size = os.path.getsize(cache_file)
         cpppath_count = len(complete_data['LDF_VARS'].get('LIB_VARS', {}).get('CPPPATH_COMPLETE', []))
         
-        print(f"✓ Vollständige SCons-Environment mit funktionierender CPPPATH gespeichert:")
+        print(f"✓ Vollständige SCons-Environment mit CPPPATH aus allen Quellen gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
         print(f"   📊 {len(complete_data['SCONS_VARS'])} SCons-Variablen")
-        print(f"   📄 {cpppath_count} CPPPATH-Einträge (vollständig)")
+        print(f"   📄 {cpppath_count} CPPPATH-Einträge (aus allen Quellen)")
         print(f"   🔄 {complete_data['CONVERSION_STATS']['file_paths']} SCons-Objekte konvertiert")
         print(f"   📋 JSON-Export: {os.path.basename(json_file)}")
         
@@ -634,16 +663,16 @@ def freeze_complete_scons_configuration(complete_data):
         return False
 
 def trigger_complete_environment_capture():
-    """Triggert vollständige Environment-Erfassung mit funktionierender CPPPATH"""
+    """Triggert vollständige Environment-Erfassung mit CPPPATH aus allen Quellen"""
     global _backup_created
     
     if _backup_created:
         return
     
     try:
-        print(f"🎯 Triggere vollständige Environment-Erfassung mit funktionierender CPPPATH...")
+        print(f"🎯 Triggere vollständige Environment-Erfassung mit CPPPATH aus allen Quellen...")
         
-        # Vollständige Environment-Erfassung mit funktionierender CPPPATH
+        # Vollständige Environment-Erfassung mit CPPPATH aus allen Quellen
         complete_data = capture_complete_scons_environment()
         
         cpppath_count = len(complete_data['LDF_VARS'].get('LIB_VARS', {}).get('CPPPATH_COMPLETE', []))
@@ -652,7 +681,7 @@ def trigger_complete_environment_capture():
             if freeze_complete_scons_configuration(complete_data):
                 env_name = env.get("PIOENV")
                 if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-                    print(f"🚀 Vollständige Environment mit funktionierender CPPPATH erfolgreich erfasst!")
+                    print(f"🚀 Vollständige Environment mit CPPPATH aus allen Quellen erfolgreich erfasst!")
                     _backup_created = True
                 else:
                     print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
@@ -665,7 +694,7 @@ def trigger_complete_environment_capture():
         print(f"❌ Vollständige Environment-Erfassung Fehler: {e}")
 
 def restore_complete_scons_configuration():
-    """Lädt vollständige Environment mit funktionierender CPPPATH aus Python-Datei"""
+    """Lädt vollständige Environment mit CPPPATH aus allen Quellen aus Python-Datei"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
@@ -685,12 +714,12 @@ def restore_complete_scons_configuration():
             print("⚠ Konfiguration geändert - Cache ungültig")
             return False
         
-        # Prüfe ob funktionierende CPPPATH-Erfassung
-        working_cpppath = getattr(env_module, 'WORKING_CPPPATH_CAPTURE', False)
+        # Prüfe ob vollständige CPPPATH aus allen Quellen
+        complete_cpppath_all_sources = getattr(env_module, 'COMPLETE_CPPPATH_FROM_ALL_SOURCES', False)
         complete_capture = getattr(env_module, 'COMPLETE_CAPTURE', False)
         
-        if working_cpppath and complete_capture:
-            print("✅ Cache stammt von funktionierender CPPPATH-Erfassung")
+        if complete_cpppath_all_sources and complete_capture:
+            print("✅ Cache stammt von vollständiger CPPPATH-Erfassung aus allen Quellen")
         else:
             print("⚠️ Cache stammt von älterer Version")
         
@@ -702,11 +731,11 @@ def restore_complete_scons_configuration():
             ldf_categories = getattr(env_module, 'LDF_CATEGORIES', 0)
             converted_file_paths = getattr(env_module, 'CONVERTED_FILE_PATHS', 0)
             
-            print(f"✓ Vollständige Environment mit funktionierender CPPPATH wiederhergestellt:")
+            print(f"✓ Vollständige Environment mit CPPPATH aus allen Quellen wiederhergestellt:")
             print(f"   📊 {scons_var_count} SCons-Variablen")
             print(f"   📋 {ldf_categories} LDF-Kategorien")
             print(f"   📄 {converted_file_paths} SCons-Pfad-Objekte konvertiert")
-            print(f"   ✅ Funktionierende CPPPATH-Erfassung verwendet")
+            print(f"   ✅ CPPPATH aus allen SCONS_VARS Quellen wiederhergestellt")
         
         return success
         
@@ -715,8 +744,8 @@ def restore_complete_scons_configuration():
         return False
 
 def enhanced_cache_validation():
-    """Erweiterte Cache-Gültigkeitsprüfung mit CPPPATH-Validierung"""
-    print(f"🔍 Erweiterte Cache-Validierung mit CPPPATH-Prüfung...")
+    """Erweiterte Cache-Gültigkeitsprüfung mit CPPPATH aus allen Quellen"""
+    print(f"🔍 Erweiterte Cache-Validierung mit CPPPATH aus allen Quellen...")
     
     cache_file = get_cache_file_path()
     
@@ -730,10 +759,10 @@ def enhanced_cache_validation():
         env_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(env_module)
         
-        # Prüfe ob funktionierende CPPPATH-Version
-        working_cpppath = getattr(env_module, 'WORKING_CPPPATH_CAPTURE', False)
-        if not working_cpppath:
-            print("⚠️ Cache ist nicht von funktionierender CPPPATH-Version")
+        # Prüfe ob CPPPATH aus allen Quellen Version
+        complete_cpppath_all_sources = getattr(env_module, 'COMPLETE_CPPPATH_FROM_ALL_SOURCES', False)
+        if not complete_cpppath_all_sources:
+            print("⚠️ Cache ist nicht von CPPPATH-aus-allen-Quellen-Version")
             return False
         
         # Prüfe CPPPATH-Vollständigkeit
@@ -761,7 +790,7 @@ def enhanced_cache_validation():
         print(f"✅ Erweiterte Cache-Validierung erfolgreich:")
         print(f"   📊 {len(scons_vars)} SCons-Variablen")
         print(f"   📁 {len(complete_cpppath)} CPPPATH-Einträge")
-        print(f"   ✨ Funktionierende CPPPATH-Version")
+        print(f"   ✨ CPPPATH aus allen Quellen Version")
         
         return True
         
@@ -770,20 +799,20 @@ def enhanced_cache_validation():
         return False
 
 def early_cache_check_and_restore():
-    """Prüft Cache und stellt vollständige SCons-Environment mit funktionierender CPPPATH wieder her"""
-    print(f"🔍 Cache-Prüfung (funktionierende CPPPATH-Environment)...")
+    """Prüft Cache und stellt vollständige SCons-Environment mit CPPPATH aus allen Quellen wieder her"""
+    print(f"🔍 Cache-Prüfung (CPPPATH aus allen Quellen)...")
     
-    # Erweiterte Cache-Validierung mit CPPPATH-Prüfung
+    # Erweiterte Cache-Validierung mit CPPPATH aus allen Quellen
     if not enhanced_cache_validation():
         return False
     
     current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
     
     if current_ldf_mode != 'off':
-        print(f"🔄 LDF noch aktiv - funktionierender CPPPATH-Cache wird nach Build erstellt")
+        print(f"🔄 LDF noch aktiv - CPPPATH-aus-allen-Quellen-Cache wird nach Build erstellt")
         return False
     
-    print(f"⚡ Funktionierender CPPPATH-Cache verfügbar - stelle Environment wieder her")
+    print(f"⚡ CPPPATH-aus-allen-Quellen-Cache verfügbar - stelle Environment wieder her")
     
     success = restore_complete_scons_configuration()
     return success
@@ -813,7 +842,7 @@ def calculate_config_hash():
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
 def post_build_complete_capture(target, source, env):
-    """Post-Build Hook: Vollständige SCons-Environment-Erfassung mit funktionierender CPPPATH"""
+    """Post-Build Hook: Vollständige SCons-Environment-Erfassung mit CPPPATH aus allen Quellen"""
     global _backup_created
     
     if _backup_created:
@@ -821,12 +850,12 @@ def post_build_complete_capture(target, source, env):
         return None
     
     try:
-        print(f"\n🎯 POST-BUILD: Vollständige SCons-Environment-Erfassung mit funktionierender CPPPATH")
+        print(f"\n🎯 POST-BUILD: Vollständige SCons-Environment-Erfassung mit CPPPATH aus allen Quellen")
         print(f"   Target: {[str(t) for t in target]}")
         print(f"   Source: {len(source)} Dateien")
         print(f"   🕐 Timing: NACH vollständigem Build - alle LDF-Daten verfügbar")
         
-        # Vollständige Environment-Erfassung mit funktionierender CPPPATH
+        # Vollständige Environment-Erfassung mit CPPPATH aus allen Quellen
         trigger_complete_environment_capture()
         
     except Exception as e:
@@ -835,26 +864,26 @@ def post_build_complete_capture(target, source, env):
     return None
 
 # =============================================================================
-# HAUPTLOGIK - FUNKTIONIERENDE CPPPATH-ERFASSUNG
+# HAUPTLOGIK - VOLLSTÄNDIGE CPPPATH AUS ALLEN QUELLEN
 # =============================================================================
 
-print(f"\n🎯 Funktionierende CPPPATH-SCons-Environment-Erfassung für: {env.get('PIOENV')}")
+print(f"\n🎯 Vollständige CPPPATH-aus-allen-Quellen-SCons-Environment-Erfassung für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und vollständige SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit funktionierendem CPPPATH-Environment-Cache - LDF übersprungen!")
+    print(f"🚀 Build mit CPPPATH-aus-allen-Quellen-Environment-Cache - LDF übersprungen!")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - funktionierende CPPPATH-Erfassung nach Build...")
+    print(f"📝 Normaler LDF-Durchlauf - CPPPATH-aus-allen-Quellen-Erfassung nach Build...")
     
-    # Post-Build Hook für vollständige Environment-Erfassung mit funktionierender CPPPATH
+    # Post-Build Hook für vollständige Environment-Erfassung mit CPPPATH aus allen Quellen
     env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", post_build_complete_capture)
-    print(f"✅ Post-Build Hook für funktionierende CPPPATH-Erfassung registriert")
+    print(f"✅ Post-Build Hook für CPPPATH-aus-allen-Quellen-Erfassung registriert")
     print(f"🔍 Erfasst ALLE CPPPATH-Einträge durch vollständige LDF-Verarbeitung")
 
-print(f"🏁 Funktionierende CPPPATH-SCons-Environment-Erfassung initialisiert")
+print(f"🏁 CPPPATH-aus-allen-Quellen-SCons-Environment-Erfassung initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/")
 print(f"💡 Nach erfolgreichem Build: lib_ldf_mode = off für nachfolgende Builds")
-print(f"🎯 Garantiert: Vollständige CPPPATH-Erfassung durch Post-Build-Timing\n")
+print(f"🎯 Garantiert: Vollständige CPPPATH-Erfassung aus ALLEN SCONS_VARS Quellen\n")
