@@ -798,6 +798,68 @@ def enhanced_cache_validation():
         print(f"❌ Erweiterte Cache-Validierung fehlgeschlagen: {e}")
         return False
 
+def debug_cache_restore():
+    """Debuggt die tatsächliche Cache-Wiederherstellung"""
+    cache_file = get_cache_file_path()
+    
+    if not os.path.exists(cache_file):
+        print("❌ Cache-Datei existiert nicht")
+        return
+    
+    try:
+        spec = importlib.util.spec_from_file_location("cache", cache_file)
+        cache_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cache_module)
+        
+        print(f"\n🔍 CACHE-WIEDERHERSTELLUNG DEBUG:")
+        
+        # Zeige was im Cache steht
+        if hasattr(cache_module, 'get_complete_cpppath'):
+            cached_paths = cache_module.get_complete_cpppath()
+            print(f"   📁 Cache enthält: {len(cached_paths)} CPPPATH-Einträge")
+            
+            # Suche nach KNX-relevanten Pfaden
+            knx_paths = [p for p in cached_paths if 'knx' in p.lower() or 'esp-knx' in p.lower()]
+            print(f"   🔍 KNX-relevante Pfade im Cache: {len(knx_paths)}")
+            for knx_path in knx_paths:
+                exists = os.path.exists(knx_path)
+                print(f"      {'✓' if exists else '✗'} {knx_path}")
+        
+        # Zeige aktuellen CPPPATH vor Wiederherstellung
+        current_cpppath = env.get('CPPPATH', [])
+        print(f"   📋 Aktueller CPPPATH vor Restore: {len(current_cpppath)} Einträge")
+        
+        # Führe Wiederherstellung durch
+        success = cache_module.restore_environment(env)
+        print(f"   🔄 Restore-Funktion Erfolg: {success}")
+        
+        # Zeige CPPPATH nach Wiederherstellung
+        restored_cpppath = env.get('CPPPATH', [])
+        print(f"   📋 CPPPATH nach Restore: {len(restored_cpppath)} Einträge")
+        
+        # Suche nach KNX-Pfaden im wiederhergestellten CPPPATH
+        knx_in_restored = []
+        for path in restored_cpppath:
+            path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+            if 'knx' in path_str.lower() or 'esp-knx' in path_str.lower():
+                knx_in_restored.append(path_str)
+        
+        print(f"   🔍 KNX-Pfade im wiederhergestellten CPPPATH: {len(knx_in_restored)}")
+        for knx_path in knx_in_restored:
+            exists = os.path.exists(knx_path)
+            print(f"      {'✓' if exists else '✗'} {knx_path}")
+        
+        # Suche nach esp-knx-ip.h
+        print(f"   🔍 Suche nach esp-knx-ip.h:")
+        for path in restored_cpppath:
+            path_str = str(path.abspath) if hasattr(path, 'abspath') else str(path)
+            header_file = os.path.join(path_str, 'esp-knx-ip.h')
+            if os.path.exists(header_file):
+                print(f"      ✅ GEFUNDEN: {header_file}")
+            
+    except Exception as e:
+        print(f"❌ Cache-Debug fehlgeschlagen: {e}")
+
 def early_cache_check_and_restore():
     """Prüft Cache und stellt vollständige SCons-Environment mit CPPPATH aus allen Quellen wieder her"""
     print(f"🔍 Cache-Prüfung (CPPPATH aus allen Quellen)...")
@@ -813,6 +875,9 @@ def early_cache_check_and_restore():
         return False
     
     print(f"⚡ CPPPATH-aus-allen-Quellen-Cache verfügbar - stelle Environment wieder her")
+    
+    # DEBUG: Zeige detaillierte Wiederherstellung
+    debug_cache_restore()
     
     success = restore_complete_scons_configuration()
     return success
