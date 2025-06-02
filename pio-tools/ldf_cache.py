@@ -124,6 +124,155 @@ def get_current_ldf_mode(env_name):
     
     return 'chain'
 
+def should_create_ldf_cache():
+    """Prüft ob ein LDF-Cache erstellt werden sollte"""
+    cache_file = get_cache_file_path()
+    env_name = env.get("PIOENV")
+    
+    # 1. Kein Cache vorhanden
+    if not os.path.exists(cache_file):
+        print(f"[INFO] Kein Cache gefunden - Cache wird erstellt")
+        return True
+    
+    # 2. Cache ist zu alt (älter als 1 Tag)
+    try:
+        cache_age = time.time() - os.path.getmtime(cache_file)
+        if cache_age > 24 * 3600:  # 24 Stunden
+            print(f"[INFO] Cache ist zu alt ({cache_age/3600:.1f}h) - Cache wird erneuert")
+            return True
+    except:
+        pass
+    
+    # 3. LDF-Modus hat sich geändert
+    current_ldf_mode = get_current_ldf_mode(env_name)
+    try:
+        # Lade gespeicherten LDF-Modus aus Cache
+        cache_globals = {}
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            exec(f.read(), cache_globals)
+        
+        cached_ldf_mode = cache_globals.get('LDF_VARS', {}).get('PROJECT_OPTIONS', {}).get('lib_ldf_mode', 'chain')
+        
+        if current_ldf_mode != cached_ldf_mode:
+            print(f"[INFO] LDF-Modus geändert ({cached_ldf_mode} -> {current_ldf_mode}) - Cache wird erneuert")
+            return True
+    except:
+        print(f"[INFO] Cache nicht lesbar - Cache wird erneuert")
+        return True
+    
+    # 4. platformio.ini wurde geändert (neuer als Cache)
+    try:
+        ini_files = find_all_platformio_files()
+        for ini_file in ini_files:
+            if os.path.exists(ini_file):
+                ini_mtime = os.path.getmtime(ini_file)
+                cache_mtime = os.path.getmtime(cache_file)
+                if ini_mtime > cache_mtime:
+                    print(f"[INFO] {os.path.basename(ini_file)} wurde geändert - Cache wird erneuert")
+                    return True
+    except:
+        pass
+    
+    print(f"[INFO] Cache ist aktuell - keine Erneuerung nötig")
+    return False
+
+def should_trigger_ldf_processing():
+    """Prüft ob LDF-Verarbeitung getriggert werden sollte"""
+    env_name = env.get("PIOENV")
+    current_ldf_mode = get_current_ldf_mode(env_name)
+    
+    # LDF-Verarbeitung nur wenn LDF aktiv ist
+    if current_ldf_mode == "off":
+        print(f"[INFO] LDF ist deaktiviert - keine LDF-Verarbeitung")
+        return False
+    
+    # Prüfe ob Libraries vorhanden sind, die LDF benötigen
+    try:
+        lib_deps = env.GetProjectOption('lib_deps', [])
+        if lib_deps:
+            print(f"[INFO] {len(lib_deps)} Library-Dependencies gefunden - LDF-Verarbeitung wird getriggert")
+            return True
+    except:
+        pass
+    
+    # Prüfe lib_extra_dirs
+    try:
+        lib_extra_dirs = env.GetProjectOption('lib_extra_dirs', [])
+        if lib_extra_dirs:
+            print(f"[INFO] lib_extra_dirs konfiguriert - LDF-Verarbeitung wird getriggert")
+            return True
+    except:
+        pass
+    
+    print(f"[INFO] Keine LDF-Verarbeitung nötig")
+    return False
+
+def should_disable_ldf():
+    """Prüft ob LDF deaktiviert werden sollte"""
+    env_name = env.get("PIOENV")
+    if not env_name:
+        return False
+    
+    current_mode = get_current_ldf_mode(env_name)
+    print(f"[INFO] Aktueller LDF-Modus: {current_mode}")
+    
+    # Deaktiviere LDF wenn nicht bereits "off"
+    return current_mode != "off"
+
+def manage_ldf_mode():
+    """Verwaltet LDF-Modus für Cache-Erstellung"""
+    env_name = env.get("PIOENV")
+    if not env_name:
+        return False
+    
+    print(f"\n[LDF] LDF-MODUS-VERWALTUNG:")
+    
+    # Prüfe aktuellen LDF-Modus
+    if should_disable_ldf():
+        print(f"[INFO] Deaktiviere LDF für vollständige Library-Erfassung...")
+        
+        # Erstelle Backup und setze LDF auf "off"
+        if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+            print(f"[OK] LDF-Modus auf 'off' gesetzt")
+            return True
+        else:
+            print(f"[WARNUNG] Konnte LDF-Modus nicht ändern")
+            return False
+    else:
+        print(f"[INFO] LDF bereits deaktiviert")
+        return True
+
+def restore_ldf_mode():
+    """Stellt ursprünglichen LDF-Modus wieder her"""
+    env_name = env.get("PIOENV")
+    if not env_name:
+        return
+    
+    print(f"\n[LDF] LDF-MODUS-WIEDERHERSTELLUNG:")
+    
+    try:
+        # Finde Backup-Datei
+        env_file = find_env_definition_file(env_name)
+        if not env_file:
+            project_dir = env.get("PROJECT_DIR")
+            env_file = os.path.join(project_dir, "platformio.ini")
+        
+        backup_file = f"{env_file}.ldf_backup"
+        
+        if os.path.exists(backup_file):
+            # Stelle Original wieder her
+            shutil.copy2(backup_file, env_file)
+            print(f"[OK] Ursprünglicher LDF-Modus wiederhergestellt")
+            
+            # Entferne Backup
+            os.remove(backup_file)
+            print(f"[OK] Backup-Datei entfernt")
+        else:
+            print(f"[INFO] Kein LDF-Backup gefunden")
+            
+    except Exception as e:
+        print(f"[WARNUNG] Fehler bei LDF-Wiederherstellung: {e}")
+
 def capture_recursive_lib_directories():
     """Erfasst ALLE rekursiven Library-Verzeichnisse aus lib_dir, lib_extra_dirs und shared_libdeps_dir"""
     print(f"\n[ORDNER] REKURSIVE LIBRARY-VERZEICHNIS-ERFASSUNG:")
@@ -294,7 +443,7 @@ def capture_ldf_cpppath():
     """Erfasst CPPPATH-Einträge nach LDF-Verarbeitung mit rekursiver lib-Erfassung"""
     print(f"\n[ORDNER] VOLLSTÄNDIGE CPPPATH-ERFASSUNG MIT REKURSIVER LIB-SICHERUNG:")
     
-    # Sammle CPPPATH aus verschiedenen Quellen - ORIGINAL VERSION
+    # Sammle CPPPATH aus verschiedenen Quellen
     cpppath_sources = {
         'original_env': [str(p.abspath) if hasattr(p, 'abspath') else str(p) for p in env.get('CPPPATH', [])],
         'project_include_dirs': [],
@@ -305,7 +454,7 @@ def capture_ldf_cpppath():
         'recursive_header_dirs': [],
     }
     
-    # NEUE: Rekursive Library-Verzeichnis-Erfassung
+    # Rekursive Library-Verzeichnis-Erfassung
     lib_roots, header_dirs = capture_recursive_lib_directories()
     cpppath_sources['recursive_lib_dirs'] = lib_roots
     cpppath_sources['recursive_header_dirs'] = header_dirs
@@ -878,24 +1027,6 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('    else:\n')
             f.write('        print(f"   LIBS: {type(final_libs).__name__}")\n')
             f.write('    \n')
-            f.write('    # 3. CPPDEFINES-Validierung\n')
-            f.write('    final_defines = target_env.get("CPPDEFINES", [])\n')
-            f.write('    if isinstance(final_defines, list):\n')
-            f.write('        print(f"   CPPDEFINES: {len(final_defines)} Defines")\n')
-            f.write('    else:\n')
-            f.write('        print(f"   CPPDEFINES: {type(final_defines).__name__}")\n')
-            f.write('    \n')
-            f.write('    # 4. Compiler-Flags-Validierung\n')
-            f.write('    flag_vars = ["CFLAGS", "CXXFLAGS", "CCFLAGS", "LINKFLAGS", "ASFLAGS", "ASPPFLAGS"]\n')
-            f.write('    for flag_var in flag_vars:\n')
-            f.write('        flag_value = target_env.get(flag_var, [])\n')
-            f.write('        if isinstance(flag_value, list):\n')
-            f.write('            print(f"   {flag_var}: {len(flag_value)} Flags")\n')
-            f.write('        elif isinstance(flag_value, str):\n')
-            f.write('            print(f"   {flag_var}: {len(flag_value)} Zeichen")\n')
-            f.write('        else:\n')
-            f.write('            print(f"   {flag_var}: {type(flag_value).__name__}")\n')
-            f.write('    \n')
             f.write('    # Erfolgs-Bewertung\n')
             f.write('    min_required_vars = 7  # Mindestens 7 der 10 Variablen sollten wiederhergestellt werden\n')
             f.write('    success = (restored_vars >= min_required_vars and failed_vars <= 2)\n')
@@ -912,66 +1043,10 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('    return success\n')
             f.write('\n')
             
-            # Validierungsfunktionen
-            f.write('def validate_all_compile_vars():\n')
-            f.write('    """Validiert alle compile-relevanten Variablen im aktuellen Environment"""\n')
-            f.write('    compile_vars = ["CPPPATH", "CPPDEFINES", "LIBS", "LIBPATH", "ASFLAGS", \n')
-            f.write('                   "ASPPFLAGS", "CFLAGS", "CXXFLAGS", "CCFLAGS", "LINKFLAGS"]\n')
-            f.write('    \n')
-            f.write('    print("\\n[INFO] COMPILE-VARIABLEN-ANALYSE:")\n')
-            f.write('    \n')
-            f.write('    for var_name in compile_vars:\n')
-            f.write('        var_value = env.get(var_name, [])\n')
-            f.write('        \n')
-            f.write('        if isinstance(var_value, list):\n')
-            f.write('            print(f"   {var_name:12s}: {len(var_value):3d} Einträge")\n')
-            f.write('            \n')
-            f.write('            # Spezielle Analyse für Pfad-Variablen\n')
-            f.write('            if var_name in ["CPPPATH", "LIBPATH"]:\n')
-            f.write('                valid_paths = sum(1 for p in var_value if isinstance(p, str) and os.path.exists(str(p)))\n')
-            f.write('                print(f"   {" ":12s}   └─ {valid_paths} gültige Pfade")\n')
-            f.write('                \n')
-            f.write('                if var_name == "CPPPATH":\n')
-            f.write('                    knx_paths = [str(p) for p in var_value if "knx" in str(p).lower()]\n')
-            f.write('                    if knx_paths:\n')
-            f.write('                        print(f"   {" ":12s}   └─ {len(knx_paths)} KNX-Pfade")\n')
-            f.write('        \n')
-            f.write('        elif isinstance(var_value, str):\n')
-            f.write('            print(f"   {var_name:12s}: String ({len(var_value)} Zeichen)")\n')
-            f.write('        \n')
-            f.write('        else:\n')
-            f.write('            print(f"   {var_name:12s}: {type(var_value).__name__}")\n')
-            f.write('    \n')
-            f.write('    return True\n')
-            f.write('\n')
-            
             # Convenience-Funktionen
             f.write('def get_complete_cpppath():\n')
             f.write('    """Gibt vollständige CPPPATH-Einträge zurück"""\n')
             f.write('    return LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_COMPLETE", [])\n\n')
-            
-            f.write('def get_cpppath_sources():\n')
-            f.write('    """Gibt CPPPATH-Einträge nach Quelle gruppiert zurück"""\n')
-            f.write('    return LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_SOURCES", {})\n\n')
-            
-            f.write('def get_recursive_lib_info():\n')
-            f.write('    """Gibt rekursive Library-Information zurück"""\n')
-            f.write('    sources = get_cpppath_sources()\n')
-            f.write('    return {\n')
-            f.write('        "recursive_lib_dirs": sources.get("recursive_lib_dirs", []),\n')
-            f.write('        "recursive_header_dirs": sources.get("recursive_header_dirs", [])\n')
-            f.write('    }\n\n')
-            
-            f.write('def analyze_cpppath_diff():\n')
-            f.write('    """Analysiert Unterschiede zwischen Original- und vollständiger CPPPATH"""\n')
-            f.write('    original = set(LDF_VARS.get("LIB_VARS", {}).get("CPPPATH_ORIGINAL", []))\n')
-            f.write('    complete = set(get_complete_cpppath())\n')
-            f.write('    return {\n')
-            f.write('        "original_count": len(original),\n')
-            f.write('        "complete_count": len(complete),\n')
-            f.write('        "added_paths": list(complete - original),\n')
-            f.write('        "removed_paths": list(original - complete)\n')
-            f.write('    }\n')
         
         # Atomarer Austausch
         if os.path.exists(cache_file):
@@ -989,183 +1064,32 @@ def freeze_complete_scons_configuration(complete_data):
             os.remove(temp_file)
         return False
 
-def should_disable_ldf():
-    """Prüft ob LDF deaktiviert werden sollte"""
-    env_name = env.get("PIOENV")
-    if not env_name:
-        return False
+def show_cache_statistics(complete_data):
+    """Zeigt Cache-Statistiken an"""
+    scons_vars = complete_data.get('SCONS_VARS', {})
+    ldf_vars = complete_data.get('LDF_VARS', {})
     
-    current_mode = get_current_ldf_mode(env_name)
-    print(f"[INFO] Aktueller LDF-Modus: {current_mode}")
+    print(f"\n[STATS] CACHE-STATISTIKEN:")
+    print(f"   SCons-Variablen: {len(scons_vars)}")
+    print(f"   LDF-Kategorien: {len(ldf_vars)}")
     
-    # Deaktiviere LDF wenn nicht bereits "off"
-    return current_mode != "off"
-
-def manage_ldf_mode():
-    """Verwaltet LDF-Modus für Cache-Erstellung"""
-    env_name = env.get("PIOENV")
-    if not env_name:
-        return False
+    # CPPPATH-Statistik
+    complete_cpppath = ldf_vars.get('LIB_VARS', {}).get('CPPPATH_COMPLETE', [])
+    knx_paths = [p for p in complete_cpppath if 'knx' in p.lower()]
+    print(f"   CPPPATH-Einträge: {len(complete_cpppath)}")
+    print(f"   KNX-Pfade: {len(knx_paths)}")
     
-    print(f"\n[LDF] LDF-MODUS-VERWALTUNG:")
+    if knx_paths:
+        print(f"   [TARGET] KNX-Pfade gefunden:")
+        for knx_path in knx_paths[:3]:  # Zeige erste 3
+            print(f"      {knx_path}")
+        if len(knx_paths) > 3:
+            print(f"      ... und {len(knx_paths) - 3} weitere")
     
-    # Prüfe aktuellen LDF-Modus
-    if should_disable_ldf():
-        print(f"[INFO] Deaktiviere LDF für vollständige Library-Erfassung...")
-        
-        # Erstelle Backup und setze LDF auf "off"
-        if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
-            print(f"[OK] LDF-Modus auf 'off' gesetzt")
-            return True
-        else:
-            print(f"[WARNUNG] Konnte LDF-Modus nicht ändern")
-            return False
-    else:
-        print(f"[INFO] LDF bereits deaktiviert")
-        return True
-
-def restore_ldf_mode():
-    """Stellt ursprünglichen LDF-Modus wieder her"""
-    env_name = env.get("PIOENV")
-    if not env_name:
-        return
-    
-    print(f"\n[LDF] LDF-MODUS-WIEDERHERSTELLUNG:")
-    
-    try:
-        # Finde Backup-Datei
-        env_file = find_env_definition_file(env_name)
-        if not env_file:
-            project_dir = env.get("PROJECT_DIR")
-            env_file = os.path.join(project_dir, "platformio.ini")
-        
-        backup_file = f"{env_file}.ldf_backup"
-        
-        if os.path.exists(backup_file):
-            # Stelle Original wieder her
-            shutil.copy2(backup_file, env_file)
-            print(f"[OK] Ursprünglicher LDF-Modus wiederhergestellt")
-            
-            # Entferne Backup
-            os.remove(backup_file)
-            print(f"[OK] Backup-Datei entfernt")
-        else:
-            print(f"[INFO] Kein LDF-Backup gefunden")
-            
-    except Exception as e:
-        print(f"[WARNUNG] Fehler bei LDF-Wiederherstellung: {e}")
-
-def create_cache_with_ldf_management():
-    """Erstellt Cache mit LDF-Management"""
-    print(f"\n[START] CACHE-ERSTELLUNG MIT LDF-MANAGEMENT:")
-    
-    # 1. LDF-Modus verwalten
-    ldf_managed = manage_ldf_mode()
-    
-    if not ldf_managed:
-        print(f"[WARNUNG] LDF-Management fehlgeschlagen - Cache wird trotzdem erstellt")
-    
-    try:
-        # 2. Cache erstellen
-        complete_data = capture_complete_scons_environment()
-        cache_created = freeze_complete_scons_configuration(complete_data)
-        
-        if cache_created:
-            print(f"[OK] Cache erfolgreich erstellt")
-            
-            # Zeige Statistiken
-            scons_vars = complete_data.get('SCONS_VARS', {})
-            ldf_vars = complete_data.get('LDF_VARS', {})
-            
-            print(f"\n[STATS] CACHE-STATISTIKEN:")
-            print(f"   SCons-Variablen: {len(scons_vars)}")
-            print(f"   LDF-Kategorien: {len(ldf_vars)}")
-            
-            # CPPPATH-Statistik
-            complete_cpppath = ldf_vars.get('LIB_VARS', {}).get('CPPPATH_COMPLETE', [])
-            knx_paths = [p for p in complete_cpppath if 'knx' in p.lower()]
-            print(f"   CPPPATH-Einträge: {len(complete_cpppath)}")
-            print(f"   KNX-Pfade: {len(knx_paths)}")
-            
-            if knx_paths:
-                print(f"   [TARGET] KNX-Pfade gefunden:")
-                for knx_path in knx_paths[:3]:  # Zeige erste 3
-                    print(f"      {knx_path}")
-                if len(knx_paths) > 3:
-                    print(f"      ... und {len(knx_paths) - 3} weitere")
-            
-            # Compile-Variablen-Statistik
-            compile_vars = ['CPPPATH', 'CPPDEFINES', 'LIBS', 'LIBPATH', 'ASFLAGS', 'ASPPFLAGS', 'CFLAGS', 'CXXFLAGS', 'CCFLAGS', 'LINKFLAGS']
-            cached_compile_vars = sum(1 for var in compile_vars if var in scons_vars)
-            print(f"   Compile-Variablen gecacht: {cached_compile_vars}/{len(compile_vars)}")
-            
-            return True
-        else:
-            print(f"[FEHLER] Cache-Erstellung fehlgeschlagen")
-            return False
-            
-    finally:
-        # 3. LDF-Modus immer wiederherstellen
-        if ldf_managed:
-            restore_ldf_mode()
-
-
-# Hauptlogik
-def main():
-    """Hauptfunktion des LDF-Cache-Systems mit LDF-Management"""
-    print(f"\n[START] TASMOTA LDF CACHE SYSTEM - VOLLSTÄNDIGE COMPILE-VAR-SICHERUNG")
-    print(f"Environment: {env.get('PIOENV')}")
-    print(f"Projekt: {env.get('PROJECT_DIR')}")
-    
-    env_name = env.get("PIOENV")
-    if not env_name:
-        print("[FEHLER] Kein PIOENV gefunden")
-        return
-    
-    # Verwende neue Cache-Erstellung mit LDF-Management
-    success = create_cache_with_ldf_management()
-    
-    if success:
-        print(f"[OK] LDF-Cache-System erfolgreich abgeschlossen")
-    else:
-        print(f"[FEHLER] LDF-Cache-System mit Fehlern beendet")
-
-    
-    # Erfasse vollständige SCons-Environment
-    complete_data = capture_complete_scons_environment()
-    
-    # Speichere Cache
-    if freeze_complete_scons_configuration(complete_data):
-        print(f"[OK] LDF-Cache erfolgreich erstellt")
-        
-        # Zeige Statistiken
-        scons_vars = complete_data.get('SCONS_VARS', {})
-        ldf_vars = complete_data.get('LDF_VARS', {})
-        
-        print(f"\n[STATS] CACHE-STATISTIKEN:")
-        print(f"   SCons-Variablen: {len(scons_vars)}")
-        print(f"   LDF-Kategorien: {len(ldf_vars)}")
-        
-        # CPPPATH-Statistik
-        complete_cpppath = ldf_vars.get('LIB_VARS', {}).get('CPPPATH_COMPLETE', [])
-        knx_paths = [p for p in complete_cpppath if 'knx' in p.lower()]
-        print(f"   CPPPATH-Einträge: {len(complete_cpppath)}")
-        print(f"   KNX-Pfade: {len(knx_paths)}")
-
-        if knx_paths:
-            print(f"   [TARGET] KNX-Pfade gefunden:")
-            for knx_path in knx_paths[:3]:  # Zeige erste 3
-                print(f"      {knx_path}")
-            if len(knx_paths) > 3:
-                print(f"      ... und {len(knx_paths) - 3} weitere")
-        
-        # Compile-Variablen-Statistik
-        compile_vars = ['CPPPATH', 'CPPDEFINES', 'LIBS', 'LIBPATH', 'ASFLAGS', 'ASPPFLAGS', 'CFLAGS', 'CXXFLAGS', 'CCFLAGS', 'LINKFLAGS']
-        cached_compile_vars = sum(1 for var in compile_vars if var in scons_vars)
-        print(f"   Compile-Variablen gecacht: {cached_compile_vars}/{len(compile_vars)}")
-        
-    else:
-        print(f"[FEHLER] LDF-Cache konnte nicht erstellt werden")
+    # Compile-Variablen-Statistik
+    compile_vars = ['CPPPATH', 'CPPDEFINES', 'LIBS', 'LIBPATH', 'ASFLAGS', 'ASPPFLAGS', 'CFLAGS', 'CXXFLAGS', 'CCFLAGS', 'LINKFLAGS']
+    cached_compile_vars = sum(1 for var in compile_vars if var in scons_vars)
+    print(f"   Compile-Variablen gecacht: {cached_compile_vars}/{len(compile_vars)}")
 
 def load_and_restore_cache():
     """Lädt und wendet den LDF-Cache an"""
@@ -1228,6 +1152,51 @@ def cleanup_old_backups():
     except:
         pass
 
+def main():
+    """Hauptfunktion des LDF-Cache-Systems mit automatischer Trigger-Logik"""
+    print(f"\n[START] TASMOTA LDF CACHE SYSTEM - AUTOMATISCHE LDF-VERARBEITUNG")
+    print(f"Environment: {env.get('PIOENV')}")
+    print(f"Projekt: {env.get('PROJECT_DIR')}")
+    
+    env_name = env.get("PIOENV")
+    if not env_name:
+        print("[FEHLER] Kein PIOENV gefunden")
+        return
+    
+    # 1. Prüfe ob Cache erstellt werden sollte
+    if should_create_ldf_cache():
+        print(f"\n[LDF] STARTE LDF-CACHE-ERSTELLUNG:")
+        
+        # 2. Prüfe ob LDF-Verarbeitung nötig ist
+        if should_trigger_ldf_processing():
+            # LDF-Management für vollständige Erfassung
+            ldf_managed = manage_ldf_mode()
+            
+            try:
+                # Cache mit LDF-Verarbeitung erstellen
+                complete_data = capture_complete_scons_environment()
+                cache_created = freeze_complete_scons_configuration(complete_data)
+                
+                if cache_created:
+                    print(f"[OK] LDF-Cache erfolgreich erstellt")
+                    
+                    # Zeige Statistiken
+                    show_cache_statistics(complete_data)
+                else:
+                    print(f"[FEHLER] Cache-Erstellung fehlgeschlagen")
+                    
+            finally:
+                # LDF-Modus immer wiederherstellen
+                if ldf_managed:
+                    restore_ldf_mode()
+        else:
+            # Einfacher Cache ohne LDF-Verarbeitung
+            print(f"[INFO] Erstelle einfachen Cache ohne LDF-Verarbeitung")
+            complete_data = capture_complete_scons_environment()
+            freeze_complete_scons_configuration(complete_data)
+    else:
+        print(f"[INFO] Cache-Erstellung übersprungen")
+
 # Hauptausführung
 if __name__ == "__main__":
     try:
@@ -1260,6 +1229,3 @@ if __name__ == "__main__":
 
 # Script-Ende-Marker
 print(f"\n[ENDE] LDF-Cache-Script beendet - Environment: {env.get('PIOENV')}")
-
-
-
