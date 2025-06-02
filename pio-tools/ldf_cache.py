@@ -295,7 +295,7 @@ def freeze_direct_scons_configuration(direct_data, conversion_stats):
             f.write("# Auto-generated - do not edit manually\n")
             f.write(f"# Generated: {time.ctime()}\n")
             f.write(f"# Environment: {env.get('PIOENV')}\n")
-            f.write(f"# Captured DIRECTLY after compile, before linking\n\n")
+            f.write(f"# Captured DIRECTLY via Task Prepare Hook\n\n")
             
             f.write("def restore_environment(target_env):\n")
             f.write('    """Stellt das direkt erfasste SCons-Environment wieder her"""\n')
@@ -306,7 +306,7 @@ def freeze_direct_scons_configuration(direct_data, conversion_stats):
             
             for key, value in sorted(direct_data.items()):
                 try:
-                    f.write(f'    # {key} (Direkt erfasst)\n')
+                    f.write(f'    # {key} (Task Prepare Hook erfasst)\n')
                     f.write(f'    try:\n')
                     f.write(f'        target_env[{repr(key)}] = {repr(value)}\n')
                     f.write(f'        restored_count += 1\n')
@@ -321,21 +321,21 @@ def freeze_direct_scons_configuration(direct_data, conversion_stats):
                     continue
             
             # Konvertierungs-Statistiken
-            f.write('    # === DIREKTE ERFASSUNG STATISTIKEN ===\n')
+            f.write('    # === TASK PREPARE HOOK STATISTIKEN ===\n')
             f.write(f'    conversion_stats = {repr(conversion_stats)}\n')
             f.write('    \n')
             
-            f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt (Direkte Erfassung)")\n')
+            f.write('    print(f"✓ {{restored_count}} SCons-Variablen wiederhergestellt (Task Prepare Hook)")\n')
             f.write('    print(f"✓ {{conversion_stats[\'file_paths\']}} SCons-Pfad-Objekte konvertiert")\n')
             f.write('    print(f"✓ String-Pfade blieben unverändert")\n')
-            f.write('    print("✓ KEIN Clone/Dictionary verwendet")\n')
+            f.write('    print("✓ Erfasst via optimalen Task Prepare Hook")\n')
             f.write('    return restored_count > 10\n')
             f.write('\n')
             f.write('# Metadata\n')
             f.write(f'CONFIG_HASH = {repr(calculate_config_hash())}\n')
             f.write(f'ENV_NAME = {repr(env.get("PIOENV"))}\n')
             f.write(f'VARIABLE_COUNT = {var_count}\n')
-            f.write(f'DIRECT_CAPTURE = True\n')
+            f.write(f'TASK_PREPARE_HOOK = True\n')
             f.write(f'CONVERTED_FILE_PATHS = {conversion_stats["file_paths"]}\n')
         
         # Atomarer Move
@@ -344,23 +344,145 @@ def freeze_direct_scons_configuration(direct_data, conversion_stats):
         file_size = os.path.getsize(cache_file)
         cpppath_count = len(direct_data.get('CPPPATH', []))
         
-        print(f"✓ Direkte Environment-Erfassung gespeichert:")
+        print(f"✓ Task Prepare Hook Environment-Erfassung gespeichert:")
         print(f"   📁 {os.path.basename(cache_file)} ({file_size} Bytes)")
-        print(f"   📊 {var_count} SCons-Variablen (direkt erfasst)")
+        print(f"   📊 {var_count} SCons-Variablen (Task Prepare Hook)")
         print(f"   📄 {cpppath_count} CPPPATH-Einträge")
         print(f"   🔄 {conversion_stats['file_paths']} SCons-Objekte konvertiert")
-        print(f"   ✅ KEIN Clone/Dictionary verwendet")
+        print(f"   ✅ Optimaler Hook-Zeitpunkt verwendet")
         
         return True
         
     except Exception as e:
-        print(f"❌ Direkte Environment-Erfassung fehlgeschlagen: {e}")
+        print(f"❌ Task Prepare Hook Environment-Erfassung fehlgeschlagen: {e}")
         if os.path.exists(temp_file):
             os.remove(temp_file)
         return False
 
+def optimal_cpppath_hook():
+    """Optimaler Zeitpunkt für CPPPATH-Erfassung - Hook in Task.prepare()"""
+    
+    global _backup_created
+    
+    def cpppath_aware_prepare(target, source, env):
+        """Hook DIREKT vor Task-Ausführung - hier ist CPPPATH vollständig"""
+        
+        if _backup_created:
+            return None  # Bereits erfasst
+        
+        try:
+            cpppath = env.get('CPPPATH', [])
+            
+            print(f"🎯 Task Prepare Hook: {len(cpppath)} CPPPATH-Einträge")
+            
+            # Zeige LDF-spezifische Pfade
+            ldf_paths = [p for p in cpppath if any(x in str(p) for x in ['.pio/', 'lib/'])]
+            framework_paths = [p for p in cpppath if 'framework-' in str(p)]
+            
+            print(f"   📚 LDF-Pfade: {len(ldf_paths)}")
+            print(f"   🔧 Framework-Pfade: {len(framework_paths)}")
+            
+            # Zeige erste LDF-Pfade zur Verifikation
+            for i, ldf_path in enumerate(ldf_paths[:3]):
+                path_str = str(ldf_path.abspath) if hasattr(ldf_path, 'abspath') else str(ldf_path)
+                print(f"      {i}: {path_str}")
+            
+            # Prüfe ob genügend Pfade für Erfassung
+            if len(cpppath) > 10:  # Realistische Anzahl
+                print(f"✅ Vollständige CPPPATH erfasst - speichere Environment")
+                
+                # Direkte Environment-Erfassung
+                direct_data, conversion_stats = capture_direct_environment()
+                
+                if freeze_direct_scons_configuration(direct_data, conversion_stats):
+                    env_name = env.get("PIOENV")
+                    if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
+                        print(f"🚀 Task Prepare Hook: Environment erfolgreich erfasst!")
+                        _backup_created = True
+                    else:
+                        print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
+                else:
+                    print(f"❌ Environment-Speicherung fehlgeschlagen")
+            else:
+                print(f"⚠ Zu wenige CPPPATH-Einträge ({len(cpppath)}) - überspringe Erfassung")
+        
+        except Exception as e:
+            print(f"❌ Task Prepare Hook Fehler: {e}")
+        
+        return None
+    
+    # Hook in Object-Builder integrieren
+    try:
+        object_builder = env['BUILDERS']['Object']
+        
+        if hasattr(object_builder, 'action'):
+            action = object_builder.action
+            
+            # Prüfe verschiedene Action-Typen
+            if hasattr(action, 'prepare'):
+                # Bereits prepare-Methode vorhanden
+                original_prepare = action.prepare
+                
+                def combined_prepare(target, source, env):
+                    # Unser Hook zuerst
+                    cpppath_aware_prepare(target, source, env)
+                    
+                    # Original prepare danach
+                    if original_prepare:
+                        return original_prepare(target, source, env)
+                
+                action.prepare = combined_prepare
+                print(f"✅ Task Prepare Hook in bestehende prepare-Methode integriert")
+                
+            else:
+                # Keine prepare-Methode - erstelle neue
+                action.prepare = cpppath_aware_prepare
+                print(f"✅ Task Prepare Hook als neue prepare-Methode hinzugefügt")
+        
+        elif hasattr(object_builder, 'generator'):
+            # Generator-basierter Builder
+            print(f"⚠ Generator-basierter Builder - Hook möglicherweise nicht kompatibel")
+            
+        else:
+            print(f"❌ Unbekannter Builder-Typ - Hook nicht implementierbar")
+            return False
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Task Prepare Hook Installation fehlgeschlagen: {e}")
+        return False
+
+def debug_builder_structure():
+    """Debuggt die Builder-Struktur für Hook-Implementierung"""
+    
+    print(f"\n🔍 Builder-Struktur-Debug:")
+    
+    try:
+        object_builder = env['BUILDERS']['Object']
+        print(f"   Object Builder: {type(object_builder)}")
+        
+        if hasattr(object_builder, 'action'):
+            action = object_builder.action
+            print(f"   Action: {type(action)}")
+            
+            if hasattr(action, 'prepare'):
+                print(f"   ✅ prepare-Methode vorhanden: {action.prepare}")
+            else:
+                print(f"   ❌ Keine prepare-Methode")
+                
+        else:
+            print(f"   ❌ Keine action-Attribute")
+            
+        # Zeige alle Builder
+        available_builders = list(env['BUILDERS'].keys())
+        print(f"   Verfügbare Builder: {available_builders[:10]}...")  # Erste 10
+        
+    except Exception as e:
+        print(f"   ❌ Builder-Debug Fehler: {e}")
+
 def post_compile_action(target, source, env):
-    """SCons Action: Erfasst Environment DIREKT nach Compile, vor Linking"""
+    """Fallback SCons Action: Erfasst Environment nach Compile, vor Linking"""
     global _backup_created
     
     if _backup_created:
@@ -368,7 +490,7 @@ def post_compile_action(target, source, env):
         return None
     
     try:
-        print(f"\n🎯 POST-COMPILE ACTION: Erfasse SCons-Environment DIREKT")
+        print(f"\n🎯 FALLBACK Post-Compile Action: Erfasse SCons-Environment")
         print(f"   Target: {[str(t) for t in target]}")
         print(f"   Source: {len(source)} Dateien")
         
@@ -378,44 +500,34 @@ def post_compile_action(target, source, env):
         # Prüfe ob realistische Werte vorhanden sind
         cpppath_count = len(direct_data.get('CPPPATH', []))
         libs_count = len(direct_data.get('LIBS', []))
-        piobuildfiles_count = len(direct_data.get('PIOBUILDFILES', []))
         
-        print(f"   📊 Direkte Environment-Statistik:")
+        print(f"   📊 Fallback Environment-Statistik:")
         print(f"      CPPPATH: {cpppath_count} Pfade")
         print(f"      LIBS: {libs_count} Bibliotheken")
-        print(f"      PIOBUILDFILES: {piobuildfiles_count} Listen")
         
-        realistic_values = (
-            cpppath_count > 10 and  # Mindestens 10 Include-Pfade
-            libs_count >= 0 and libs_count < 50 and  # Realistische LIBS-Anzahl
-            piobuildfiles_count >= 0  # Build-Dateien können 0 sein
-        )
-        
-        if realistic_values:
-            print(f"✅ Realistische Environment-Werte - speichere direkte Erfassung")
+        if cpppath_count > 5:  # Mindestens Framework-Pfade
+            print(f"✅ Environment-Werte erfasst - speichere Fallback-Daten")
             
             if freeze_direct_scons_configuration(direct_data, conversion_stats):
                 env_name = env.get("PIOENV")
                 if backup_and_modify_correct_ini_file(env_name, set_ldf_off=True):
                     print(f"✓ lib_ldf_mode = off für Lauf 2 gesetzt")
-                    print(f"🚀 DIREKTE SCons-Environment-Erfassung abgeschlossen!")
+                    print(f"🚀 FALLBACK SCons-Environment-Erfassung abgeschlossen!")
                     _backup_created = True
                 else:
                     print(f"⚠ lib_ldf_mode konnte nicht gesetzt werden")
             else:
-                print(f"❌ Direkte Environment-Erfassung fehlgeschlagen")
+                print(f"❌ Fallback Environment-Erfassung fehlgeschlagen")
         else:
-            print(f"⚠ Unrealistische Environment-Werte - überspringe Erfassung")
-            print(f"   CPPPATH: {cpppath_count} (erwartet >10)")
-            print(f"   LIBS: {libs_count} (erwartet 0-50)")
+            print(f"⚠ Zu wenige CPPPATH-Einträge - überspringe Fallback-Erfassung")
     
     except Exception as e:
-        print(f"❌ Post-Compile Action Fehler: {e}")
+        print(f"❌ Fallback Post-Compile Action Fehler: {e}")
     
     return None
 
 def restore_exact_scons_configuration():
-    """Lädt Environment aus Python-Datei (direkte Erfassung)"""
+    """Lädt Environment aus Python-Datei (Task Prepare Hook)"""
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
@@ -435,10 +547,10 @@ def restore_exact_scons_configuration():
             print("⚠ Konfiguration geändert - Cache ungültig")
             return False
         
-        # Prüfe ob direkte Erfassung
-        direct_capture = getattr(env_module, 'DIRECT_CAPTURE', False)
-        if not direct_capture:
-            print("⚠ Cache stammt nicht von direkter Erfassung")
+        # Prüfe ob Task Prepare Hook verwendet wurde
+        task_prepare_hook = getattr(env_module, 'TASK_PREPARE_HOOK', False)
+        if task_prepare_hook:
+            print("✅ Cache stammt von optimalem Task Prepare Hook")
         
         # Environment wiederherstellen
         success = env_module.restore_environment(env)
@@ -447,34 +559,34 @@ def restore_exact_scons_configuration():
             var_count = getattr(env_module, 'VARIABLE_COUNT', 0)
             converted_file_paths = getattr(env_module, 'CONVERTED_FILE_PATHS', 0)
             
-            print(f"✓ Direkte Environment-Erfassung wiederhergestellt:")
+            print(f"✓ Task Prepare Hook Environment wiederhergestellt:")
             print(f"   📊 {var_count} Variablen")
             print(f"   📄 {converted_file_paths} SCons-Pfad-Objekte konvertiert")
-            print(f"   ✅ KEIN Clone/Dictionary verwendet")
+            print(f"   ✅ Optimaler Hook-Zeitpunkt verwendet")
         
         return success
         
     except Exception as e:
-        print(f"❌ Direkte Cache-Wiederherstellung fehlgeschlagen: {e}")
+        print(f"❌ Task Prepare Hook Cache-Wiederherstellung fehlgeschlagen: {e}")
         return False
 
 def early_cache_check_and_restore():
     """Prüft Cache und stellt SCons-Environment wieder her"""
-    print(f"🔍 Cache-Prüfung (Direkte Environment-Erfassung)...")
+    print(f"🔍 Cache-Prüfung (Task Prepare Hook Environment)...")
     
     cache_file = get_cache_file_path()
     
     if not os.path.exists(cache_file):
-        print(f"📝 Kein direkter Cache - LDF wird normal ausgeführt")
+        print(f"📝 Kein Task Prepare Hook Cache - LDF wird normal ausgeführt")
         return False
     
     current_ldf_mode = get_current_ldf_mode(env.get("PIOENV"))
     
     if current_ldf_mode != 'off':
-        print(f"🔄 LDF noch aktiv - direkter Cache wird nach Build erstellt")
+        print(f"🔄 LDF noch aktiv - Task Prepare Hook wird nach Build erstellt")
         return False
     
-    print(f"⚡ Direkter Cache verfügbar - stelle Environment wieder her")
+    print(f"⚡ Task Prepare Hook Cache verfügbar - stelle Environment wieder her")
     
     success = restore_exact_scons_configuration()
     return success
@@ -503,42 +615,37 @@ def calculate_config_hash():
     config_string = "|".join(relevant_values)
     return hashlib.md5(config_string.encode('utf-8')).hexdigest()
 
-def debug_cpppath_evolution(phase_name):
-    """Debuggt CPPPATH zu verschiedenen Zeitpunkten"""
-    def debug_action(target, source, env):
-        cpppath = env.get('CPPPATH', [])
-        print(f"🔍 CPPPATH {phase_name}: {len(cpppath)} Einträge")
-        
-        # Zeige LDF-spezifische Pfade
-        ldf_paths = [p for p in cpppath if any(x in str(p) for x in ['.pio/libdeps/', 'lib/'])]
-        print(f"   📚 LDF-Pfade: {len(ldf_paths)}")
-        
-        return None
-    return debug_action
-
-
 # =============================================================================
-# HAUPTLOGIK - DIREKTE SCONS-ENVIRONMENT-ERFASSUNG (OHNE CLONE)
+# HAUPTLOGIK - OPTIMALER TASK PREPARE HOOK FÜR SCONS-ENVIRONMENT
 # =============================================================================
 
-print(f"\n🎯 Direkte SCons-Environment-Erfassung für: {env.get('PIOENV')}")
+print(f"\n🎯 Optimaler Task Prepare Hook SCons-Environment-Erfassung für: {env.get('PIOENV')}")
 
 # Cache-Prüfung und SCons-Environment-Wiederherstellung
 cache_restored = early_cache_check_and_restore()
 
 if cache_restored:
-    print(f"🚀 Build mit direktem Environment-Cache - LDF übersprungen!")
+    print(f"🚀 Build mit Task Prepare Hook Environment-Cache - LDF übersprungen!")
 
 else:
-    print(f"📝 Normaler LDF-Durchlauf - erfasse Environment DIREKT nach Compile-Phase...")
+    print(f"📝 Normaler LDF-Durchlauf - installiere optimalen Task Prepare Hook...")
     
-    # Mehrere Zeitpunkte testen
-    env.AddPostAction("*.o", debug_cpppath_evolution("POST-OBJECT"))
-    env.AddPostAction("*.a", debug_cpppath_evolution("POST-LIBRARY"))  
-    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", debug_cpppath_evolution("POST-ELF"))
-    env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", debug_cpppath_evolution("POST-BIN"))
+    # Debug Builder-Struktur
+    debug_builder_structure()
     
-    print(f"✅ Direkte Post-Compile Action registriert für: $BUILD_DIR/${{PROGNAME}}.elf")
+    # Installiere optimalen Task Prepare Hook
+    hook_success = optimal_cpppath_hook()
+    
+    if hook_success:
+        print(f"✅ Task Prepare Hook erfolgreich installiert")
+        print(f"🎯 Hook wird bei erster Task-Ausführung aktiv (optimaler Zeitpunkt)")
+    else:
+        print(f"❌ Task Prepare Hook Installation fehlgeschlagen")
+        print(f"💡 Fallback: Verwende Post-Action Hook")
+        
+        # Fallback auf Post-Action
+        env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", post_compile_action)
+        print(f"✅ Fallback Post-Action Hook registriert")
 
-print(f"🏁 Direkte SCons-Environment-Erfassung initialisiert (KEIN Clone)")
+print(f"🏁 Optimaler Task Prepare Hook SCons-Environment-Erfassung initialisiert")
 print(f"💡 Reset: rm -rf .pio/ldf_cache/\n")
