@@ -861,7 +861,7 @@ def freeze_complete_scons_configuration(complete_data):
             f.write('    \n')
             f.write('    print(f"Erweiterte Wiederherstellung: {restored_vars}/{len(COMPILE_VARS)} Variablen")\n')
             f.write('    print(f"Fehlgeschlagen: {failed_vars}, Übersprungen: {skipped_vars}")\n')
-            f.write('    print(f"KNX-Header: {\\"✓\\" if knx_header_found else \\"✗\\"}")\n')
+            f.write('    print(f"KNX-Header gefunden: {'[OK]' if knx_header_found else '[FEHLER]'}")\n')
             f.write('    print(f"Status: {'✓ Erfolgreich' if success else '❌ Fehlgeschlagen'}")\n')
             f.write('    \n')
             f.write('    return success\n')
