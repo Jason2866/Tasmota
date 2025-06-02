@@ -1023,4 +1023,6 @@ def restore_complete_scons_configuration():
         complete_cpppath_all_sources = getattr(env_module, 'COMPLETE_CPPPATH_FROM_ALL_SOURCES', False)
         complete_capture = getattr(env_module, 'COMPLETE_CAPTURE', False)
         recursive_lib_capture = getattr(env_module, 'RECURSIVE_LIB_CAPTURE', False)
-        all_includes_to_cpppath = getattr(env_module, 'ALL
+        all_includes_to_cpppath = getattr(env_module, 'ALL_INCLUDES_TO_CPPPATH', False)
+        
+        if complete_cpppath_all_sources and complete_capture and recursive_
