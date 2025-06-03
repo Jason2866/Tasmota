@@ -1,11 +1,13 @@
 # ldf_cache_optimizer.py
 # PlatformIO Advanced Script für intelligentes LDF-Caching
+# Autor: pioarduino Maintainer
+# Optimiert Build-Performance durch selektives LDF-Caching
+# Version: 2.1 - Vereinfachte Hash-Bildung und vollständige SCons-Variablen
 
 Import("env")
 import os
 import json
 import hashlib
-import re
 import datetime
 
 class LDFCacheOptimizer:
@@ -15,142 +17,16 @@ class LDFCacheOptimizer:
         self.project_dir = self.env.subst("$PROJECT_DIR")
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         
-        # Erweiterte Include-relevante Dateitypen (nur sichere Ergänzungen)
+        # Include-relevante Dateitypen
         self.include_relevant_extensions = {
             # Standard C/C++
             '.h', '.hpp', '.hxx', '.h++', '.hh',
             '.c', '.cpp', '.cxx', '.c++', '.cc', '.ino',
-            # Template-Dateien (echte Verbesserung)
+            # Template-Dateien
             '.tpp', '.tcc', '.inc',
             # Config/Manifest-Dateien
             '.json', '.properties', '.txt', '.ini'
         }
-        
-        # Nur Standard Include-Pattern (keine experimentellen)
-        self.include_patterns = [
-            r'#include\s*[<"](.*?)[>"]'  # Standard C/C++
-        ]
-    
-    def extract_include_dependencies(self, file_path):
-        """Extrahiere Include-relevante Informationen aus einer Datei"""
-        include_data = {
-            'direct_includes': [],
-            'conditional_includes': [],
-            'defines_affecting_includes': []
-        }
-        
-        try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-            
-            in_multiline_comment = False
-            in_conditional_block = False
-            current_condition = ""
-            
-            for line_num, line in enumerate(lines):
-                original_line = line
-                line = line.strip()
-                
-                # Kommentar-Handling
-                if '/*' in line and '*/' not in line:
-                    in_multiline_comment = True
-                    continue
-                elif '*/' in line:
-                    in_multiline_comment = False
-                    continue
-                elif in_multiline_comment or line.startswith('//'):
-                    continue
-                
-                # Include-Statements
-                for pattern in self.include_patterns:
-                    matches = re.findall(pattern, line)
-                    for match in matches:
-                        if in_conditional_block:
-                            include_data['conditional_includes'].append({
-                                'condition': current_condition,
-                                'include': match
-                            })
-                        else:
-                            include_data['direct_includes'].append(match)
-                
-                # Conditional Compilation
-                if line.startswith(('#ifdef', '#ifndef', '#if')):
-                    in_conditional_block = True
-                    current_condition = line
-                elif line.startswith('#endif'):
-                    in_conditional_block = False
-                    current_condition = ""
-                elif line.startswith(('#else', '#elif')):
-                    current_condition = line
-                
-                # Include-relevante Defines
-                if line.startswith('#define') and any(keyword in line.upper() 
-                    for keyword in ['INCLUDE', 'PATH', 'DIR', 'CONFIG']):
-                    include_data['defines_affecting_includes'].append(line)
-        
-        except Exception as e:
-            # Fallback: Datei-Hash
-            return {'file_hash': self._get_file_hash(file_path)}
-        
-        return include_data
-    
-    def get_project_include_fingerprint(self):
-        """Erstelle detaillierten Include-Fingerprint"""
-        fingerprint = {
-            'config_files': {},
-            'header_files': {},
-            'source_files': {},
-            'library_manifests': {}
-        }
-        
-        # Projekt-Verzeichnisse scannen
-        scan_dirs = [
-            (self.src_dir, 'source'),
-            (os.path.join(self.project_dir, "include"), 'header'),
-            (os.path.join(self.project_dir, "lib"), 'library'),
-            (self.project_dir, 'config')
-        ]
-        
-        # Zusätzliche Include-Pfade
-        for inc_path in self.env.get('CPPPATH', []):
-            scan_dirs.append((str(inc_path), 'header'))
-        
-        for scan_dir, category in scan_dirs:
-            if os.path.exists(scan_dir):
-                self._scan_directory_for_includes(scan_dir, fingerprint, category)
-        
-        return fingerprint
-    
-    def _scan_directory_for_includes(self, directory, fingerprint, category):
-        """Scanne Verzeichnis nach Include-relevanten Dateien"""
-        for root, dirs, files in os.walk(directory):
-            # Ignoriere Build-Verzeichnisse
-            dirs[:] = [d for d in dirs if not d.startswith(('.pio', 'build', '.git'))]
-            
-            for file in sorted(files):
-                file_path = os.path.join(root, file)
-                rel_path = os.path.relpath(file_path, self.project_dir)
-                file_ext = os.path.splitext(file)[1].lower()
-                
-                if file_ext not in self.include_relevant_extensions:
-                    continue
-                
-                # Kategorisierung
-                if category == 'config' and file in ['platformio.ini', 'library.json', 'library.properties']:
-                    fingerprint['config_files'][rel_path] = self._get_file_hash(file_path)
-                elif file_ext in {'.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'}:
-                    fingerprint['header_files'][rel_path] = self.extract_include_dependencies(file_path)
-                elif file_ext in {'.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'}:
-                    include_data = self.extract_include_dependencies(file_path)
-                    # Nur Include-relevante Teile für Source-Dateien
-                    filtered_data = {
-                        'direct_includes': include_data.get('direct_includes', []),
-                        'conditional_includes': include_data.get('conditional_includes', [])
-                    }
-                    if filtered_data['direct_includes'] or filtered_data['conditional_includes']:
-                        fingerprint['source_files'][rel_path] = filtered_data
-                elif file_ext in {'.json', '.properties'}:
-                    fingerprint['library_manifests'][rel_path] = self._get_file_hash(file_path)
     
     def _get_file_hash(self, file_path):
         """Hash einer einzelnen Datei"""
@@ -160,51 +36,73 @@ class LDFCacheOptimizer:
         except:
             return "unreadable"
     
-    def create_include_hash(self):
-        """Erstelle Hash aus Include-Fingerprint"""
-        fingerprint = self.get_project_include_fingerprint()
-        fingerprint_json = json.dumps(fingerprint, sort_keys=True, indent=None)
-        return hashlib.sha256(fingerprint_json.encode()).hexdigest()
-    
-    def analyze_include_changes(self, old_fingerprint, new_fingerprint):
-        """Analysiere Include-Änderungen (Debugging-Hilfe)"""
-        changes = []
-        
-        # Config-Änderungen
-        if old_fingerprint.get('config_files') != new_fingerprint.get('config_files'):
-            changes.append("Config-Dateien geändert")
-        
-        # Header-Änderungen
-        old_headers = old_fingerprint.get('header_files', {})
-        new_headers = new_fingerprint.get('header_files', {})
-        for header_path in set(old_headers.keys()) | set(new_headers.keys()):
-            if header_path not in old_headers:
-                changes.append(f"Neuer Header: {header_path}")
-            elif header_path not in new_headers:
-                changes.append(f"Header entfernt: {header_path}")
-            elif old_headers[header_path] != new_headers[header_path]:
-                changes.append(f"Header geändert: {header_path}")
-        
-        # Source-Include-Änderungen
-        old_sources = old_fingerprint.get('source_files', {})
-        new_sources = new_fingerprint.get('source_files', {})
-        for src_path in set(old_sources.keys()) | set(new_sources.keys()):
-            if src_path not in old_sources or src_path not in new_sources:
-                continue
+    def get_simple_include_hash(self, file_path):
+        """Einfache Hash-Bildung nur aus Include-Statements"""
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
             
-            old_includes = set(old_sources[src_path].get('direct_includes', []))
-            new_includes = set(new_sources[src_path].get('direct_includes', []))
-            if old_includes != new_includes:
-                changes.append(f"Includes geändert in: {src_path}")
+            # Nur Include-Zeilen extrahieren
+            include_lines = []
+            for line in content.splitlines():
+                line = line.strip()
+                # Einfache Include-Erkennung
+                if line.startswith('#include') and not line.startswith('//'):
+                    include_lines.append(line)
+            
+            # Hash aus Include-Zeilen
+            return hashlib.md5('\n'.join(include_lines).encode()).hexdigest()[:8]
+            
+        except:
+            # Fallback: Ganzer Datei-Hash
+            return self._get_file_hash(file_path)
+    
+    def get_project_hash(self):
+        """Vereinfachte Hash-Bildung für Cache-Validierung"""
+        hash_data = []
         
-        # Library-Änderungen
-        if old_fingerprint.get('library_manifests') != new_fingerprint.get('library_manifests'):
-            changes.append("Library-Manifeste geändert")
+        # platformio.ini
+        ini_file = os.path.join(self.project_dir, "platformio.ini")
+        if os.path.exists(ini_file):
+            hash_data.append(self._get_file_hash(ini_file))
         
-        return changes
+        # Source-Verzeichnis scannen
+        if os.path.exists(self.src_dir):
+            for root, _, files in os.walk(self.src_dir):
+                for file in sorted(files):
+                    file_path = os.path.join(root, file)
+                    file_ext = os.path.splitext(file)[1].lower()
+                    
+                    if file_ext in {'.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'}:
+                        # Header-Dateien: Vollständiger Hash
+                        hash_data.append(self._get_file_hash(file_path))
+                    elif file_ext in {'.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'}:
+                        # Source-Dateien: Nur Include-Hash
+                        hash_data.append(self.get_simple_include_hash(file_path))
+        
+        # Include-Verzeichnisse scannen
+        for inc_path in self.env.get('CPPPATH', []):
+            inc_dir = str(inc_path)
+            if os.path.exists(inc_dir) and inc_dir != self.src_dir:
+                for root, _, files in os.walk(inc_dir):
+                    for file in sorted(files):
+                        if file.endswith(('.h', '.hpp', '.hxx', '.inc', '.tpp')):
+                            file_path = os.path.join(root, file)
+                            hash_data.append(self._get_file_hash(file_path))
+        
+        # Library-Verzeichnis
+        lib_dir = os.path.join(self.project_dir, "lib")
+        if os.path.exists(lib_dir):
+            for root, _, files in os.walk(lib_dir):
+                for file in sorted(files):
+                    if file.endswith(('.h', '.hpp', '.json', '.properties')):
+                        file_path = os.path.join(root, file)
+                        hash_data.append(self._get_file_hash(file_path))
+        
+        return hashlib.sha256(''.join(hash_data).encode()).hexdigest()
     
     def load_and_validate_cache(self):
-        """Lade Cache mit verbesserter Validierung"""
+        """Lade Cache mit Hash-Validierung"""
         if not os.path.exists(self.cache_file):
             return None
         
@@ -217,20 +115,15 @@ class LDFCacheOptimizer:
                 print("🔄 Environment geändert")
                 return None
             
-            # Include-Fingerprint-Vergleich
-            current_fingerprint = self.get_project_include_fingerprint()
-            cached_fingerprint = cache_data.get('include_fingerprint', {})
+            # Hash-Vergleich
+            current_hash = self.get_project_hash()
+            cached_hash = cache_data.get('project_hash')
             
-            if current_fingerprint != cached_fingerprint:
-                changes = self.analyze_include_changes(cached_fingerprint, current_fingerprint)
-                print("🔍 Include-Änderungen erkannt:")
-                for detail in changes[:3]:  # Erste 3 Änderungen
-                    print(f"  • {detail}")
-                if len(changes) > 3:
-                    print(f"  • ... und {len(changes) - 3} weitere")
+            if current_hash != cached_hash:
+                print("🔄 Projekt-Änderungen erkannt - Cache ungültig")
                 return None
             
-            print("✅ Keine Include-relevanten Änderungen - Cache verwendbar")
+            print("✅ Keine relevanten Änderungen - Cache verwendbar")
             return cache_data
             
         except Exception as e:
@@ -238,7 +131,7 @@ class LDFCacheOptimizer:
             return None
     
     def apply_ldf_cache(self, cache_data):
-        """Wende LDF-Cache mit ALLEN SCons-Variablen an"""
+        """Wende LDF-Cache mit korrekten SCons-Methoden an"""
         try:
             # LDF abschalten
             self.env.Replace(LIB_LDF_MODE="off")
@@ -264,12 +157,12 @@ class LDFCacheOptimizer:
             if defines:
                 self.env.Append(CPPDEFINES=defines)
             
-            # Source-Filter - KRITISCH
+            # Source-Filter - mit Replace statt direkter Zuweisung
             src_filter = ldf_results.get('src_filter') or ldf_results.get('SRC_FILTER')
             if src_filter:
                 self.env.Replace(SRC_FILTER=src_filter)
             
-            # Compiler-Flags - KRITISCH
+            # Compiler-Flags
             cc_flags = ldf_results.get('cc_flags') or ldf_results.get('CCFLAGS', [])
             if cc_flags:
                 self.env.Append(CCFLAGS=cc_flags)
@@ -278,7 +171,7 @@ class LDFCacheOptimizer:
             if cxx_flags:
                 self.env.Append(CXXFLAGS=cxx_flags)
             
-            # Linker-Flags - KRITISCH
+            # Linker-Flags
             link_flags = ldf_results.get('link_flags') or ldf_results.get('LINKFLAGS', [])
             if link_flags:
                 self.env.Append(LINKFLAGS=link_flags)
@@ -294,17 +187,14 @@ class LDFCacheOptimizer:
             raise
     
     def save_ldf_cache(self, target, source, env_arg):
-        """Speichere vollständige LDF-Ergebnisse mit verbesserter Struktur"""
+        """Speichere vollständige LDF-Ergebnisse"""
         if self.env.get("LIB_LDF_MODE") == "off":
             return  # Cache wurde verwendet
         
         try:
-            fingerprint = self.get_project_include_fingerprint()
-            
             cache_data = {
-                # Verbesserte Cache-Struktur
-                'include_hash': self.create_include_hash(),
-                'include_fingerprint': fingerprint,
+                # Vereinfachter Hash
+                'project_hash': self.get_project_hash(),
                 'pioenv': self.env['PIOENV'],
                 'timestamp': datetime.datetime.now().isoformat(),
                 
@@ -337,14 +227,6 @@ class LDFCacheOptimizer:
                     # Linker-Flags
                     'link_flags': self.env.get('LINKFLAGS', []),
                     'LINKFLAGS': self.env.get('LINKFLAGS', [])
-                },
-                
-                # Statistiken für bessere Transparenz
-                'statistics': {
-                    'header_files': len(fingerprint.get('header_files', {})),
-                    'source_files': len(fingerprint.get('source_files', {})),
-                    'config_files': len(fingerprint.get('config_files', {})),
-                    'library_manifests': len(fingerprint.get('library_manifests', {}))
                 }
             }
             
@@ -353,10 +235,8 @@ class LDFCacheOptimizer:
             with open(self.cache_file, 'w') as f:
                 json.dump(cache_data, f, indent=2, default=str)
             
-            stats = cache_data['statistics']
             lib_count = len(cache_data['ldf_results'].get('LIBS', []))
-            print(f"💾 Verbesserter LDF-Cache gespeichert:")
-            print(f"   {lib_count} Libraries, {stats['header_files']} Headers, {stats['source_files']} Sources")
+            print(f"💾 LDF-Cache gespeichert: {lib_count} Libraries")
             
         except Exception as e:
             print(f"✗ Fehler beim Speichern des LDF Cache: {e}")
@@ -368,7 +248,7 @@ class LDFCacheOptimizer:
         cache_data = self.load_and_validate_cache()
         
         if cache_data:
-            print("🚀 Verwende LDF-Cache (keine Include-Änderungen)")
+            print("🚀 Verwende LDF-Cache (keine relevanten Änderungen)")
             self.apply_ldf_cache(cache_data)
         else:
             print("🔄 LDF-Neuberechnung erforderlich")
@@ -376,8 +256,9 @@ class LDFCacheOptimizer:
         
         print("================================")
 
-# Cache-Management-Befehle (unverändert)
+# Cache-Management-Befehle
 def clear_ldf_cache():
+    """Lösche LDF-Cache"""
     cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.json")
     if os.path.exists(cache_file):
         os.remove(cache_file)
@@ -386,20 +267,19 @@ def clear_ldf_cache():
         print("ℹ Kein LDF Cache vorhanden")
 
 def show_ldf_cache_info():
+    """Zeige Cache-Info"""
     cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.json")
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r') as f:
                 cache_data = json.load(f)
             
-            stats = cache_data.get('statistics', {})
             print(f"\n=== LDF Cache Info ===")
             print(f"Erstellt:     {cache_data.get('timestamp', 'unbekannt')}")
             print(f"Environment:  {cache_data.get('pioenv', 'unbekannt')}")
-            print(f"Header-Dateien: {stats.get('header_files', 0)}")
-            print(f"Source-Dateien: {stats.get('source_files', 0)}")
             print(f"Libraries:    {len(cache_data.get('ldf_results', {}).get('LIBS', []))}")
-            print(f"Include-Hash: {cache_data.get('include_hash', 'unbekannt')[:16]}...")
+            print(f"Include-Pfade: {len(cache_data.get('ldf_results', {}).get('CPPPATH', []))}")
+            print(f"Hash:         {cache_data.get('project_hash', 'unbekannt')[:16]}...")
             print("=" * 25)
             
         except Exception as e:
@@ -407,9 +287,15 @@ def show_ldf_cache_info():
     else:
         print("Kein LDF Cache vorhanden")
 
+def force_ldf_rebuild():
+    """Erzwinge LDF-Neuberechnung"""
+    clear_ldf_cache()
+    print("LDF wird beim nächsten Build neu berechnet")
+
 # Custom Targets
 env.AlwaysBuild(env.Alias("clear_ldf_cache", None, clear_ldf_cache))
 env.AlwaysBuild(env.Alias("ldf_cache_info", None, show_ldf_cache_info))
+env.AlwaysBuild(env.Alias("force_ldf_rebuild", None, force_ldf_rebuild))
 
 # LDF Cache Optimizer initialisieren
 ldf_optimizer = LDFCacheOptimizer(env)
