@@ -228,7 +228,7 @@ class LDFCacheOptimizer:
             # Preprocessor defines
             defines = ldf_results.get('defines') or ldf_results.get('CPPDEFINES', [])
             if defines:
-                self.env.Append(CPPDEFINES=defines)
+                self.env.AppendUnique(CPPDEFINES=defines)
             
             # Source filter - with Replace instead of direct assignment
             src_filter = ldf_results.get('src_filter') or ldf_results.get('SRC_FILTER')
@@ -238,16 +238,16 @@ class LDFCacheOptimizer:
             # Compiler flags
             cc_flags = ldf_results.get('cc_flags') or ldf_results.get('CCFLAGS', [])
             if cc_flags:
-                self.env.Append(CCFLAGS=cc_flags)
+                self.env.AppendUnique(CCFLAGS=cc_flags)
             
             cxx_flags = ldf_results.get('cxx_flags') or ldf_results.get('CXXFLAGS', [])
             if cxx_flags:
-                self.env.Append(CXXFLAGS=cxx_flags)
+                self.env.AppendUnique(CXXFLAGS=cxx_flags)
             
             # Linker flags
             link_flags = ldf_results.get('link_flags') or ldf_results.get('LINKFLAGS', [])
             if link_flags:
-                self.env.Append(LINKFLAGS=link_flags)
+                self.env.AppendUnique(LINKFLAGS=link_flags)
             
             lib_count = len(libs)
             include_count = len(includes)
