@@ -61,7 +61,7 @@ class LDFCacheOptimizer:
                          any(keyword in stripped.upper() for keyword in ['INCLUDE', 'PATH', 'CONFIG']))):
                         include_lines.append(stripped)
             
-            return hashlib.md5('\n'.join(include_lines).encode()).hexdigest()[:8]
+            return hashlib.sha256('\n'.join(include_lines).encode()).hexdigest()[:16]
             
         except Exception:
             # Fallback: Datei-Hash
