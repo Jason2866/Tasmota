@@ -1,198 +1,216 @@
-# ldf_cache_optimizer.py
-# PlatformIO Advanced Script für intelligentes LDF-Caching
-# Autor: pioarduino Maintainer
-# Optimiert Build-Performance durch selektives LDF-Caching
-# Version: 2.0 - Korrigierte Hash-Invalidierung
-
+# ldf_cache.py - Erweiterte Include-Erkennung
+Import("env")
 import os
 import json
 import hashlib
-import subprocess
+import re
 import datetime
-Import("env")
 
-class LDFCacheOptimizer:
-    def __init__(self, environment):
-        self.env = environment
-        self.cache_file = os.path.join(self.env.subst("$BUILD_DIR"), "ldf_cache.json")
-        self.project_dir = self.env.subst("$PROJECT_DIR")
-        self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
-        # Git-Status zu Beginn erfassen
-        self.git_snapshot = self._create_git_snapshot()
+class PreciseLDFCache:
+    def __init__(self):
+        self.cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.json")
+        self.project_dir = env.subst("$PROJECT_DIR")
         
-    def _create_git_snapshot(self):
-        """Erstelle Git-Snapshot zu Beginn des Builds"""
+    def extract_include_dependencies(self, file_path):
+        """Extrahiere nur Include-relevante Informationen aus einer Datei"""
+        include_data = {
+            'includes': [],
+            'conditional_includes': [],
+            'defines_affecting_includes': []
+        }
+        
         try:
-            result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
-                                  capture_output=True, text=True, cwd=self.project_dir)
-            return result.stdout.strip() if result.returncode == 0 else None
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()
+            
+            in_multiline_comment = False
+            
+            for line_num, line in enumerate(lines, 1):
+                original_line = line
+                line = line.strip()
+                
+                # Multiline-Kommentare handhaben
+                if '/*' in line and '*/' not in line:
+                    in_multiline_comment = True
+                    continue
+                elif '*/' in line:
+                    in_multiline_comment = False
+                    continue
+                elif in_multiline_comment:
+                    continue
+                
+                # Einzeilige Kommentare ignorieren
+                if line.startswith('//'):
+                    continue
+                
+                # Include-Statements
+                if line.startswith('#include'):
+                    # Normalisiere Include-Statement
+                    match = re.match(r'#include\s*[<"](.*?)[>"]', line)
+                    if match:
+                        include_data['includes'].append(match.group(1))
+                
+                # Conditional Includes (in #ifdef, #if, etc.)
+                elif line.startswith(('#ifdef', '#ifndef', '#if')):
+                    # Schaue in den nächsten Zeilen nach Includes
+                    for next_line_idx in range(line_num, min(line_num + 10, len(lines))):
+                        next_line = lines[next_line_idx].strip()
+                        if next_line.startswith('#include'):
+                            match = re.match(r'#include\s*[<"](.*?)[>"]', next_line)
+                            if match:
+                                include_data['conditional_includes'].append({
+                                    'condition': line,
+                                    'include': match.group(1)
+                                })
+                        elif next_line.startswith(('#endif', '#else', '#elif')):
+                            break
+                
+                # Defines die Include-Pfade beeinflussen könnten
+                elif line.startswith('#define') and any(keyword in line.upper() for keyword in 
+                    ['PATH', 'DIR', 'INCLUDE', 'LIB', 'CONFIG']):
+                    include_data['defines_affecting_includes'].append(line)
+        
+        except Exception as e:
+            # Bei Fehlern: Fallback auf Datei-Hash
+            return {'file_hash': self._get_file_hash(file_path)}
+        
+        return include_data
+    
+    def get_include_structure_hash(self):
+        """Erstelle Hash nur aus Include-relevanten Änderungen"""
+        include_structure = {}
+        
+        # Source-Verzeichnis scannen
+        src_dir = env.subst("$PROJECT_SRC_DIR")
+        if os.path.exists(src_dir):
+            include_structure.update(self._scan_directory_for_includes(src_dir))
+        
+        # Include-Verzeichnisse scannen
+        for inc_path in env.get('CPPPATH', []):
+            inc_dir = str(inc_path)
+            if os.path.exists(inc_dir) and inc_dir != src_dir:
+                include_structure.update(self._scan_directory_for_includes(inc_dir))
+        
+        # Library-Verzeichnis
+        lib_dir = os.path.join(self.project_dir, "lib")
+        if os.path.exists(lib_dir):
+            include_structure.update(self._scan_directory_for_includes(lib_dir))
+        
+        # Sortiert für konsistente Hashes
+        sorted_structure = json.dumps(include_structure, sort_keys=True)
+        return hashlib.sha256(sorted_structure.encode()).hexdigest()
+    
+    def _scan_directory_for_includes(self, directory):
+        """Scanne Verzeichnis nach Include-relevanten Änderungen"""
+        include_map = {}
+        
+        for root, _, files in os.walk(directory):
+            for file in sorted(files):  # Sortiert für Konsistenz
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, self.project_dir)
+                
+                if file.endswith(('.h', '.hpp')):
+                    # Header-Dateien: Vollständige Include-Analyse
+                    include_map[rel_path] = self.extract_include_dependencies(file_path)
+                
+                elif file.endswith(('.cpp', '.c', '.ino')):
+                    # Source-Dateien: Nur Include-Statements
+                    include_data = self.extract_include_dependencies(file_path)
+                    # Nur Include-relevante Teile speichern
+                    filtered_data = {
+                        'includes': include_data.get('includes', []),
+                        'conditional_includes': include_data.get('conditional_includes', [])
+                    }
+                    if filtered_data['includes'] or filtered_data['conditional_includes']:
+                        include_map[rel_path] = filtered_data
+                
+                elif file.endswith(('.json', '.properties')):
+                    # Library-Manifeste: Vollständiger Inhalt
+                    include_map[rel_path] = self._get_file_hash(file_path)
+        
+        return include_map
+    
+    def _get_file_hash(self, file_path):
+        """Erstelle Hash einer einzelnen Datei"""
+        try:
+            with open(file_path, 'rb') as f:
+                return hashlib.md5(f.read()).hexdigest()[:8]
         except:
-            return None
-        
-    def get_project_hash(self):
-        """Erstelle Hash aus kritischen Projekt-Dateien für Cache-Invalidierung"""
-        hash_data = []
-        
-        # platformio.ini Hash - KOMPLETT (für automatische Invalidierung bei Änderungen)
-        ini_path = os.path.join(self.project_dir, "platformio.ini")
-        if os.path.exists(ini_path):
-            with open(ini_path, 'rb') as f:
-                hash_data.append(f.read())
-        
-        # Source-Dateien Timestamps (für Performance nur mtime + size)
-        for root, _, files in os.walk(self.src_dir):
-            for file in files:
-                if file.endswith(('.cpp', '.c', '.h', '.hpp', '.ino')):
-                    file_path = os.path.join(root, file)
-                    if os.path.exists(file_path):
-                        stat = os.stat(file_path)
-                        hash_data.append(f"{file_path}:{stat.st_mtime}:{stat.st_size}".encode())
-        
-        # Library-Manifeste Hash
-        for lib_dir in self.env.GetLibSourceDirs():
-            if os.path.exists(lib_dir):
-                for item in os.listdir(lib_dir):
-                    lib_path = os.path.join(lib_dir, item)
-                    if os.path.isdir(lib_path):
-                        for manifest in ['library.json', 'library.properties', 'module.json']:
-                            manifest_path = os.path.join(lib_path, manifest)
-                            if os.path.exists(manifest_path):
-                                with open(manifest_path, 'rb') as f:
-                                    hash_data.append(f.read())
-        
-        return hashlib.md5(b''.join(hash_data)).hexdigest()
+            return "unreadable"
     
-    def detect_source_only_changes(self):
-        """Erkenne ob nur Source-Code geändert wurde (keine neuen Includes)"""
+    def get_config_hash(self):
+        """Hash für platformio.ini - nur relevante Sektionen"""
+        ini_file = os.path.join(self.project_dir, "platformio.ini")
+        if not os.path.exists(ini_file):
+            return ""
+        
+        relevant_lines = []
+        current_env = f"[env:{env['PIOENV']}]"
+        in_relevant_section = False
+        
         try:
-            # Git diff für geänderte Dateien mit Snapshot
-            if not self.git_snapshot:
-                print("Git nicht verfügbar - Cache wird invalidiert")
-                return False
-                
-            result = subprocess.run(
-                ['git', 'diff', '--name-only', f'{self.git_snapshot}~1'], 
-                capture_output=True, text=True, cwd=self.project_dir
-            )
-            
-            if result.returncode != 0:
-                print("Git diff fehlgeschlagen - Cache wird invalidiert")
-                return False
-                
-            changed_files = result.stdout.strip().splitlines()
-            if not changed_files:
-                return True  # Keine Änderungen
-            
-            for file_path in changed_files:
-                # Strukturelle Änderungen
-                if file_path in ['platformio.ini', 'library.json', 'library.properties']:
-                    print(f"Strukturelle Änderung erkannt: {file_path}")
-                    return False
-                
-                # Header-Dateien geändert
-                if file_path.endswith(('.h', '.hpp')):
-                    print(f"Header-Datei geändert: {file_path}")
-                    return False
-                
-                # Source-Dateien: Prüfe auf neue Includes
-                if file_path.endswith(('.cpp', '.c', '.ino')):
-                    if self.has_new_includes(file_path):
-                        print(f"Neue Includes in {file_path} erkannt")
-                        return False
-            
-            print("Nur Source-Code-Änderungen erkannt")
-            return True
-            
-        except Exception as e:
-            print(f"Fehler bei Change-Detection: {e} - Cache wird invalidiert")
-            return False
-    
-    def has_new_includes(self, file_path):
-        """Prüfe ob neue #include Statements hinzugefügt wurden"""
-        try:
-            result = subprocess.run(
-                ['git', 'diff', f'{self.git_snapshot}~1', file_path], 
-                capture_output=True, text=True, cwd=self.project_dir
-            )
-            
-            if result.returncode != 0:
-                return True  # Im Zweifel Cache invalidieren
-            
-            diff_lines = result.stdout.splitlines()
-            for line in diff_lines:
-                if line.startswith('+') and '#include' in line and not line.startswith('+++'):
-                    return True
-            
-            return False
-            
+            with open(ini_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    
+                    # Sektions-Erkennung
+                    if line.startswith('['):
+                        in_relevant_section = (line == current_env or 
+                                             line == '[platformio]' or 
+                                             line == '[common]')
+                    
+                    # Relevante Zeilen sammeln
+                    elif in_relevant_section and line and not line.startswith(';'):
+                        # Nur dependency-relevante Optionen
+                        if any(line.startswith(prefix) for prefix in [
+                            'lib_deps', 'lib_', 'build_flags', 'board', 
+                            'platform', 'framework', 'monitor_', 'upload_'
+                        ]):
+                            relevant_lines.append(line)
+        
         except Exception:
-            return True  # Im Zweifel Cache invalidieren
-    
-    def verify_cached_libraries(self, cache_data):
-        """Prüfe ob alle gecachten Libraries noch verfügbar sind"""
-        missing_libs = []
-        for lib_dep in cache_data.get('library_dependencies', []):
-            lib_path = lib_dep.get('path')
-            if lib_path and not os.path.exists(lib_path):
-                missing_libs.append(lib_dep.get('name'))
+            # Fallback: Ganze Datei
+            with open(ini_file, 'rb') as f:
+                return hashlib.md5(f.read()).hexdigest()
         
-        if missing_libs:
-            print(f"⚠ Fehlende Libraries: {missing_libs}")
-            return False
-        return True
+        return hashlib.md5('\n'.join(relevant_lines).encode()).hexdigest()
     
-    def save_ldf_cache(self):
-        """Speichere vollständige LDF-Ergebnisse nach erfolgreichem Build"""
-        try:
-            cache_data = {
-                'project_hash': self.get_project_hash(),
-                'pioenv': self.env['PIOENV'],
-                'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                
-                # LDF-Ergebnisse
-                'ldf_results': {
-                    'includes': [str(p) for p in self.env.get('CPPPATH', [])],
-                    'defines': self.env.get('CPPDEFINES', []),
-                    'libs': self.env.get('LIBS', []),
-                    'lib_paths': [str(p) for p in self.env.get('LIBPATH', [])],
-                    'src_filter': self.env.get('SRC_FILTER', ''),
-                    'cc_flags': self.env.get('CCFLAGS', []),
-                    'cxx_flags': self.env.get('CXXFLAGS', []),
-                    'link_flags': self.env.get('LINKFLAGS', [])
-                },
-                
-                # Library-Dependencies für Debugging
-                'library_dependencies': []
-            }
-            
-            # Sammle Library-Informationen - alle verfügbaren Libraries erfassen
-            for lb in self.env.GetLibBuilders():
-                lib_dep = {
-                    'name': lb.name,
-                    'path': str(lb.path),
-                    'include_dirs': [str(d) for d in lb.get_include_dirs()],
-                    'is_dependent': getattr(lb, 'is_dependent', False),
-                    'is_built': getattr(lb, 'is_built', False),
-                    'dependencies': [dep.name for dep in getattr(lb, 'depbuilders', [])],
-                    'ldf_mode': getattr(lb, 'lib_ldf_mode', 'unknown')
-                }
-                cache_data['library_dependencies'].append(lib_dep)
-            
-            # Cache-Verzeichnis erstellen falls nötig
-            os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
-            
-            # Cache speichern
-            with open(self.cache_file, 'w') as f:
-                json.dump(cache_data, f, indent=2, default=str)
-            
-            print(f"✓ LDF Cache gespeichert: {len(cache_data['library_dependencies'])} Libraries")
-            print(f"  Cache-Datei: {self.cache_file}")
-            
-        except Exception as e:
-            print(f"✗ Fehler beim Speichern des LDF Cache: {e}")
+    def get_combined_hash(self):
+        """Kombinierter Hash aus Config und Include-Struktur"""
+        config_hash = self.get_config_hash()
+        include_hash = self.get_include_structure_hash()
+        
+        combined = f"{config_hash}:{include_hash}"
+        return hashlib.sha256(combined.encode()).hexdigest()
     
-    def load_ldf_cache(self):
-        """Lade und validiere LDF-Cache"""
+    def has_include_changes_since_cache(self, cache_data):
+        """Prüfe ob Include-relevante Änderungen seit letztem Cache aufgetreten sind"""
+        if not cache_data:
+            return True
+        
+        current_hash = self.get_combined_hash()
+        cached_hash = cache_data.get('combined_hash')
+        
+        if current_hash != cached_hash:
+            # Detaillierte Analyse welcher Teil sich geändert hat
+            current_config = self.get_config_hash()
+            current_includes = self.get_include_structure_hash()
+            
+            cached_config = cache_data.get('config_hash', '')
+            cached_includes = cache_data.get('include_hash', '')
+            
+            if current_config != cached_config:
+                print("🔧 platformio.ini Änderungen erkannt")
+                return True
+            
+            if current_includes != cached_includes:
+                print("📁 Include-Struktur Änderungen erkannt")
+                return True
+        
+        return False
+    
+    def load_and_validate_cache(self):
+        """Lade Cache und prüfe auf Include-Änderungen"""
         if not os.path.exists(self.cache_file):
             return None
         
@@ -200,179 +218,85 @@ class LDFCacheOptimizer:
             with open(self.cache_file, 'r') as f:
                 cache_data = json.load(f)
             
-            # Cache-Validierung
-            current_hash = self.get_project_hash()
-            cached_hash = cache_data.get('project_hash')
-            cached_env = cache_data.get('pioenv')
-            
-            if cached_hash != current_hash:
-                print("LDF Cache ungültig - Projekt-Hash unterschiedlich")
+            # Environment-Check
+            if cache_data.get('pioenv') != env['PIOENV']:
+                print("🔄 Environment geändert")
                 return None
             
-            if cached_env != self.env['PIOENV']:
-                print(f"LDF Cache ungültig - Environment geändert ({cached_env} -> {self.env['PIOENV']})")
+            # Include-Change-Check
+            if self.has_include_changes_since_cache(cache_data):
                 return None
             
-            # Library-Verfügbarkeitsprüfung
-            if not self.verify_cached_libraries(cache_data):
-                print("LDF Cache ungültig - Libraries fehlen")
-                return None
-            
-            print(f"✓ LDF Cache geladen: {cache_data.get('timestamp', 'unbekannt')}")
+            print("✅ Keine Include-Änderungen - Cache verwendbar")
             return cache_data
             
         except Exception as e:
-            print(f"✗ Fehler beim Laden des LDF Cache: {e}")
+            print(f"⚠ Cache-Validierung fehlgeschlagen: {e}")
             return None
     
-    def apply_ldf_cache(self, cache_data):
-        """Wende LDF-Cache auf Environment an"""
+    def apply_cache(self, cache_data):
+        """Wende Cache an"""
+        env.Replace(LIB_LDF_MODE="off")
+        
+        results = cache_data.get('ldf_results', {})
+        
+        if results.get('CPPPATH'):
+            env.PrependUnique(CPPPATH=results['CPPPATH'])
+        if results.get('LIBPATH'):
+            env.PrependUnique(LIBPATH=results['LIBPATH'])
+        if results.get('LIBS'):
+            env.PrependUnique(LIBS=results['LIBS'])
+        if results.get('CPPDEFINES'):
+            env.AppendUnique(CPPDEFINES=results['CPPDEFINES'])
+        
+        lib_count = len(results.get('LIBS', []))
+        print(f"📦 {lib_count} Libraries aus Cache geladen")
+    
+    def save_cache(self, target, source, env_arg):
+        """Speichere detaillierten Cache"""
+        if env.get("LIB_LDF_MODE") == "off":
+            return
+        
         try:
-            ldf_results = cache_data['ldf_results']
+            cache_data = {
+                'combined_hash': self.get_combined_hash(),
+                'config_hash': self.get_config_hash(),
+                'include_hash': self.get_include_structure_hash(),
+                'pioenv': env['PIOENV'],
+                'timestamp': datetime.datetime.now().isoformat(),
+                'ldf_results': {
+                    'CPPPATH': [str(p) for p in env.get('CPPPATH', [])],
+                    'LIBPATH': [str(p) for p in env.get('LIBPATH', [])],
+                    'LIBS': env.get('LIBS', []),
+                    'CPPDEFINES': env.get('CPPDEFINES', [])
+                }
+            }
             
-            # Include-Pfade
-            if ldf_results.get('includes'):
-                self.env.PrependUnique(CPPPATH=ldf_results['includes'])
+            os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
             
-            # Library-Pfade und -Namen
-            if ldf_results.get('lib_paths'):
-                self.env.PrependUnique(LIBPATH=ldf_results['lib_paths'])
+            with open(self.cache_file, 'w') as f:
+                json.dump(cache_data, f, indent=2)
             
-            if ldf_results.get('libs'):
-                self.env.PrependUnique(LIBS=ldf_results['libs'])
-            
-            # Preprocessor-Defines
-            if ldf_results.get('defines'):
-                self.env.Append(CPPDEFINES=ldf_results['defines'])
-            
-            # Source-Filter
-            if ldf_results.get('src_filter'):
-                self.env['SRC_FILTER'] = ldf_results['src_filter']
-            
-            # Compiler-Flags (optional)
-            if ldf_results.get('cc_flags'):
-                self.env.Append(CCFLAGS=ldf_results['cc_flags'])
-            
-            if ldf_results.get('cxx_flags'):
-                self.env.Append(CXXFLAGS=ldf_results['cxx_flags'])
-            
-            lib_count = len(cache_data.get('library_dependencies', []))
-            print(f"✓ LDF-Cache angewendet: {lib_count} Libraries")
-            print("  LDF-Modus: OFF (Cache verwendet)")
+            lib_count = len(cache_data['ldf_results'].get('LIBS', []))
+            print(f"💾 Präziser LDF-Cache gespeichert ({lib_count} Libraries)")
             
         except Exception as e:
-            print(f"✗ Fehler beim Anwenden des LDF Cache: {e}")
-            raise
+            print(f"⚠ Cache-Speicherung fehlgeschlagen: {e}")
     
-    def debug_cache_decision(self, cache_data, source_only_changes):
-        """Debug-Ausgabe für Cache-Entscheidungen"""
-        current_hash = self.get_project_hash()
-        cached_hash = cache_data.get('project_hash') if cache_data else None
+    def setup(self):
+        """Hauptlogik"""
+        print("\n=== Precise LDF Cache ===")
         
-        print(f"Cache-Debug:")
-        print(f"  Aktueller Hash: {current_hash[:8]}...")
-        print(f"  Cache Hash:     {cached_hash[:8] if cached_hash else 'None'}...")
-        print(f"  Hash-Match:     {current_hash == cached_hash if cached_hash else False}")
-        print(f"  Source-Only:    {source_only_changes}")
-        print(f"  Cache-Datei:    {'Existiert' if cache_data else 'Nicht vorhanden'}")
-    
-    def setup_ldf_caching(self):
-        """Hauptlogik für intelligentes LDF-Caching ohne platformio.ini Modifikation"""
-        print("\n=== LDF Cache Optimizer v2.0 ===")
+        cache_data = self.load_and_validate_cache()
         
-        # Originaler LDF-Modus aus platformio.ini
-        original_ldf_mode = self.env.GetProjectOption("lib_ldf_mode", "chain")
-        print(f"Original LDF-Modus: {original_ldf_mode}")
-        
-        # Cache-Validierung
-        cache_data = self.load_ldf_cache()
-        source_only_changes = self.detect_source_only_changes()
-        
-        # Debug-Ausgabe
-        if self.env.get("PIOVERBOSE", 0):
-            self.debug_cache_decision(cache_data, source_only_changes)
-        
-        if cache_data and source_only_changes:
-            # Cache verwenden - NUR Runtime-Environment ändern (KEINE Datei-Modifikation)
-            print("🚀 Verwende LDF-Cache (nur Source-Code geändert)")
-            
-            # KRITISCH: Nur SCons Environment ändern, platformio.ini bleibt unberührt
-            self.env.Replace(lib_ldf_mode="off")
-            
-            # Cache anwenden
-            self.apply_ldf_cache(cache_data)
-            
-            print(f"  Runtime LDF-Modus: OFF (Override von {original_ldf_mode})")
-            
+        if cache_data:
+            self.apply_cache(cache_data)
         else:
-            # Normaler LDF-Lauf
-            if not cache_data:
-                print("📝 Erster Build - erstelle LDF-Cache")
-            elif not source_only_changes:
-                print("🔄 Include-Struktur geändert - LDF-Neuberechnung")
-            else:
-                print("⚠ Cache ungültig - LDF-Neuberechnung")
-            
-            print(f"  LDF-Modus: {original_ldf_mode} (aus platformio.ini)")
-            
-            # Cache nach erfolgreichem Build speichern
-            self.env.AddPostAction("checkprogsize", 
-                                  lambda target, source, env: self.save_ldf_cache())
+            print("🔄 LDF-Neuberechnung erforderlich")
+            env.AddPostAction("$PROGPATH", self.save_cache)
         
-        print("=" * 35)
+        print("=========================")
 
-# Cache-Management-Befehle
-def clear_ldf_cache():
-    """Lösche LDF-Cache manuell"""
-    cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.json")
-    if os.path.exists(cache_file):
-        os.remove(cache_file)
-        print("✓ LDF Cache gelöscht")
-    else:
-        print("ℹ Kein LDF Cache vorhanden")
-
-def show_ldf_cache_info():
-    """Zeige detaillierte Cache-Informationen"""
-    cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.json")
-    if os.path.exists(cache_file):
-        try:
-            with open(cache_file, 'r') as f:
-                cache_data = json.load(f)
-            
-            print(f"\n=== LDF Cache Info ===")
-            print(f"Erstellt:     {cache_data.get('timestamp', 'unbekannt')}")
-            print(f"Environment:  {cache_data.get('pioenv', 'unbekannt')}")
-            print(f"Project Hash: {cache_data.get('project_hash', 'unbekannt')[:16]}...")
-            print(f"Libraries:    {len(cache_data.get('library_dependencies', []))}")
-            print(f"Includes:     {len(cache_data.get('ldf_results', {}).get('includes', []))}")
-            print(f"Cache-Datei:  {cache_file}")
-            
-            # Library-Details
-            libs = cache_data.get('library_dependencies', [])
-            if libs:
-                print(f"\nGecachte Libraries:")
-                for lib in libs[:10]:  # Erste 10 anzeigen
-                    print(f"  - {lib.get('name', 'unknown')} ({'dependent' if lib.get('is_dependent') else 'independent'})")
-                if len(libs) > 10:
-                    print(f"  ... und {len(libs) - 10} weitere")
-            
-            print("=" * 25)
-            
-        except Exception as e:
-            print(f"Fehler beim Lesen der Cache-Info: {e}")
-    else:
-        print("Kein LDF Cache vorhanden")
-
-def force_ldf_rebuild():
-    """Erzwinge LDF-Neuberechnung durch Cache-Löschung"""
-    clear_ldf_cache()
-    print("LDF wird beim nächsten Build neu berechnet")
-
-# Custom Targets für Cache-Management
-env.AlwaysBuild(env.Alias("clear_ldf_cache", None, clear_ldf_cache))
-env.AlwaysBuild(env.Alias("ldf_cache_info", None, show_ldf_cache_info))
-env.AlwaysBuild(env.Alias("force_ldf_rebuild", None, force_ldf_rebuild))
-
-# LDF Cache Optimizer initialisieren und ausführen
-ldf_optimizer = LDFCacheOptimizer(env)
-ldf_optimizer.setup_ldf_caching()
+# Cache initialisieren
+precise_cache = PreciseLDFCache()
+precise_cache.setup()
