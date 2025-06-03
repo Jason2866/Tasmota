@@ -259,7 +259,7 @@ class LDFCacheOptimizer:
             print(f"✗ Error applying LDF cache: {e}")
             raise
     
-    def save_ldf_cache(self, target, source, env_arg):
+    def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
         Save complete LDF results to cache.
         
