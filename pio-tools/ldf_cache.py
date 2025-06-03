@@ -90,27 +90,22 @@ class LDFCacheOptimizer:
                          any(keyword in stripped.upper() for keyword in ['INCLUDE', 'PATH', 'CONFIG']))):
                         include_lines.append(stripped)
             
-            content = '\n'.join(include_lines)
-            print(f"Include {file_path}: {len(include_lines)} lines")
-            return hashlib.sha256(content.encode()).hexdigest()[:16]
+            return hashlib.sha256('\n'.join(include_lines).encode()).hexdigest()[:16]
             
         except Exception:
             # Fallback: file hash
             return self._get_file_hash(file_path)
     
-    def get_project_hash(self):
+    def get_project_hash_with_details(self):
         """
-        Generate include-relevant hash for cache validation.
-        
-        This method creates a comprehensive hash of all files and content that could
-        affect library dependency resolution, including headers, preprocessor directives
-        in source files, and configuration files.
+        Generate hash with detailed file tracking for comparison.
         
         Returns:
-            str: SHA256 hash representing the current state of include-relevant project content
+            dict: Contains final_hash, file_hashes dict, and total_files count
         """
         hash_data = []
-        # Ignore directorys
+        file_hashes = {}  # Für Vergleiche speichern
+        
         ignore_dirs = {
             '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
             'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
@@ -118,49 +113,41 @@ class LDFCacheOptimizer:
             'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc',
             'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
         }
-    
+
         # platformio.ini
         ini_file = os.path.join(self.project_dir, "platformio.ini")
         if os.path.exists(ini_file):
             ini_hash = self._get_file_hash(ini_file)
             hash_data.append(ini_hash)
-            print(f"🔍 platformio.ini: {ini_hash}")
+            file_hashes['platformio.ini'] = ini_hash
             
         generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
         
         # Scan source directory
         if os.path.exists(self.src_dir):
-            print(f"🔍 Scanning source directory: {self.src_dir}")
             for root, dirs, files in os.walk(self.src_dir):
-                ignored = [d for d in dirs if d in ignore_dirs]
-                if ignored:
-                    print(f"   Ignored dirs in {root}: {ignored}")
                 dirs[:] = [d for d in dirs if d not in ignore_dirs]
 
                 for file in sorted(files):
                     if file == generated_cpp:
-                        print(f"   ✅ Skipping generated file: {generated_cpp}")
                         continue
                         
                     file_path = os.path.join(root, file)
                     file_ext = os.path.splitext(file)[1].lower()
                     
                     if file_ext in {'.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'}:
-                        # Header files: complete hash
                         file_hash = self._get_file_hash(file_path)
                         hash_data.append(file_hash)
-                        print(f"   Header {file}: {file_hash}")
+                        file_hashes[file_path] = file_hash
                     elif file_ext in {'.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'}:
-                        # Source files: include-relevant hash
                         file_hash = self.get_include_relevant_hash(file_path)
                         hash_data.append(file_hash)
-                        print(f"   Source {file}: {file_hash}")
+                        file_hashes[file_path] = file_hash
         
         # Scan include directories
         for inc_path in self.env.get('CPPPATH', []):
             inc_dir = str(inc_path)
             if os.path.exists(inc_dir) and inc_dir != self.src_dir:
-                print(f"🔍 Scanning include directory: {inc_dir}")
                 for root, dirs, files in os.walk(inc_dir):
                     dirs[:] = [d for d in dirs if d not in ignore_dirs]
 
@@ -169,12 +156,11 @@ class LDFCacheOptimizer:
                             file_path = os.path.join(root, file)
                             file_hash = self._get_file_hash(file_path)
                             hash_data.append(file_hash)
-                            print(f"   Include {file}: {file_hash}")
+                            file_hashes[file_path] = file_hash
         
         # Library directory
         lib_dir = os.path.join(self.project_dir, "lib")
         if os.path.exists(lib_dir):
-            print(f"🔍 Scanning library directory: {lib_dir}")
             for root, dirs, files in os.walk(lib_dir):
                 dirs[:] = [d for d in dirs if d not in ignore_dirs]
 
@@ -183,15 +169,59 @@ class LDFCacheOptimizer:
                         file_path = os.path.join(root, file)
                         file_hash = self._get_file_hash(file_path)
                         hash_data.append(file_hash)
-                        print(f"   Library {file}: {file_hash}")
+                        file_hashes[file_path] = file_hash
         
         final_hash = hashlib.sha256(''.join(hash_data).encode()).hexdigest()[:16]
-        print(f"🔍 Final project hash: {final_hash} (from {len(hash_data)} files)")
-        return final_hash
+        
+        return {
+            'final_hash': final_hash,
+            'file_hashes': file_hashes,
+            'total_files': len(file_hashes)
+        }
+    
+    def get_project_hash(self):
+        """Wrapper für Kompatibilität"""
+        return self.get_project_hash_with_details()['final_hash']
+    
+    def compare_hash_details(self, current_hashes, cached_hashes):
+        """
+        Compare hash details and show only differences.
+        
+        Args:
+            current_hashes (dict): Current file hashes
+            cached_hashes (dict): Cached file hashes
+        """
+        differences_found = 0
+        
+        # Neue Dateien
+        for file_path, current_hash in current_hashes.items():
+            if file_path not in cached_hashes:
+                print(f"   ➕ NEW: {file_path} -> {current_hash}")
+                differences_found += 1
+        
+        # Geänderte Dateien
+        for file_path, current_hash in current_hashes.items():
+            if file_path in cached_hashes:
+                cached_hash = cached_hashes[file_path]
+                if current_hash != cached_hash:
+                    print(f"   🔄 CHANGED: {file_path}")
+                    print(f"      Old: {cached_hash}")
+                    print(f"      New: {current_hash}")
+                    differences_found += 1
+        
+        # Gelöschte Dateien
+        for file_path in cached_hashes:
+            if file_path not in current_hashes:
+                print(f"   ➖ DELETED: {file_path}")
+                differences_found += 1
+        
+        print(f"\n   Total differences: {differences_found}")
+        print(f"   Current files: {len(current_hashes)}")
+        print(f"   Cached files: {len(cached_hashes)}")
     
     def load_and_validate_cache(self):
         """
-        Load cache with detailed hash debugging.
+        Load cache with targeted hash debugging - only show differences.
         
         Loads the existing cache file and validates it against the current project state
         by comparing environment settings and include-relevant content hashes.
@@ -212,10 +242,13 @@ class LDFCacheOptimizer:
                 print(f"🔄 Environment changed: {cache_data.get('pioenv')} -> {self.env['PIOENV']}")
                 return None
             
-            # Detaillierter Hash-Vergleich
-            print("🔍 Starting hash calculation for comparison...")
-            current_hash = self.get_project_hash()
+            # Hash-Vergleich mit Unterschieds-Erkennung
+            print("🔍 Comparing hashes (showing only differences)...")
+            current_hash_details = self.get_project_hash_with_details()
             cached_hash = cache_data.get('project_hash')
+            cached_hash_details = cache_data.get('hash_details', {})
+            
+            current_hash = current_hash_details['final_hash']
             
             print(f"\n🔍 Hash comparison:")
             print(f"   Current:  {current_hash}")
@@ -223,7 +256,8 @@ class LDFCacheOptimizer:
             print(f"   Match:    {current_hash == cached_hash}")
             
             if current_hash != cached_hash:
-                print("🔄 Include-relevant changes detected - cache invalid")
+                print("\n🔄 Files with DIFFERENT hashes:")
+                self.compare_hash_details(current_hash_details['file_hashes'], cached_hash_details)
                 return None
             
             print("✅ No include-relevant changes - cache usable")
@@ -302,7 +336,7 @@ class LDFCacheOptimizer:
     
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
-        Save complete LDF results to cache.
+        Save complete LDF results to cache with hash details.
         
         This method is called as a post-action after successful build to capture
         all SCons variables and build settings determined by the LDF process.
@@ -317,11 +351,12 @@ class LDFCacheOptimizer:
         
         try:
             print("💾 Saving LDF cache...")
-            project_hash = self.get_project_hash()
+            hash_details = self.get_project_hash_with_details()
             
             cache_data = {
                 # Include-relevant hash
-                'project_hash': project_hash,
+                'project_hash': hash_details['final_hash'],
+                'hash_details': hash_details['file_hashes'],  # Für Vergleiche speichern
                 'pioenv': self.env['PIOENV'],
                 'timestamp': datetime.datetime.now().isoformat(),
                 
@@ -363,7 +398,7 @@ class LDFCacheOptimizer:
                 json.dump(cache_data, f, indent=2, default=str)
             
             lib_count = len(cache_data['ldf_results'].get('LIBS', []))
-            print(f"💾 LDF cache saved: {lib_count} Libraries, hash: {project_hash}")
+            print(f"💾 LDF cache saved: {lib_count} Libraries, {hash_details['total_files']} files, hash: {hash_details['final_hash']}")
             
         except Exception as e:
             print(f"✗ Error saving LDF cache: {e}")
@@ -375,7 +410,7 @@ class LDFCacheOptimizer:
         Orchestrates the entire caching process: validates existing cache,
         applies it if valid, or sets up cache saving for new builds.
         """
-        print("\n=== LDF Cache Optimizer v1.0 (Debug Mode) ===")
+        print("\n=== LDF Cache Optimizer v1.0 (Diff Mode) ===")
         
         cache_data = self.load_and_validate_cache()
         
