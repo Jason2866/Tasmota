@@ -114,7 +114,12 @@ class LDFCacheOptimizer:
             str: SHA256 hash representing the current state of include-relevant project content
         """
         hash_data = []
-        
+        # Ignore directorys
+        ignore_dirs = {'.git', '.github', '.cache', '.vscode', '.pio', 'data', 'build', 'pio-tools', 'tools', '__pycache__'}
+    
+        for root, dirs, files in os.walk(self.src_dir):
+            dirs[:] = [d for d in dirs if d not in ignore_dirs]
+
         # platformio.ini
         ini_file = os.path.join(self.project_dir, "platformio.ini")
         if os.path.exists(ini_file):
