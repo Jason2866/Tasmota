@@ -8,6 +8,7 @@ import os
 import json
 import hashlib
 import subprocess
+import datetime
 Import("env")
 
 class LDFCacheOptimizer:
@@ -16,6 +17,17 @@ class LDFCacheOptimizer:
         self.cache_file = os.path.join(self.env.subst("$BUILD_DIR"), "ldf_cache.json")
         self.project_dir = self.env.subst("$PROJECT_DIR")
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
+        # Git-Status zu Beginn erfassen
+        self.git_snapshot = self._create_git_snapshot()
+        
+    def _create_git_snapshot(self):
+        """Erstelle Git-Snapshot zu Beginn des Builds"""
+        try:
+            result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
+                                  capture_output=True, text=True, cwd=self.project_dir)
+            return result.stdout.strip() if result.returncode == 0 else None
+        except:
+            return None
         
     def get_project_hash(self):
         """Erstelle Hash aus kritischen Projekt-Dateien für Cache-Invalidierung"""
@@ -27,14 +39,14 @@ class LDFCacheOptimizer:
             with open(ini_path, 'rb') as f:
                 hash_data.append(f.read())
         
-        # Source-Dateien Timestamps (für Performance nur mtime)
+        # Source-Dateien Timestamps (für Performance nur mtime + size)
         for root, _, files in os.walk(self.src_dir):
             for file in files:
                 if file.endswith(('.cpp', '.c', '.h', '.hpp', '.ino')):
                     file_path = os.path.join(root, file)
                     if os.path.exists(file_path):
                         stat = os.stat(file_path)
-                        hash_data.append(f"{file_path}:{stat.st_mtime}".encode())
+                        hash_data.append(f"{file_path}:{stat.st_mtime}:{stat.st_size}".encode())
         
         # Library-Manifeste Hash
         for lib_dir in self.env.GetLibSourceDirs():
@@ -53,14 +65,18 @@ class LDFCacheOptimizer:
     def detect_source_only_changes(self):
         """Erkenne ob nur Source-Code geändert wurde (keine neuen Includes)"""
         try:
-            # Git diff für geänderte Dateien
+            # Git diff für geänderte Dateien mit Snapshot
+            if not self.git_snapshot:
+                print("Git nicht verfügbar - Cache wird invalidiert")
+                return False
+                
             result = subprocess.run(
-                ['git', 'diff', '--name-only', 'HEAD~1'], 
+                ['git', 'diff', '--name-only', f'{self.git_snapshot}~1'], 
                 capture_output=True, text=True, cwd=self.project_dir
             )
             
             if result.returncode != 0:
-                print("Git nicht verfügbar - Cache wird invalidiert")
+                print("Git diff fehlgeschlagen - Cache wird invalidiert")
                 return False
                 
             changed_files = result.stdout.strip().splitlines()
@@ -95,7 +111,7 @@ class LDFCacheOptimizer:
         """Prüfe ob neue #include Statements hinzugefügt wurden"""
         try:
             result = subprocess.run(
-                ['git', 'diff', 'HEAD~1', file_path], 
+                ['git', 'diff', f'{self.git_snapshot}~1', file_path], 
                 capture_output=True, text=True, cwd=self.project_dir
             )
             
@@ -112,14 +128,26 @@ class LDFCacheOptimizer:
         except Exception:
             return True  # Im Zweifel Cache invalidieren
     
+    def verify_cached_libraries(self, cache_data):
+        """Prüfe ob alle gecachten Libraries noch verfügbar sind"""
+        missing_libs = []
+        for lib_dep in cache_data.get('library_dependencies', []):
+            lib_path = lib_dep.get('path')
+            if lib_path and not os.path.exists(lib_path):
+                missing_libs.append(lib_dep.get('name'))
+        
+        if missing_libs:
+            print(f"⚠ Fehlende Libraries: {missing_libs}")
+            return False
+        return True
+    
     def save_ldf_cache(self):
         """Speichere vollständige LDF-Ergebnisse nach erfolgreichem Build"""
         try:
             cache_data = {
                 'project_hash': self.get_project_hash(),
                 'pioenv': self.env['PIOENV'],
-                'timestamp': subprocess.run(['date', '+%Y-%m-%d %H:%M:%S'], 
-                                          capture_output=True, text=True).stdout.strip(),
+                'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 
                 # LDF-Ergebnisse
                 'ldf_results': {
@@ -137,19 +165,18 @@ class LDFCacheOptimizer:
                 'library_dependencies': []
             }
             
-            # Sammle Library-Informationen
+            # Sammle Library-Informationen - alle verfügbaren Libraries erfassen
             for lb in self.env.GetLibBuilders():
-                if lb.is_built or lb.is_dependent:
-                    lib_dep = {
-                        'name': lb.name,
-                        'path': str(lb.path),
-                        'include_dirs': [str(d) for d in lb.get_include_dirs()],
-                        'is_dependent': lb.is_dependent,
-                        'is_built': lb.is_built,
-                        'dependencies': [dep.name for dep in lb.depbuilders],
-                        'ldf_mode': getattr(lb, 'lib_ldf_mode', 'unknown')
-                    }
-                    cache_data['library_dependencies'].append(lib_dep)
+                lib_dep = {
+                    'name': lb.name,
+                    'path': str(lb.path),
+                    'include_dirs': [str(d) for d in lb.get_include_dirs()],
+                    'is_dependent': getattr(lb, 'is_dependent', False),
+                    'is_built': getattr(lb, 'is_built', False),
+                    'dependencies': [dep.name for dep in getattr(lb, 'depbuilders', [])],
+                    'ldf_mode': getattr(lb, 'lib_ldf_mode', 'unknown')
+                }
+                cache_data['library_dependencies'].append(lib_dep)
             
             # Cache-Verzeichnis erstellen falls nötig
             os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
@@ -184,6 +211,11 @@ class LDFCacheOptimizer:
             
             if cached_env != self.env['PIOENV']:
                 print(f"LDF Cache ungültig - Environment geändert ({cached_env} -> {self.env['PIOENV']})")
+                return None
+            
+            # Library-Verfügbarkeitsprüfung
+            if not self.verify_cached_libraries(cache_data):
+                print("LDF Cache ungültig - Libraries fehlen")
                 return None
             
             print(f"✓ LDF Cache geladen: {cache_data.get('timestamp', 'unbekannt')}")
