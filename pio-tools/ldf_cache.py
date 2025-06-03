@@ -267,7 +267,7 @@ class LDFCacheOptimizer:
             # Source-Filter - KRITISCH
             src_filter = ldf_results.get('src_filter') or ldf_results.get('SRC_FILTER')
             if src_filter:
-                self.env['SRC_FILTER'] = src_filter
+                self.env.Replace(SRC_FILTER=src_filter)
             
             # Compiler-Flags - KRITISCH
             cc_flags = ldf_results.get('cc_flags') or ldf_results.get('CCFLAGS', [])
