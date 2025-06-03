@@ -153,7 +153,7 @@ class LDFCacheOptimizer:
                         file_path = os.path.join(root, file)
                         hash_data.append(self._get_file_hash(file_path))
         
-        return hashlib.sha256(''.join(hash_data).encode()).hexdigest()
+        return hashlib.sha256(''.join(hash_data).encode()).hexdigest()[:16]
     
     def load_and_validate_cache(self):
         """
