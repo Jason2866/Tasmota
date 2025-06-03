@@ -86,12 +86,12 @@ class LDFCacheOptimizer:
                     
                     # Include-relevant lines
                     if (stripped.startswith('#include') or 
-                        stripped.startswith('#if') or 
-                        stripped.startswith('#ifdef') or
-                        stripped.startswith('#ifndef') or
-                        stripped.startswith('#endif') or
-                        stripped.startswith('#else') or
-                        stripped.startswith('#elif') or
+#                        stripped.startswith('#if') or 
+#                        stripped.startswith('#ifdef') or
+#                        stripped.startswith('#ifndef') or
+#                        stripped.startswith('#endif') or
+#                        stripped.startswith('#else') or
+#                        stripped.startswith('#elif') or
                         (stripped.startswith('#define') and 
                          any(keyword in stripped.upper() for keyword in ['INCLUDE', 'PATH', 'CONFIG']))):
                         include_lines.append(stripped)
