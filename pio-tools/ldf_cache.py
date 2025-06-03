@@ -115,11 +115,14 @@ class LDFCacheOptimizer:
         """
         hash_data = []
         # Ignore directorys
-        ignore_dirs = {'.git', '.github', '.cache', '.vscode', '.pio', 'data', 'build', 'pio-tools', 'tools', '__pycache__'}
+        ignore_dirs = {
+            '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
+            'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
+            'berry', 'berry_tasmota', 'berry_matter', 'berry_custom',
+            'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc',
+            'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
+        }
     
-        for root, dirs, files in os.walk(self.src_dir):
-            dirs[:] = [d for d in dirs if d not in ignore_dirs]
-
         # platformio.ini
         ini_file = os.path.join(self.project_dir, "platformio.ini")
         if os.path.exists(ini_file):
@@ -127,7 +130,12 @@ class LDFCacheOptimizer:
         
         # Scan source directory
         if os.path.exists(self.src_dir):
-            for root, _, files in os.walk(self.src_dir):
+            for root, dirs, files in os.walk(self.src_dir):
+                ignored = [d for d in dirs if d in ignore_dirs]
+                if ignored:
+                    print(f"Ignored in {root}: {ignored}")
+                dirs[:] = [d for d in dirs if d not in ignore_dirs]
+
                 for file in sorted(files):
                     file_path = os.path.join(root, file)
                     file_ext = os.path.splitext(file)[1].lower()
@@ -143,7 +151,9 @@ class LDFCacheOptimizer:
         for inc_path in self.env.get('CPPPATH', []):
             inc_dir = str(inc_path)
             if os.path.exists(inc_dir) and inc_dir != self.src_dir:
-                for root, _, files in os.walk(inc_dir):
+                for root, dirs, files in os.walk(inc_dir):
+                    dirs[:] = [d for d in dirs if d not in ignore_dirs]
+
                     for file in sorted(files):
                         if file.endswith(('.h', '.hpp', '.hxx', '.inc', '.tpp')):
                             file_path = os.path.join(root, file)
@@ -152,7 +162,9 @@ class LDFCacheOptimizer:
         # Library directory
         lib_dir = os.path.join(self.project_dir, "lib")
         if os.path.exists(lib_dir):
-            for root, _, files in os.walk(lib_dir):
+            for root, dirs, files in os.walk(lib_dir):
+                dirs[:] = [d for d in dirs if d not in ignore_dirs]
+
                 for file in sorted(files):
                     if file.endswith(('.h', '.hpp', '.json', '.properties')):
                         file_path = os.path.join(root, file)
