@@ -2,7 +2,7 @@
 # PlatformIO Advanced Script für intelligentes LDF-Caching
 # Autor: pioarduino Maintainer
 # Optimiert Build-Performance durch selektives LDF-Caching
-# Version: 2.1 - Vereinfachte Hash-Bildung und vollständige SCons-Variablen
+# Version: 2.1 - Include-relevante Hash-Bildung und vollständige SCons-Variablen
 
 Import("env")
 import os
@@ -36,29 +36,39 @@ class LDFCacheOptimizer:
         except:
             return "unreadable"
     
-    def get_simple_include_hash(self, file_path):
-        """Einfache Hash-Bildung nur aus Include-Statements"""
+    def get_include_relevant_hash(self, file_path):
+        """Hash nur von Include-relevanten Zeilen"""
+        include_lines = []
+        
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
+                for line in f:
+                    stripped = line.strip()
+                    
+                    # Skip Kommentare
+                    if stripped.startswith('//'):
+                        continue
+                    
+                    # Include-relevante Zeilen
+                    if (stripped.startswith('#include') or 
+                        stripped.startswith('#if') or 
+                        stripped.startswith('#ifdef') or
+                        stripped.startswith('#ifndef') or
+                        stripped.startswith('#endif') or  # Auch wichtig!
+                        stripped.startswith('#else') or   # Auch wichtig!
+                        stripped.startswith('#elif') or   # Auch wichtig!
+                        (stripped.startswith('#define') and 
+                         any(keyword in stripped.upper() for keyword in ['INCLUDE', 'PATH', 'CONFIG']))):
+                        include_lines.append(stripped)
             
-            # Nur Include-Zeilen extrahieren
-            include_lines = []
-            for line in content.splitlines():
-                line = line.strip()
-                # Einfache Include-Erkennung
-                if line.startswith('#include') and not line.startswith('//'):
-                    include_lines.append(line)
-            
-            # Hash aus Include-Zeilen
             return hashlib.md5('\n'.join(include_lines).encode()).hexdigest()[:8]
             
-        except:
-            # Fallback: Ganzer Datei-Hash
+        except Exception:
+            # Fallback: Datei-Hash
             return self._get_file_hash(file_path)
     
     def get_project_hash(self):
-        """Vereinfachte Hash-Bildung für Cache-Validierung"""
+        """Include-relevante Hash-Bildung für Cache-Validierung"""
         hash_data = []
         
         # platformio.ini
@@ -77,8 +87,8 @@ class LDFCacheOptimizer:
                         # Header-Dateien: Vollständiger Hash
                         hash_data.append(self._get_file_hash(file_path))
                     elif file_ext in {'.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'}:
-                        # Source-Dateien: Nur Include-Hash
-                        hash_data.append(self.get_simple_include_hash(file_path))
+                        # Source-Dateien: Include-relevanter Hash
+                        hash_data.append(self.get_include_relevant_hash(file_path))
         
         # Include-Verzeichnisse scannen
         for inc_path in self.env.get('CPPPATH', []):
@@ -120,10 +130,10 @@ class LDFCacheOptimizer:
             cached_hash = cache_data.get('project_hash')
             
             if current_hash != cached_hash:
-                print("🔄 Projekt-Änderungen erkannt - Cache ungültig")
+                print("🔄 Include-relevante Änderungen erkannt - Cache ungültig")
                 return None
             
-            print("✅ Keine relevanten Änderungen - Cache verwendbar")
+            print("✅ Keine Include-relevanten Änderungen - Cache verwendbar")
             return cache_data
             
         except Exception as e:
@@ -193,7 +203,7 @@ class LDFCacheOptimizer:
         
         try:
             cache_data = {
-                # Vereinfachter Hash
+                # Include-relevanter Hash
                 'project_hash': self.get_project_hash(),
                 'pioenv': self.env['PIOENV'],
                 'timestamp': datetime.datetime.now().isoformat(),
@@ -248,7 +258,7 @@ class LDFCacheOptimizer:
         cache_data = self.load_and_validate_cache()
         
         if cache_data:
-            print("🚀 Verwende LDF-Cache (keine relevanten Änderungen)")
+            print("🚀 Verwende LDF-Cache (keine Include-relevanten Änderungen)")
             self.apply_ldf_cache(cache_data)
         else:
             print("🔄 LDF-Neuberechnung erforderlich")
