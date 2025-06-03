@@ -95,7 +95,8 @@ class LDFCacheOptimizer:
                         (stripped.startswith('#define') and 
                          any(keyword in stripped.upper() for keyword in ['INCLUDE', 'PATH', 'CONFIG']))):
                         include_lines.append(stripped)
-            
+            content = '\n'.join(include_lines)
+            print(f"Include {file_path}: {len(include_lines)} lines")
             return hashlib.sha256('\n'.join(include_lines).encode()).hexdigest()[:16]
             
         except Exception:
@@ -127,6 +128,8 @@ class LDFCacheOptimizer:
         ini_file = os.path.join(self.project_dir, "platformio.ini")
         if os.path.exists(ini_file):
             hash_data.append(self._get_file_hash(ini_file))
+            
+        generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
         
         # Scan source directory
         if os.path.exists(self.src_dir):
@@ -137,6 +140,10 @@ class LDFCacheOptimizer:
                 dirs[:] = [d for d in dirs if d not in ignore_dirs]
 
                 for file in sorted(files):
+                    if file == generated_cpp:
+                        # Skip generated C++ file
+                        print(f"Skipping generated file: {generated_cpp}")
+                        continue
                     file_path = os.path.join(root, file)
                     file_ext = os.path.splitext(file)[1].lower()
                     
