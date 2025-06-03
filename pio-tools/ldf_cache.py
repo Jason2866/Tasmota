@@ -340,7 +340,9 @@ class LDFCacheOptimizer:
             self.apply_ldf_cache(cache_data)
         else:
             print("🔄 LDF recalculation required")
-            self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
+            silent_action = self.env.Action(self.save_ldf_cache)
+            silent_action.strfunction = lambda target, source, env: '' # hack to silence scons command outputs
+            self.env.AddPostAction("checkprogsize", silent_action)
         
         print("================================")
 
