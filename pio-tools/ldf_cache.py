@@ -47,6 +47,7 @@ class LDFCacheOptimizer:
         """
         self.env = environment
         self.project_dir = self.env.subst("$PROJECT_DIR")
+        self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         self.cache_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"ldf_cache_{self.env['PIOENV']}.py")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
         self.original_ldf_mode = None
