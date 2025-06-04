@@ -553,18 +553,26 @@ class LDFCacheOptimizer:
         Orchestrates the entire caching process: validates existing cache,
         applies it if valid, or sets up cache saving for new builds.
         """
+        # SOFORT LDF deaktivieren - noch vor allen anderen Operationen
+        self.env.Replace(LIB_LDF_MODE="off")
+        
         setup_start = time.time()
         print("\n=== LDF Cache Optimizer v1.0 ===")
         
         cache_data = self.load_and_validate_cache()
         
         if cache_data:
-            print("🚀 Using LDF cache (no include-relevant changes)")
+            print("🚀 Using LDF cache")
             success = self.apply_ldf_cache(cache_data)
             if not success:
-                print("🔄 Cache application failed, falling back to LDF recalculation")
+                # Bei Fehler: LDF wieder aktivieren
+                self.env.Replace(LIB_LDF_MODE="chain")
+                print("🔄 Cache failed, re-enabling LDF")
         else:
-            print("🔄 LDF recalculation required")
+            # Kein Cache: LDF wieder aktivieren für diesen Build
+            self.env.Replace(LIB_LDF_MODE="chain")
+            print("🔄 No cache, LDF recalculation required")
+            # Cache nach dem Build speichern
             silent_action = self.env.Action(self.save_ldf_cache)
             silent_action.strfunction = lambda target, source, env: '' # hack to silence scons command outputs
             self.env.AddPostAction("checkprogsize", silent_action)
