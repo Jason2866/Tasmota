@@ -18,7 +18,7 @@ class LDFCacheOptimizer:
     """
     Intelligent LDF (Library Dependency Finder) cache optimizer for PlatformIO.
     Uses SCons native serialization (env.Dump) to store and restore all build variables
-    without losing any information.
+    without losing any information. Only variables present in the environment are saved/restored.
     """
 
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
@@ -32,7 +32,19 @@ class LDFCacheOptimizer:
         'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
     ])
 
+    # List of all potentially relevant SCons variables for LDF caching
+    LDF_SCONS_VARS = [
+        'CPPPATH', 'LIBPATH', 'LIBS', 'CPPDEFINES', 'SRC_FILTER',
+        'CCFLAGS', 'CXXFLAGS', 'LINKFLAGS'
+    ]
+
     def __init__(self, environment):
+        """
+        Initialize the LDF Cache Optimizer.
+
+        Args:
+            environment: PlatformIO SCons environment object
+        """
         self.env = environment
         self.cache_file = os.path.join(self.env.subst("$BUILD_DIR"), "ldf_cache_sconsdump.py")
         self.project_dir = self.env.subst("$PROJECT_DIR")
@@ -42,6 +54,11 @@ class LDFCacheOptimizer:
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
 
     def find_lib_ldf_mode_in_ini(self):
+        """
+        Find all occurrences of lib_ldf_mode in platformio.ini across all sections.
+        Returns:
+            list: List of dictionaries with section, line_number, and line content
+        """
         lib_ldf_mode_lines = []
         try:
             if os.path.exists(self.platformio_ini):
@@ -69,6 +86,13 @@ class LDFCacheOptimizer:
             return []
 
     def modify_platformio_ini(self, new_ldf_mode):
+        """
+        Modify or add lib_ldf_mode in platformio.ini.
+        Args:
+            new_ldf_mode (str): New LDF mode ('off' or 'chain')
+        Returns:
+            bool: True if modification was successful, False otherwise
+        """
         try:
             ldf_entries = self.find_lib_ldf_mode_in_ini()
             if ldf_entries:
@@ -98,6 +122,9 @@ class LDFCacheOptimizer:
             return False
 
     def add_lib_ldf_mode_to_platformio_section(self, new_ldf_mode):
+        """
+        Add lib_ldf_mode to [platformio] section if not present.
+        """
         try:
             with open(self.platformio_ini, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -119,6 +146,9 @@ class LDFCacheOptimizer:
             return False
 
     def restore_platformio_ini(self):
+        """
+        Restore the original lib_ldf_mode in platformio.ini after build.
+        """
         if self.original_ldf_mode is None:
             return
         try:
@@ -142,6 +172,9 @@ class LDFCacheOptimizer:
             print(f"❌ Error restoring platformio.ini: {e}")
 
     def _get_file_hash(self, file_path):
+        """
+        Generate SHA256 hash of a file.
+        """
         try:
             with open(file_path, 'rb') as f:
                 return hashlib.sha256(f.read()).hexdigest()[:16]
@@ -149,6 +182,9 @@ class LDFCacheOptimizer:
             return "unreadable"
 
     def get_include_relevant_hash(self, file_path):
+        """
+        Generate hash only from include-relevant lines in source files.
+        """
         include_lines = []
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -166,6 +202,9 @@ class LDFCacheOptimizer:
             return self._get_file_hash(file_path)
 
     def is_platformio_path(self, path):
+        """
+        Check if path belongs to PlatformIO installation.
+        """
         platformio_paths = set()
         if 'PLATFORMIO_CORE_DIR' in os.environ:
             platformio_paths.add(os.path.normpath(os.environ['PLATFORMIO_CORE_DIR']))
@@ -176,6 +215,10 @@ class LDFCacheOptimizer:
         return any(norm_path.startswith(pio_path) for pio_path in platformio_paths)
 
     def get_project_hash_with_details(self):
+        """
+        Generate hash with detailed file tracking and optimized early filtering.
+        Excludes all PlatformIO-installed components and lib_ldf_mode settings.
+        """
         start_time = time.time()
         file_hashes = {}
         hash_data = []
@@ -255,6 +298,9 @@ class LDFCacheOptimizer:
         }
 
     def load_and_validate_cache(self):
+        """
+        Load cache using Python text format (eval).
+        """
         if not os.path.exists(self.cache_file):
             print("🔍 No cache file exists")
             return None
@@ -290,30 +336,33 @@ class LDFCacheOptimizer:
     def apply_ldf_cache(self, cache_data):
         """
         Restore using SCons native deserialization.
+        Only restore variables present in the cache.
         """
         try:
             apply_start = time.time()
             scons_dump_str = cache_data.get('scons_dump', '{}')
             scons_vars = eval(scons_dump_str)
             print(f"🔧 Restoring SCons variables from native dump...")
-            for var_name, var_value in scons_vars.items():
-                if var_name == 'CPPPATH':
-                    self.env.PrependUnique(CPPPATH=var_value)
-                elif var_name == 'LIBPATH':
-                    self.env.PrependUnique(LIBPATH=var_value)
-                elif var_name == 'LIBS':
-                    self.env.PrependUnique(LIBS=var_value)
-                elif var_name == 'CPPDEFINES':
-                    self.env.AppendUnique(CPPDEFINES=var_value)
-                elif var_name == 'SRC_FILTER':
-                    self.env.Replace(SRC_FILTER=var_value)
-                elif var_name == 'CCFLAGS':
-                    self.env.AppendUnique(CCFLAGS=var_value)
-                elif var_name == 'CXXFLAGS':
-                    self.env.AppendUnique(CXXFLAGS=var_value)
-                elif var_name == 'LINKFLAGS':
-                    self.env.AppendUnique(LINKFLAGS=var_value)
-                print(f"🔧 Restored {var_name}: {type(var_value)} with {len(var_value) if hasattr(var_value, '__len__') else 'N/A'} items")
+            for var_name in self.LDF_SCONS_VARS:
+                if var_name in scons_vars:
+                    var_value = scons_vars[var_name]
+                    if var_name == 'CPPPATH':
+                        self.env.PrependUnique(CPPPATH=var_value)
+                    elif var_name == 'LIBPATH':
+                        self.env.PrependUnique(LIBPATH=var_value)
+                    elif var_name == 'LIBS':
+                        self.env.PrependUnique(LIBS=var_value)
+                    elif var_name == 'CPPDEFINES':
+                        self.env.AppendUnique(CPPDEFINES=var_value)
+                    elif var_name == 'SRC_FILTER':
+                        self.env.Replace(SRC_FILTER=var_value)
+                    elif var_name == 'CCFLAGS':
+                        self.env.AppendUnique(CCFLAGS=var_value)
+                    elif var_name == 'CXXFLAGS':
+                        self.env.AppendUnique(CXXFLAGS=var_value)
+                    elif var_name == 'LINKFLAGS':
+                        self.env.AppendUnique(LINKFLAGS=var_value)
+                    print(f"🔧 Restored {var_name}: {type(var_value)} with {len(var_value) if hasattr(var_value, '__len__') else 'N/A'} items")
             apply_elapsed = time.time() - apply_start
             print(f"📦 LDF cache applied in {apply_elapsed:.3f}s using SCons native format")
             return True
@@ -324,6 +373,7 @@ class LDFCacheOptimizer:
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
         Save using SCons native serialization - preserves everything.
+        Only save variables present in the environment.
         """
         if self.env.get("LIB_LDF_MODE") == "off":
             return
@@ -331,11 +381,9 @@ class LDFCacheOptimizer:
             save_start = time.time()
             print("💾 Saving LDF cache using SCons native Dump...")
             hash_details = self.get_project_hash_with_details()
-            scons_vars_dump = self.env.Dump(
-                'CPPPATH', 'LIBPATH', 'LIBS', 'CPPDEFINES', 
-                'SRC_FILTER', 'CCFLAGS', 'CXXFLAGS', 'LINKFLAGS',
-                format='pretty'
-            )
+            # Only include SCons vars that exist in the environment
+            dump_vars = [var for var in self.LDF_SCONS_VARS if var in self.env]
+            scons_vars_dump = self.env.Dump(*dump_vars, format='pretty')
             cache_data = {
                 'project_hash': hash_details['final_hash'],
                 'hash_details': hash_details['file_hashes'],
@@ -360,6 +408,9 @@ class LDFCacheOptimizer:
             print(f"✗ Error saving LDF cache: {e}")
 
     def compare_hash_details(self, current_hashes, cached_hashes):
+        """
+        Compare hash details and show only differences.
+        """
         differences_found = 0
         for file_path, current_hash in current_hashes.items():
             if file_path not in cached_hashes:
@@ -382,8 +433,14 @@ class LDFCacheOptimizer:
         print(f"   Cached files: {len(cached_hashes)}")
 
     def setup_ldf_caching(self):
+        """
+        Main logic for intelligent LDF caching with platformio.ini modification.
+        Orchestrates the entire caching process: validates existing cache,
+        and if valid, modifies platformio.ini to disable LDF before PlatformIO
+        reads the configuration. Uses SCons native serialization.
+        """
         setup_start = time.time()
-        print("\n=== LDF Cache Optimizer (SCons Dump) ===")
+        print("\n=== LDF Cache Optimizer (SCons Dump, robust) ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
             print("🚀 Cache available - disabling LDF via platformio.ini modification")
@@ -405,6 +462,9 @@ class LDFCacheOptimizer:
         print("=" * 60)
 
 def clear_ldf_cache():
+    """
+    Delete LDF cache file.
+    """
     cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache_sconsdump.py")
     if os.path.exists(cache_file):
         try:
@@ -416,6 +476,9 @@ def clear_ldf_cache():
         print("ℹ No LDF Cache present")
 
 def show_ldf_cache_info():
+    """
+    Display cache information.
+    """
     cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache_sconsdump.py")
     if os.path.exists(cache_file):
         try:
@@ -444,6 +507,9 @@ def show_ldf_cache_info():
         print("No LDF Cache present")
 
 def force_ldf_rebuild():
+    """
+    Force LDF recalculation.
+    """
     clear_ldf_cache()
     print("LDF will be recalculated on next build")
 
