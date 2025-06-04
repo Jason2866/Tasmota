@@ -58,20 +58,129 @@ class LDFCacheOptimizer:
     # ------------------- PlatformIO.ini Modification Methods -------------------
     
     def find_lib_ldf_mode_in_ini(self):
-        """Locate lib_ldf_mode entries in platformio.ini across all sections."""
-        # ... (identical to your original implementation) ...
+        """
+        Find all occurrences of lib_ldf_mode in platformio.ini across all sections.
+
+        Returns:
+            list: List of dictionaries with section, line_number, and line content
+        """
+        lib_ldf_mode_lines = []
+        try:
+            if os.path.exists(self.platformio_ini):
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                for i, line in enumerate(lines):
+                    if 'lib_ldf_mode' in line.lower():
+                        section = None
+                        for j in range(i, -1, -1):
+                            if lines[j].strip().startswith('[') and lines[j].strip().endswith(']'):
+                                section = lines[j].strip()
+                                break
+                        lib_ldf_mode_lines.append({
+                            'section': section, 
+                            'line_number': i+1, 
+                            'line': line.strip(),
+                            'line_index': i
+                        })
+                return lib_ldf_mode_lines
+            else:
+                print(f"❌ platformio.ini not found: {self.platformio_ini}")
+                return []
+        except Exception as e:
+            print(f"❌ Error reading platformio.ini: {e}")
+            return []
 
     def modify_platformio_ini(self, new_ldf_mode):
-        """Modify lib_ldf_mode in platformio.ini."""
-        # ... (identical to your original implementation) ...
+        """
+        Modify or add lib_ldf_mode in platformio.ini.
+
+        Args:
+            new_ldf_mode (str): New LDF mode ('off' or 'chain')
+        Returns:
+            bool: True if modification was successful, False otherwise
+        """
+        try:
+            ldf_entries = self.find_lib_ldf_mode_in_ini()
+            if ldf_entries:
+                first_entry = ldf_entries[0]
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                current_line = lines[first_entry['line_index']]
+                match = re.search(r'lib_ldf_mode\s*=\s*(\w+)', current_line)
+                if match:
+                    self.original_ldf_mode = match.group(1)
+                else:
+                    self.original_ldf_mode = "chain"
+                lines[first_entry['line_index']] = re.sub(
+                    r'lib_ldf_mode\s*=\s*\w+', 
+                    f'lib_ldf_mode = {new_ldf_mode}', 
+                    current_line
+                )
+                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                print(f"🔧 Modified {first_entry['section']}: lib_ldf_mode = {new_ldf_mode}")
+                return True
+            else:
+                print("🔍 No existing lib_ldf_mode found, adding to [platformio] section")
+                return self.add_lib_ldf_mode_to_platformio_section(new_ldf_mode)
+        except Exception as e:
+            print(f"❌ Error modifying platformio.ini: {e}")
+            return False
 
     def add_lib_ldf_mode_to_platformio_section(self, new_ldf_mode):
-        """Add lib_ldf_mode to [platformio] section."""
-        # ... (identical to your original implementation) ...
+        """
+        Add lib_ldf_mode to [platformio] section if not present.
+
+        Args:
+            new_ldf_mode (str): New LDF mode to add
+        Returns:
+            bool: True if addition was successful, False otherwise
+        """
+        try:
+            with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                content = f.read()
+            self.original_ldf_mode = "chain"
+            platformio_section = re.search(r'\[platformio\]', content)
+            if platformio_section:
+                insert_pos = platformio_section.end()
+                new_content = (content[:insert_pos] + 
+                             f'\nlib_ldf_mode = {new_ldf_mode}' + 
+                             content[insert_pos:])
+            else:
+                new_content = f'[platformio]\nlib_ldf_mode = {new_ldf_mode}\n\n' + content
+            with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            print(f"🔧 Added to [platformio]: lib_ldf_mode = {new_ldf_mode}")
+            return True
+        except Exception as e:
+            print(f"❌ Error adding lib_ldf_mode: {e}")
+            return False
 
     def restore_platformio_ini(self):
-        """Restore original lib_ldf_mode value."""
-        # ... (identical to your original implementation) ...
+        """
+        Restore the original lib_ldf_mode in platformio.ini after build.
+        """
+        if self.original_ldf_mode is None:
+            return
+        try:
+            ldf_entries = self.find_lib_ldf_mode_in_ini()
+            if ldf_entries:
+                first_entry = ldf_entries[0]
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                if self.original_ldf_mode == "chain":
+                    lines.pop(first_entry['line_index'])
+                else:
+                    lines[first_entry['line_index']] = re.sub(
+                        r'lib_ldf_mode\s*=\s*\w+', 
+                        f'lib_ldf_mode = {self.original_ldf_mode}', 
+                        lines[first_entry['line_index']]
+                    )
+                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                print(f"🔧 Restored lib_ldf_mode = {self.original_ldf_mode}")
+        except Exception as e:
+            print(f"❌ Error restoring platformio.ini: {e}")
 
     # ------------------- Smart Hash Generation & Comparison -------------------
     
