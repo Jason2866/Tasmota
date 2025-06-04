@@ -12,10 +12,8 @@ import json
 import hashlib
 import datetime
 import time
+import re
 from platformio.project.config import ProjectConfig
-
-env.Replace(LIB_LDF_MODE="off")
-print("🔧 LDF disabled immediately in pre-script")
 
 class LDFCacheOptimizer:
     """
@@ -23,6 +21,7 @@ class LDFCacheOptimizer:
     
     This class manages caching of library dependency resolution results to speed up
     subsequent builds when no include-relevant changes have been made to the project.
+    Uses direct platformio.ini modification to control LDF timing.
     """
     
     # File type categories for early filtering
@@ -50,8 +49,129 @@ class LDFCacheOptimizer:
         self.cache_file = os.path.join(self.env.subst("$BUILD_DIR"), "ldf_cache.json")
         self.project_dir = self.env.subst("$PROJECT_DIR")
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
+        self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
+        self.original_ldf_mode = None
         
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
+    
+    def modify_platformio_ini(self, new_ldf_mode):
+        """
+        Modify lib_ldf_mode directly in platformio.ini file.
+        
+        This is a "dirty" workaround for the timing issue where LDF runs before
+        any SCons pre-actions can disable it.
+        
+        Args:
+            new_ldf_mode (str): New LDF mode ('off' or 'chain')
+            
+        Returns:
+            bool: True if modification was successful, False otherwise
+        """
+        if not os.path.exists(self.platformio_ini):
+            print("⚠ platformio.ini not found")
+            return False
+        
+        try:
+            with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Find current environment section
+            current_env = self.env['PIOENV']
+            env_pattern = rf'\[env:{re.escape(current_env)}\]'
+            
+            # Look for existing lib_ldf_mode in current environment
+            ldf_pattern = r'lib_ldf_mode\s*=\s*(\w+)'
+            
+            # Search for lib_ldf_mode after the current environment section
+            env_match = re.search(env_pattern, content)
+            if env_match:
+                # Look for lib_ldf_mode in this environment section
+                env_start = env_match.end()
+                next_env = re.search(r'\[env:', content[env_start:])
+                env_end = env_start + next_env.start() if next_env else len(content)
+                env_section = content[env_start:env_end]
+                
+                ldf_match = re.search(ldf_pattern, env_section)
+                if ldf_match:
+                    # Save original value and replace
+                    self.original_ldf_mode = ldf_match.group(1)
+                    # Replace in the full content
+                    full_match_start = env_start + ldf_match.start()
+                    full_match_end = env_start + ldf_match.end()
+                    new_content = (content[:full_match_start] + 
+                                 f'lib_ldf_mode = {new_ldf_mode}' + 
+                                 content[full_match_end:])
+                else:
+                    # Add lib_ldf_mode to current environment section
+                    self.original_ldf_mode = "chain"  # PlatformIO default
+                    insert_pos = env_match.end()
+                    new_content = (content[:insert_pos] + 
+                                 f'\nlib_ldf_mode = {new_ldf_mode}' + 
+                                 content[insert_pos:])
+            else:
+                print(f"⚠ Environment [{current_env}] not found in platformio.ini")
+                return False
+            
+            # Write modified content
+            with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            
+            print(f"🔧 Modified platformio.ini: lib_ldf_mode = {new_ldf_mode}")
+            return True
+            
+        except Exception as e:
+            print(f"✗ Error modifying platformio.ini: {e}")
+            return False
+    
+    def restore_platformio_ini(self):
+        """
+        Restore original lib_ldf_mode value in platformio.ini.
+        
+        Called as post-action after build completion to clean up
+        the temporary modification.
+        """
+        if self.original_ldf_mode is None:
+            return
+        
+        try:
+            with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Find current environment section
+            current_env = self.env['PIOENV']
+            env_pattern = rf'\[env:{re.escape(current_env)}\]'
+            ldf_pattern = r'lib_ldf_mode\s*=\s*\w+'
+            
+            if self.original_ldf_mode == "chain":
+                # Remove the line if it was the default value
+                # Look for the line in the current environment section
+                env_match = re.search(env_pattern, content)
+                if env_match:
+                    env_start = env_match.end()
+                    next_env = re.search(r'\[env:', content[env_start:])
+                    env_end = env_start + next_env.start() if next_env else len(content)
+                    
+                    # Remove lib_ldf_mode line from this section
+                    before_env = content[:env_start]
+                    env_section = content[env_start:env_end]
+                    after_env = content[env_end:]
+                    
+                    # Remove lib_ldf_mode line (including newline)
+                    cleaned_section = re.sub(r'\nlib_ldf_mode\s*=\s*\w+', '', env_section)
+                    new_content = before_env + cleaned_section + after_env
+                else:
+                    new_content = content
+            else:
+                # Restore original non-default value
+                new_content = re.sub(ldf_pattern, f'lib_ldf_mode = {self.original_ldf_mode}', content)
+            
+            with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            
+            print(f"🔧 Restored platformio.ini: lib_ldf_mode = {self.original_ldf_mode}")
+            
+        except Exception as e:
+            print(f"✗ Error restoring platformio.ini: {e}")
     
     def _get_file_hash(self, file_path):
         """
@@ -166,7 +286,7 @@ class LDFCacheOptimizer:
     def get_project_hash_with_details(self):
         """
         Generate hash with detailed file tracking and optimized early filtering.
-        Excludes all PlatformIO-installed components (framework, tools, etc.)
+        Excludes all PlatformIO-installed components and lib_ldf_mode settings.
         
         Returns:
             dict: Contains final_hash, file_hashes dict, total_files count, and timing info
@@ -178,15 +298,22 @@ class LDFCacheOptimizer:
         
         # Generated file to skip (PlatformIO merges .ino files)
         generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
-        #print(f"🔍 Generated file to skip: {generated_cpp}")
         
-        # Process platformio.ini first
-        ini_file = os.path.join(self.project_dir, "platformio.ini")
-        if os.path.exists(ini_file):
-            ini_hash = self._get_file_hash(ini_file)
-            hash_data.append(ini_hash)
-            file_hashes['platformio.ini'] = ini_hash
-            #print(f"🔍 platformio.ini: {ini_hash}")
+        # Process platformio.ini - EXCLUDE lib_ldf_mode from hash calculation
+        if os.path.exists(self.platformio_ini):
+            try:
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    ini_content = f.read()
+                
+                # Remove lib_ldf_mode lines from hash calculation to avoid cache invalidation
+                # when we temporarily modify the file
+                filtered_content = re.sub(r'lib_ldf_mode\s*=\s*\w+\n?', '', ini_content)
+                ini_hash = hashlib.sha256(filtered_content.encode()).hexdigest()[:16]
+                hash_data.append(ini_hash)
+                file_hashes['platformio.ini'] = ini_hash
+                
+            except Exception as e:
+                print(f"⚠ Error reading platformio.ini: {e}")
         
         # Collect all scan directories
         scan_dirs = []
@@ -201,23 +328,19 @@ class LDFCacheOptimizer:
             scan_dirs.append(('library', lib_dir))
         
         # Add include directories (filtered)
-        #print(f"🔍 Filtering include directories...")
         for inc_path in self.env.get('CPPPATH', []):
             inc_dir = str(inc_path)
             
             # Skip PlatformIO paths
             if self.is_platformio_path(inc_dir):
-                #print(f"🚫 Skipping PlatformIO include path: {inc_dir}")
                 continue
             
             # Skip variants and other system paths explicitly
             if any(skip_dir in inc_dir for skip_dir in ['variants', '.platformio', '.pio']):
-                #print(f"🚫 Skipping system path: {inc_dir}")
                 continue
             
             if os.path.exists(inc_dir) and inc_dir != self.src_dir:
                 scan_dirs.append(('include', inc_dir))
-                #print(f"✅ Including path: {inc_dir}")
         
         total_scanned = 0
         total_relevant = 0
@@ -231,7 +354,6 @@ class LDFCacheOptimizer:
                 for root, dirs, files in os.walk(scan_dir):
                     # Skip PlatformIO paths
                     if self.is_platformio_path(root):
-                        #print(f"🚫 Skipping PlatformIO subpath: {root}")
                         continue
                     
                     # Filter ignored directories
@@ -252,7 +374,6 @@ class LDFCacheOptimizer:
                     for file, file_ext in relevant_files:
                         # Skip generated files
                         if file == generated_cpp:
-                            #print(f"🚫 Skipping generated file: {file}")
                             continue
                         
                         file_path = os.path.join(root, file)
@@ -286,8 +407,6 @@ class LDFCacheOptimizer:
         
         if total_scanned > 0:
             print(f"🔍 Performance: {((total_relevant/total_scanned)*100):.1f}% relevance ratio")
-        
-        #print(f"🔍 Final project hash: {final_hash}")
         
         return {
             'final_hash': final_hash,
@@ -548,27 +667,33 @@ class LDFCacheOptimizer:
     
     def setup_ldf_caching(self):
         """
-        Main logic for intelligent LDF caching.
+        Main logic for intelligent LDF caching with platformio.ini modification.
         
         Orchestrates the entire caching process: validates existing cache,
-        applies it if valid, or sets up cache saving for new builds.
+        and if valid, modifies platformio.ini to disable LDF before PlatformIO
+        reads the configuration.
         """
         setup_start = time.time()
         print("\n=== LDF Cache Optimizer v1.0 ===")
-
+        
         cache_data = self.load_and_validate_cache()
         
         if cache_data:
-            print("🚀 Using LDF cache")
-            success = self.apply_ldf_cache(cache_data)
-            if not success:
-                self.env.Replace(LIB_LDF_MODE="chain")
-                print("🔄 Cache failed, re-enabling LDF")
+            print("🚀 Cache available - disabling LDF via platformio.ini modification")
+            success = self.modify_platformio_ini("off")
+            if success:
+                self.apply_ldf_cache(cache_data)
+                # Setup restore after build completion
+                restore_action = self.env.Action(lambda t, s, e: self.restore_platformio_ini())
+                restore_action.strfunction = lambda target, source, env: ''  # Silent action
+                self.env.AddPostAction("checkprogsize", restore_action)
+            else:
+                print("✗ Failed to modify platformio.ini - proceeding with normal LDF")
         else:
-            self.env.Replace(LIB_LDF_MODE="chain")
-            print("🔄 No cache, LDF recalculation required")
+            print("🔄 No cache available - LDF will run normally")
+            # Setup cache saving after build
             silent_action = self.env.Action(self.save_ldf_cache)
-            silent_action.strfunction = lambda target, source, env: '' # hack to silence scons command outputs
+            silent_action.strfunction = lambda target, source, env: ''  # Silent action
             self.env.AddPostAction("checkprogsize", silent_action)
         
         setup_elapsed = time.time() - setup_start
