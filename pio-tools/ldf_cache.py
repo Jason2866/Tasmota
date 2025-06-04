@@ -8,7 +8,6 @@ Copyright: Jason2866
 
 Import("env")
 import os
-import json
 import hashlib
 import datetime
 import time
@@ -21,7 +20,7 @@ class LDFCacheOptimizer:
     
     This class manages caching of library dependency resolution results to speed up
     subsequent builds when no include-relevant changes have been made to the project.
-    Uses direct platformio.ini modification to control LDF timing.
+    Uses Python text format (repr/eval) for proper SCons variable storage.
     """
     
     # File type categories for early filtering
@@ -46,7 +45,7 @@ class LDFCacheOptimizer:
             environment: PlatformIO SCons environment object
         """
         self.env = environment
-        self.cache_file = os.path.join(self.env.subst("$BUILD_DIR"), "ldf_cache.json")
+        self.cache_file = os.path.join(self.env.subst("$BUILD_DIR"), "ldf_cache.py")
         self.project_dir = self.env.subst("$PROJECT_DIR")
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
@@ -97,10 +96,6 @@ class LDFCacheOptimizer:
     def modify_platformio_ini(self, new_ldf_mode):
         """
         Modify lib_ldf_mode in platformio.ini - searches all sections.
-        
-        This is a "dirty" workaround for the timing issue where LDF runs before
-        any SCons pre-actions can disable it. The function searches for existing
-        lib_ldf_mode entries in any section of platformio.ini.
         
         Args:
             new_ldf_mode (str): New LDF mode ('off' or 'chain')
@@ -285,34 +280,35 @@ class LDFCacheOptimizer:
             # Fallback: file hash
             return self._get_file_hash(file_path)
     
-    def safe_serialize_scons_value(self, value):
+    def convert_scons_to_python_repr(self, value):
         """
-        Safe serialization of SCons values to prevent JSON corruption.
+        Convert SCons values to Python text representation.
         
         Args:
-            value: SCons value to serialize
+            value: SCons value to convert
             
         Returns:
-            Serializable value (list, string, or None)
+            str: Python text representation that can be eval'd
         """
         if value is None:
-            return None
+            return 'None'
         
-        # SCons NodeList or similar iterable objects
+        # Convert SCons NodeList and similar to regular Python list
         if hasattr(value, '__iter__') and not isinstance(value, (str, bytes)):
             try:
-                # Try to serialize as list
-                return [str(item) for item in value if item is not None]
+                # Convert to list of strings
+                python_list = [str(item) for item in value if item is not None]
+                return repr(python_list)
             except (TypeError, AttributeError):
-                return str(value)
+                return repr(str(value))
         
         # Simple values
         elif isinstance(value, (str, int, float, bool)):
-            return value
+            return repr(value)
         
         # Everything else as string
         else:
-            return str(value)
+            return repr(str(value))
     
     def is_platformio_path(self, path):
         """
@@ -523,7 +519,7 @@ class LDFCacheOptimizer:
     
     def load_and_validate_cache(self):
         """
-        Load cache with targeted hash debugging - only show differences.
+        Load cache using Python text format (eval).
         
         Loads the existing cache file and validates it against the current project state
         by comparing environment settings and include-relevant content hashes.
@@ -537,7 +533,12 @@ class LDFCacheOptimizer:
         
         try:
             with open(self.cache_file, 'r', encoding='utf-8') as f:
-                cache_data = json.load(f)
+                cache_content = f.read()
+            
+            # Safely evaluate Python text format
+            cache_data = eval(cache_content)
+            
+            print(f"✅ Cache loaded successfully from {os.path.basename(self.cache_file)}")
             
             # Environment check
             if cache_data.get('pioenv') != self.env['PIOENV']:
@@ -569,16 +570,16 @@ class LDFCacheOptimizer:
             print("✅ No include-relevant changes - cache usable")
             return cache_data
             
-        except (IOError, OSError, PermissionError, json.JSONDecodeError) as e:
+        except Exception as e:
             print(f"⚠ Cache validation failed: {e}")
             return None
     
     def apply_ldf_cache(self, cache_data):
         """
-        Apply LDF cache with SCons methods and validation.
+        Apply LDF cache with proper Python list restoration.
         
         Restores all cached library dependency finder results including include paths,
-        library paths, compiler flags, and other build settings.
+        library paths, compiler flags, and other build settings using Python lists.
         
         Args:
             cache_data (dict): Previously cached LDF results
@@ -591,36 +592,48 @@ class LDFCacheOptimizer:
             
             ldf_results = cache_data.get('ldf_results', {})
             
-            # Validate loaded data
-            for key, value in ldf_results.items():
-                if value and not isinstance(value, (list, str)):
-                    print(f"⚠ Warning: Unexpected cached type for {key}: {type(value)}")
-                    return False
+            print(f"🔧 Restoring SCons variables from Python text format...")
             
-            # Safe restoration
+            # Direct restoration using Python lists
             if ldf_results.get('CPPPATH'):
-                self.env.PrependUnique(CPPPATH=ldf_results['CPPPATH'])
+                cpppath_list = ldf_results['CPPPATH']
+                print(f"🔧 Restoring CPPPATH: {len(cpppath_list)} items")
+                self.env.PrependUnique(CPPPATH=cpppath_list)
             
             if ldf_results.get('LIBPATH'):
-                self.env.PrependUnique(LIBPATH=ldf_results['LIBPATH'])
+                libpath_list = ldf_results['LIBPATH']
+                print(f"🔧 Restoring LIBPATH: {len(libpath_list)} items")
+                self.env.PrependUnique(LIBPATH=libpath_list)
             
             if ldf_results.get('LIBS'):
-                self.env.PrependUnique(LIBS=ldf_results['LIBS'])
+                libs_list = ldf_results['LIBS']
+                print(f"🔧 Restoring LIBS: {len(libs_list)} items")
+                self.env.PrependUnique(LIBS=libs_list)
             
             if ldf_results.get('CPPDEFINES'):
-                self.env.AppendUnique(CPPDEFINES=ldf_results['CPPDEFINES'])
+                cppdefines_list = ldf_results['CPPDEFINES']
+                print(f"🔧 Restoring CPPDEFINES: {len(cppdefines_list)} items")
+                self.env.AppendUnique(CPPDEFINES=cppdefines_list)
             
             if ldf_results.get('SRC_FILTER'):
-                self.env.Replace(SRC_FILTER=ldf_results['SRC_FILTER'])
+                src_filter = ldf_results['SRC_FILTER']
+                print(f"🔧 Restoring SRC_FILTER: {src_filter}")
+                self.env.Replace(SRC_FILTER=src_filter)
             
             if ldf_results.get('CCFLAGS'):
-                self.env.AppendUnique(CCFLAGS=ldf_results['CCFLAGS'])
+                ccflags_list = ldf_results['CCFLAGS']
+                print(f"🔧 Restoring CCFLAGS: {len(ccflags_list)} items")
+                self.env.AppendUnique(CCFLAGS=ccflags_list)
             
             if ldf_results.get('CXXFLAGS'):
-                self.env.AppendUnique(CXXFLAGS=ldf_results['CXXFLAGS'])
+                cxxflags_list = ldf_results['CXXFLAGS']
+                print(f"🔧 Restoring CXXFLAGS: {len(cxxflags_list)} items")
+                self.env.AppendUnique(CXXFLAGS=cxxflags_list)
             
             if ldf_results.get('LINKFLAGS'):
-                self.env.AppendUnique(LINKFLAGS=ldf_results['LINKFLAGS'])
+                linkflags_list = ldf_results['LINKFLAGS']
+                print(f"🔧 Restoring LINKFLAGS: {len(linkflags_list)} items")
+                self.env.AppendUnique(LINKFLAGS=linkflags_list)
             
             apply_elapsed = time.time() - apply_start
             
@@ -630,8 +643,10 @@ class LDFCacheOptimizer:
             
             return True
             
-        except (KeyError, TypeError, AttributeError) as e:
+        except Exception as e:
             print(f"✗ Error applying LDF cache: {e}")
+            import traceback
+            traceback.print_exc()
             # Delete cache on errors
             if os.path.exists(self.cache_file):
                 try:
@@ -643,10 +658,11 @@ class LDFCacheOptimizer:
     
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
-        Save complete LDF results to cache with safe SCons serialization.
+        Save complete LDF results to cache using Python text format.
         
         This method is called as a post-action after successful build to capture
         all SCons variables and build settings determined by the LDF process.
+        Uses Python repr() for text representation.
         
         Args:
             target: SCons target (unused)
@@ -658,19 +674,11 @@ class LDFCacheOptimizer:
         
         try:
             save_start = time.time()
-            print("💾 Saving LDF cache...")
+            print("💾 Saving LDF cache using Python text format...")
             
             hash_details = self.get_project_hash_with_details()
             
-            # Safe extraction of SCons variables
-            def extract_scons_var(var_name):
-                try:
-                    value = self.env.get(var_name, [])
-                    return self.safe_serialize_scons_value(value)
-                except (KeyError, TypeError, AttributeError) as e:
-                    print(f"⚠ Warning: Could not serialize {var_name}: {e}")
-                    return []
-            
+            # Extract SCons variables and convert to Python text format
             cache_data = {
                 'project_hash': hash_details['final_hash'],
                 'hash_details': hash_details['file_hashes'],
@@ -684,38 +692,39 @@ class LDFCacheOptimizer:
                 },
                 
                 'ldf_results': {
-                    'CPPPATH': extract_scons_var('CPPPATH'),
-                    'LIBPATH': extract_scons_var('LIBPATH'), 
-                    'LIBS': extract_scons_var('LIBS'),
-                    'CPPDEFINES': extract_scons_var('CPPDEFINES'),
+                    'CPPPATH': [str(item) for item in self.env.get('CPPPATH', [])],
+                    'LIBPATH': [str(item) for item in self.env.get('LIBPATH', [])],
+                    'LIBS': [str(item) for item in self.env.get('LIBS', [])],
+                    'CPPDEFINES': [str(item) for item in self.env.get('CPPDEFINES', [])],
                     'SRC_FILTER': str(self.env.get('SRC_FILTER', '')),
-                    'CCFLAGS': extract_scons_var('CCFLAGS'),
-                    'CXXFLAGS': extract_scons_var('CXXFLAGS'),
-                    'LINKFLAGS': extract_scons_var('LINKFLAGS')
+                    'CCFLAGS': [str(item) for item in self.env.get('CCFLAGS', [])],
+                    'CXXFLAGS': [str(item) for item in self.env.get('CXXFLAGS', [])],
+                    'LINKFLAGS': [str(item) for item in self.env.get('LINKFLAGS', [])]
                 }
             }
             
-            # Validation before saving
-            for key, value in cache_data['ldf_results'].items():
-                if not isinstance(value, (list, str, type(None))):
-                    print(f"⚠ Warning: Unexpected type for {key}: {type(value)}")
-            
             os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
             
-            # Safe JSON serialization
+            # Save using Python text format (repr)
             with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, indent=2, ensure_ascii=False, default=str)
+                f.write("# LDF Cache - Python Text Format\n")
+                f.write("# Generated automatically - do not edit manually\n\n")
+                f.write(repr(cache_data))
             
             # Verification by reading back
             with open(self.cache_file, 'r', encoding='utf-8') as f:
-                test_load = json.load(f)
+                content = f.read()
+                test_load = eval(content.split('\n\n', 1)[1])  # Skip comments
             
             save_elapsed = time.time() - save_start
             lib_count = len(cache_data['ldf_results'].get('LIBS', []))
             print(f"💾 LDF cache saved and verified in {save_elapsed:.3f}s: {lib_count} Libraries")
+            print(f"💾 Cache file: {os.path.basename(self.cache_file)} ({os.path.getsize(self.cache_file)} bytes)")
             
-        except (IOError, OSError, PermissionError, TypeError, ValueError) as e:
+        except Exception as e:
             print(f"✗ Error saving LDF cache: {e}")
+            import traceback
+            traceback.print_exc()
             # Delete cache file on error
             if os.path.exists(self.cache_file):
                 try:
@@ -729,10 +738,10 @@ class LDFCacheOptimizer:
         
         Orchestrates the entire caching process: validates existing cache,
         and if valid, modifies platformio.ini to disable LDF before PlatformIO
-        reads the configuration. Searches for lib_ldf_mode in all sections.
+        reads the configuration. Uses Python text format for proper data storage.
         """
         setup_start = time.time()
-        print("\n=== LDF Cache Optimizer v1.0 (Global INI Search) ===")
+        print("\n=== LDF Cache Optimizer v2.0 (Python Text Format) ===")
         
         cache_data = self.load_and_validate_cache()
         
@@ -766,7 +775,7 @@ def clear_ldf_cache():
     Removes the cached LDF results, forcing a complete recalculation
     on the next build.
     """
-    cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.json")
+    cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.py")
     if os.path.exists(cache_file):
         try:
             os.remove(cache_file)
@@ -783,11 +792,12 @@ def show_ldf_cache_info():
     Shows details about the current cache including creation time,
     environment, library count, content hash, and performance metrics.
     """
-    cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.json")
+    cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.py")
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
-                cache_data = json.load(f)
+                content = f.read()
+                cache_data = eval(content.split('\n\n', 1)[1])  # Skip comments
             
             print(f"\n=== LDF Cache Info ===")
             print(f"Created:      {cache_data.get('timestamp', 'unknown')}")
@@ -795,6 +805,7 @@ def show_ldf_cache_info():
             print(f"Libraries:    {len(cache_data.get('ldf_results', {}).get('LIBS', []))}")
             print(f"Include paths: {len(cache_data.get('ldf_results', {}).get('CPPPATH', []))}")
             print(f"Hash:         {cache_data.get('project_hash', 'unknown')}")
+            print(f"File size:    {os.path.getsize(cache_file)} bytes")
             
             # Performance metrics
             perf = cache_data.get('performance', {})
@@ -810,7 +821,7 @@ def show_ldf_cache_info():
             
             print("=" * 25)
             
-        except (IOError, OSError, PermissionError, json.JSONDecodeError) as e:
+        except Exception as e:
             print(f"Error reading cache info: {e}")
     else:
         print("No LDF Cache present")
