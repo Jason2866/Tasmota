@@ -14,13 +14,8 @@ import datetime
 import time
 from platformio.project.config import ProjectConfig
 
-def disable_ldf_early(target, source, env):
-    """Pre-action to disable LDF before any build steps"""
-    env.Replace(LIB_LDF_MODE="off")
-    print("🔧 LDF disabled via pre-action")
-
-# Set pre-action to disable LDF before everything else
-env.AddPreAction("buildprog", disable_ldf_early)
+env.Replace(LIB_LDF_MODE="off")
+print("🔧 LDF disabled immediately in pre-script")
 
 class LDFCacheOptimizer:
     """
@@ -560,21 +555,18 @@ class LDFCacheOptimizer:
         """
         setup_start = time.time()
         print("\n=== LDF Cache Optimizer v1.0 ===")
-        
+
         cache_data = self.load_and_validate_cache()
         
         if cache_data:
             print("🚀 Using LDF cache")
             success = self.apply_ldf_cache(cache_data)
             if not success:
-                # Bei Fehler: LDF wieder aktivieren
                 self.env.Replace(LIB_LDF_MODE="chain")
                 print("🔄 Cache failed, re-enabling LDF")
         else:
-            # Kein Cache: LDF wieder aktivieren für diesen Build
             self.env.Replace(LIB_LDF_MODE="chain")
             print("🔄 No cache, LDF recalculation required")
-            # Cache nach dem Build speichern
             silent_action = self.env.Action(self.save_ldf_cache)
             silent_action.strfunction = lambda target, source, env: '' # hack to silence scons command outputs
             self.env.AddPostAction("checkprogsize", silent_action)
