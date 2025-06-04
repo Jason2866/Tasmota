@@ -11,6 +11,7 @@ import os
 import json
 import hashlib
 import datetime
+import time
 
 class LDFCacheOptimizer:
     """
@@ -60,7 +61,7 @@ class LDFCacheOptimizer:
         try:
             with open(file_path, 'rb') as f:
                 return hashlib.sha256(f.read()).hexdigest()[:16]
-        except:
+        except (IOError, OSError, PermissionError):
             return "unreadable"
     
     def get_include_relevant_hash(self, file_path):
@@ -97,7 +98,7 @@ class LDFCacheOptimizer:
             content = '\n'.join(include_lines)
             return hashlib.sha256(content.encode()).hexdigest()[:16]
             
-        except Exception:
+        except (IOError, OSError, PermissionError, UnicodeDecodeError):
             # Fallback: file hash
             return self._get_file_hash(file_path)
     
@@ -119,7 +120,7 @@ class LDFCacheOptimizer:
             try:
                 # Try to serialize as list
                 return [str(item) for item in value if item is not None]
-            except:
+            except (TypeError, AttributeError):
                 return str(value)
         
         # Simple values
@@ -163,8 +164,10 @@ class LDFCacheOptimizer:
         Excludes all PlatformIO-installed components (framework, tools, etc.)
         
         Returns:
-            dict: Contains final_hash, file_hashes dict, and total_files count
+            dict: Contains final_hash, file_hashes dict, total_files count, and timing info
         """
+        start_time = time.time()
+        
         file_hashes = {}
         hash_data = []
         
@@ -213,63 +216,82 @@ class LDFCacheOptimizer:
         
         total_scanned = 0
         total_relevant = 0
+        scan_start_time = time.time()
         
         # Single-pass scanning with early filtering and smart hashing
         for dir_type, scan_dir in scan_dirs:
             print(f"🔍 Scanning {dir_type} directory: {scan_dir}")
             
-            for root, dirs, files in os.walk(scan_dir):
-                # Skip PlatformIO paths
-                if self.is_platformio_path(root):
-                    print(f"🚫 Skipping PlatformIO subpath: {root}")
-                    continue
-                
-                # Filter ignored directories
-                dirs[:] = [d for d in dirs if d not in self.ignore_dirs]
-                
-                # Early file type filtering - MAJOR OPTIMIZATION
-                relevant_files = []
-                for file in files:
-                    total_scanned += 1
-                    file_ext = os.path.splitext(file)[1].lower()
-                    
-                    # Early extension filter - skip irrelevant files immediately
-                    if file_ext in self.ALL_RELEVANT_EXTENSIONS:
-                        relevant_files.append((file, file_ext))
-                        total_relevant += 1
-                
-                # Process only relevant files
-                for file, file_ext in relevant_files:
-                    # Skip generated files
-                    if file == generated_cpp:
-                        print(f"🚫 Skipping generated file: {file}")
+            try:
+                for root, dirs, files in os.walk(scan_dir):
+                    # Skip PlatformIO paths
+                    if self.is_platformio_path(root):
+                        print(f"🚫 Skipping PlatformIO subpath: {root}")
                         continue
                     
-                    file_path = os.path.join(root, file)
+                    # Filter ignored directories
+                    dirs[:] = [d for d in dirs if d not in self.ignore_dirs]
                     
-                    # Smart hashing based on file type
-                    if file_ext in self.HEADER_EXTENSIONS or file_ext in self.CONFIG_EXTENSIONS:
-                        # Header and config files: complete hash
-                        file_hash = self._get_file_hash(file_path)
-                    elif file_ext in self.SOURCE_EXTENSIONS:
-                        # Source files: include-relevant hash only
-                        file_hash = self.get_include_relevant_hash(file_path)
-                    else:
-                        continue  # Should not happen due to early filter
+                    # Early file type filtering - MAJOR OPTIMIZATION
+                    relevant_files = []
+                    for file in files:
+                        total_scanned += 1
+                        file_ext = os.path.splitext(file)[1].lower()
+                        
+                        # Early extension filter - skip irrelevant files immediately
+                        if file_ext in self.ALL_RELEVANT_EXTENSIONS:
+                            relevant_files.append((file, file_ext))
+                            total_relevant += 1
                     
-                    file_hashes[file_path] = file_hash
-                    hash_data.append(file_hash)
+                    # Process only relevant files
+                    for file, file_ext in relevant_files:
+                        # Skip generated files
+                        if file == generated_cpp:
+                            print(f"🚫 Skipping generated file: {file}")
+                            continue
+                        
+                        file_path = os.path.join(root, file)
+                        
+                        # Smart hashing based on file type
+                        if file_ext in self.HEADER_EXTENSIONS or file_ext in self.CONFIG_EXTENSIONS:
+                            # Header and config files: complete hash
+                            file_hash = self._get_file_hash(file_path)
+                        elif file_ext in self.SOURCE_EXTENSIONS:
+                            # Source files: include-relevant hash only
+                            file_hash = self.get_include_relevant_hash(file_path)
+                        else:
+                            continue  # Should not happen due to early filter
+                        
+                        file_hashes[file_path] = file_hash
+                        hash_data.append(file_hash)
+            
+            except (IOError, OSError, PermissionError) as e:
+                print(f"⚠ Warning: Could not scan directory {scan_dir}: {e}")
+                continue
+        
+        scan_elapsed = time.time() - scan_start_time
         
         final_hash = hashlib.sha256(''.join(hash_data).encode()).hexdigest()[:16]
         
+        total_elapsed = time.time() - start_time
+        
+        print(f"🔍 Scanning completed in {scan_elapsed:.2f}s")
+        print(f"🔍 Total hash calculation completed in {total_elapsed:.2f}s")
         print(f"🔍 Scan complete: {total_scanned} files scanned, {total_relevant} relevant, {len(file_hashes)} hashed")
-        print(f"🔍 Performance: {((total_relevant/total_scanned)*100):.1f}% relevance ratio")
+        
+        if total_scanned > 0:
+            print(f"🔍 Performance: {((total_relevant/total_scanned)*100):.1f}% relevance ratio")
+        
         print(f"🔍 Final project hash: {final_hash}")
         
         return {
             'final_hash': final_hash,
             'file_hashes': file_hashes,
-            'total_files': len(file_hashes)
+            'total_files': len(file_hashes),
+            'scan_time': scan_elapsed,
+            'total_time': total_elapsed,
+            'files_scanned': total_scanned,
+            'files_relevant': total_relevant
         }
     
     def get_project_hash(self):
@@ -342,13 +364,17 @@ class LDFCacheOptimizer:
             
             # Hash comparison with difference detection
             print("🔍 Comparing hashes (showing only differences)...")
+            comparison_start = time.time()
+            
             current_hash_details = self.get_project_hash_with_details()
             cached_hash = cache_data.get('project_hash')
             cached_hash_details = cache_data.get('hash_details', {})
             
             current_hash = current_hash_details['final_hash']
             
-            print(f"\n🔍 Hash comparison:")
+            comparison_elapsed = time.time() - comparison_start
+            
+            print(f"\n🔍 Hash comparison completed in {comparison_elapsed:.2f}s:")
             print(f"   Current:  {current_hash}")
             print(f"   Cached:   {cached_hash}")
             print(f"   Match:    {current_hash == cached_hash}")
@@ -361,7 +387,7 @@ class LDFCacheOptimizer:
             print("✅ No include-relevant changes - cache usable")
             return cache_data
             
-        except Exception as e:
+        except (IOError, OSError, PermissionError, json.JSONDecodeError) as e:
             print(f"⚠ Cache validation failed: {e}")
             return None
     
@@ -379,6 +405,8 @@ class LDFCacheOptimizer:
             bool: True if successfully applied, False otherwise
         """
         try:
+            apply_start = time.time()
+            
             # Disable LDF
             self.env.Replace(LIB_LDF_MODE="off")
             
@@ -415,18 +443,23 @@ class LDFCacheOptimizer:
             if ldf_results.get('LINKFLAGS'):
                 self.env.AppendUnique(LINKFLAGS=ldf_results['LINKFLAGS'])
             
+            apply_elapsed = time.time() - apply_start
+            
             lib_count = len(ldf_results.get('LIBS', []))
             include_count = len(ldf_results.get('CPPPATH', []))
-            print(f"📦 LDF cache applied: {lib_count} Libraries, {include_count} Include paths")
+            print(f"📦 LDF cache applied in {apply_elapsed:.3f}s: {lib_count} Libraries, {include_count} Include paths")
             
             return True
             
-        except Exception as e:
+        except (KeyError, TypeError, AttributeError) as e:
             print(f"✗ Error applying LDF cache: {e}")
             # Delete cache on errors
             if os.path.exists(self.cache_file):
-                os.remove(self.cache_file)
-                print("🗑️ Corrupted cache deleted")
+                try:
+                    os.remove(self.cache_file)
+                    print("🗑️ Corrupted cache deleted")
+                except (IOError, OSError, PermissionError):
+                    print("⚠ Could not delete corrupted cache file")
             return False
     
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
@@ -445,7 +478,9 @@ class LDFCacheOptimizer:
             return  # Cache was used
         
         try:
+            save_start = time.time()
             print("💾 Saving LDF cache...")
+            
             hash_details = self.get_project_hash_with_details()
             
             # Safe extraction of SCons variables
@@ -453,7 +488,7 @@ class LDFCacheOptimizer:
                 try:
                     value = self.env.get(var_name, [])
                     return self.safe_serialize_scons_value(value)
-                except Exception as e:
+                except (KeyError, TypeError, AttributeError) as e:
                     print(f"⚠ Warning: Could not serialize {var_name}: {e}")
                     return []
             
@@ -462,6 +497,12 @@ class LDFCacheOptimizer:
                 'hash_details': hash_details['file_hashes'],
                 'pioenv': str(self.env['PIOENV']),
                 'timestamp': datetime.datetime.now().isoformat(),
+                'performance': {
+                    'scan_time': hash_details.get('scan_time', 0),
+                    'total_time': hash_details.get('total_time', 0),
+                    'files_scanned': hash_details.get('files_scanned', 0),
+                    'files_relevant': hash_details.get('files_relevant', 0)
+                },
                 
                 'ldf_results': {
                     'CPPPATH': extract_scons_var('CPPPATH'),
@@ -489,15 +530,19 @@ class LDFCacheOptimizer:
             # Verification by reading back
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 test_load = json.load(f)
-                
-            lib_count = len(cache_data['ldf_results'].get('LIBS', []))
-            print(f"💾 LDF cache saved and verified: {lib_count} Libraries")
             
-        except Exception as e:
+            save_elapsed = time.time() - save_start
+            lib_count = len(cache_data['ldf_results'].get('LIBS', []))
+            print(f"💾 LDF cache saved and verified in {save_elapsed:.3f}s: {lib_count} Libraries")
+            
+        except (IOError, OSError, PermissionError, json.JSONEncodeError) as e:
             print(f"✗ Error saving LDF cache: {e}")
             # Delete cache file on error
             if os.path.exists(self.cache_file):
-                os.remove(self.cache_file)
+                try:
+                    os.remove(self.cache_file)
+                except (IOError, OSError, PermissionError):
+                    print("⚠ Could not delete failed cache file")
     
     def setup_ldf_caching(self):
         """
@@ -506,7 +551,8 @@ class LDFCacheOptimizer:
         Orchestrates the entire caching process: validates existing cache,
         applies it if valid, or sets up cache saving for new builds.
         """
-        print("\n=== LDF Cache Optimizer v1.1 (Optimized + Early Filter) ===")
+        setup_start = time.time()
+        print("\n=== LDF Cache Optimizer v1.2 (Optimized + Timing) ===")
         
         cache_data = self.load_and_validate_cache()
         
@@ -521,6 +567,8 @@ class LDFCacheOptimizer:
             silent_action.strfunction = lambda target, source, env: '' # hack to silence scons command outputs
             self.env.AddPostAction("checkprogsize", silent_action)
         
+        setup_elapsed = time.time() - setup_start
+        print(f"⏱️ LDF Cache setup completed in {setup_elapsed:.3f}s")
         print("=" * 60)
 
 # Cache management commands
@@ -533,8 +581,11 @@ def clear_ldf_cache():
     """
     cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.json")
     if os.path.exists(cache_file):
-        os.remove(cache_file)
-        print("✓ LDF Cache deleted")
+        try:
+            os.remove(cache_file)
+            print("✓ LDF Cache deleted")
+        except (IOError, OSError, PermissionError) as e:
+            print(f"✗ Error deleting cache: {e}")
     else:
         print("ℹ No LDF Cache present")
 
@@ -543,7 +594,7 @@ def show_ldf_cache_info():
     Display cache information.
     
     Shows details about the current cache including creation time,
-    environment, library count, and content hash.
+    environment, library count, content hash, and performance metrics.
     """
     cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache.json")
     if os.path.exists(cache_file):
@@ -557,9 +608,22 @@ def show_ldf_cache_info():
             print(f"Libraries:    {len(cache_data.get('ldf_results', {}).get('LIBS', []))}")
             print(f"Include paths: {len(cache_data.get('ldf_results', {}).get('CPPPATH', []))}")
             print(f"Hash:         {cache_data.get('project_hash', 'unknown')}")
+            
+            # Performance metrics
+            perf = cache_data.get('performance', {})
+            if perf:
+                print(f"\n--- Performance Metrics ---")
+                print(f"Scan time:    {perf.get('scan_time', 0):.2f}s")
+                print(f"Total time:   {perf.get('total_time', 0):.2f}s")
+                print(f"Files scanned: {perf.get('files_scanned', 0)}")
+                print(f"Files relevant: {perf.get('files_relevant', 0)}")
+                if perf.get('files_scanned', 0) > 0:
+                    relevance = (perf.get('files_relevant', 0) / perf.get('files_scanned', 1)) * 100
+                    print(f"Relevance:    {relevance:.1f}%")
+            
             print("=" * 25)
             
-        except Exception as e:
+        except (IOError, OSError, PermissionError, json.JSONDecodeError) as e:
             print(f"Error reading cache info: {e}")
     else:
         print("No LDF Cache present")
