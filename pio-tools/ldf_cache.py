@@ -32,15 +32,19 @@ class LDFCacheOptimizer:
         self.project_dir = self.env.subst("$PROJECT_DIR")
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         
-        # Include-relevant file types
-        self.include_relevant_extensions = {
-            # Standard C/C++
-            '.h', '.hpp', '.hxx', '.h++', '.hh',
-            '.c', '.cpp', '.cxx', '.c++', '.cc', '.ino',
-            # Template files
-            '.tpp', '.tcc', '.inc',
-            # Config/Manifest files
-            '.json', '.properties', '.txt', '.ini'
+        # File type categories for early filtering
+        self.HEADER_EXTENSIONS = {'.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'}
+        self.SOURCE_EXTENSIONS = {'.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'}
+        self.CONFIG_EXTENSIONS = {'.json', '.properties', '.txt', '.ini'}
+        self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
+        
+        # Directories to ignore during scanning
+        self.ignore_dirs = {
+            '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
+            'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
+            'berry', 'berry_tasmota', 'berry_matter', 'berry_custom',
+            'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc',
+            'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
         }
     
     def _get_file_hash(self, file_path):
@@ -126,97 +130,75 @@ class LDFCacheOptimizer:
         else:
             return str(value)
     
+    def is_platformio_path(self, path):
+        """
+        Check if path belongs to PlatformIO installation.
+        
+        Args:
+            path (str): Path to check
+            
+        Returns:
+            bool: True if path is part of PlatformIO installation
+        """
+        # Get PlatformIO paths
+        platformio_paths = set()
+        
+        # Main PlatformIO directory
+        if 'PLATFORMIO_CORE_DIR' in os.environ:
+            platformio_paths.add(os.path.normpath(os.environ['PLATFORMIO_CORE_DIR']))
+        
+        # Standard PlatformIO paths
+        home_dir = os.path.expanduser("~")
+        platformio_paths.add(os.path.normpath(os.path.join(home_dir, ".platformio")))
+        
+        # Project-specific .pio directories
+        platformio_paths.add(os.path.normpath(os.path.join(self.project_dir, ".pio")))
+        
+        norm_path = os.path.normpath(path)
+        return any(norm_path.startswith(pio_path) for pio_path in platformio_paths)
+    
     def get_project_hash_with_details(self):
         """
-        Generate hash with detailed file tracking for comparison.
+        Generate hash with detailed file tracking and optimized early filtering.
         Excludes all PlatformIO-installed components (framework, tools, etc.)
         
         Returns:
             dict: Contains final_hash, file_hashes dict, and total_files count
         """
-        hash_data = []
         file_hashes = {}
+        hash_data = []
         
-        # Directories to ignore during scanning
-        ignore_dirs = {
-            '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
-            'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
-            'berry', 'berry_tasmota', 'berry_matter', 'berry_custom',
-            'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc',
-            'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
-        }
-
-        # Determine and exclude PlatformIO paths
-        platformio_paths = set()
+        # Generated file to skip (PlatformIO merges .ino files)
+        generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
+        print(f"🔍 Generated file to skip: {generated_cpp}")
         
-        # Main PlatformIO directory
-        if 'PLATFORMIO_CORE_DIR' in os.environ:
-            pio_core = os.path.normpath(os.environ['PLATFORMIO_CORE_DIR'])
-            platformio_paths.add(pio_core)
-            print(f"🔍 PlatformIO Core Dir: {pio_core}")
-        
-        # Standard PlatformIO paths
-        home_dir = os.path.expanduser("~")
-        pio_home = os.path.normpath(os.path.join(home_dir, ".platformio"))
-        platformio_paths.add(pio_home)
-        print(f"🔍 PlatformIO Home Dir: {pio_home}")
-        
-        # Project-specific .pio directories
-        pio_project = os.path.normpath(os.path.join(self.project_dir, ".pio"))
-        platformio_paths.add(pio_project)
-        print(f"🔍 Project .pio Dir: {pio_project}")
-        
-        def is_platformio_path(path):
-            """Check if path belongs to PlatformIO installation"""
-            norm_path = os.path.normpath(path)
-            return any(norm_path.startswith(pio_path) for pio_path in platformio_paths)
-
-        # Process platformio.ini
+        # Process platformio.ini first
         ini_file = os.path.join(self.project_dir, "platformio.ini")
         if os.path.exists(ini_file):
             ini_hash = self._get_file_hash(ini_file)
             hash_data.append(ini_hash)
             file_hashes['platformio.ini'] = ini_hash
             print(f"🔍 platformio.ini: {ini_hash}")
-            
-        # Generated cpp file to skip (PlatformIO merges .ino files)
-        generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
         
-        # Scan source directory
+        # Collect all scan directories
+        scan_dirs = []
+        
+        # Add source directory
         if os.path.exists(self.src_dir):
-            print(f"🔍 Scanning source directory: {self.src_dir}")
-            for root, dirs, files in os.walk(self.src_dir):
-                # Skip PlatformIO paths
-                if is_platformio_path(root):
-                    print(f"🚫 Skipping PlatformIO source path: {root}")
-                    continue
-                    
-                dirs[:] = [d for d in dirs if d not in ignore_dirs]
-
-                for file in sorted(files):
-                    if file == generated_cpp:
-                        print(f"🚫 Skipping generated file: {file}")
-                        continue
-                        
-                    file_path = os.path.join(root, file)
-                    file_ext = os.path.splitext(file)[1].lower()
-                    
-                    if file_ext in {'.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'}:
-                        file_hash = self._get_file_hash(file_path)
-                        hash_data.append(file_hash)
-                        file_hashes[file_path] = file_hash
-                    elif file_ext in {'.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'}:
-                        file_hash = self.get_include_relevant_hash(file_path)
-                        hash_data.append(file_hash)
-                        file_hashes[file_path] = file_hash
+            scan_dirs.append(('source', self.src_dir))
         
-        # Scan include directories with PlatformIO filter
-        print(f"🔍 Scanning include directories...")
+        # Add library directory
+        lib_dir = os.path.join(self.project_dir, "lib")
+        if os.path.exists(lib_dir) and not self.is_platformio_path(lib_dir):
+            scan_dirs.append(('library', lib_dir))
+        
+        # Add include directories (filtered)
+        print(f"🔍 Filtering include directories...")
         for inc_path in self.env.get('CPPPATH', []):
             inc_dir = str(inc_path)
             
             # Skip PlatformIO paths
-            if is_platformio_path(inc_dir):
+            if self.is_platformio_path(inc_dir):
                 print(f"🚫 Skipping PlatformIO include path: {inc_dir}")
                 continue
             
@@ -224,49 +206,64 @@ class LDFCacheOptimizer:
             if any(skip_dir in inc_dir for skip_dir in ['variants', '.platformio', '.pio']):
                 print(f"🚫 Skipping system path: {inc_dir}")
                 continue
-                
-            print(f"✅ Including path: {inc_dir}")
             
             if os.path.exists(inc_dir) and inc_dir != self.src_dir:
-                for root, dirs, files in os.walk(inc_dir):
-                    # Double check for subdirectories
-                    if is_platformio_path(root):
-                        print(f"🚫 Skipping PlatformIO subpath: {root}")
-                        continue
-                        
-                    dirs[:] = [d for d in dirs if d not in ignore_dirs]
-
-                    for file in sorted(files):
-                        if file.endswith(('.h', '.hpp', '.hxx', '.inc', '.tpp')):
-                            file_path = os.path.join(root, file)
-                            file_hash = self._get_file_hash(file_path)
-                            hash_data.append(file_hash)
-                            file_hashes[file_path] = file_hash
+                scan_dirs.append(('include', inc_dir))
+                print(f"✅ Including path: {inc_dir}")
         
-        # Library directory with PlatformIO filter
-        lib_dir = os.path.join(self.project_dir, "lib")
-        if os.path.exists(lib_dir):
-            if is_platformio_path(lib_dir):
-                print(f"🚫 Skipping PlatformIO lib directory: {lib_dir}")
-            else:
-                print(f"🔍 Scanning library directory: {lib_dir}")
-                for root, dirs, files in os.walk(lib_dir):
-                    if is_platformio_path(root):
-                        print(f"🚫 Skipping PlatformIO lib subpath: {root}")
+        total_scanned = 0
+        total_relevant = 0
+        
+        # Single-pass scanning with early filtering and smart hashing
+        for dir_type, scan_dir in scan_dirs:
+            print(f"🔍 Scanning {dir_type} directory: {scan_dir}")
+            
+            for root, dirs, files in os.walk(scan_dir):
+                # Skip PlatformIO paths
+                if self.is_platformio_path(root):
+                    print(f"🚫 Skipping PlatformIO subpath: {root}")
+                    continue
+                
+                # Filter ignored directories
+                dirs[:] = [d for d in dirs if d not in self.ignore_dirs]
+                
+                # Early file type filtering - MAJOR OPTIMIZATION
+                relevant_files = []
+                for file in files:
+                    total_scanned += 1
+                    file_ext = os.path.splitext(file)[1].lower()
+                    
+                    # Early extension filter - skip irrelevant files immediately
+                    if file_ext in self.ALL_RELEVANT_EXTENSIONS:
+                        relevant_files.append((file, file_ext))
+                        total_relevant += 1
+                
+                # Process only relevant files
+                for file, file_ext in relevant_files:
+                    # Skip generated files
+                    if file == generated_cpp:
+                        print(f"🚫 Skipping generated file: {file}")
                         continue
-                        
-                    dirs[:] = [d for d in dirs if d not in ignore_dirs]
-
-                    for file in sorted(files):
-                        if file.endswith(('.h', '.hpp', '.json', '.properties')):
-                            file_path = os.path.join(root, file)
-                            file_hash = self._get_file_hash(file_path)
-                            hash_data.append(file_hash)
-                            file_hashes[file_path] = file_hash
+                    
+                    file_path = os.path.join(root, file)
+                    
+                    # Smart hashing based on file type
+                    if file_ext in self.HEADER_EXTENSIONS or file_ext in self.CONFIG_EXTENSIONS:
+                        # Header and config files: complete hash
+                        file_hash = self._get_file_hash(file_path)
+                    elif file_ext in self.SOURCE_EXTENSIONS:
+                        # Source files: include-relevant hash only
+                        file_hash = self.get_include_relevant_hash(file_path)
+                    else:
+                        continue  # Should not happen due to early filter
+                    
+                    file_hashes[file_path] = file_hash
+                    hash_data.append(file_hash)
         
         final_hash = hashlib.sha256(''.join(hash_data).encode()).hexdigest()[:16]
         
-        print(f"🔍 Hash calculation complete: {len(file_hashes)} project files (PlatformIO paths excluded)")
+        print(f"🔍 Scan complete: {total_scanned} files scanned, {total_relevant} relevant, {len(file_hashes)} hashed")
+        print(f"🔍 Performance: {((total_relevant/total_scanned)*100):.1f}% relevance ratio")
         print(f"🔍 Final project hash: {final_hash}")
         
         return {
@@ -509,7 +506,7 @@ class LDFCacheOptimizer:
         Orchestrates the entire caching process: validates existing cache,
         applies it if valid, or sets up cache saving for new builds.
         """
-        print("\n=== LDF Cache Optimizer v1.0 (Debug + PlatformIO Filter) ===")
+        print("\n=== LDF Cache Optimizer v1.1 (Optimized + Early Filter) ===")
         
         cache_data = self.load_and_validate_cache()
         
