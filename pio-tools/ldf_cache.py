@@ -54,12 +54,53 @@ class LDFCacheOptimizer:
         
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
     
+    def find_lib_ldf_mode_in_ini(self):
+        """
+        Find all occurrences of lib_ldf_mode in platformio.ini across all sections.
+        
+        Returns:
+            list: List of dictionaries with section, line_number, and line content
+        """
+        lib_ldf_mode_lines = []
+        
+        try:
+            if os.path.exists(self.platformio_ini):
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                for i, line in enumerate(lines):
+                    if 'lib_ldf_mode' in line.lower():
+                        # Find which section this line belongs to
+                        section = None
+                        # Search backwards for section header
+                        for j in range(i, -1, -1):
+                            if lines[j].strip().startswith('[') and lines[j].strip().endswith(']'):
+                                section = lines[j].strip()
+                                break
+                        
+                        lib_ldf_mode_lines.append({
+                            'section': section, 
+                            'line_number': i+1, 
+                            'line': line.strip(),
+                            'line_index': i
+                        })
+                
+                return lib_ldf_mode_lines
+            else:
+                print(f"❌ platformio.ini not found: {self.platformio_ini}")
+                return []
+                
+        except Exception as e:
+            print(f"❌ Error reading platformio.ini: {e}")
+            return []
+    
     def modify_platformio_ini(self, new_ldf_mode):
         """
-        Modify lib_ldf_mode directly in platformio.ini file.
+        Modify lib_ldf_mode in platformio.ini - searches all sections.
         
         This is a "dirty" workaround for the timing issue where LDF runs before
-        any SCons pre-actions can disable it.
+        any SCons pre-actions can disable it. The function searches for existing
+        lib_ldf_mode entries in any section of platformio.ini.
         
         Args:
             new_ldf_mode (str): New LDF mode ('off' or 'chain')
@@ -67,60 +108,88 @@ class LDFCacheOptimizer:
         Returns:
             bool: True if modification was successful, False otherwise
         """
-        if not os.path.exists(self.platformio_ini):
-            print("⚠ platformio.ini not found")
+        try:
+            # Find all existing lib_ldf_mode entries
+            ldf_entries = self.find_lib_ldf_mode_in_ini()
+            
+            if ldf_entries:
+                print(f"🔍 Found {len(ldf_entries)} lib_ldf_mode entries:")
+                for entry in ldf_entries:
+                    print(f"   {entry['section']} line {entry['line_number']}: {entry['line']}")
+                
+                # Use the first entry found (modify the first occurrence)
+                first_entry = ldf_entries[0]
+                
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                # Extract current value for restoration
+                current_line = lines[first_entry['line_index']]
+                match = re.search(r'lib_ldf_mode\s*=\s*(\w+)', current_line)
+                if match:
+                    self.original_ldf_mode = match.group(1)
+                else:
+                    self.original_ldf_mode = "chain"  # Default
+                
+                # Replace the line
+                lines[first_entry['line_index']] = re.sub(
+                    r'lib_ldf_mode\s*=\s*\w+', 
+                    f'lib_ldf_mode = {new_ldf_mode}', 
+                    current_line
+                )
+                
+                # Write back
+                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                
+                print(f"🔧 Modified {first_entry['section']}: lib_ldf_mode = {new_ldf_mode}")
+                return True
+                
+            else:
+                # No existing lib_ldf_mode found - add to [platformio] section
+                print("🔍 No existing lib_ldf_mode found, adding to [platformio] section")
+                return self.add_lib_ldf_mode_to_platformio_section(new_ldf_mode)
+                
+        except Exception as e:
+            print(f"❌ Error modifying platformio.ini: {e}")
             return False
+    
+    def add_lib_ldf_mode_to_platformio_section(self, new_ldf_mode):
+        """
+        Add lib_ldf_mode to [platformio] section if no existing entry found.
         
+        Args:
+            new_ldf_mode (str): New LDF mode to add
+            
+        Returns:
+            bool: True if addition was successful, False otherwise
+        """
         try:
             with open(self.platformio_ini, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # Find current environment section
-            current_env = self.env['PIOENV']
-            env_pattern = rf'\[env:{re.escape(current_env)}\]'
+            self.original_ldf_mode = "chain"  # Default value
             
-            # Look for existing lib_ldf_mode in current environment
-            ldf_pattern = r'lib_ldf_mode\s*=\s*(\w+)'
-            
-            # Search for lib_ldf_mode after the current environment section
-            env_match = re.search(env_pattern, content)
-            if env_match:
-                # Look for lib_ldf_mode in this environment section
-                env_start = env_match.end()
-                next_env = re.search(r'\[env:', content[env_start:])
-                env_end = env_start + next_env.start() if next_env else len(content)
-                env_section = content[env_start:env_end]
-                
-                ldf_match = re.search(ldf_pattern, env_section)
-                if ldf_match:
-                    # Save original value and replace
-                    self.original_ldf_mode = ldf_match.group(1)
-                    # Replace in the full content
-                    full_match_start = env_start + ldf_match.start()
-                    full_match_end = env_start + ldf_match.end()
-                    new_content = (content[:full_match_start] + 
-                                 f'lib_ldf_mode = {new_ldf_mode}' + 
-                                 content[full_match_end:])
-                else:
-                    # Add lib_ldf_mode to current environment section
-                    self.original_ldf_mode = "chain"  # PlatformIO default
-                    insert_pos = env_match.end()
-                    new_content = (content[:insert_pos] + 
-                                 f'\nlib_ldf_mode = {new_ldf_mode}' + 
-                                 content[insert_pos:])
+            # Look for [platformio] section
+            platformio_section = re.search(r'\[platformio\]', content)
+            if platformio_section:
+                # Add after [platformio] line
+                insert_pos = platformio_section.end()
+                new_content = (content[:insert_pos] + 
+                             f'\nlib_ldf_mode = {new_ldf_mode}' + 
+                             content[insert_pos:])
             else:
-                print(f"⚠ Environment [{current_env}] not found in platformio.ini")
-                return False
+                # Add [platformio] section at top
+                new_content = f'[platformio]\nlib_ldf_mode = {new_ldf_mode}\n\n' + content
             
-            # Write modified content
             with open(self.platformio_ini, 'w', encoding='utf-8') as f:
                 f.write(new_content)
             
-            print(f"🔧 Modified platformio.ini: lib_ldf_mode = {new_ldf_mode}")
+            print(f"🔧 Added to [platformio]: lib_ldf_mode = {new_ldf_mode}")
             return True
             
         except Exception as e:
-            print(f"✗ Error modifying platformio.ini: {e}")
+            print(f"❌ Error adding lib_ldf_mode: {e}")
             return False
     
     def restore_platformio_ini(self):
@@ -134,44 +203,33 @@ class LDFCacheOptimizer:
             return
         
         try:
-            with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                content = f.read()
+            # Find current lib_ldf_mode entries
+            ldf_entries = self.find_lib_ldf_mode_in_ini()
             
-            # Find current environment section
-            current_env = self.env['PIOENV']
-            env_pattern = rf'\[env:{re.escape(current_env)}\]'
-            ldf_pattern = r'lib_ldf_mode\s*=\s*\w+'
-            
-            if self.original_ldf_mode == "chain":
-                # Remove the line if it was the default value
-                # Look for the line in the current environment section
-                env_match = re.search(env_pattern, content)
-                if env_match:
-                    env_start = env_match.end()
-                    next_env = re.search(r'\[env:', content[env_start:])
-                    env_end = env_start + next_env.start() if next_env else len(content)
-                    
-                    # Remove lib_ldf_mode line from this section
-                    before_env = content[:env_start]
-                    env_section = content[env_start:env_end]
-                    after_env = content[env_end:]
-                    
-                    # Remove lib_ldf_mode line (including newline)
-                    cleaned_section = re.sub(r'\nlib_ldf_mode\s*=\s*\w+', '', env_section)
-                    new_content = before_env + cleaned_section + after_env
+            if ldf_entries:
+                first_entry = ldf_entries[0]
+                
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                if self.original_ldf_mode == "chain":
+                    # Remove the line (was default)
+                    lines.pop(first_entry['line_index'])
                 else:
-                    new_content = content
-            else:
-                # Restore original non-default value
-                new_content = re.sub(ldf_pattern, f'lib_ldf_mode = {self.original_ldf_mode}', content)
-            
-            with open(self.platformio_ini, 'w', encoding='utf-8') as f:
-                f.write(new_content)
-            
-            print(f"🔧 Restored platformio.ini: lib_ldf_mode = {self.original_ldf_mode}")
+                    # Restore original value
+                    lines[first_entry['line_index']] = re.sub(
+                        r'lib_ldf_mode\s*=\s*\w+', 
+                        f'lib_ldf_mode = {self.original_ldf_mode}', 
+                        lines[first_entry['line_index']]
+                    )
+                
+                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                
+                print(f"🔧 Restored lib_ldf_mode = {self.original_ldf_mode}")
             
         except Exception as e:
-            print(f"✗ Error restoring platformio.ini: {e}")
+            print(f"❌ Error restoring platformio.ini: {e}")
     
     def _get_file_hash(self, file_path):
         """
@@ -671,10 +729,10 @@ class LDFCacheOptimizer:
         
         Orchestrates the entire caching process: validates existing cache,
         and if valid, modifies platformio.ini to disable LDF before PlatformIO
-        reads the configuration.
+        reads the configuration. Searches for lib_ldf_mode in all sections.
         """
         setup_start = time.time()
-        print("\n=== LDF Cache Optimizer v1.0 ===")
+        print("\n=== LDF Cache Optimizer v1.0 (Global INI Search) ===")
         
         cache_data = self.load_and_validate_cache()
         
