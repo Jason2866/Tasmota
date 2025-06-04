@@ -22,6 +22,20 @@ class LDFCacheOptimizer:
     subsequent builds when no include-relevant changes have been made to the project.
     """
     
+    # File type categories for early filtering
+    HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
+    SOURCE_EXTENSIONS = frozenset(['.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'])
+    CONFIG_EXTENSIONS = frozenset(['.json', '.properties', '.txt', '.ini'])
+    
+    # Directories to ignore during scanning
+    IGNORE_DIRS = frozenset([
+        '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
+        'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
+        'berry', 'berry_tasmota', 'berry_matter', 'berry_custom',
+        'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc',
+        'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
+    ])
+    
     def __init__(self, environment):
         """
         Initialize the LDF Cache Optimizer.
@@ -34,20 +48,7 @@ class LDFCacheOptimizer:
         self.project_dir = self.env.subst("$PROJECT_DIR")
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         
-        # File type categories for early filtering
-        self.HEADER_EXTENSIONS = {'.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'}
-        self.SOURCE_EXTENSIONS = {'.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'}
-        self.CONFIG_EXTENSIONS = {'.json', '.properties', '.txt', '.ini'}
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
-        
-        # Directories to ignore during scanning
-        self.ignore_dirs = {
-            '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
-            'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
-            'berry', 'berry_tasmota', 'berry_matter', 'berry_custom',
-            'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc',
-            'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
-        }
     
     def _get_file_hash(self, file_path):
         """
@@ -231,7 +232,7 @@ class LDFCacheOptimizer:
                         continue
                     
                     # Filter ignored directories
-                    dirs[:] = [d for d in dirs if d not in self.ignore_dirs]
+                    dirs[:] = [d for d in dirs if d not in self.IGNORE_DIRS]
                     
                     # Early file type filtering - MAJOR OPTIMIZATION
                     relevant_files = []
