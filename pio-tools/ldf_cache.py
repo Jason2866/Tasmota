@@ -17,13 +17,19 @@ from platformio.project.config import ProjectConfig
 class LDFCacheOptimizer:
     """
     Intelligent LDF (Library Dependency Finder) cache optimizer for PlatformIO.
+
+    This class manages caching of library dependency resolution results to speed up
+    subsequent builds when no include-relevant changes have been made to the project.
     Uses SCons native serialization (env.Dump) to store and restore all build variables
     without losing any information. Only variables present in the environment are saved/restored.
     """
 
+    # File type categories for early filtering
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
     SOURCE_EXTENSIONS = frozenset(['.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'])
     CONFIG_EXTENSIONS = frozenset(['.json', '.properties', '.txt', '.ini'])
+
+    # Directories to ignore during scanning
     IGNORE_DIRS = frozenset([
         '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
         'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
@@ -56,6 +62,7 @@ class LDFCacheOptimizer:
     def find_lib_ldf_mode_in_ini(self):
         """
         Find all occurrences of lib_ldf_mode in platformio.ini across all sections.
+
         Returns:
             list: List of dictionaries with section, line_number, and line content
         """
@@ -88,6 +95,7 @@ class LDFCacheOptimizer:
     def modify_platformio_ini(self, new_ldf_mode):
         """
         Modify or add lib_ldf_mode in platformio.ini.
+
         Args:
             new_ldf_mode (str): New LDF mode ('off' or 'chain')
         Returns:
@@ -124,6 +132,11 @@ class LDFCacheOptimizer:
     def add_lib_ldf_mode_to_platformio_section(self, new_ldf_mode):
         """
         Add lib_ldf_mode to [platformio] section if not present.
+
+        Args:
+            new_ldf_mode (str): New LDF mode to add
+        Returns:
+            bool: True if addition was successful, False otherwise
         """
         try:
             with open(self.platformio_ini, 'r', encoding='utf-8') as f:
@@ -174,6 +187,12 @@ class LDFCacheOptimizer:
     def _get_file_hash(self, file_path):
         """
         Generate SHA256 hash of a file.
+
+        Args:
+            file_path (str): Path to the file to hash
+
+        Returns:
+            str: SHA256 hash of the file content (first 16 characters) or "unreadable" if error
         """
         try:
             with open(file_path, 'rb') as f:
@@ -184,6 +203,12 @@ class LDFCacheOptimizer:
     def get_include_relevant_hash(self, file_path):
         """
         Generate hash only from include-relevant lines in source files.
+
+        Args:
+            file_path (str): Path to the source file
+
+        Returns:
+            str: SHA256 hash of include-relevant content (first 16 characters)
         """
         include_lines = []
         try:
@@ -204,6 +229,12 @@ class LDFCacheOptimizer:
     def is_platformio_path(self, path):
         """
         Check if path belongs to PlatformIO installation.
+
+        Args:
+            path (str): Path to check
+
+        Returns:
+            bool: True if path is part of PlatformIO installation
         """
         platformio_paths = set()
         if 'PLATFORMIO_CORE_DIR' in os.environ:
@@ -218,6 +249,9 @@ class LDFCacheOptimizer:
         """
         Generate hash with detailed file tracking and optimized early filtering.
         Excludes all PlatformIO-installed components and lib_ldf_mode settings.
+
+        Returns:
+            dict: Contains final_hash, file_hashes dict, total_files count, and timing info
         """
         start_time = time.time()
         file_hashes = {}
@@ -300,6 +334,9 @@ class LDFCacheOptimizer:
     def load_and_validate_cache(self):
         """
         Load cache using Python text format (eval).
+
+        Returns:
+            dict or None: Cache data if valid, None if invalid or non-existent
         """
         if not os.path.exists(self.cache_file):
             print("🔍 No cache file exists")
@@ -513,9 +550,11 @@ def force_ldf_rebuild():
     clear_ldf_cache()
     print("LDF will be recalculated on next build")
 
+# Register custom targets for cache management
 env.AlwaysBuild(env.Alias("clear_ldf_cache", None, clear_ldf_cache))
 env.AlwaysBuild(env.Alias("ldf_cache_info", None, show_ldf_cache_info))
 env.AlwaysBuild(env.Alias("force_ldf_rebuild", None, force_ldf_rebuild))
 
+# Initialize and run LDF Cache Optimizer
 ldf_optimizer = LDFCacheOptimizer(env)
 ldf_optimizer.setup_ldf_caching()
