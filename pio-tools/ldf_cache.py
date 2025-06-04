@@ -1,8 +1,9 @@
 # ldf_cache_env.py
 """
-PlatformIO Advanced Script for full SCons Environment Caching and LDF disabling.
+PlatformIO Advanced Script for full SCons Environment Caching with Cache Invalidation.
 This module optimizes build performance by saving and restoring the
-entire SCons environment and disables LDF when using the cache.
+entire SCons environment, disables LDF when using the cache, and
+automatically invalidates the cache if the project or environment changes.
 
 Copyright: Jason2866
 """
@@ -17,11 +18,12 @@ from platformio.project.config import ProjectConfig
 
 class SConsEnvCache:
     """
-    Full SCons Environment Cache for PlatformIO.
+    Full SCons Environment Cache for PlatformIO with automatic cache invalidation.
 
     This class dumps the entire SCons environment to a file after a successful build,
     and can restore all variables for future builds, enabling maximum reproducibility
-    and performance for dependency-heavy projects. It also manages lib_ldf_mode.
+    and performance for dependency-heavy projects. It also manages lib_ldf_mode and
+    automatically invalidates the cache if the project or environment changes.
     """
 
     def __init__(self, environment):
@@ -34,6 +36,7 @@ class SConsEnvCache:
         self.env = environment
         self.cache_file = os.path.join(self.env.subst("$BUILD_DIR"), "ldf_env_cache.py")
         self.project_dir = self.env.subst("$PROJECT_DIR")
+        self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
         self.original_ldf_mode = None
 
@@ -162,25 +165,62 @@ class SConsEnvCache:
         except Exception as e:
             print(f"❌ Error restoring platformio.ini: {e}")
 
+    def get_project_hash(self):
+        """
+        Compute a hash of the project that reflects all include-relevant files.
+
+        Returns:
+            str: SHA256 hash (first 16 chars) of project state
+        """
+        hash_data = []
+        # Hash platformio.ini (excluding lib_ldf_mode)
+        if os.path.exists(self.platformio_ini):
+            try:
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    ini_content = f.read()
+                filtered_content = re.sub(r'lib_ldf_mode\s*=\s*\w+\n?', '', ini_content)
+                hash_data.append(filtered_content)
+            except Exception as e:
+                print(f"⚠ Error reading platformio.ini: {e}")
+        # Hash all source and config files (recursively)
+        for root, dirs, files in os.walk(self.project_dir):
+            dirs[:] = [d for d in dirs if d not in ['.pio', '.git', 'build', 'data', '__pycache__']]
+            for file in files:
+                if file.endswith(('.c', '.cpp', '.h', '.hpp', '.ino', '.json', '.ini')):
+                    try:
+                        with open(os.path.join(root, file), 'rb') as f:
+                            hash_data.append(f.read())
+                    except Exception:
+                        continue
+        return hashlib.sha256(b''.join(hash_data)).hexdigest()[:16]
+
     def save_env_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
         Save the full SCons environment to a file using SCons' native Dump().
+        Also save the current project hash and environment for cache validation.
         """
         try:
             print("💾 Saving full SCons environment cache...")
             env_dump = self.env.Dump(format='pretty')
+            project_hash = self.get_project_hash()
+            cache_data = {
+                'env_dump': env_dump,
+                'project_hash': project_hash,
+                'pioenv': str(self.env['PIOENV']),
+                'timestamp': datetime.datetime.now().isoformat(),
+            }
             os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 f.write("# SCons Environment Cache - Do not edit manually\n")
                 f.write("# Generated automatically\n\n")
-                f.write(env_dump)
+                f.write(repr(cache_data))
             print(f"💾 SCons environment cache saved to {self.cache_file}")
         except Exception as e:
             print(f"✗ Error saving environment cache: {e}")
 
     def load_env_cache(self):
         """
-        Load and restore the full SCons environment from cache if available.
+        Load and restore the full SCons environment from cache if available and valid.
 
         Returns:
             bool: True if cache was loaded and applied, False otherwise
@@ -191,7 +231,15 @@ class SConsEnvCache:
         try:
             print(f"🔍 Loading SCons environment cache from {self.cache_file} ...")
             with open(self.cache_file, 'r', encoding='utf-8') as f:
-                env_dict = eval(f.read())
+                cache_data = eval(f.read())
+            # Validate cache
+            current_hash = self.get_project_hash()
+            current_env = str(self.env['PIOENV'])
+            if not self.is_cache_valid(cache_data, current_env, current_hash):
+                print("⚠ Cache invalid, will not use cached environment.")
+                return False
+            # Restore all variables from the cached environment
+            env_dict = eval(cache_data['env_dump'])
             for k, v in env_dict.items():
                 self.env[k] = v
             print("✅ SCons environment restored from cache.")
@@ -199,6 +247,27 @@ class SConsEnvCache:
         except Exception as e:
             print(f"⚠ Error loading environment cache: {e}")
             return False
+
+    def is_cache_valid(self, cache_data, current_env, current_hash):
+        """
+        Check if the cache is still valid based on environment and project hash.
+
+        Args:
+            cache_data (dict): Cached data containing 'pioenv' and 'project_hash'
+            current_env (str): Current environment name
+            current_hash (str): Current project hash
+        Returns:
+            bool: True if cache is valid, False otherwise
+        """
+        if not cache_data:
+            return False
+        if cache_data.get('pioenv') != current_env:
+            print(f"Cache invalid: environment changed from {cache_data.get('pioenv')} to {current_env}")
+            return False
+        if cache_data.get('project_hash') != current_hash:
+            print(f"Cache invalid: project hash changed from {cache_data.get('project_hash')} to {current_hash}")
+            return False
+        return True
 
     def setup_env_caching(self):
         """
@@ -218,7 +287,7 @@ class SConsEnvCache:
             restore_action.strfunction = lambda target, source, env: ''
             self.env.AddPostAction("checkprogsize", restore_action)
         else:
-            print("🔄 No environment cache found - will save after build.")
+            print("🔄 No valid environment cache found - will save after build.")
             # Save the environment after a successful build
             save_action = self.env.Action(self.save_env_cache)
             save_action.strfunction = lambda target, source, env: ''
@@ -248,10 +317,12 @@ def show_env_cache_info():
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                env_dict = eval(content.split('\n\n', 1)[1])
+                cache_data = eval(content.split('\n\n', 1)[1])
             print(f"\n=== SCons Environment Cache Info ===")
-            print(f"Variables cached: {len(env_dict)}")
-            print(f"File size: {os.path.getsize(cache_file)} bytes")
+            print(f"Environment:  {cache_data.get('pioenv', 'unknown')}")
+            print(f"Project hash: {cache_data.get('project_hash', 'unknown')}")
+            print(f"Timestamp:    {cache_data.get('timestamp', 'unknown')}")
+            print(f"File size:    {os.path.getsize(cache_file)} bytes")
             print("=" * 25)
         except Exception as e:
             print(f"Error reading cache info: {e}")
