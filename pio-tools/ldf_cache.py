@@ -214,7 +214,7 @@ class LDFCacheOptimizer:
             
             if os.path.exists(inc_dir) and inc_dir != self.src_dir:
                 scan_dirs.append(('include', inc_dir))
-                print(f"✅ Including path: {inc_dir}")
+                #print(f"✅ Including path: {inc_dir}")
         
         total_scanned = 0
         total_relevant = 0
