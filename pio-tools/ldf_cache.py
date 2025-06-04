@@ -97,14 +97,47 @@ class LDFCacheOptimizer:
             # Fallback: file hash
             return self._get_file_hash(file_path)
     
+    def safe_serialize_scons_value(self, value):
+        """
+        Safe serialization of SCons values to prevent JSON corruption.
+        
+        Args:
+            value: SCons value to serialize
+            
+        Returns:
+            Serializable value (list, string, or None)
+        """
+        if value is None:
+            return None
+        
+        # SCons NodeList or similar iterable objects
+        if hasattr(value, '__iter__') and not isinstance(value, (str, bytes)):
+            try:
+                # Try to serialize as list
+                return [str(item) for item in value if item is not None]
+            except:
+                return str(value)
+        
+        # Simple values
+        elif isinstance(value, (str, int, float, bool)):
+            return value
+        
+        # Everything else as string
+        else:
+            return str(value)
+    
     def get_project_hash_with_details(self):
         """
         Generate hash with detailed file tracking for comparison.
         Excludes all PlatformIO-installed components (framework, tools, etc.)
+        
+        Returns:
+            dict: Contains final_hash, file_hashes dict, and total_files count
         """
         hash_data = []
         file_hashes = {}
         
+        # Directories to ignore during scanning
         ignore_dirs = {
             '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
             'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
@@ -113,32 +146,32 @@ class LDFCacheOptimizer:
             'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
         }
 
-        # PlatformIO-Pfade ermitteln und ausschließen
+        # Determine and exclude PlatformIO paths
         platformio_paths = set()
         
-        # Haupt-PlatformIO-Verzeichnis
+        # Main PlatformIO directory
         if 'PLATFORMIO_CORE_DIR' in os.environ:
             pio_core = os.path.normpath(os.environ['PLATFORMIO_CORE_DIR'])
             platformio_paths.add(pio_core)
             print(f"🔍 PlatformIO Core Dir: {pio_core}")
         
-        # Standard-PlatformIO-Pfade
+        # Standard PlatformIO paths
         home_dir = os.path.expanduser("~")
         pio_home = os.path.normpath(os.path.join(home_dir, ".platformio"))
         platformio_paths.add(pio_home)
         print(f"🔍 PlatformIO Home Dir: {pio_home}")
         
-        # Projekt-spezifische .pio Verzeichnisse
+        # Project-specific .pio directories
         pio_project = os.path.normpath(os.path.join(self.project_dir, ".pio"))
         platformio_paths.add(pio_project)
         print(f"🔍 Project .pio Dir: {pio_project}")
         
         def is_platformio_path(path):
-            """Prüfe ob Pfad zu PlatformIO gehört"""
+            """Check if path belongs to PlatformIO installation"""
             norm_path = os.path.normpath(path)
             return any(norm_path.startswith(pio_path) for pio_path in platformio_paths)
 
-        # platformio.ini
+        # Process platformio.ini
         ini_file = os.path.join(self.project_dir, "platformio.ini")
         if os.path.exists(ini_file):
             ini_hash = self._get_file_hash(ini_file)
@@ -146,14 +179,14 @@ class LDFCacheOptimizer:
             file_hashes['platformio.ini'] = ini_hash
             print(f"🔍 platformio.ini: {ini_hash}")
             
+        # Generated cpp file to skip (PlatformIO merges .ino files)
         generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
-        print(f"🔍 Generated file to skip: {generated_cpp}")
         
         # Scan source directory
         if os.path.exists(self.src_dir):
             print(f"🔍 Scanning source directory: {self.src_dir}")
             for root, dirs, files in os.walk(self.src_dir):
-                # Skip PlatformIO-Pfade
+                # Skip PlatformIO paths
                 if is_platformio_path(root):
                     print(f"🚫 Skipping PlatformIO source path: {root}")
                     continue
@@ -177,20 +210,26 @@ class LDFCacheOptimizer:
                         hash_data.append(file_hash)
                         file_hashes[file_path] = file_hash
         
-        # Scan include directories - MIT PlatformIO-Filter
-        print("🔍 Scanning include directories:")
+        # Scan include directories with PlatformIO filter
+        print(f"🔍 Scanning include directories...")
         for inc_path in self.env.get('CPPPATH', []):
             inc_dir = str(inc_path)
             
-            # Skip PlatformIO-Pfade
+            # Skip PlatformIO paths
             if is_platformio_path(inc_dir):
                 print(f"🚫 Skipping PlatformIO include path: {inc_dir}")
                 continue
+            
+            # Skip variants and other system paths explicitly
+            if any(skip_dir in inc_dir for skip_dir in ['variants', '.platformio', '.pio']):
+                print(f"🚫 Skipping system path: {inc_dir}")
+                continue
                 
             print(f"✅ Including path: {inc_dir}")
+            
             if os.path.exists(inc_dir) and inc_dir != self.src_dir:
                 for root, dirs, files in os.walk(inc_dir):
-                    # Doppelt prüfen für Unterverzeichnisse
+                    # Double check for subdirectories
                     if is_platformio_path(root):
                         print(f"🚫 Skipping PlatformIO subpath: {root}")
                         continue
@@ -204,11 +243,11 @@ class LDFCacheOptimizer:
                             hash_data.append(file_hash)
                             file_hashes[file_path] = file_hash
         
-        # Library directory - MIT PlatformIO-Filter
+        # Library directory with PlatformIO filter
         lib_dir = os.path.join(self.project_dir, "lib")
         if os.path.exists(lib_dir):
             if is_platformio_path(lib_dir):
-                print(f"🚫 Skipping PlatformIO library path: {lib_dir}")
+                print(f"🚫 Skipping PlatformIO lib directory: {lib_dir}")
             else:
                 print(f"🔍 Scanning library directory: {lib_dir}")
                 for root, dirs, files in os.walk(lib_dir):
@@ -237,22 +276,31 @@ class LDFCacheOptimizer:
         }
     
     def get_project_hash(self):
-        """Wrapper für Kompatibilität"""
+        """
+        Compatibility wrapper for get_project_hash_with_details.
+        
+        Returns:
+            str: Project hash
+        """
         return self.get_project_hash_with_details()['final_hash']
     
     def compare_hash_details(self, current_hashes, cached_hashes):
         """
         Compare hash details and show only differences.
+        
+        Args:
+            current_hashes (dict): Current file hashes
+            cached_hashes (dict): Cached file hashes
         """
         differences_found = 0
         
-        # Neue Dateien
+        # New files
         for file_path, current_hash in current_hashes.items():
             if file_path not in cached_hashes:
                 print(f"   ➕ NEW: {file_path} -> {current_hash}")
                 differences_found += 1
         
-        # Geänderte Dateien
+        # Changed files
         for file_path, current_hash in current_hashes.items():
             if file_path in cached_hashes:
                 cached_hash = cached_hashes[file_path]
@@ -262,7 +310,7 @@ class LDFCacheOptimizer:
                     print(f"      New: {current_hash}")
                     differences_found += 1
         
-        # Gelöschte Dateien
+        # Deleted files
         for file_path in cached_hashes:
             if file_path not in current_hashes:
                 print(f"   ➖ DELETED: {file_path}")
@@ -275,6 +323,12 @@ class LDFCacheOptimizer:
     def load_and_validate_cache(self):
         """
         Load cache with targeted hash debugging - only show differences.
+        
+        Loads the existing cache file and validates it against the current project state
+        by comparing environment settings and include-relevant content hashes.
+        
+        Returns:
+            dict or None: Cache data if valid, None if invalid or non-existent
         """
         if not os.path.exists(self.cache_file):
             print("🔍 No cache file exists")
@@ -289,7 +343,7 @@ class LDFCacheOptimizer:
                 print(f"🔄 Environment changed: {cache_data.get('pioenv')} -> {self.env['PIOENV']}")
                 return None
             
-            # Hash-Vergleich mit Unterschieds-Erkennung
+            # Hash comparison with difference detection
             print("🔍 Comparing hashes (showing only differences)...")
             current_hash_details = self.get_project_hash_with_details()
             cached_hash = cache_data.get('project_hash')
@@ -316,7 +370,7 @@ class LDFCacheOptimizer:
     
     def apply_ldf_cache(self, cache_data):
         """
-        Apply LDF cache with SCons methods.
+        Apply LDF cache with SCons methods and validation.
         
         Restores all cached library dependency finder results including include paths,
         library paths, compiler flags, and other build settings.
@@ -324,66 +378,71 @@ class LDFCacheOptimizer:
         Args:
             cache_data (dict): Previously cached LDF results
             
-        Raises:
-            Exception: If cache application fails
+        Returns:
+            bool: True if successfully applied, False otherwise
         """
         try:
             # Disable LDF
             self.env.Replace(LIB_LDF_MODE="off")
             
-            ldf_results = cache_data['ldf_results']
+            ldf_results = cache_data.get('ldf_results', {})
             
-            # Include paths (both variants for compatibility)
-            includes = ldf_results.get('includes') or ldf_results.get('CPPPATH', [])
-            if includes:
-                self.env.PrependUnique(CPPPATH=includes)
+            # Validate loaded data
+            for key, value in ldf_results.items():
+                if value and not isinstance(value, (list, str)):
+                    print(f"⚠ Warning: Unexpected cached type for {key}: {type(value)}")
+                    return False
             
-            # Library paths and names
-            lib_paths = ldf_results.get('lib_paths') or ldf_results.get('LIBPATH', [])
-            if lib_paths:
-                self.env.PrependUnique(LIBPATH=lib_paths)
+            # Safe restoration
+            if ldf_results.get('CPPPATH'):
+                self.env.PrependUnique(CPPPATH=ldf_results['CPPPATH'])
             
-            libs = ldf_results.get('libs') or ldf_results.get('LIBS', [])
-            if libs:
-                self.env.PrependUnique(LIBS=libs)
+            if ldf_results.get('LIBPATH'):
+                self.env.PrependUnique(LIBPATH=ldf_results['LIBPATH'])
             
-            # Preprocessor defines
-            defines = ldf_results.get('defines') or ldf_results.get('CPPDEFINES', [])
-            if defines:
-                self.env.AppendUnique(CPPDEFINES=defines)
+            if ldf_results.get('LIBS'):
+                self.env.PrependUnique(LIBS=ldf_results['LIBS'])
             
-            # Source filter - with Replace instead of direct assignment
-            src_filter = ldf_results.get('src_filter') or ldf_results.get('SRC_FILTER')
-            if src_filter:
-                self.env.Replace(SRC_FILTER=src_filter)
+            if ldf_results.get('CPPDEFINES'):
+                self.env.AppendUnique(CPPDEFINES=ldf_results['CPPDEFINES'])
             
-            # Compiler flags
-            cc_flags = ldf_results.get('cc_flags') or ldf_results.get('CCFLAGS', [])
-            if cc_flags:
-                self.env.AppendUnique(CCFLAGS=cc_flags)
+            if ldf_results.get('SRC_FILTER'):
+                self.env.Replace(SRC_FILTER=ldf_results['SRC_FILTER'])
             
-            cxx_flags = ldf_results.get('cxx_flags') or ldf_results.get('CXXFLAGS', [])
-            if cxx_flags:
-                self.env.AppendUnique(CXXFLAGS=cxx_flags)
+            if ldf_results.get('CCFLAGS'):
+                self.env.AppendUnique(CCFLAGS=ldf_results['CCFLAGS'])
             
-            # Linker flags
-            link_flags = ldf_results.get('link_flags') or ldf_results.get('LINKFLAGS', [])
-            if link_flags:
-                self.env.AppendUnique(LINKFLAGS=link_flags)
+            if ldf_results.get('CXXFLAGS'):
+                self.env.AppendUnique(CXXFLAGS=ldf_results['CXXFLAGS'])
             
-            lib_count = len(libs)
-            include_count = len(includes)
-            print(f"📦 Complete LDF cache applied:")
-            print(f"   {lib_count} Libraries, {include_count} Include paths")
-            print("   All compiler flags and build settings restored")
+            if ldf_results.get('LINKFLAGS'):
+                self.env.AppendUnique(LINKFLAGS=ldf_results['LINKFLAGS'])
+            
+            lib_count = len(ldf_results.get('LIBS', []))
+            include_count = len(ldf_results.get('CPPPATH', []))
+            print(f"📦 LDF cache applied: {lib_count} Libraries, {include_count} Include paths")
+            
+            return True
             
         except Exception as e:
             print(f"✗ Error applying LDF cache: {e}")
-            raise
+            # Delete cache on errors
+            if os.path.exists(self.cache_file):
+                os.remove(self.cache_file)
+                print("🗑️ Corrupted cache deleted")
+            return False
     
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
-        Save complete LDF results to cache with hash details.
+        Save complete LDF results to cache with safe SCons serialization.
+        
+        This method is called as a post-action after successful build to capture
+        all SCons variables and build settings determined by the LDF process.
+        
+        Args:
+            target: SCons target (unused)
+            source: SCons source (unused) 
+            env_arg: SCons environment (unused, uses self.env)
         """
         if self.env.get("LIB_LDF_MODE") == "off":
             return  # Cache was used
@@ -392,55 +451,56 @@ class LDFCacheOptimizer:
             print("💾 Saving LDF cache...")
             hash_details = self.get_project_hash_with_details()
             
+            # Safe extraction of SCons variables
+            def extract_scons_var(var_name):
+                try:
+                    value = self.env.get(var_name, [])
+                    return self.safe_serialize_scons_value(value)
+                except Exception as e:
+                    print(f"⚠ Warning: Could not serialize {var_name}: {e}")
+                    return []
+            
             cache_data = {
-                # Include-relevant hash
                 'project_hash': hash_details['final_hash'],
-                'hash_details': hash_details['file_hashes'],  # Für Vergleiche speichern
-                'pioenv': self.env['PIOENV'],
+                'hash_details': hash_details['file_hashes'],
+                'pioenv': str(self.env['PIOENV']),
                 'timestamp': datetime.datetime.now().isoformat(),
                 
-                # ALL relevant SCons variables
                 'ldf_results': {
-                    # Include paths
-                    'includes': [str(p) for p in self.env.get('CPPPATH', [])],
-                    'CPPPATH': [str(p) for p in self.env.get('CPPPATH', [])],
-                    
-                    # Library paths and names
-                    'lib_paths': [str(p) for p in self.env.get('LIBPATH', [])],
-                    'LIBPATH': [str(p) for p in self.env.get('LIBPATH', [])],
-                    'libs': self.env.get('LIBS', []),
-                    'LIBS': self.env.get('LIBS', []),
-                    
-                    # Preprocessor defines
-                    'defines': self.env.get('CPPDEFINES', []),
-                    'CPPDEFINES': self.env.get('CPPDEFINES', []),
-                    
-                    # Source filter
-                    'src_filter': self.env.get('SRC_FILTER', ''),
-                    'SRC_FILTER': self.env.get('SRC_FILTER', ''),
-                    
-                    # Compiler flags
-                    'cc_flags': self.env.get('CCFLAGS', []),
-                    'CCFLAGS': self.env.get('CCFLAGS', []),
-                    'cxx_flags': self.env.get('CXXFLAGS', []),
-                    'CXXFLAGS': self.env.get('CXXFLAGS', []),
-                    
-                    # Linker flags
-                    'link_flags': self.env.get('LINKFLAGS', []),
-                    'LINKFLAGS': self.env.get('LINKFLAGS', [])
+                    'CPPPATH': extract_scons_var('CPPPATH'),
+                    'LIBPATH': extract_scons_var('LIBPATH'), 
+                    'LIBS': extract_scons_var('LIBS'),
+                    'CPPDEFINES': extract_scons_var('CPPDEFINES'),
+                    'SRC_FILTER': str(self.env.get('SRC_FILTER', '')),
+                    'CCFLAGS': extract_scons_var('CCFLAGS'),
+                    'CXXFLAGS': extract_scons_var('CXXFLAGS'),
+                    'LINKFLAGS': extract_scons_var('LINKFLAGS')
                 }
             }
             
+            # Validation before saving
+            for key, value in cache_data['ldf_results'].items():
+                if not isinstance(value, (list, str, type(None))):
+                    print(f"⚠ Warning: Unexpected type for {key}: {type(value)}")
+            
             os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
             
+            # Safe JSON serialization
             with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, indent=2, default=str)
+                json.dump(cache_data, f, indent=2, ensure_ascii=False, default=str)
             
+            # Verification by reading back
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                test_load = json.load(f)
+                
             lib_count = len(cache_data['ldf_results'].get('LIBS', []))
-            print(f"💾 LDF cache saved: {lib_count} Libraries, {hash_details['total_files']} files, hash: {hash_details['final_hash']}")
+            print(f"💾 LDF cache saved and verified: {lib_count} Libraries")
             
         except Exception as e:
             print(f"✗ Error saving LDF cache: {e}")
+            # Delete cache file on error
+            if os.path.exists(self.cache_file):
+                os.remove(self.cache_file)
     
     def setup_ldf_caching(self):
         """
@@ -455,14 +515,16 @@ class LDFCacheOptimizer:
         
         if cache_data:
             print("🚀 Using LDF cache (no include-relevant changes)")
-            self.apply_ldf_cache(cache_data)
+            success = self.apply_ldf_cache(cache_data)
+            if not success:
+                print("🔄 Cache application failed, falling back to LDF recalculation")
         else:
             print("🔄 LDF recalculation required")
             silent_action = self.env.Action(self.save_ldf_cache)
             silent_action.strfunction = lambda target, source, env: '' # hack to silence scons command outputs
             self.env.AddPostAction("checkprogsize", silent_action)
         
-        print("=" * 50)
+        print("=" * 60)
 
 # Cache management commands
 def clear_ldf_cache():
