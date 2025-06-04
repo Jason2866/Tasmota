@@ -12,6 +12,7 @@ import json
 import hashlib
 import datetime
 import time
+from platformio import fs
 
 class LDFCacheOptimizer:
     """
@@ -149,8 +150,8 @@ class LDFCacheOptimizer:
             platformio_paths.add(os.path.normpath(os.environ['PLATFORMIO_CORE_DIR']))
         
         # Standard PlatformIO paths
-        home_dir = os.path.expanduser("~")
-        platformio_paths.add(os.path.normpath(os.path.join(home_dir, ".platformio")))
+        pio_home = fs.get_platformio_home_dir()
+        platformio_paths.add(os.path.normpath(pio_home))
         
         # Project-specific .pio directories
         platformio_paths.add(os.path.normpath(os.path.join(self.project_dir, ".pio")))
