@@ -284,7 +284,7 @@ class LDFCacheOptimizer:
         if total_scanned > 0:
             print(f"🔍 Performance: {((total_relevant/total_scanned)*100):.1f}% relevance ratio")
         
-        print(f"🔍 Final project hash: {final_hash}")
+        #print(f"🔍 Final project hash: {final_hash}")
         
         return {
             'final_hash': final_hash,
