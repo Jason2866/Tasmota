@@ -173,7 +173,7 @@ class LDFCacheOptimizer:
         
         # Generated file to skip (PlatformIO merges .ino files)
         generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
-        print(f"🔍 Generated file to skip: {generated_cpp}")
+        #print(f"🔍 Generated file to skip: {generated_cpp}")
         
         # Process platformio.ini first
         ini_file = os.path.join(self.project_dir, "platformio.ini")
@@ -181,7 +181,7 @@ class LDFCacheOptimizer:
             ini_hash = self._get_file_hash(ini_file)
             hash_data.append(ini_hash)
             file_hashes['platformio.ini'] = ini_hash
-            print(f"🔍 platformio.ini: {ini_hash}")
+            #print(f"🔍 platformio.ini: {ini_hash}")
         
         # Collect all scan directories
         scan_dirs = []
@@ -196,18 +196,18 @@ class LDFCacheOptimizer:
             scan_dirs.append(('library', lib_dir))
         
         # Add include directories (filtered)
-        print(f"🔍 Filtering include directories...")
+        #print(f"🔍 Filtering include directories...")
         for inc_path in self.env.get('CPPPATH', []):
             inc_dir = str(inc_path)
             
             # Skip PlatformIO paths
             if self.is_platformio_path(inc_dir):
-                print(f"🚫 Skipping PlatformIO include path: {inc_dir}")
+                #print(f"🚫 Skipping PlatformIO include path: {inc_dir}")
                 continue
             
             # Skip variants and other system paths explicitly
             if any(skip_dir in inc_dir for skip_dir in ['variants', '.platformio', '.pio']):
-                print(f"🚫 Skipping system path: {inc_dir}")
+                #print(f"🚫 Skipping system path: {inc_dir}")
                 continue
             
             if os.path.exists(inc_dir) and inc_dir != self.src_dir:
@@ -226,7 +226,7 @@ class LDFCacheOptimizer:
                 for root, dirs, files in os.walk(scan_dir):
                     # Skip PlatformIO paths
                     if self.is_platformio_path(root):
-                        print(f"🚫 Skipping PlatformIO subpath: {root}")
+                        #print(f"🚫 Skipping PlatformIO subpath: {root}")
                         continue
                     
                     # Filter ignored directories
@@ -247,7 +247,7 @@ class LDFCacheOptimizer:
                     for file, file_ext in relevant_files:
                         # Skip generated files
                         if file == generated_cpp:
-                            print(f"🚫 Skipping generated file: {file}")
+                            #print(f"🚫 Skipping generated file: {file}")
                             continue
                         
                         file_path = os.path.join(root, file)
@@ -552,7 +552,7 @@ class LDFCacheOptimizer:
         applies it if valid, or sets up cache saving for new builds.
         """
         setup_start = time.time()
-        print("\n=== LDF Cache Optimizer v1.2 (Optimized + Timing) ===")
+        print("\n=== LDF Cache Optimizer v1.0 ===")
         
         cache_data = self.load_and_validate_cache()
         
