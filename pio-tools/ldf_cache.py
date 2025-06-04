@@ -536,7 +536,7 @@ class LDFCacheOptimizer:
             lib_count = len(cache_data['ldf_results'].get('LIBS', []))
             print(f"💾 LDF cache saved and verified in {save_elapsed:.3f}s: {lib_count} Libraries")
             
-        except (IOError, OSError, PermissionError, json.JSONEncodeError) as e:
+        except (IOError, OSError, PermissionError, TypeError, ValueError) as e:
             print(f"✗ Error saving LDF cache: {e}")
             # Delete cache file on error
             if os.path.exists(self.cache_file):
