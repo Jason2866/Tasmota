@@ -494,7 +494,8 @@ def clear_ldf_cache():
     """
     Delete LDF cache file.
     """
-    cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache_sconsdump.py")
+    project_dir = env.subst("$PROJECT_DIR")
+    cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env['PIOENV']}.py")
     if os.path.exists(cache_file):
         try:
             os.remove(cache_file)
@@ -508,7 +509,8 @@ def show_ldf_cache_info():
     """
     Display cache information.
     """
-    cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache_sconsdump.py")
+    project_dir = env.subst("$PROJECT_DIR")
+    cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env['PIOENV']}.py")
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
