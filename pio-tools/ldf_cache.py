@@ -1,8 +1,9 @@
 # ldf_cache.py
 """
 PlatformIO Advanced Script for intelligent LDF caching with full environment dump.
-This module optimizes build performance through selective LDF caching and restoring
-using SCons native serialization and smart cache invalidation.
+This module optimizes build performance through selective LDF caching and restoring,
+using SCons native serialization, smart cache invalidation, cache file signature,
+and PlatformIO version compatibility check.
 
 Copyright: Jason2866
 """
@@ -22,15 +23,13 @@ class LDFCacheOptimizer:
     This class manages caching of library dependency resolution results to speed up
     subsequent builds when no include-relevant changes have been made to the project.
     Uses SCons native serialization (env.Dump) to store and restore all build variables
-    with smart hash-based cache invalidation.
+    with smart hash-based cache invalidation, cache file signature, and PlatformIO version check.
     """
 
-    # File type categories for early filtering
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
     SOURCE_EXTENSIONS = frozenset(['.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'])
     CONFIG_EXTENSIONS = frozenset(['.json', '.properties', '.txt', '.ini'])
-    
-    # Directories to ignore during scanning
+
     IGNORE_DIRS = frozenset([
         '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
         'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
@@ -52,11 +51,10 @@ class LDFCacheOptimizer:
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
         self.original_ldf_mode = None
-        
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
 
     # ------------------- PlatformIO.ini Modification Methods -------------------
-    
+
     def find_lib_ldf_mode_in_ini(self):
         """
         Find all occurrences of lib_ldf_mode in platformio.ini across all sections.
@@ -183,7 +181,7 @@ class LDFCacheOptimizer:
             print(f"❌ Error restoring platformio.ini: {e}")
 
     # ------------------- Smart Hash Generation & Comparison -------------------
-    
+
     def _get_file_hash(self, file_path):
         """
         Generate SHA256 hash of a file.
@@ -355,52 +353,89 @@ class LDFCacheOptimizer:
             'files_scanned': total_scanned,
             'files_relevant': total_relevant
         }
+
     # ------------------- Enhanced Cache Validation ----------------------------
-    
+
     def load_and_validate_cache(self):
-        """Load and validate cache with smart hash comparison."""
+        """
+        Load and validate cache with smart hash comparison, signature, and PIO version.
+
+        Returns:
+            dict or None: Cache data if valid, None if invalid or non-existent
+        """
         if not os.path.exists(self.cache_file):
             print("🔍 No cache file exists")
             return None
-        
         try:
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 cache_content = f.read()
             cache_data = eval(cache_content.split('\n\n', 1)[1])
-            
+
+            # PlatformIO version check
+            current_pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
+            if cache_data.get('pio_version') != current_pio_version:
+                print(f"⚠ Cache invalid: PlatformIO version changed from {cache_data.get('pio_version')} to {current_pio_version}")
+                clear_ldf_cache()
+                return None
+
+            # Signature check (integrity)
+            expected_signature = cache_data.get('signature')
+            actual_signature = self.compute_signature(cache_data)
+            if expected_signature != actual_signature:
+                print("⚠ Cache invalid: Signature mismatch. Possible file tampering or corruption.")
+                clear_ldf_cache()
+                return None
+
             # Environment check
             if cache_data.get('pioenv') != self.env['PIOENV']:
                 print(f"🔄 Environment changed: {cache_data.get('pioenv')} -> {self.env['PIOENV']}")
+                clear_ldf_cache()
                 return None
 
             # Detailed hash comparison
             print("🔍 Comparing hashes (showing only differences)...")
             current_hash_details = self.get_project_hash_with_details()
-            
             if cache_data.get('project_hash') != current_hash_details['final_hash']:
                 print("\n🔄 Project files changed:")
                 self.compare_hash_details(current_hash_details['file_hashes'], cache_data.get('hash_details', {}))
+                clear_ldf_cache()
                 return None
 
             print("✅ No include-relevant changes - cache valid")
             return cache_data
-            
+
         except Exception as e:
             print(f"⚠ Cache validation failed: {e}")
+            clear_ldf_cache()
             return None
 
+    def compute_signature(self, cache_data):
+        """
+        Compute a signature for the cache to detect tampering.
+
+        Args:
+            cache_data (dict): The cache data dictionary
+
+        Returns:
+            str: SHA256 signature string
+        """
+        # Exclude the signature field itself
+        data = dict(cache_data)
+        data.pop('signature', None)
+        raw = repr(data).encode()
+        return hashlib.sha256(raw).hexdigest()
+
     # ------------------- SCons Environment Handling ---------------------------
-    
+
     def apply_ldf_cache(self, cache_data):
-        """Restore full SCons environment from cache."""
+        """
+        Restore full SCons environment from cache.
+        """
         try:
             scons_vars = eval(cache_data['scons_dump'])
             print("🔧 Restoring full SCons environment...")
-            
-            # Restore all variables from the cached environment
             for var_name, var_value in scons_vars.items():
                 self.env[var_name] = var_value
-                
             print(f"📦 Restored {len(scons_vars)} SCons variables")
             return True
         except Exception as e:
@@ -408,38 +443,41 @@ class LDFCacheOptimizer:
             return False
 
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
-        """Save full SCons environment with validation data."""
+        """
+        Save full SCons environment with validation data, signature, and PIO version.
+        """
         try:
             hash_details = self.get_project_hash_with_details()
             env_dump = self.env.Dump(format='pretty')
-            
+            pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
             cache_data = {
                 'scons_dump': env_dump,
                 'project_hash': hash_details['final_hash'],
                 'hash_details': hash_details['file_hashes'],
                 'pioenv': str(self.env['PIOENV']),
                 'timestamp': datetime.datetime.now().isoformat(),
-                'performance': hash_details.get('performance', {})
+                'performance': hash_details.get('performance', {}),
+                'pio_version': pio_version,
             }
-            
+            # Compute and add signature
+            cache_data['signature'] = self.compute_signature(cache_data)
             os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 f.write("# LDF Cache - Full SCons Environment\n")
                 f.write("# Generated automatically\n\n")
                 f.write(repr(cache_data))
-                
             print(f"💾 Saved full environment cache ({len(cache_data['scons_dump'])} bytes)")
         except Exception as e:
             print(f"✗ Error saving cache: {e}")
 
     # ------------------- Main Logic --------------------------------------------
-    
+
     def setup_ldf_caching(self):
-        """Orchestrate caching process with smart invalidation."""
+        """
+        Orchestrate caching process with smart invalidation, signature, and version check.
+        """
         print("\n=== LDF Cache Optimizer (Enhanced Validation) ===")
-        
         cache_data = self.load_and_validate_cache()
-        
         if cache_data:
             print("🚀 Valid cache found - disabling LDF")
             if self.modify_platformio_ini("off"):
@@ -448,13 +486,14 @@ class LDFCacheOptimizer:
         else:
             print("🔄 No valid cache - running full LDF")
             self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
-        
         print("=" * 60)
 
 # ------------------- Cache Management Commands --------------------------------
 
 def clear_ldf_cache():
-    """Delete LDF cache file."""
+    """
+    Delete LDF cache file.
+    """
     cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache_sconsdump.py")
     if os.path.exists(cache_file):
         try:
@@ -466,7 +505,9 @@ def clear_ldf_cache():
         print("ℹ No LDF Cache present")
 
 def show_ldf_cache_info():
-    """Display cache information."""
+    """
+    Display cache information.
+    """
     cache_file = os.path.join(env.subst("$BUILD_DIR"), "ldf_cache_sconsdump.py")
     if os.path.exists(cache_file):
         try:
@@ -475,6 +516,8 @@ def show_ldf_cache_info():
             print("\n=== LDF Cache Info ===")
             print(f"Environment:  {cache_data.get('pioenv', 'unknown')}")
             print(f"Project hash: {cache_data.get('project_hash', 'unknown')}")
+            print(f"PlatformIO version: {cache_data.get('pio_version', 'unknown')}")
+            print(f"Signature:    {cache_data.get('signature', 'none')}")
             print(f"Created:      {cache_data.get('timestamp', 'unknown')}")
             print(f"File size:    {os.path.getsize(cache_file)} bytes")
             print("=" * 25)
