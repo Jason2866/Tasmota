@@ -14,6 +14,14 @@ import datetime
 import time
 from platformio.project.config import ProjectConfig
 
+def disable_ldf_early(target, source, env):
+    """Pre-action to disable LDF before any build steps"""
+    env.Replace(LIB_LDF_MODE="off")
+    print("🔧 LDF disabled via pre-action")
+
+# Set pre-action to disable LDF before everything else
+env.AddPreAction("buildprog", disable_ldf_early)
+
 class LDFCacheOptimizer:
     """
     Intelligent LDF (Library Dependency Finder) cache optimizer for PlatformIO.
@@ -409,9 +417,6 @@ class LDFCacheOptimizer:
         try:
             apply_start = time.time()
             
-            # Disable LDF
-            self.env.Replace(LIB_LDF_MODE="off")
-            
             ldf_results = cache_data.get('ldf_results', {})
             
             # Validate loaded data
@@ -553,9 +558,6 @@ class LDFCacheOptimizer:
         Orchestrates the entire caching process: validates existing cache,
         applies it if valid, or sets up cache saving for new builds.
         """
-        # SOFORT LDF deaktivieren - noch vor allen anderen Operationen
-        self.env.Replace(LIB_LDF_MODE="off")
-        
         setup_start = time.time()
         print("\n=== LDF Cache Optimizer v1.0 ===")
         
