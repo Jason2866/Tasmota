@@ -1,9 +1,8 @@
 # ldf_cache.py
 """
-PlatformIO Advanced Script for intelligent LDF caching with full environment dump.
-This module optimizes build performance through selective LDF caching and restoring,
-using SCons native serialization, smart cache invalidation, cache file signature,
-and PlatformIO version compatibility check.
+PlatformIO Advanced Script for intelligent LDF caching using lib_deps extraction.
+This module optimizes build performance by extracting LDF results and reusing them
+as lib_deps configuration to bypass LDF on subsequent builds.
 
 Copyright: Jason2866
 """
@@ -14,16 +13,15 @@ import hashlib
 import datetime
 import time
 import re
+import json
 from platformio.project.config import ProjectConfig
 
 class LDFCacheOptimizer:
     """
     Intelligent LDF (Library Dependency Finder) cache optimizer for PlatformIO.
 
-    This class manages caching of library dependency resolution results to speed up
-    subsequent builds when no include-relevant changes have been made to the project.
-    Uses SCons native serialization (env.Dump) to store and restore all build variables
-    with smart hash-based cache invalidation, cache file signature, and PlatformIO version check.
+    This class extracts LDF results and converts them to reusable lib_deps configuration,
+    allowing subsequent builds to bypass LDF entirely while maintaining all dependencies.
     """
 
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
@@ -369,7 +367,14 @@ class LDFCacheOptimizer:
         try:
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 cache_content = f.read()
-            cache_data = eval(cache_content.split('\n\n', 1)[1])
+            
+            # Parse JSON cache data
+            if 'cache_json' in cache_content:
+                exec(cache_content)
+                cache_data = locals()['cache_data']
+            else:
+                # Fallback for old format
+                cache_data = eval(cache_content.split('\n\n', 1)[1])
 
             # PlatformIO version check
             current_pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
@@ -425,387 +430,248 @@ class LDFCacheOptimizer:
         raw = repr(data).encode()
         return hashlib.sha256(raw).hexdigest()
 
-    # ------------------- SCons Environment Handling ---------------------------
+    # ------------------- LDF Results Extraction & Caching ---------------------
 
-    def convert_all_scons_objects(self, obj, depth=0, max_depth=10):
+    def extract_complete_ldf_results(self):
         """
-        Rekursive Konvertierung aller SCons-Objekte zu Debug-Strings.
+        Extrahiere alle LDF-Ergebnisse für Wiederverwendung.
         """
-        if depth > max_depth:
-            return f"<MAX_DEPTH_REACHED:{type(obj).__name__}>"
-        
-        obj_type_str = str(type(obj))
-        
-        # SCons.Node Objekte - verschiedene Typen
-        if 'SCons.Node' in obj_type_str:
-            try:
-                # Versuche verschiedene Pfad-Attribute
-                if hasattr(obj, 'abspath'):
-                    return f"<Node:abspath={obj.abspath}>"
-                elif hasattr(obj, 'path'):
-                    return f"<Node:path={obj.path}>"
-                elif hasattr(obj, 'relpath'):
-                    return f"<Node:relpath={obj.relpath}>"
-                elif hasattr(obj, 'get_path'):
-                    return f"<Node:get_path={obj.get_path()}>"
-                else:
-                    return f"<Node:{obj_type_str}={str(obj)}>"
-            except Exception as e:
-                return f"<Node:ERROR={e}>"
-        
-        # Andere SCons-Objekte
-        elif 'SCons' in obj_type_str:
-            try:
-                return f"<SCons:{type(obj).__name__}={str(obj)}>"
-            except:
-                return f"<SCons:{type(obj).__name__}:UNCONVERTIBLE>"
-        
-        # Container-Typen rekursiv verarbeiten
-        elif isinstance(obj, dict):
-            converted_dict = {}
-            for key, value in obj.items():
-                try:
-                    converted_key = self.convert_all_scons_objects(key, depth+1, max_depth)
-                    converted_value = self.convert_all_scons_objects(value, depth+1, max_depth)
-                    converted_dict[converted_key] = converted_value
-                except Exception as e:
-                    converted_dict[str(key)] = f"<CONVERSION_ERROR:{e}>"
-            return converted_dict
-        
-        elif isinstance(obj, (list, tuple)):
-            converted_list = []
-            for item in obj:
-                try:
-                    converted_item = self.convert_all_scons_objects(item, depth+1, max_depth)
-                    converted_list.append(converted_item)
-                except Exception as e:
-                    converted_list.append(f"<CONVERSION_ERROR:{e}>")
-            return converted_list if isinstance(obj, list) else tuple(converted_list)
-        
-        # Normale Objekte
-        else:
-            return obj
-
-    def debug_dump_all_scons_objects(self):
-        """
-        Debug-Ausgabe aller SCons-Objekte im Environment.
-        """
-        try:
-            # Vollständigen Environment-Dump holen
-            env_dump = self.env.Dump(format='pretty')
-            scons_vars = eval(env_dump)
-            
-            print("\n=== DEBUG: All SCons Objects Conversion ===")
-            
-            # Statistiken sammeln
-            total_vars = len(scons_vars)
-            scons_objects_found = 0
-            conversion_errors = 0
-            
-            converted_vars = {}
-            
-            for var_name, var_value in scons_vars.items():
-                try:
-                    # Prüfe ob SCons-Objekte enthalten sind
-                    var_str = str(var_value)
-                    contains_scons = 'SCons' in var_str
-                    
-                    if contains_scons:
-                        scons_objects_found += 1
-                        print(f"\n🔍 {var_name} (contains SCons objects):")
-                        print(f"   Original: {var_str[:200]}{'...' if len(var_str) > 200 else ''}")
-                    
-                    # Konvertiere alle SCons-Objekte
-                    converted_value = self.convert_all_scons_objects(var_value)
-                    converted_vars[var_name] = converted_value
-                    
-                    if contains_scons:
-                        print(f"   Converted: {str(converted_value)[:200]}{'...' if len(str(converted_value)) > 200 else ''}")
-                    
-                except Exception as e:
-                    conversion_errors += 1
-                    converted_vars[var_name] = f"<CONVERSION_ERROR:{e}>"
-                    print(f"❌ Error converting {var_name}: {e}")
-            
-            print(f"\n📊 Debug Statistics:")
-            print(f"   Total variables: {total_vars}")
-            print(f"   Variables with SCons objects: {scons_objects_found}")
-            print(f"   Conversion errors: {conversion_errors}")
-            print(f"   Successfully converted: {total_vars - conversion_errors}")
-            
-            # Vollständige konvertierte Ausgabe
-            print(f"\n=== All Converted Variables ===")
-            for var_name, var_value in converted_vars.items():
-                try:
-                    print(f"{var_name}: {var_value}")
-                except Exception as e:
-                    print(f"{var_name}: <OUTPUT_ERROR:{e}>")
-            
-            return converted_vars
-            
-        except Exception as e:
-            print(f"❌ Debug dump failed: {e}")
-            return {}
-
-    def get_comprehensive_ldf_vars(self):
-        """
-        Extrahiere alle LDF-relevanten Variablen und konvertiere Node-Objekte.
-        """
-        LDF_RELEVANT_VARS = {
-            'CPPPATH', 'LIBPATH', 'LIBS', 'LIB_DEPS', 'LIB_IGNORE', 
-            'LIB_EXTRA_DIRS', 'LIB_LDF_MODE', 'LIB_COMPAT_MODE',
-            'LIBSOURCE_DIRS', 'PROJECT_LIBDEPS_DIR', 'PLATFORM', 
-            'FRAMEWORK', 'BOARD', 'BUILD_FLAGS', 'CPPDEFINES'
+        ldf_results = {
+            'framework_libraries': [],
+            'external_libraries': [], 
+            'local_libraries': [],
+            'lib_deps_entries': []
         }
         
-        extracted_vars = {}
-        node_conversions = 0
-        
-        for var_name in LDF_RELEVANT_VARS:
-            if var_name in self.env:
-                var_value = self.env[var_name]
-                
-                # Zähle Node-Konversionen für Debugging
-                original_str = str(var_value)
-                serialized_value = self.convert_all_scons_objects(var_value)
-                
-                if 'SCons.Node' in original_str:
-                    node_conversions += 1
-                    print(f"🔄 Converted {var_name}: Node objects -> strings")
-                
-                extracted_vars[var_name] = serialized_value
-        
-        print(f"📊 Node conversions: {node_conversions} variables contained SCons.Node objects")
-        return extracted_vars
-
-    def extract_ldf_results(self):
-        """
-        Extrahiere LDF-Ergebnisse aus dem Dateisystem.
-        """
-        ldf_results = {}
-        
-        # Pfad zu den LDF-Ergebnissen
-        libdeps_dir = os.path.join(self.project_dir, ".pio", "libdeps", self.env['PIOENV'])
-        
-        if os.path.exists(libdeps_dir):
-            try:
-                # Gefundene Libraries
-                libraries = []
+        try:
+            # 1. Externe Libraries aus .pio/libdeps/
+            libdeps_dir = os.path.join(self.project_dir, ".pio", "libdeps", self.env['PIOENV'])
+            if os.path.exists(libdeps_dir):
                 for lib_dir in os.listdir(libdeps_dir):
                     lib_path = os.path.join(libdeps_dir, lib_dir)
                     if os.path.isdir(lib_path):
-                        # Extrahiere Library-Info
+                        # Prüfe ob es eine library.json gibt
                         library_json = os.path.join(lib_path, "library.json")
                         if os.path.exists(library_json):
                             try:
                                 with open(library_json, 'r') as f:
-                                    import json
                                     lib_info = json.loads(f.read())
-                                    libraries.append({
+                                    ldf_results['external_libraries'].append({
                                         'name': lib_info.get('name', lib_dir),
                                         'version': lib_info.get('version', 'unknown'),
-                                        'path': lib_path
+                                        'path': lib_path,
+                                        'lib_deps_entry': lib_dir  # Einfacher Name für lib_deps
                                     })
                             except:
-                                libraries.append({'name': lib_dir, 'path': lib_path})
-                        else:
-                            libraries.append({'name': lib_dir, 'path': lib_path})
+                                ldf_results['external_libraries'].append({
+                                    'name': lib_dir,
+                                    'path': lib_path,
+                                    'lib_deps_entry': lib_dir
+                                })
+            
+            # 2. Framework-Libraries aus CPPPATH extrahieren
+            platform = self.env.get('PLATFORM', 'unknown')
+            for cpp_path in self.env.get('CPPPATH', []):
+                path_str = str(cpp_path)
                 
-                ldf_results['libraries'] = libraries
-                ldf_results['libdeps_dir'] = libdeps_dir
-                
-            except Exception as e:
-                print(f"⚠ Error extracting LDF results: {e}")
-                
-        return ldf_results
-
-    def _analyze_node_types(self, scons_vars):
-        """
-        Analysiere die verschiedenen SCons.Node Typen im Environment.
-        """
-        node_types = {}
-        node_examples = {}
-        
-        for var_name, var_value in scons_vars.items():
-            var_str = str(var_value)
-            if 'SCons.Node' in var_str:
-                # Extrahiere Node-Typ
-                import re
-                node_matches = re.findall(r'SCons\.Node\.([^>]+)', var_str)
-                for node_type in node_matches:
-                    if node_type not in node_types:
-                        node_types[node_type] = 0
-                        node_examples[node_type] = []
-                    node_types[node_type] += 1
-                    if len(node_examples[node_type]) < 3:  # Nur erste 3 Beispiele
-                        node_examples[node_type].append({
-                            'variable': var_name,
-                            'example': var_str[:100] + '...' if len(var_str) > 100 else var_str
+                # Framework-Library-Pfade erkennen
+                if f'framework-{platform}' in path_str and 'libraries' in path_str:
+                    # Extrahiere Library-Namen
+                    parts = path_str.split('libraries')
+                    if len(parts) > 1:
+                        lib_name = parts[1].strip('/\\').split('/')[0].split('\\')[0]
+                        if lib_name and lib_name not in [lib['name'] for lib in ldf_results['framework_libraries']]:
+                            lib_deps_entry = f"${{platformio.packages_dir}}/framework-{platform}/libraries/{lib_name}"
+                            ldf_results['framework_libraries'].append({
+                                'name': lib_name,
+                                'path': path_str,
+                                'lib_deps_entry': lib_deps_entry
+                            })
+            
+            # 3. Lokale Libraries (im project/lib/ Verzeichnis)
+            local_lib_dir = os.path.join(self.project_dir, "lib")
+            if os.path.exists(local_lib_dir):
+                for lib_dir in os.listdir(local_lib_dir):
+                    lib_path = os.path.join(local_lib_dir, lib_dir)
+                    if os.path.isdir(lib_path):
+                        ldf_results['local_libraries'].append({
+                            'name': lib_dir,
+                            'path': lib_path,
+                            'lib_deps_entry': f"./lib/{lib_dir}"
                         })
-        
-        return {
-            'node_type_counts': node_types,
-            'node_examples': node_examples
-        }
-
-    def create_analysis_dump(self):
-        """
-        Erstelle einen detaillierten Dump für die Analyse der LDF-Daten.
-        """
-        try:
-            print("\n🔍 Creating detailed analysis dump...")
             
-            # Hole alle Environment-Daten
-            env_dump = self.env.Dump(format='pretty')
-            scons_vars = eval(env_dump)
+            # 4. Sammle alle lib_deps Einträge
+            for category in ['framework_libraries', 'external_libraries', 'local_libraries']:
+                for lib in ldf_results[category]:
+                    ldf_results['lib_deps_entries'].append(lib['lib_deps_entry'])
             
-            # Konvertiere alle SCons-Objekte
-            converted_vars = self.debug_dump_all_scons_objects()
+            print(f"📚 LDF Results extracted:")
+            print(f"   Framework libraries: {len(ldf_results['framework_libraries'])}")
+            print(f"   External libraries: {len(ldf_results['external_libraries'])}")
+            print(f"   Local libraries: {len(ldf_results['local_libraries'])}")
             
-            # Extrahiere LDF-relevante Daten
-            build_vars = self.get_comprehensive_ldf_vars()
-            ldf_results = self.extract_ldf_results()
-            
-            # Erstelle strukturierten Analyse-Dump
-            analysis_data = {
-                'analysis_info': {
-                    'timestamp': datetime.datetime.now().isoformat(),
-                    'pioenv': str(self.env['PIOENV']),
-                    'project_dir': self.project_dir,
-                    'purpose': 'LDF Cache Analysis - for script optimization'
-                },
-                'raw_scons_vars': {
-                    'total_count': len(scons_vars),
-                    'sample_vars': dict(list(scons_vars.items())[:10]),  # Erste 10 für Übersicht
-                },
-                'converted_scons_vars': converted_vars,
-                'ldf_relevant_vars': build_vars,
-                'ldf_filesystem_results': ldf_results,
-                'critical_paths': {
-                    'CPPPATH': self.env.get('CPPPATH', []),
-                    'LIBPATH': self.env.get('LIBPATH', []),
-                    'LIBS': self.env.get('LIBS', []),
-                },
-                'node_analysis': self._analyze_node_types(scons_vars)
-            }
-            
-            # Speichere Analyse-Dump
-            analysis_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"analysis_dump_{self.env['PIOENV']}.py")
-            os.makedirs(os.path.dirname(analysis_file), exist_ok=True)
-            
-            with open(analysis_file, 'w', encoding='utf-8') as f:
-                f.write("# LDF Cache Analysis Dump\n")
-                f.write("# This file contains detailed analysis data for script optimization\n")
-                f.write("# Generated for upload and analysis\n\n")
-                f.write("analysis_data = ")
-                f.write(repr(analysis_data))
-            
-            print(f"📁 Analysis dump saved to: {analysis_file}")
-            print(f"📊 Analysis contains:")
-            print(f"   - {len(converted_vars)} converted SCons variables")
-            print(f"   - {len(build_vars)} LDF-relevant variables")
-            print(f"   - {len(ldf_results.get('libraries', []))} detected libraries")
-            print(f"   - Node type analysis")
-            
-            return analysis_file
+            return ldf_results
             
         except Exception as e:
-            print(f"❌ Error creating analysis dump: {e}")
+            print(f"⚠ Error extracting LDF results: {e}")
+            return ldf_results
+
+    def generate_platformio_ini_section(self, ldf_results):
+        """
+        Generiere platformio.ini Sektion für LDF-Bypass.
+        """
+        lines = [
+            f"# LDF Cache Configuration for {self.env['PIOENV']}",
+            f"# Generated: {datetime.datetime.now().isoformat()}",
+            f"# Add this to your [env:{self.env['PIOENV']}] section:",
+            "",
+            "lib_ldf_mode = off",
+            "lib_deps = "
+        ]
+        
+        # Füge alle lib_deps Einträge hinzu
+        for lib_dep in ldf_results['lib_deps_entries']:
+            lines.append(f"    {lib_dep}")
+        
+        return '\n'.join(lines)
+
+    def save_ldf_bypass_config(self, ldf_results):
+        """
+        Speichere LDF-Bypass-Konfiguration.
+        """
+        try:
+            # Generiere Konfiguration
+            config_content = self.generate_platformio_ini_section(ldf_results)
+            
+            # Speichere in Cache-Verzeichnis
+            config_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"ldf_bypass_{self.env['PIOENV']}.ini")
+            os.makedirs(os.path.dirname(config_file), exist_ok=True)
+            
+            with open(config_file, 'w', encoding='utf-8') as f:
+                f.write(config_content)
+            
+            print(f"\n📁 LDF Bypass config saved to: {config_file}")
+            print(f"\n📋 Copy this to your platformio.ini [env:{self.env['PIOENV']}] section:")
+            print("=" * 60)
+            print(config_content)
+            print("=" * 60)
+            
+            return config_file
+            
+        except Exception as e:
+            print(f"❌ Error saving bypass config: {e}")
             return None
 
-    def apply_ldf_cache(self, cache_data):
+    def apply_ldf_cache_automatically(self, cache_data):
         """
-        Restore relevant build variables from cache.
+        Wende LDF-Cache automatisch an, indem lib_deps gesetzt wird.
         """
         try:
-            build_vars = cache_data.get('build_vars', {})
-            print("🔧 Restoring build variables from cache...")
+            ldf_results = cache_data.get('ldf_results', {})
+            lib_deps_entries = ldf_results.get('lib_deps_entries', [])
             
-            restored_count = 0
-            for var_name, var_value in build_vars.items():
-                try:
-                    self.env[var_name] = var_value
-                    restored_count += 1
-                except Exception as e:
-                    print(f"⚠ Error restoring {var_name}: {e}")
+            if not lib_deps_entries:
+                print("⚠ No lib_deps entries found in cache")
+                return False
             
-            print(f"📦 Restored {restored_count} build variables")
+            print("🔧 Applying LDF cache by setting lib_deps...")
+            
+            # Setze lib_deps im aktuellen Environment
+            self.env['LIB_DEPS'] = lib_deps_entries
+            
+            # Zusätzlich: Setze LDF_MODE auf off
+            self.env['LIB_LDF_MODE'] = 'off'
+            
+            print(f"📦 Applied {len(lib_deps_entries)} library dependencies:")
+            for lib_dep in lib_deps_entries:
+                print(f"   - {lib_dep}")
+            
             return True
+            
         except Exception as e:
-            print(f"✗ Error restoring environment: {e}")
+            print(f"✗ Error applying LDF cache: {e}")
             return False
 
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
-        Save LDF cache with comprehensive SCons object debugging.
+        Speichere LDF-Ergebnisse für Wiederverwendung.
         """
         try:
             hash_details = self.get_project_hash_with_details()
             
-            # Debug: Alle SCons-Objekte konvertieren und ausgeben
-            print("\n🔧 DEBUG MODE: Converting all SCons objects...")
-            converted_debug_vars = self.debug_dump_all_scons_objects()
+            # Extrahiere vollständige LDF-Ergebnisse
+            ldf_results = self.extract_complete_ldf_results()
             
-            # Extrahiere relevante Build-Variablen
-            build_vars = self.get_comprehensive_ldf_vars()
-            ldf_results = self.extract_ldf_results()
-            
-            # Erstelle zusätzlich einen Analyse-Dump
-            analysis_file = self.create_analysis_dump()
-            if analysis_file:
-                print(f"\n📤 Upload this file for analysis: {analysis_file}")
+            # Erstelle Bypass-Konfiguration
+            bypass_config_file = self.save_ldf_bypass_config(ldf_results)
             
             pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
             
             cache_data = {
-                'build_vars': build_vars,
                 'ldf_results': ldf_results,
-                'debug_vars': converted_debug_vars,  # Vollständige Debug-Daten
                 'project_hash': hash_details['final_hash'],
                 'hash_details': hash_details['file_hashes'],
                 'pioenv': str(self.env['PIOENV']),
                 'timestamp': datetime.datetime.now().isoformat(),
                 'pio_version': pio_version,
+                'bypass_config_file': bypass_config_file
             }
             
             # Compute and add signature
             cache_data['signature'] = self.compute_signature(cache_data)
             
             os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                f.write("# LDF Cache - Comprehensive Build Data\n")
-                f.write("# Generated automatically\n\n")
-                f.write(repr(cache_data))
-                
-            print(f"💾 Saved comprehensive cache with {len(build_vars)} build vars and {len(ldf_results.get('libraries', []))} libraries")
             
-            # Ausgabe der relevanten Build-Variablen
-            print("\n=== Relevant Build Variables ===")
-            for var_name, var_value in build_vars.items():
-                print(f"{var_name}: {var_value}")
-                
-            print(f"\n=== LDF Libraries ({len(ldf_results.get('libraries', []))}) ===")
-            for lib in ldf_results.get('libraries', []):
-                print(f"📚 {lib.get('name', 'unknown')} v{lib.get('version', '?')} -> {lib.get('path', '')}")
-                
+            # Speichere als JSON
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                f.write("# LDF Cache - Library Dependencies\n")
+                f.write("# Generated automatically\n\n")
+                f.write("import json\n\n")
+                f.write("cache_json = '''\n")
+                f.write(json.dumps(cache_data, ensure_ascii=False, indent=2, default=str))
+                f.write("\n'''\n\n")
+                f.write("cache_data = json.loads(cache_json)\n")
+            
+            print(f"💾 LDF Cache saved successfully!")
+            print(f"🎯 Found {len(ldf_results['lib_deps_entries'])} library dependencies")
+            
+            # Detaillierte Ausgabe der gefundenen Libraries
+            if ldf_results['framework_libraries']:
+                print(f"\n📚 Framework Libraries ({len(ldf_results['framework_libraries'])}):")
+                for lib in ldf_results['framework_libraries']:
+                    print(f"   - {lib['name']}")
+            
+            if ldf_results['external_libraries']:
+                print(f"\n📦 External Libraries ({len(ldf_results['external_libraries'])}):")
+                for lib in ldf_results['external_libraries']:
+                    print(f"   - {lib['name']} v{lib.get('version', '?')}")
+            
+            if ldf_results['local_libraries']:
+                print(f"\n🏠 Local Libraries ({len(ldf_results['local_libraries'])}):")
+                for lib in ldf_results['local_libraries']:
+                    print(f"   - {lib['name']}")
+            
         except Exception as e:
-            print(f"✗ Error saving cache: {e}")
+            print(f"✗ Error saving LDF cache: {e}")
 
     # ------------------- Main Logic --------------------------------------------
 
     def setup_ldf_caching(self):
         """
-        Orchestrate caching process with smart invalidation, signature, and version check.
+        Orchestrate caching process with LDF result extraction and reuse.
         """
-        print("\n=== LDF Cache Optimizer (Debug Mode) ===")
+        print("\n=== LDF Cache Optimizer (lib_deps Mode) ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
-            print("🚀 Valid cache found - disabling LDF")
+            print("🚀 Valid cache found - applying LDF bypass")
             if self.modify_platformio_ini("off"):
-                self.apply_ldf_cache(cache_data)
-                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_platformio_ini())
+                if self.apply_ldf_cache_automatically(cache_data):
+                    self.env.AddPostAction("checkprogsize", lambda *args: self.restore_platformio_ini())
+                else:
+                    print("⚠ Failed to apply cache - falling back to normal LDF")
+                    self.restore_platformio_ini()
         else:
-            print("🔄 No valid cache - running full LDF")
+            print("🔄 No valid cache - running full LDF and extracting results")
             self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
         print("=" * 60)
 
@@ -835,7 +701,17 @@ def show_ldf_cache_info():
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
-                cache_data = eval(f.read().split('\n\n', 1)[1])
+                cache_content = f.read()
+            
+            # Parse JSON cache data
+            if 'cache_json' in cache_content:
+                exec(cache_content)
+                cache_data = locals()['cache_data']
+            else:
+                cache_data = eval(cache_content.split('\n\n', 1)[1])
+                
+            ldf_results = cache_data.get('ldf_results', {})
+            
             print("\n=== LDF Cache Info ===")
             print(f"Environment:  {cache_data.get('pioenv', 'unknown')}")
             print(f"Project hash: {cache_data.get('project_hash', 'unknown')}")
@@ -843,31 +719,38 @@ def show_ldf_cache_info():
             print(f"Signature:    {cache_data.get('signature', 'none')}")
             print(f"Created:      {cache_data.get('timestamp', 'unknown')}")
             print(f"File size:    {os.path.getsize(cache_file)} bytes")
-            print(f"Build vars:   {len(cache_data.get('build_vars', {}))}")
-            print(f"Libraries:    {len(cache_data.get('ldf_results', {}).get('libraries', []))}")
+            print(f"Framework libs: {len(ldf_results.get('framework_libraries', []))}")
+            print(f"External libs:  {len(ldf_results.get('external_libraries', []))}")
+            print(f"Local libs:     {len(ldf_results.get('local_libraries', []))}")
+            print(f"Total lib_deps: {len(ldf_results.get('lib_deps_entries', []))}")
             print("=" * 25)
         except Exception as e:
             print(f"Error reading cache: {e}")
     else:
         print("No LDF Cache present")
 
-def create_standalone_analysis_dump():
+def show_ldf_bypass_config():
     """
-    Erstelle einen Analyse-Dump als eigenständiges Command.
+    Display the generated LDF bypass configuration.
     """
     project_dir = env.subst("$PROJECT_DIR")
-    optimizer = LDFCacheOptimizer(env)
-    analysis_file = optimizer.create_analysis_dump()
-    if analysis_file:
-        print(f"✅ Analysis dump created: {analysis_file}")
-        print("📤 Upload this file for script optimization!")
+    config_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_bypass_{env['PIOENV']}.ini")
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config_content = f.read()
+            print("\n=== LDF Bypass Configuration ===")
+            print(config_content)
+            print("=" * 40)
+        except Exception as e:
+            print(f"Error reading bypass config: {e}")
     else:
-        print("❌ Failed to create analysis dump")
+        print("No LDF Bypass configuration found")
 
 # Register custom targets
 env.AlwaysBuild(env.Alias("clear_ldf_cache", None, clear_ldf_cache))
 env.AlwaysBuild(env.Alias("ldf_cache_info", None, show_ldf_cache_info))
-env.AlwaysBuild(env.Alias("create_analysis_dump", None, create_standalone_analysis_dump))
+env.AlwaysBuild(env.Alias("show_ldf_bypass_config", None, show_ldf_bypass_config))
 
 # Initialize and run
 ldf_optimizer = LDFCacheOptimizer(env)
