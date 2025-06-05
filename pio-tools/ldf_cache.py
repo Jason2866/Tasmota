@@ -427,16 +427,215 @@ class LDFCacheOptimizer:
 
     # ------------------- SCons Environment Handling ---------------------------
 
-    def apply_ldf_cache(self, cache_data):
+    def convert_all_scons_objects(self, obj, depth=0, max_depth=10):
         """
-        Restore full SCons environment from cache.
+        Rekursive Konvertierung aller SCons-Objekte zu Debug-Strings.
+        """
+        if depth > max_depth:
+            return f"<MAX_DEPTH_REACHED:{type(obj).__name__}>"
+        
+        obj_type_str = str(type(obj))
+        
+        # SCons.Node Objekte - verschiedene Typen
+        if 'SCons.Node' in obj_type_str:
+            try:
+                # Versuche verschiedene Pfad-Attribute
+                if hasattr(obj, 'abspath'):
+                    return f"<Node:abspath={obj.abspath}>"
+                elif hasattr(obj, 'path'):
+                    return f"<Node:path={obj.path}>"
+                elif hasattr(obj, 'relpath'):
+                    return f"<Node:relpath={obj.relpath}>"
+                elif hasattr(obj, 'get_path'):
+                    return f"<Node:get_path={obj.get_path()}>"
+                else:
+                    return f"<Node:{obj_type_str}={str(obj)}>"
+            except Exception as e:
+                return f"<Node:ERROR={e}>"
+        
+        # Andere SCons-Objekte
+        elif 'SCons' in obj_type_str:
+            try:
+                return f"<SCons:{type(obj).__name__}={str(obj)}>"
+            except:
+                return f"<SCons:{type(obj).__name__}:UNCONVERTIBLE>"
+        
+        # Container-Typen rekursiv verarbeiten
+        elif isinstance(obj, dict):
+            converted_dict = {}
+            for key, value in obj.items():
+                try:
+                    converted_key = self.convert_all_scons_objects(key, depth+1, max_depth)
+                    converted_value = self.convert_all_scons_objects(value, depth+1, max_depth)
+                    converted_dict[converted_key] = converted_value
+                except Exception as e:
+                    converted_dict[str(key)] = f"<CONVERSION_ERROR:{e}>"
+            return converted_dict
+        
+        elif isinstance(obj, (list, tuple)):
+            converted_list = []
+            for item in obj:
+                try:
+                    converted_item = self.convert_all_scons_objects(item, depth+1, max_depth)
+                    converted_list.append(converted_item)
+                except Exception as e:
+                    converted_list.append(f"<CONVERSION_ERROR:{e}>")
+            return converted_list if isinstance(obj, list) else tuple(converted_list)
+        
+        # Normale Objekte
+        else:
+            return obj
+
+    def debug_dump_all_scons_objects(self):
+        """
+        Debug-Ausgabe aller SCons-Objekte im Environment.
         """
         try:
-            scons_vars = eval(cache_data['scons_dump'])
-            print("🔧 Restoring full SCons environment...")
+            # Vollständigen Environment-Dump holen
+            env_dump = self.env.Dump(format='pretty')
+            scons_vars = eval(env_dump)
+            
+            print("\n=== DEBUG: All SCons Objects Conversion ===")
+            
+            # Statistiken sammeln
+            total_vars = len(scons_vars)
+            scons_objects_found = 0
+            conversion_errors = 0
+            
+            converted_vars = {}
+            
             for var_name, var_value in scons_vars.items():
-                self.env[var_name] = var_value
-            print(f"📦 Restored {len(scons_vars)} SCons variables")
+                try:
+                    # Prüfe ob SCons-Objekte enthalten sind
+                    var_str = str(var_value)
+                    contains_scons = 'SCons' in var_str
+                    
+                    if contains_scons:
+                        scons_objects_found += 1
+                        print(f"\n🔍 {var_name} (contains SCons objects):")
+                        print(f"   Original: {var_str[:200]}{'...' if len(var_str) > 200 else ''}")
+                    
+                    # Konvertiere alle SCons-Objekte
+                    converted_value = self.convert_all_scons_objects(var_value)
+                    converted_vars[var_name] = converted_value
+                    
+                    if contains_scons:
+                        print(f"   Converted: {str(converted_value)[:200]}{'...' if len(str(converted_value)) > 200 else ''}")
+                    
+                except Exception as e:
+                    conversion_errors += 1
+                    converted_vars[var_name] = f"<CONVERSION_ERROR:{e}>"
+                    print(f"❌ Error converting {var_name}: {e}")
+            
+            print(f"\n📊 Debug Statistics:")
+            print(f"   Total variables: {total_vars}")
+            print(f"   Variables with SCons objects: {scons_objects_found}")
+            print(f"   Conversion errors: {conversion_errors}")
+            print(f"   Successfully converted: {total_vars - conversion_errors}")
+            
+            # Vollständige konvertierte Ausgabe
+            print(f"\n=== All Converted Variables ===")
+            for var_name, var_value in converted_vars.items():
+                try:
+                    print(f"{var_name}: {var_value}")
+                except Exception as e:
+                    print(f"{var_name}: <OUTPUT_ERROR:{e}>")
+            
+            return converted_vars
+            
+        except Exception as e:
+            print(f"❌ Debug dump failed: {e}")
+            return {}
+
+    def get_comprehensive_ldf_vars(self):
+        """
+        Extrahiere alle LDF-relevanten Variablen und konvertiere Node-Objekte.
+        """
+        LDF_RELEVANT_VARS = {
+            'CPPPATH', 'LIBPATH', 'LIBS', 'LIB_DEPS', 'LIB_IGNORE', 
+            'LIB_EXTRA_DIRS', 'LIB_LDF_MODE', 'LIB_COMPAT_MODE',
+            'LIBSOURCE_DIRS', 'PROJECT_LIBDEPS_DIR', 'PLATFORM', 
+            'FRAMEWORK', 'BOARD', 'BUILD_FLAGS', 'CPPDEFINES'
+        }
+        
+        extracted_vars = {}
+        node_conversions = 0
+        
+        for var_name in LDF_RELEVANT_VARS:
+            if var_name in self.env:
+                var_value = self.env[var_name]
+                
+                # Zähle Node-Konversionen für Debugging
+                original_str = str(var_value)
+                serialized_value = self.convert_all_scons_objects(var_value)
+                
+                if 'SCons.Node' in original_str:
+                    node_conversions += 1
+                    print(f"🔄 Converted {var_name}: Node objects -> strings")
+                
+                extracted_vars[var_name] = serialized_value
+        
+        print(f"📊 Node conversions: {node_conversions} variables contained SCons.Node objects")
+        return extracted_vars
+
+    def extract_ldf_results(self):
+        """
+        Extrahiere LDF-Ergebnisse aus dem Dateisystem.
+        """
+        ldf_results = {}
+        
+        # Pfad zu den LDF-Ergebnissen
+        libdeps_dir = os.path.join(self.project_dir, ".pio", "libdeps", self.env['PIOENV'])
+        
+        if os.path.exists(libdeps_dir):
+            try:
+                # Gefundene Libraries
+                libraries = []
+                for lib_dir in os.listdir(libdeps_dir):
+                    lib_path = os.path.join(libdeps_dir, lib_dir)
+                    if os.path.isdir(lib_path):
+                        # Extrahiere Library-Info
+                        library_json = os.path.join(lib_path, "library.json")
+                        if os.path.exists(library_json):
+                            try:
+                                with open(library_json, 'r') as f:
+                                    import json
+                                    lib_info = json.loads(f.read())
+                                    libraries.append({
+                                        'name': lib_info.get('name', lib_dir),
+                                        'version': lib_info.get('version', 'unknown'),
+                                        'path': lib_path
+                                    })
+                            except:
+                                libraries.append({'name': lib_dir, 'path': lib_path})
+                        else:
+                            libraries.append({'name': lib_dir, 'path': lib_path})
+                
+                ldf_results['libraries'] = libraries
+                ldf_results['libdeps_dir'] = libdeps_dir
+                
+            except Exception as e:
+                print(f"⚠ Error extracting LDF results: {e}")
+                
+        return ldf_results
+
+    def apply_ldf_cache(self, cache_data):
+        """
+        Restore relevant build variables from cache.
+        """
+        try:
+            build_vars = cache_data.get('build_vars', {})
+            print("🔧 Restoring build variables from cache...")
+            
+            restored_count = 0
+            for var_name, var_value in build_vars.items():
+                try:
+                    self.env[var_name] = var_value
+                    restored_count += 1
+                except Exception as e:
+                    print(f"⚠ Error restoring {var_name}: {e}")
+            
+            print(f"📦 Restored {restored_count} build variables")
             return True
         except Exception as e:
             print(f"✗ Error restoring environment: {e}")
@@ -444,118 +643,54 @@ class LDFCacheOptimizer:
 
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
-        Save full SCons environment with validation data, signature, and PIO version.
+        Save LDF cache with comprehensive SCons object debugging.
         """
         try:
             hash_details = self.get_project_hash_with_details()
-            env_dump = self.env.Dump(format='pretty')
+            
+            # Debug: Alle SCons-Objekte konvertieren und ausgeben
+            print("\n🔧 DEBUG MODE: Converting all SCons objects...")
+            converted_debug_vars = self.debug_dump_all_scons_objects()
+            
+            # Extrahiere relevante Build-Variablen
+            build_vars = self.get_comprehensive_ldf_vars()
+            ldf_results = self.extract_ldf_results()
+            
             pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
+            
             cache_data = {
-                'scons_dump': env_dump,
+                'build_vars': build_vars,
+                'ldf_results': ldf_results,
+                'debug_vars': converted_debug_vars,  # Vollständige Debug-Daten
                 'project_hash': hash_details['final_hash'],
                 'hash_details': hash_details['file_hashes'],
                 'pioenv': str(self.env['PIOENV']),
                 'timestamp': datetime.datetime.now().isoformat(),
-                'performance': hash_details.get('performance', {}),
                 'pio_version': pio_version,
             }
+            
             # Compute and add signature
             cache_data['signature'] = self.compute_signature(cache_data)
+            
             os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
             with open(self.cache_file, 'w', encoding='utf-8') as f:
-                f.write("# LDF Cache - Full SCons Environment\n")
+                f.write("# LDF Cache - Comprehensive Build Data\n")
                 f.write("# Generated automatically\n\n")
                 f.write(repr(cache_data))
-            print(f"💾 Saved full environment cache ({len(cache_data['scons_dump'])} bytes)")
+                
+            print(f"💾 Saved comprehensive cache with {len(build_vars)} build vars and {len(ldf_results.get('libraries', []))} libraries")
             
-            # Parse und ausgeben der SCons Environment Variablen mit robuster Fehlerbehandlung
-            try:
-                scons_vars = eval(env_dump)
-                print("\n=== SCons Environment Variables and Contents ===")
+            # Ausgabe der relevanten Build-Variablen
+            print("\n=== Relevant Build Variables ===")
+            for var_name, var_value in build_vars.items():
+                print(f"{var_name}: {var_value}")
                 
-                successful_outputs = 0
-                failed_outputs = 0
+            print(f"\n=== LDF Libraries ({len(ldf_results.get('libraries', []))}) ===")
+            for lib in ldf_results.get('libraries', []):
+                print(f"📚 {lib.get('name', 'unknown')} v{lib.get('version', '?')} -> {lib.get('path', '')}")
                 
-                for var_name, var_value in scons_vars.items():
-                    try:
-                        # Versuche die Variable auszugeben
-                        print(f"{var_name}: {var_value}")
-                        successful_outputs += 1
-                    except Exception as var_error:
-                        # Nur diese Variable überspringen, aber weitermachen
-                        print(f"{var_name}: <Error displaying value: {type(var_error).__name__}>")
-                        failed_outputs += 1
-                        
-                print("=" * 50)
-                print(f"📊 Ausgabe-Statistik: {successful_outputs} erfolgreich, {failed_outputs} mit Fehlern")
-                
-            except Exception as parse_error:
-                # Fallback: Versuche zeilenweise zu parsen
-                print(f"⚠ Error parsing complete environment dump: {parse_error}")
-                print("🔄 Attempting line-by-line parsing...")
-                
-                try:
-                    # Versuche das Environment manuell zu parsen
-                    self._parse_env_dump_manually(env_dump)
-                except Exception as manual_error:
-                    print(f"⚠ Manual parsing also failed: {manual_error}")
-                    
         except Exception as e:
             print(f"✗ Error saving cache: {e}")
-
-    def _parse_env_dump_manually(self, env_dump):
-        """
-        Manueller Parser für Environment Dump als Fallback-Option.
-        """
-        print("\n=== SCons Environment Variables (Manual Parse) ===")
-        
-        # Einfacher Regex-basierter Parser für Key-Value Paare
-        import re
-        
-        successful_outputs = 0
-        failed_outputs = 0
-        
-        # Suche nach Patterns wie 'KEY': 'VALUE' oder 'KEY': [...]
-        pattern = r"'([^']+)':\s*(.+?)(?=,\s*'[^']+':|\s*})"
-        
-        try:
-            matches = re.findall(pattern, env_dump, re.DOTALL)
-            
-            for var_name, var_value in matches:
-                try:
-                    # Versuche den Wert sicher zu evaluieren
-                    try:
-                        # Für einfache Werte
-                        if var_value.strip().startswith(("'", '"', '[', '{')):
-                            evaluated_value = eval(var_value.strip().rstrip(','))
-                        else:
-                            # Für andere Werte als String behandeln
-                            evaluated_value = var_value.strip().rstrip(',')
-                        
-                        print(f"{var_name}: {evaluated_value}")
-                        successful_outputs += 1
-                        
-                    except:
-                        # Falls eval fehlschlägt, als String ausgeben
-                        cleaned_value = var_value.strip().rstrip(',')
-                        print(f"{var_name}: {cleaned_value}")
-                        successful_outputs += 1
-                        
-                except Exception as var_error:
-                    print(f"{var_name}: <Error processing: {type(var_error).__name__}>")
-                    failed_outputs += 1
-                    
-        except Exception as regex_error:
-            print(f"⚠ Regex parsing failed: {regex_error}")
-            
-            # Letzter Fallback: Zeige rohen Dump in Abschnitten
-            print("\n=== Raw Environment Dump (First 2000 chars) ===")
-            print(env_dump[:2000])
-            if len(env_dump) > 2000:
-                print(f"\n... (truncated, total length: {len(env_dump)} chars)")
-        
-        print("=" * 50)
-        print(f"📊 Manual Parse Statistik: {successful_outputs} erfolgreich, {failed_outputs} mit Fehlern")
 
     # ------------------- Main Logic --------------------------------------------
 
@@ -563,7 +698,7 @@ class LDFCacheOptimizer:
         """
         Orchestrate caching process with smart invalidation, signature, and version check.
         """
-        print("\n=== LDF Cache Optimizer (Enhanced Validation) ===")
+        print("\n=== LDF Cache Optimizer (Debug Mode) ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
             print("🚀 Valid cache found - disabling LDF")
@@ -609,6 +744,8 @@ def show_ldf_cache_info():
             print(f"Signature:    {cache_data.get('signature', 'none')}")
             print(f"Created:      {cache_data.get('timestamp', 'unknown')}")
             print(f"File size:    {os.path.getsize(cache_file)} bytes")
+            print(f"Build vars:   {len(cache_data.get('build_vars', {}))}")
+            print(f"Libraries:    {len(cache_data.get('ldf_results', {}).get('libraries', []))}")
             print("=" * 25)
         except Exception as e:
             print(f"Error reading cache: {e}")
