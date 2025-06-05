@@ -37,6 +37,19 @@ class LDFCacheOptimizer:
     and stores the cache as a Python dict for robust validation.
     """
 
+    HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
+    SOURCE_EXTENSIONS = frozenset(['.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'])
+    CONFIG_EXTENSIONS = frozenset(['.json', '.properties', '.txt', '.ini'])
+
+    IGNORE_DIRS = frozenset([
+        '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
+        'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
+        'berry', 'berry_tasmota', 'berry_matter', 'berry_custom',
+        'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc',
+        'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
+    ])
+
+
     def __init__(self, environment):
         """
         Initialize the LDF Cache Optimizer.
@@ -46,11 +59,13 @@ class LDFCacheOptimizer:
         """
         self.env = environment
         self.project_dir = self.env.subst("$PROJECT_DIR")
+        self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         self.cache_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"ldf_cache_{self.env['PIOENV']}.py")
         self.ldf_cache_ini = os.path.join(self.project_dir, "ldf_cache.ini")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
         self.idedata_file = os.path.join(self.project_dir, ".pio", "build", self.env['PIOENV'], "idedata.json")
         self.original_ldf_mode = None
+        self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
 
     # --- PlatformIO.ini Modification Methods ---
 
@@ -340,33 +355,94 @@ class LDFCacheOptimizer:
 
     def get_project_hash_with_details(self):
         """
-        Generate a hash of the project for cache validation.
+        Generate hash with detailed file tracking and optimized early filtering.
+        Excludes all PlatformIO-installed components and lib_ldf_mode settings.
+
         Returns:
-            dict: Hash details
+            dict: Contains final_hash, file_hashes dict, total_files count, and timing info
         """
+        start_time = time.time()
+        file_hashes = {}
         hash_data = []
-        # Only hash platformio.ini, NOT ldf_cache.ini
+        generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
         if os.path.exists(self.platformio_ini):
-            with open(self.platformio_ini, 'rb') as f:
-                ini_content = f.read()
-                # Optionally filter out lib_ldf_mode line
-                ini_content = re.sub(rb'lib_ldf_mode\s*=\s*\w+\n?', b'', ini_content)
-                hash_data.append(hashlib.sha256(ini_content).hexdigest())
-        src_dir = self.env.subst("$PROJECT_SRC_DIR")
-        for root, dirs, files in os.walk(src_dir):
-            for fname in files:
-                fpath = os.path.join(root, fname)
-                try:
-                    with open(fpath, 'rb') as f:
-                        hash_data.append(hashlib.sha256(f.read()).hexdigest())
-                except Exception:
-                    pass
+            try:
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    ini_content = f.read()
+                filtered_content = re.sub(r'lib_ldf_mode\s*=\s*\w+\n?', '', ini_content)
+                ini_hash = hashlib.sha256(filtered_content.encode()).hexdigest()[:16]
+                hash_data.append(ini_hash)
+                file_hashes['platformio.ini'] = ini_hash
+            except Exception as e:
+                print(f"⚠ Error reading platformio.ini: {e}")
+        scan_dirs = []
+        if os.path.exists(self.src_dir):
+            scan_dirs.append(('source', self.src_dir))
+        lib_dir = os.path.join(self.project_dir, "lib")
+        if os.path.exists(lib_dir) and not self.is_platformio_path(lib_dir):
+            scan_dirs.append(('library', lib_dir))
+        for inc_path in self.env.get('CPPPATH', []):
+            inc_dir = str(inc_path)
+            if self.is_platformio_path(inc_dir):
+                continue
+            if any(skip_dir in inc_dir for skip_dir in ['variants', '.platformio', '.pio']):
+                continue
+            if os.path.exists(inc_dir) and inc_dir != self.src_dir:
+                scan_dirs.append(('include', inc_dir))
+        total_scanned = 0
+        total_relevant = 0
+        scan_start_time = time.time()
+        for dir_type, scan_dir in scan_dirs:
+            print(f"🔍 Scanning {dir_type} directory: {scan_dir}")
+            try:
+                for root, dirs, files in os.walk(scan_dir):
+                    if self.is_platformio_path(root):
+                        continue
+                    dirs[:] = [d for d in dirs if d not in self.IGNORE_DIRS]
+                    relevant_files = []
+                    for file in files:
+                        total_scanned += 1
+                        file_ext = os.path.splitext(file)[1].lower()
+                        if file_ext in self.ALL_RELEVANT_EXTENSIONS:
+                            relevant_files.append((file, file_ext))
+                            total_relevant += 1
+                    for file, file_ext in relevant_files:
+                        if file == generated_cpp:
+                            continue
+                        file_path = os.path.join(root, file)
+                        if file_ext in self.HEADER_EXTENSIONS or file_ext in self.CONFIG_EXTENSIONS:
+                            file_hash = self._get_file_hash(file_path)
+                        elif file_ext in self.SOURCE_EXTENSIONS:
+                            file_hash = self.get_include_relevant_hash(file_path)
+                        else:
+                            continue
+                        file_hashes[file_path] = file_hash
+                        hash_data.append(file_hash)
+            except (IOError, OSError, PermissionError) as e:
+                print(f"⚠ Warning: Could not scan directory {scan_dir}: {e}")
+                continue
+        scan_elapsed = time.time() - scan_start_time
         final_hash = hashlib.sha256(''.join(hash_data).encode()).hexdigest()[:16]
-        return {'final_hash': final_hash, 'file_hashes': {}}
+        total_elapsed = time.time() - start_time
+        print(f"🔍 Scanning completed in {scan_elapsed:.2f}s")
+        print(f"🔍 Total hash calculation completed in {total_elapsed:.2f}s")
+        print(f"🔍 Scan complete: {total_scanned} files scanned, {total_relevant} relevant, {len(file_hashes)} hashed")
+        if total_scanned > 0:
+            print(f"🔍 Performance: {((total_relevant/total_scanned)*100):.1f}% relevance ratio")
+        return {
+            'final_hash': final_hash,
+            'file_hashes': file_hashes,
+            'total_files': len(file_hashes),
+            'scan_time': scan_elapsed,
+            'total_time': total_elapsed,
+            'files_scanned': total_scanned,
+            'files_relevant': total_relevant
+        }
 
     def load_and_validate_cache(self):
         """
-        Load and validate cache with hash and signature from Python dict file.
+        Load and validate cache with smart hash comparison, signature, and PIO version.
+
         Returns:
             dict or None: Cache data if valid, None if invalid or non-existent
         """
@@ -378,14 +454,42 @@ class LDFCacheOptimizer:
                 cache_content = f.read()
             local_vars = {}
             exec(cache_content, {}, local_vars)
+
             cache_data = local_vars.get('cache_data')
+
+            # PlatformIO version check
+            current_pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
+            if cache_data.get('pio_version') != current_pio_version:
+                print(f"⚠ Cache invalid: PlatformIO version changed from {cache_data.get('pio_version')} to {current_pio_version}")
+                clear_ldf_cache()
+                return None
+
+            # Signature check (integrity)
             expected_signature = cache_data.get('signature')
             actual_signature = self.compute_signature(cache_data)
             if expected_signature != actual_signature:
-                print("⚠ Cache invalid: Signature mismatch.")
+                print("⚠ Cache invalid: Signature mismatch. Possible file tampering or corruption.")
                 clear_ldf_cache()
                 return None
+
+            # Environment check
+            if cache_data.get('pioenv') != self.env['PIOENV']:
+                print(f"🔄 Environment changed: {cache_data.get('pioenv')} -> {self.env['PIOENV']}")
+                clear_ldf_cache()
+                return None
+
+            # Detailed hash comparison
+            print("🔍 Comparing hashes (showing only differences)...")
+            current_hash_details = self.get_project_hash_with_details()
+            if cache_data.get('project_hash') != current_hash_details['final_hash']:
+                print("\n🔄 Project files changed:")
+                self.compare_hash_details(current_hash_details['file_hashes'], cache_data.get('hash_details', {}))
+                clear_ldf_cache()
+                return None
+
+            print("✅ No include-relevant changes - cache valid")
             return cache_data
+
         except Exception as e:
             print(f"⚠ Cache validation failed: {e}")
             clear_ldf_cache()
@@ -394,11 +498,14 @@ class LDFCacheOptimizer:
     def compute_signature(self, cache_data):
         """
         Compute a signature for the cache to detect tampering.
+
         Args:
             cache_data (dict): The cache data dictionary
+
         Returns:
             str: SHA256 signature string
         """
+        # Exclude the signature field itself
         data = dict(cache_data)
         data.pop('signature', None)
         try:
