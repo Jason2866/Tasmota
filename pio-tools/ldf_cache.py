@@ -619,6 +619,100 @@ class LDFCacheOptimizer:
                 
         return ldf_results
 
+    def _analyze_node_types(self, scons_vars):
+        """
+        Analysiere die verschiedenen SCons.Node Typen im Environment.
+        """
+        node_types = {}
+        node_examples = {}
+        
+        for var_name, var_value in scons_vars.items():
+            var_str = str(var_value)
+            if 'SCons.Node' in var_str:
+                # Extrahiere Node-Typ
+                import re
+                node_matches = re.findall(r'SCons\.Node\.([^>]+)', var_str)
+                for node_type in node_matches:
+                    if node_type not in node_types:
+                        node_types[node_type] = 0
+                        node_examples[node_type] = []
+                    node_types[node_type] += 1
+                    if len(node_examples[node_type]) < 3:  # Nur erste 3 Beispiele
+                        node_examples[node_type].append({
+                            'variable': var_name,
+                            'example': var_str[:100] + '...' if len(var_str) > 100 else var_str
+                        })
+        
+        return {
+            'node_type_counts': node_types,
+            'node_examples': node_examples
+        }
+
+    def create_analysis_dump(self):
+        """
+        Erstelle einen detaillierten Dump für die Analyse der LDF-Daten.
+        """
+        try:
+            print("\n🔍 Creating detailed analysis dump...")
+            
+            # Hole alle Environment-Daten
+            env_dump = self.env.Dump(format='pretty')
+            scons_vars = eval(env_dump)
+            
+            # Konvertiere alle SCons-Objekte
+            converted_vars = self.debug_dump_all_scons_objects()
+            
+            # Extrahiere LDF-relevante Daten
+            build_vars = self.get_comprehensive_ldf_vars()
+            ldf_results = self.extract_ldf_results()
+            
+            # Erstelle strukturierten Analyse-Dump
+            analysis_data = {
+                'analysis_info': {
+                    'timestamp': datetime.datetime.now().isoformat(),
+                    'pioenv': str(self.env['PIOENV']),
+                    'project_dir': self.project_dir,
+                    'purpose': 'LDF Cache Analysis - for script optimization'
+                },
+                'raw_scons_vars': {
+                    'total_count': len(scons_vars),
+                    'sample_vars': dict(list(scons_vars.items())[:10]),  # Erste 10 für Übersicht
+                },
+                'converted_scons_vars': converted_vars,
+                'ldf_relevant_vars': build_vars,
+                'ldf_filesystem_results': ldf_results,
+                'critical_paths': {
+                    'CPPPATH': self.env.get('CPPPATH', []),
+                    'LIBPATH': self.env.get('LIBPATH', []),
+                    'LIBS': self.env.get('LIBS', []),
+                },
+                'node_analysis': self._analyze_node_types(scons_vars)
+            }
+            
+            # Speichere Analyse-Dump
+            analysis_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"analysis_dump_{self.env['PIOENV']}.py")
+            os.makedirs(os.path.dirname(analysis_file), exist_ok=True)
+            
+            with open(analysis_file, 'w', encoding='utf-8') as f:
+                f.write("# LDF Cache Analysis Dump\n")
+                f.write("# This file contains detailed analysis data for script optimization\n")
+                f.write("# Generated for upload and analysis\n\n")
+                f.write("analysis_data = ")
+                f.write(repr(analysis_data))
+            
+            print(f"📁 Analysis dump saved to: {analysis_file}")
+            print(f"📊 Analysis contains:")
+            print(f"   - {len(converted_vars)} converted SCons variables")
+            print(f"   - {len(build_vars)} LDF-relevant variables")
+            print(f"   - {len(ldf_results.get('libraries', []))} detected libraries")
+            print(f"   - Node type analysis")
+            
+            return analysis_file
+            
+        except Exception as e:
+            print(f"❌ Error creating analysis dump: {e}")
+            return None
+
     def apply_ldf_cache(self, cache_data):
         """
         Restore relevant build variables from cache.
@@ -655,6 +749,11 @@ class LDFCacheOptimizer:
             # Extrahiere relevante Build-Variablen
             build_vars = self.get_comprehensive_ldf_vars()
             ldf_results = self.extract_ldf_results()
+            
+            # Erstelle zusätzlich einen Analyse-Dump
+            analysis_file = self.create_analysis_dump()
+            if analysis_file:
+                print(f"\n📤 Upload this file for analysis: {analysis_file}")
             
             pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
             
@@ -752,9 +851,23 @@ def show_ldf_cache_info():
     else:
         print("No LDF Cache present")
 
+def create_standalone_analysis_dump():
+    """
+    Erstelle einen Analyse-Dump als eigenständiges Command.
+    """
+    project_dir = env.subst("$PROJECT_DIR")
+    optimizer = LDFCacheOptimizer(env)
+    analysis_file = optimizer.create_analysis_dump()
+    if analysis_file:
+        print(f"✅ Analysis dump created: {analysis_file}")
+        print("📤 Upload this file for script optimization!")
+    else:
+        print("❌ Failed to create analysis dump")
+
 # Register custom targets
 env.AlwaysBuild(env.Alias("clear_ldf_cache", None, clear_ldf_cache))
 env.AlwaysBuild(env.Alias("ldf_cache_info", None, show_ldf_cache_info))
+env.AlwaysBuild(env.Alias("create_analysis_dump", None, create_standalone_analysis_dump))
 
 # Initialize and run
 ldf_optimizer = LDFCacheOptimizer(env)
