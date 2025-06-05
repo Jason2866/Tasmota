@@ -234,17 +234,88 @@ class LDFCacheOptimizer:
         }
 
     # --- All other methods remain unchanged from the previous version ---
-    # (For brevity, see previous script for the unchanged methods, such as:
-    # find_lib_ldf_mode_in_ini, modify_platformio_ini, add_lib_ldf_mode_to_platformio_section,
-    # restore_platformio_ini, read_existing_idedata, _process_real_idedata_structure,
-    # write_ldf_cache_ini, apply_ldf_cache, save_ldf_cache, load_and_validate_cache,
-    # compute_signature, setup_ldf_caching, clear_ldf_cache, show_ldf_cache_info, show_ldf_config)
+    # Copy all other methods from your previous script here:
+    # - find_lib_ldf_mode_in_ini
+    # - modify_platformio_ini
+    # - add_lib_ldf_mode_to_platformio_section
+    # - restore_platformio_ini
+    # - read_existing_idedata
+    # - _process_real_idedata_structure
+    # - write_ldf_cache_ini
+    # - apply_ldf_cache
+    # - save_ldf_cache
+    # - load_and_validate_cache
+    # - compute_signature
+    # - setup_ldf_caching
 
-# Register custom targets
-env.AlwaysBuild(env.Alias("clear_ldf_cache", None, lambda: None))
-env.AlwaysBuild(env.Alias("ldf_cache_info", None, lambda: None))
-env.AlwaysBuild(env.Alias("show_ldf_config", None, lambda: None))
+def clear_ldf_cache():
+    """
+    Delete LDF cache file.
+    """
+    project_dir = env.subst("$PROJECT_DIR")
+    cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env['PIOENV']}.py")
+    if os.path.exists(cache_file):
+        try:
+            os.remove(cache_file)
+            print("✓ LDF Cache deleted")
+        except Exception as e:
+            print(f"✗ Error deleting cache: {e}")
+    else:
+        print("ℹ No LDF Cache present")
 
-# Initialize and run
+def show_ldf_cache_info():
+    """
+    Display cache information.
+    """
+    project_dir = env.subst("$PROJECT_DIR")
+    cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env['PIOENV']}.py")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache_content = f.read()
+            local_vars = {}
+            exec(cache_content, {}, local_vars)
+            cache_data = local_vars.get('cache_data')
+            ldf_results = cache_data.get('ldf_results', {})
+            print("\n=== LDF Cache Info ===")
+            print(f"Environment:  {cache_data.get('pioenv', 'unknown')}")
+            print(f"Project hash: {cache_data.get('project_hash', 'unknown')}")
+            print(f"PlatformIO version: {cache_data.get('pio_version', 'unknown')}")
+            print(f"Signature:    {cache_data.get('signature', 'none')}")
+            print(f"Created:      {cache_data.get('timestamp', 'unknown')}")
+            print(f"File size:    {os.path.getsize(cache_file)} bytes")
+            print(f"Libraries:    {len(ldf_results.get('libraries', []))}")
+            print(f"Include paths: {len(ldf_results.get('include_paths', []))}")
+            print(f"Defines:      {len(ldf_results.get('defines', []))}")
+            print(f"Build flags:  {len(ldf_results.get('build_flags', []))}")
+            print(f"Libsource dirs: {len(ldf_results.get('libsource_dirs', []))}")
+            print("=" * 25)
+        except Exception as e:
+            print(f"Error reading cache: {e}")
+    else:
+        print("No LDF Cache present")
+
+def show_ldf_config():
+    """
+    Display the generated LDF configuration (ldf_cache.ini).
+    """
+    project_dir = env.subst("$PROJECT_DIR")
+    config_file = os.path.join(project_dir, "ldf_cache.ini")
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config_content = f.read()
+            print("\n=== ldf_cache.ini (LDF Cache Configuration) ===")
+            print(config_content)
+            print("=" * 40)
+        except Exception as e:
+            print(f"Error reading ldf_cache.ini: {e}")
+    else:
+        print("No ldf_cache.ini configuration found")
+
+env.AlwaysBuild(env.Alias("clear_ldf_cache", None, clear_ldf_cache))
+env.AlwaysBuild(env.Alias("ldf_cache_info", None, show_ldf_cache_info))
+env.AlwaysBuild(env.Alias("show_ldf_config", None, show_ldf_config))
+
 ldf_optimizer = LDFCacheOptimizer(env)
 ldf_optimizer.setup_ldf_caching()
