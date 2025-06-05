@@ -1,8 +1,8 @@
 # ldf_cache.py
 """
-PlatformIO Advanced Script for intelligent LDF caching using lib_deps extraction.
-This module optimizes build performance by extracting LDF results and reusing them
-as lib_deps configuration to bypass LDF on subsequent builds.
+PlatformIO Advanced Script for intelligent LDF caching using LDF interception.
+This module optimizes build performance by intercepting LDF execution and reusing
+the results to bypass LDF on subsequent builds.
 
 Copyright: Jason2866
 """
@@ -14,13 +14,14 @@ import datetime
 import time
 import re
 import json
+import subprocess
 from platformio.project.config import ProjectConfig
 
 class LDFCacheOptimizer:
     """
     Intelligent LDF (Library Dependency Finder) cache optimizer for PlatformIO.
 
-    This class extracts LDF results and converts them to reusable lib_deps configuration,
+    This class intercepts LDF execution and converts results to reusable configuration,
     allowing subsequent builds to bypass LDF entirely while maintaining all dependencies.
     """
 
@@ -51,7 +52,7 @@ class LDFCacheOptimizer:
         self.original_ldf_mode = None
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
 
-    # ------------------- PlatformIO.ini Modification Methods -------------------
+    # ------------------- PlatformIO.ini Modification Methods (ORIGINAL) -------
 
     def find_lib_ldf_mode_in_ini(self):
         """
@@ -430,248 +431,295 @@ class LDFCacheOptimizer:
         raw = repr(data).encode()
         return hashlib.sha256(raw).hexdigest()
 
-    # ------------------- LDF Results Extraction & Caching ---------------------
+    # ------------------- LDF Interception & Results Extraction ----------------
 
-    def extract_complete_ldf_results(self):
+    def intercept_ldf_execution(self):
         """
-        Extrahiere alle LDF-Ergebnisse für Wiederverwendung.
+        Rufe LDF gezielt auf und fange die Ergebnisse ab.
         """
-        ldf_results = {
-            'framework_libraries': [],
-            'external_libraries': [], 
-            'local_libraries': [],
+        try:
+            print("🎯 Executing targeted LDF interception...")
+            
+            # 1. LDF-Prozess abfangen
+            ldf_results = self._execute_ldf_and_capture()
+            
+            # 2. Ergebnisse in verwertbarer Form verarbeiten
+            if ldf_results:
+                return self._process_raw_ldf_results(ldf_results)
+            else:
+                print("⚠ No LDF results captured")
+                return None
+                
+        except Exception as e:
+            print(f"❌ LDF interception failed: {e}")
+            return None
+
+    def _execute_ldf_and_capture(self):
+        """
+        Führe LDF aus und fange die Rohergebnisse ab.
+        """
+        try:
+            # LDF als separaten Prozess ausführen um idedata.json zu generieren
+            cmd = [
+                "pio", "run", 
+                "--environment", self.env['PIOENV'],
+                "--target", "idedata",  # Generiert idedata.json mit LDF-Ergebnissen
+                "--project-dir", self.project_dir
+            ]
+            
+            print(f"🔧 Executing: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=self.project_dir)
+            
+            if result.returncode == 0:
+                # Lese idedata.json - enthält alle LDF-Ergebnisse
+                idedata_file = os.path.join(self.project_dir, ".pio", "build", self.env['PIOENV'], "idedata.json")
+                if os.path.exists(idedata_file):
+                    print(f"✅ Found idedata.json: {idedata_file}")
+                    with open(idedata_file, 'r') as f:
+                        return json.loads(f.read())
+                else:
+                    print(f"❌ idedata.json not found: {idedata_file}")
+            else:
+                print(f"❌ LDF execution failed: {result.stderr}")
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error executing LDF: {e}")
+            return None
+
+    def _process_raw_ldf_results(self, idedata):
+        """
+        Verarbeite die rohen LDF-Ergebnisse aus idedata.json.
+        """
+        ldf_cache = {
+            'libraries': [],
+            'include_paths': [],
+            'defines': [],
+            'build_flags': [],
             'lib_deps_entries': []
         }
         
-        try:
-            # 1. Externe Libraries aus .pio/libdeps/
-            libdeps_dir = os.path.join(self.project_dir, ".pio", "libdeps", self.env['PIOENV'])
-            if os.path.exists(libdeps_dir):
-                for lib_dir in os.listdir(libdeps_dir):
-                    lib_path = os.path.join(libdeps_dir, lib_dir)
-                    if os.path.isdir(lib_path):
-                        # Prüfe ob es eine library.json gibt
-                        library_json = os.path.join(lib_path, "library.json")
-                        if os.path.exists(library_json):
-                            try:
-                                with open(library_json, 'r') as f:
-                                    lib_info = json.loads(f.read())
-                                    ldf_results['external_libraries'].append({
-                                        'name': lib_info.get('name', lib_dir),
-                                        'version': lib_info.get('version', 'unknown'),
-                                        'path': lib_path,
-                                        'lib_deps_entry': lib_dir  # Einfacher Name für lib_deps
-                                    })
-                            except:
-                                ldf_results['external_libraries'].append({
-                                    'name': lib_dir,
-                                    'path': lib_path,
-                                    'lib_deps_entry': lib_dir
-                                })
+        if not idedata:
+            return ldf_cache
+        
+        print("🔍 Processing LDF results from idedata.json...")
+        
+        # Extrahiere Libraries aus lib_deps
+        lib_deps = idedata.get('lib_deps', [])
+        print(f"📚 Found {len(lib_deps)} library dependencies")
+        
+        for lib_path in lib_deps:
+            lib_name = os.path.basename(lib_path)
+            ldf_cache['libraries'].append({
+                'name': lib_name,
+                'path': lib_path
+            })
             
-            # 2. Framework-Libraries aus CPPPATH extrahieren
-            platform = self.env.get('PLATFORM', 'unknown')
-            for cpp_path in self.env.get('CPPPATH', []):
-                path_str = str(cpp_path)
+            # Konvertiere zu lib_deps Format
+            if 'framework-' in lib_path:
+                platform = self.env.get('PLATFORM', 'esp32')
+                lib_deps_entry = f"${{platformio.packages_dir}}/framework-{platform}/libraries/{lib_name}"
+            else:
+                lib_deps_entry = lib_name
                 
-                # Framework-Library-Pfade erkennen
-                if f'framework-{platform}' in path_str and 'libraries' in path_str:
-                    # Extrahiere Library-Namen
-                    parts = path_str.split('libraries')
-                    if len(parts) > 1:
-                        lib_name = parts[1].strip('/\\').split('/')[0].split('\\')[0]
-                        if lib_name and lib_name not in [lib['name'] for lib in ldf_results['framework_libraries']]:
-                            lib_deps_entry = f"${{platformio.packages_dir}}/framework-{platform}/libraries/{lib_name}"
-                            ldf_results['framework_libraries'].append({
-                                'name': lib_name,
-                                'path': path_str,
-                                'lib_deps_entry': lib_deps_entry
-                            })
-            
-            # 3. Lokale Libraries (im project/lib/ Verzeichnis)
-            local_lib_dir = os.path.join(self.project_dir, "lib")
-            if os.path.exists(local_lib_dir):
-                for lib_dir in os.listdir(local_lib_dir):
-                    lib_path = os.path.join(local_lib_dir, lib_dir)
-                    if os.path.isdir(lib_path):
-                        ldf_results['local_libraries'].append({
-                            'name': lib_dir,
-                            'path': lib_path,
-                            'lib_deps_entry': f"./lib/{lib_dir}"
-                        })
-            
-            # 4. Sammle alle lib_deps Einträge
-            for category in ['framework_libraries', 'external_libraries', 'local_libraries']:
-                for lib in ldf_results[category]:
-                    ldf_results['lib_deps_entries'].append(lib['lib_deps_entry'])
-            
-            print(f"📚 LDF Results extracted:")
-            print(f"   Framework libraries: {len(ldf_results['framework_libraries'])}")
-            print(f"   External libraries: {len(ldf_results['external_libraries'])}")
-            print(f"   Local libraries: {len(ldf_results['local_libraries'])}")
-            
-            return ldf_results
-            
-        except Exception as e:
-            print(f"⚠ Error extracting LDF results: {e}")
-            return ldf_results
+            ldf_cache['lib_deps_entries'].append(lib_deps_entry)
+            print(f"   - {lib_name} -> {lib_deps_entry}")
+        
+        # Extrahiere Include-Pfade
+        includes = idedata.get('includes', [])
+        print(f"📂 Found {len(includes)} include paths")
+        
+        for include_path in includes:
+            if not self.is_platformio_path(include_path):
+                ldf_cache['include_paths'].append(include_path)
+                print(f"   - {include_path}")
+        
+        # Extrahiere Defines
+        defines = idedata.get('defines', [])
+        print(f"🔧 Found {len(defines)} defines")
+        
+        for define in defines:
+            ldf_cache['defines'].append(define)
+            print(f"   - {define}")
+        
+        # Extrahiere Build-Flags
+        cxx_flags = idedata.get('cxx_flags', [])
+        cc_flags = idedata.get('cc_flags', [])
+        all_flags = cxx_flags + cc_flags
+        
+        print(f"🚩 Found {len(all_flags)} build flags")
+        
+        for flag in all_flags:
+            if flag not in ldf_cache['build_flags']:
+                ldf_cache['build_flags'].append(flag)
+                print(f"   - {flag}")
+        
+        return ldf_cache
 
-    def generate_platformio_ini_section(self, ldf_results):
+    def generate_complete_platformio_config(self, ldf_results):
         """
-        Generiere platformio.ini Sektion für LDF-Bypass.
+        Generiere vollständige platformio.ini Konfiguration.
         """
-        lines = [
-            f"# LDF Cache Configuration for {self.env['PIOENV']}",
+        config_lines = [
+            f"# Complete LDF Cache Configuration for {self.env['PIOENV']}",
             f"# Generated: {datetime.datetime.now().isoformat()}",
-            f"# Add this to your [env:{self.env['PIOENV']}] section:",
+            f"# Copy this to your [env:{self.env['PIOENV']}] section",
             "",
             "lib_ldf_mode = off",
             "lib_deps = "
         ]
         
-        # Füge alle lib_deps Einträge hinzu
+        # Libraries
         for lib_dep in ldf_results['lib_deps_entries']:
-            lines.append(f"    {lib_dep}")
+            config_lines.append(f"    {lib_dep}")
         
-        return '\n'.join(lines)
+        config_lines.append("")
+        config_lines.append("build_flags = ")
+        
+        # Include-Pfade
+        for include_path in ldf_results['include_paths']:
+            config_lines.append(f"    -I\"{include_path}\"")
+        
+        # Defines
+        for define in ldf_results['defines']:
+            config_lines.append(f"    -D{define}")
+        
+        # Zusätzliche Build-Flags
+        for flag in ldf_results['build_flags']:
+            # Vermeide Duplikate von Include-Pfaden
+            if not flag.startswith('-I'):
+                config_lines.append(f"    {flag}")
+        
+        # Speichere Konfiguration
+        config_content = '\n'.join(config_lines)
+        config_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"complete_ldf_config_{self.env['PIOENV']}.ini")
+        os.makedirs(os.path.dirname(config_file), exist_ok=True)
+        
+        with open(config_file, 'w', encoding='utf-8') as f:
+            f.write(config_content)
+        
+        print(f"\n📁 Complete LDF config saved to: {config_file}")
+        print(f"\n📋 Copy this to your platformio.ini [env:{self.env['PIOENV']}] section:")
+        print("=" * 60)
+        print(config_content)
+        print("=" * 60)
+        
+        return config_file
 
-    def save_ldf_bypass_config(self, ldf_results):
+    def apply_ldf_cache(self, cache_data):
         """
-        Speichere LDF-Bypass-Konfiguration.
-        """
-        try:
-            # Generiere Konfiguration
-            config_content = self.generate_platformio_ini_section(ldf_results)
-            
-            # Speichere in Cache-Verzeichnis
-            config_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"ldf_bypass_{self.env['PIOENV']}.ini")
-            os.makedirs(os.path.dirname(config_file), exist_ok=True)
-            
-            with open(config_file, 'w', encoding='utf-8') as f:
-                f.write(config_content)
-            
-            print(f"\n📁 LDF Bypass config saved to: {config_file}")
-            print(f"\n📋 Copy this to your platformio.ini [env:{self.env['PIOENV']}] section:")
-            print("=" * 60)
-            print(config_content)
-            print("=" * 60)
-            
-            return config_file
-            
-        except Exception as e:
-            print(f"❌ Error saving bypass config: {e}")
-            return None
-
-    def apply_ldf_cache_automatically(self, cache_data):
-        """
-        Wende LDF-Cache automatisch an, indem lib_deps gesetzt wird.
+        Restore full build environment from cache (ORIGINAL LOGIC).
         """
         try:
             ldf_results = cache_data.get('ldf_results', {})
-            lib_deps_entries = ldf_results.get('lib_deps_entries', [])
             
-            if not lib_deps_entries:
-                print("⚠ No lib_deps entries found in cache")
+            if not ldf_results:
+                print("⚠ No LDF results found in cache")
                 return False
             
-            print("🔧 Applying LDF cache by setting lib_deps...")
+            print("🔧 Restoring full build environment from cache...")
             
-            # Setze lib_deps im aktuellen Environment
-            self.env['LIB_DEPS'] = lib_deps_entries
+            # Restore lib_deps
+            lib_deps = ldf_results.get('lib_deps_entries', [])
+            if lib_deps:
+                self.env['LIB_DEPS'] = lib_deps
+                print(f"📚 Restored {len(lib_deps)} library dependencies")
             
-            # Zusätzlich: Setze LDF_MODE auf off
-            self.env['LIB_LDF_MODE'] = 'off'
+            # Restore include paths
+            include_paths = ldf_results.get('include_paths', [])
+            if include_paths:
+                self.env.Append(CPPPATH=include_paths)
+                print(f"📂 Restored {len(include_paths)} include paths")
             
-            print(f"📦 Applied {len(lib_deps_entries)} library dependencies:")
-            for lib_dep in lib_deps_entries:
-                print(f"   - {lib_dep}")
+            # Restore defines
+            defines = ldf_results.get('defines', [])
+            if defines:
+                self.env.Append(CPPDEFINES=defines)
+                print(f"🔧 Restored {len(defines)} preprocessor defines")
+            
+            # Restore build flags
+            build_flags = ldf_results.get('build_flags', [])
+            if build_flags:
+                self.env.Append(BUILD_FLAGS=build_flags)
+                print(f"🚩 Restored {len(build_flags)} build flags")
             
             return True
             
         except Exception as e:
-            print(f"✗ Error applying LDF cache: {e}")
+            print(f"✗ Error restoring environment: {e}")
             return False
 
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
-        Speichere LDF-Ergebnisse für Wiederverwendung.
+        Führe gezielten LDF-Aufruf durch und speichere Ergebnisse.
         """
         try:
             hash_details = self.get_project_hash_with_details()
             
-            # Extrahiere vollständige LDF-Ergebnisse
-            ldf_results = self.extract_complete_ldf_results()
+            # Gezielter LDF-Aufruf mit Interception
+            ldf_results = self.intercept_ldf_execution()
             
-            # Erstelle Bypass-Konfiguration
-            bypass_config_file = self.save_ldf_bypass_config(ldf_results)
-            
-            pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
-            
-            cache_data = {
-                'ldf_results': ldf_results,
-                'project_hash': hash_details['final_hash'],
-                'hash_details': hash_details['file_hashes'],
-                'pioenv': str(self.env['PIOENV']),
-                'timestamp': datetime.datetime.now().isoformat(),
-                'pio_version': pio_version,
-                'bypass_config_file': bypass_config_file
-            }
-            
-            # Compute and add signature
-            cache_data['signature'] = self.compute_signature(cache_data)
-            
-            os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
-            
-            # Speichere als JSON
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                f.write("# LDF Cache - Library Dependencies\n")
-                f.write("# Generated automatically\n\n")
-                f.write("import json\n\n")
-                f.write("cache_json = '''\n")
-                f.write(json.dumps(cache_data, ensure_ascii=False, indent=2, default=str))
-                f.write("\n'''\n\n")
-                f.write("cache_data = json.loads(cache_json)\n")
-            
-            print(f"💾 LDF Cache saved successfully!")
-            print(f"🎯 Found {len(ldf_results['lib_deps_entries'])} library dependencies")
-            
-            # Detaillierte Ausgabe der gefundenen Libraries
-            if ldf_results['framework_libraries']:
-                print(f"\n📚 Framework Libraries ({len(ldf_results['framework_libraries'])}):")
-                for lib in ldf_results['framework_libraries']:
-                    print(f"   - {lib['name']}")
-            
-            if ldf_results['external_libraries']:
-                print(f"\n📦 External Libraries ({len(ldf_results['external_libraries'])}):")
-                for lib in ldf_results['external_libraries']:
-                    print(f"   - {lib['name']} v{lib.get('version', '?')}")
-            
-            if ldf_results['local_libraries']:
-                print(f"\n🏠 Local Libraries ({len(ldf_results['local_libraries'])}):")
-                for lib in ldf_results['local_libraries']:
-                    print(f"   - {lib['name']}")
-            
+            if ldf_results:
+                # Generiere vollständige platformio.ini Konfiguration
+                config_file = self.generate_complete_platformio_config(ldf_results)
+                
+                pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
+                
+                # Speichere verwertbare Ergebnisse
+                cache_data = {
+                    'ldf_results': ldf_results,
+                    'project_hash': hash_details['final_hash'],
+                    'hash_details': hash_details['file_hashes'],
+                    'pioenv': str(self.env['PIOENV']),
+                    'timestamp': datetime.datetime.now().isoformat(),
+                    'pio_version': pio_version,
+                    'config_file': config_file
+                }
+                
+                # Compute and add signature
+                cache_data['signature'] = self.compute_signature(cache_data)
+                
+                os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
+                
+                # Speichere als JSON
+                with open(self.cache_file, 'w', encoding='utf-8') as f:
+                    f.write("# LDF Cache - Complete Build Environment\n")
+                    f.write("# Generated automatically via LDF interception\n\n")
+                    f.write("import json\n\n")
+                    f.write("cache_json = '''\n")
+                    f.write(json.dumps(cache_data, ensure_ascii=False, indent=2, default=str))
+                    f.write("\n'''\n\n")
+                    f.write("cache_data = json.loads(cache_json)\n")
+                
+                print(f"💾 LDF Cache saved successfully!")
+                print(f"🎯 Captured complete build environment:")
+                print(f"   📚 Libraries: {len(ldf_results['libraries'])}")
+                print(f"   📂 Include paths: {len(ldf_results['include_paths'])}")
+                print(f"   🔧 Defines: {len(ldf_results['defines'])}")
+                print(f"   🚩 Build flags: {len(ldf_results['build_flags'])}")
+                
+            else:
+                print("❌ LDF interception failed - no results captured")
+                
         except Exception as e:
             print(f"✗ Error saving LDF cache: {e}")
 
-    # ------------------- Main Logic --------------------------------------------
+    # ------------------- Main Logic (ORIGINAL) --------------------------------
 
     def setup_ldf_caching(self):
         """
-        Orchestrate caching process with LDF result extraction and reuse.
+        Orchestrate caching process with smart invalidation, signature, and version check.
         """
-        print("\n=== LDF Cache Optimizer (lib_deps Mode) ===")
+        print("\n=== LDF Cache Optimizer (LDF Interception Mode) ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
-            print("🚀 Valid cache found - applying LDF bypass")
+            print("🚀 Valid cache found - disabling LDF")
             if self.modify_platformio_ini("off"):
-                if self.apply_ldf_cache_automatically(cache_data):
-                    self.env.AddPostAction("checkprogsize", lambda *args: self.restore_platformio_ini())
-                else:
-                    print("⚠ Failed to apply cache - falling back to normal LDF")
-                    self.restore_platformio_ini()
+                self.apply_ldf_cache(cache_data)
+                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_platformio_ini())
         else:
-            print("🔄 No valid cache - running full LDF and extracting results")
+            print("🔄 No valid cache - running full LDF with interception")
             self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
         print("=" * 60)
 
@@ -719,38 +767,38 @@ def show_ldf_cache_info():
             print(f"Signature:    {cache_data.get('signature', 'none')}")
             print(f"Created:      {cache_data.get('timestamp', 'unknown')}")
             print(f"File size:    {os.path.getsize(cache_file)} bytes")
-            print(f"Framework libs: {len(ldf_results.get('framework_libraries', []))}")
-            print(f"External libs:  {len(ldf_results.get('external_libraries', []))}")
-            print(f"Local libs:     {len(ldf_results.get('local_libraries', []))}")
-            print(f"Total lib_deps: {len(ldf_results.get('lib_deps_entries', []))}")
+            print(f"Libraries:    {len(ldf_results.get('libraries', []))}")
+            print(f"Include paths: {len(ldf_results.get('include_paths', []))}")
+            print(f"Defines:      {len(ldf_results.get('defines', []))}")
+            print(f"Build flags:  {len(ldf_results.get('build_flags', []))}")
             print("=" * 25)
         except Exception as e:
             print(f"Error reading cache: {e}")
     else:
         print("No LDF Cache present")
 
-def show_ldf_bypass_config():
+def show_ldf_config():
     """
-    Display the generated LDF bypass configuration.
+    Display the generated LDF configuration.
     """
     project_dir = env.subst("$PROJECT_DIR")
-    config_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_bypass_{env['PIOENV']}.ini")
+    config_file = os.path.join(project_dir, ".pio", "ldf_cache", f"complete_ldf_config_{env['PIOENV']}.ini")
     if os.path.exists(config_file):
         try:
             with open(config_file, 'r', encoding='utf-8') as f:
                 config_content = f.read()
-            print("\n=== LDF Bypass Configuration ===")
+            print("\n=== Complete LDF Configuration ===")
             print(config_content)
             print("=" * 40)
         except Exception as e:
-            print(f"Error reading bypass config: {e}")
+            print(f"Error reading LDF config: {e}")
     else:
-        print("No LDF Bypass configuration found")
+        print("No LDF configuration found")
 
 # Register custom targets
 env.AlwaysBuild(env.Alias("clear_ldf_cache", None, clear_ldf_cache))
 env.AlwaysBuild(env.Alias("ldf_cache_info", None, show_ldf_cache_info))
-env.AlwaysBuild(env.Alias("show_ldf_bypass_config", None, show_ldf_bypass_config))
+env.AlwaysBuild(env.Alias("show_ldf_config", None, show_ldf_config))
 
 # Initialize and run
 ldf_optimizer = LDFCacheOptimizer(env)
