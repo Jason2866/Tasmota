@@ -1,6 +1,6 @@
 # ldf_cache.py
 """
-PlatformIO Advanced Script for intelligent LDF caching using existing idedata.json.
+PlatformIO Advanced Script for intelligent LDF caching using idedata.json.
 This module optimizes build performance by reading LDF results from idedata.json
 and reusing them to bypass LDF on subsequent builds.
 
@@ -16,11 +16,25 @@ import re
 import json
 from platformio.project.config import ProjectConfig
 
+# ------------------- Ensure idedata.json is created ------------------------
+
+def ensure_idedata_target():
+    """
+    Füge das Target 'idedata' zum Build hinzu, damit idedata.json erstellt wird.
+    """
+    current_targets = [str(target) for target in BUILD_TARGETS]
+    if "idedata" not in current_targets:
+        env.Default("idedata")
+        print("🔧 Added 'idedata' target to ensure idedata.json creation")
+
+# Führe die idedata-Target-Sicherstellung aus
+ensure_idedata_target()
+
 class LDFCacheOptimizer:
     """
     Intelligent LDF (Library Dependency Finder) cache optimizer for PlatformIO.
 
-    This class reads LDF results from existing idedata.json and converts them to 
+    This class reads LDF results from idedata.json and converts them to 
     reusable configuration, allowing subsequent builds to bypass LDF entirely.
     """
 
@@ -431,21 +445,21 @@ class LDFCacheOptimizer:
         raw = repr(data).encode()
         return hashlib.sha256(raw).hexdigest()
 
-    # ------------------- Simplified LDF Results Extraction --------------------
+    # ------------------- LDF Results Extraction from idedata.json --------------
 
     def read_existing_idedata(self):
         """
-        Lese die bereits vorhandene idedata.json Datei.
+        Lese die idedata.json Datei (die durch das idedata-Target erstellt wurde).
         """
         try:
             if os.path.exists(self.idedata_file):
-                print(f"✅ Found existing idedata.json: {self.idedata_file}")
+                print(f"✅ Found idedata.json: {self.idedata_file}")
                 with open(self.idedata_file, 'r') as f:
                     idedata = json.loads(f.read())
                     return self._process_idedata_results(idedata)
             else:
-                print(f"⚠ idedata.json not found: {self.idedata_file}")
-                print("   This is normal for the first build.")
+                print(f"❌ idedata.json not found: {self.idedata_file}")
+                print("   This should not happen with the idedata target!")
                 return None
                 
         except Exception as e:
@@ -621,7 +635,7 @@ class LDFCacheOptimizer:
         try:
             hash_details = self.get_project_hash_with_details()
             
-            # Lese die bereits vorhandene idedata.json
+            # Lese die idedata.json (sollte durch das idedata-Target erstellt worden sein)
             ldf_results = self.read_existing_idedata()
             
             if ldf_results:
@@ -664,8 +678,8 @@ class LDFCacheOptimizer:
                 print(f"   🚩 Build flags: {len(ldf_results['build_flags'])}")
                 
             else:
-                print("⚠ No idedata.json found - LDF cache not created")
-                print("   Run the build again to generate the cache.")
+                print("❌ No idedata.json found - LDF cache not created")
+                print("   This should not happen with the idedata target!")
                 
         except Exception as e:
             print(f"✗ Error saving LDF cache: {e}")
