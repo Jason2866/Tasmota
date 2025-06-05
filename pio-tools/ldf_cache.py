@@ -467,6 +467,16 @@ class LDFCacheOptimizer:
                 f.write("# Generated automatically\n\n")
                 f.write(repr(cache_data))
             print(f"💾 Saved full environment cache ({len(cache_data['scons_dump'])} bytes)")
+
+            try:
+                scons_vars = eval(env_dump)
+                print("\n=== SCons Environment Variables and Contents ===")
+                for var_name, var_value in scons_vars.items():
+                    print(f"{var_name}: {var_value}")
+                print("=" * 50)
+            except Exception as parse_error:
+                print(f"⚠ Error parsing environment dump: {parse_error}")
+                
         except Exception as e:
             print(f"✗ Error saving cache: {e}")
 
