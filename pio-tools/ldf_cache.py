@@ -14,21 +14,8 @@ import datetime
 import time
 import re
 import json
+import subprocess
 from platformio.project.config import ProjectConfig
-
-# ------------------- Ensure idedata.json is created ------------------------
-
-def ensure_idedata_target():
-    """
-    Füge das Target 'idedata' zum Build hinzu, damit idedata.json erstellt wird.
-    """
-    current_targets = [str(target) for target in BUILD_TARGETS]
-    if "idedata" not in current_targets:
-        env.Default("idedata")
-        print("🔧 Added 'idedata' target to ensure idedata.json creation")
-
-# Führe die idedata-Target-Sicherstellung aus
-ensure_idedata_target()
 
 class LDFCacheOptimizer:
     """
@@ -447,84 +434,120 @@ class LDFCacheOptimizer:
 
     # ------------------- LDF Results Extraction from idedata.json --------------
 
-    def read_existing_idedata(self):
+    def create_idedata_json(self):
         """
-        Lese die idedata.json Datei (die durch das idedata-Target erstellt wurde).
+        Erstelle idedata.json durch gezielten Aufruf von pio run --target idedata.
         """
         try:
             if os.path.exists(self.idedata_file):
-                print(f"✅ Found idedata.json: {self.idedata_file}")
-                with open(self.idedata_file, 'r') as f:
-                    idedata = json.loads(f.read())
-                    return self._process_idedata_results(idedata)
+                print(f"✅ idedata.json already exists: {self.idedata_file}")
+                return True
+            
+            print("📄 Creating idedata.json via 'pio run --target idedata'...")
+            cmd = [
+                "pio", "run", 
+                "--target", "idedata",
+                "--environment", self.env['PIOENV'],
+                "--project-dir", self.project_dir
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=self.project_dir)
+            
+            if result.returncode == 0 and os.path.exists(self.idedata_file):
+                print(f"✅ idedata.json created successfully")
+                return True
             else:
-                print(f"❌ idedata.json not found: {self.idedata_file}")
-                print("   This should not happen with the idedata target!")
+                print(f"❌ Failed to create idedata.json: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error creating idedata.json: {e}")
+            return False
+
+    def read_existing_idedata(self):
+        """
+        Lese die idedata.json Datei und verarbeite die echte Struktur.
+        """
+        try:
+            # Stelle sicher, dass idedata.json existiert
+            if not self.create_idedata_json():
                 return None
+            
+            print(f"✅ Reading idedata.json: {self.idedata_file}")
+            with open(self.idedata_file, 'r') as f:
+                idedata = json.loads(f.read())
+                return self._process_real_idedata_structure(idedata)
                 
         except Exception as e:
             print(f"❌ Error reading idedata.json: {e}")
             return None
 
-    def _process_idedata_results(self, idedata):
+    def _process_real_idedata_structure(self, idedata):
         """
-        Verarbeite die LDF-Ergebnisse aus idedata.json.
+        Verarbeite die ECHTE idedata.json Struktur basierend auf deinem Upload.
         """
         ldf_cache = {
             'libraries': [],
             'include_paths': [],
             'defines': [],
             'build_flags': [],
-            'lib_deps_entries': []
+            'lib_deps_entries': [],
+            'libsource_dirs': []
         }
         
         if not idedata:
             return ldf_cache
         
-        print("🔍 Processing LDF results from idedata.json...")
+        print("🔍 Processing LDF results from REAL idedata.json structure...")
         
-        # Extrahiere Libraries aus lib_deps
-        lib_deps = idedata.get('lib_deps', [])
-        print(f"📚 Found {len(lib_deps)} library dependencies")
+        # 1. Extrahiere libsource_dirs (die echten Library-Verzeichnisse)
+        libsource_dirs = idedata.get('libsource_dirs', [])
+        print(f"📚 Found {len(libsource_dirs)} library source directories")
         
-        for lib_path in lib_deps:
-            lib_name = os.path.basename(lib_path)
-            ldf_cache['libraries'].append({
-                'name': lib_name,
-                'path': lib_path
-            })
+        for lib_dir in libsource_dirs:
+            ldf_cache['libsource_dirs'].append(lib_dir)
             
             # Konvertiere zu lib_deps Format
-            if 'framework-' in lib_path:
-                platform = self.env.get('PLATFORM', 'esp32')
-                lib_deps_entry = f"${{platformio.packages_dir}}/framework-{platform}/libraries/{lib_name}"
+            if 'lib/' in lib_dir and self.project_dir in lib_dir:
+                # Lokale Library: ./lib/lib_name
+                lib_name = os.path.basename(lib_dir)
+                lib_deps_entry = f"./lib/{lib_name}"
+            elif 'framework-' in lib_dir:
+                # Framework Library: ${platformio.packages_dir}/framework-xxx/libraries
+                lib_deps_entry = lib_dir.replace(os.path.expanduser('~/.platformio/packages'), '${platformio.packages_dir}')
             else:
-                lib_deps_entry = lib_name
-                
+                # Andere Libraries
+                lib_deps_entry = lib_dir
+            
             ldf_cache['lib_deps_entries'].append(lib_deps_entry)
-            print(f"   - {lib_name} -> {lib_deps_entry}")
+            ldf_cache['libraries'].append({
+                'name': os.path.basename(lib_dir),
+                'path': lib_dir,
+                'lib_deps_entry': lib_deps_entry
+            })
+            print(f"   - {os.path.basename(lib_dir)} -> {lib_deps_entry}")
         
-        # Extrahiere Include-Pfade
-        includes = idedata.get('includes', [])
-        print(f"📂 Found {len(includes)} include paths")
+        # 2. Extrahiere Include-Pfade aus includes.build
+        includes_build = idedata.get('includes', {}).get('build', [])
+        print(f"📂 Found {len(includes_build)} build include paths")
         
-        for include_path in includes:
+        for include_path in includes_build:
             if not self.is_platformio_path(include_path):
                 ldf_cache['include_paths'].append(include_path)
                 print(f"   - {include_path}")
         
-        # Extrahiere Defines
+        # 3. Extrahiere Defines
         defines = idedata.get('defines', [])
-        print(f"🔧 Found {len(defines)} defines")
+        print(f"🔧 Found {len(defines)} preprocessor defines")
         
         for define in defines:
             ldf_cache['defines'].append(define)
             print(f"   - {define}")
         
-        # Extrahiere Build-Flags
-        cxx_flags = idedata.get('cxx_flags', [])
+        # 4. Extrahiere Build-Flags
         cc_flags = idedata.get('cc_flags', [])
-        all_flags = cxx_flags + cc_flags
+        cxx_flags = idedata.get('cxx_flags', [])
+        all_flags = cc_flags + cxx_flags
         
         print(f"🚩 Found {len(all_flags)} build flags")
         
@@ -537,25 +560,26 @@ class LDFCacheOptimizer:
 
     def generate_complete_platformio_config(self, ldf_results):
         """
-        Generiere vollständige platformio.ini Konfiguration.
+        Generiere vollständige platformio.ini Konfiguration basierend auf echten LDF-Ergebnissen.
         """
         config_lines = [
             f"# Complete LDF Cache Configuration for {self.env['PIOENV']}",
             f"# Generated: {datetime.datetime.now().isoformat()}",
+            f"# Based on REAL idedata.json structure",
             f"# Copy this to your [env:{self.env['PIOENV']}] section",
             "",
             "lib_ldf_mode = off",
             "lib_deps = "
         ]
         
-        # Libraries
-        for lib_dep in ldf_results['lib_deps_entries']:
-            config_lines.append(f"    {lib_dep}")
+        # Libraries aus libsource_dirs
+        for lib_deps_entry in ldf_results['lib_deps_entries']:
+            config_lines.append(f"    {lib_deps_entry}")
         
         config_lines.append("")
         config_lines.append("build_flags = ")
         
-        # Include-Pfade
+        # Include-Pfade aus includes.build
         for include_path in ldf_results['include_paths']:
             config_lines.append(f"    -I\"{include_path}\"")
         
@@ -563,10 +587,9 @@ class LDFCacheOptimizer:
         for define in ldf_results['defines']:
             config_lines.append(f"    -D{define}")
         
-        # Zusätzliche Build-Flags
+        # Build-Flags
         for flag in ldf_results['build_flags']:
-            # Vermeide Duplikate von Include-Pfaden
-            if not flag.startswith('-I'):
+            if not flag.startswith('-I'):  # Vermeide Duplikate
                 config_lines.append(f"    {flag}")
         
         # Speichere Konfiguration
@@ -587,7 +610,7 @@ class LDFCacheOptimizer:
 
     def apply_ldf_cache(self, cache_data):
         """
-        Restore full build environment from cache.
+        Restore full build environment from cache using REAL idedata.json structure.
         """
         try:
             ldf_results = cache_data.get('ldf_results', {})
@@ -598,13 +621,13 @@ class LDFCacheOptimizer:
             
             print("🔧 Restoring full build environment from cache...")
             
-            # Restore lib_deps
+            # Restore lib_deps (aus libsource_dirs)
             lib_deps = ldf_results.get('lib_deps_entries', [])
             if lib_deps:
                 self.env['LIB_DEPS'] = lib_deps
                 print(f"📚 Restored {len(lib_deps)} library dependencies")
             
-            # Restore include paths
+            # Restore include paths (aus includes.build)
             include_paths = ldf_results.get('include_paths', [])
             if include_paths:
                 self.env.Append(CPPPATH=include_paths)
@@ -630,15 +653,15 @@ class LDFCacheOptimizer:
 
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
-        Lese idedata.json und speichere LDF-Ergebnisse.
+        Erstelle idedata.json und speichere LDF-Ergebnisse.
         """
         try:
             hash_details = self.get_project_hash_with_details()
             
-            # Lese die idedata.json (sollte durch das idedata-Target erstellt worden sein)
+            # Erstelle und lese idedata.json mit ECHTER Struktur
             ldf_results = self.read_existing_idedata()
             
-            if ldf_results:
+            if ldf_results and ldf_results.get('lib_deps_entries'):
                 # Generiere vollständige platformio.ini Konfiguration
                 config_file = self.generate_complete_platformio_config(ldf_results)
                 
@@ -663,7 +686,7 @@ class LDFCacheOptimizer:
                 # Speichere als JSON
                 with open(self.cache_file, 'w', encoding='utf-8') as f:
                     f.write("# LDF Cache - Complete Build Environment\n")
-                    f.write("# Generated automatically from idedata.json\n\n")
+                    f.write("# Generated from REAL idedata.json structure\n\n")
                     f.write("import json\n\n")
                     f.write("cache_json = '''\n")
                     f.write(json.dumps(cache_data, ensure_ascii=False, indent=2, default=str))
@@ -671,15 +694,16 @@ class LDFCacheOptimizer:
                     f.write("cache_data = json.loads(cache_json)\n")
                 
                 print(f"💾 LDF Cache saved successfully!")
-                print(f"🎯 Captured complete build environment:")
+                print(f"🎯 Captured complete build environment from REAL idedata.json:")
                 print(f"   📚 Libraries: {len(ldf_results['libraries'])}")
                 print(f"   📂 Include paths: {len(ldf_results['include_paths'])}")
                 print(f"   🔧 Defines: {len(ldf_results['defines'])}")
                 print(f"   🚩 Build flags: {len(ldf_results['build_flags'])}")
+                print(f"   📁 Libsource dirs: {len(ldf_results['libsource_dirs'])}")
                 
             else:
-                print("❌ No idedata.json found - LDF cache not created")
-                print("   This should not happen with the idedata target!")
+                print("❌ No valid LDF results found in idedata.json")
+                print("   LDF caching failed!")
                 
         except Exception as e:
             print(f"✗ Error saving LDF cache: {e}")
@@ -690,7 +714,7 @@ class LDFCacheOptimizer:
         """
         Orchestrate caching process with smart invalidation, signature, and version check.
         """
-        print("\n=== LDF Cache Optimizer (idedata.json Mode) ===")
+        print("\n=== LDF Cache Optimizer (REAL idedata.json Mode) ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
             print("🚀 Valid cache found - disabling LDF")
@@ -750,6 +774,7 @@ def show_ldf_cache_info():
             print(f"Include paths: {len(ldf_results.get('include_paths', []))}")
             print(f"Defines:      {len(ldf_results.get('defines', []))}")
             print(f"Build flags:  {len(ldf_results.get('build_flags', []))}")
+            print(f"Libsource dirs: {len(ldf_results.get('libsource_dirs', []))}")
             print("=" * 25)
         except Exception as e:
             print(f"Error reading cache: {e}")
