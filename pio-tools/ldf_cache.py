@@ -443,120 +443,119 @@ class LDFCacheOptimizer:
             return False
 
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
-    """
-    Save full SCons environment with validation data, signature, and PIO version.
-    """
-    try:
-        hash_details = self.get_project_hash_with_details()
-        env_dump = self.env.Dump(format='pretty')
-        pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
-        cache_data = {
-            'scons_dump': env_dump,
-            'project_hash': hash_details['final_hash'],
-            'hash_details': hash_details['file_hashes'],
-            'pioenv': str(self.env['PIOENV']),
-            'timestamp': datetime.datetime.now().isoformat(),
-            'performance': hash_details.get('performance', {}),
-            'pio_version': pio_version,
-        }
-        # Compute and add signature
-        cache_data['signature'] = self.compute_signature(cache_data)
-        os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
-        with open(self.cache_file, 'w', encoding='utf-8') as f:
-            f.write("# LDF Cache - Full SCons Environment\n")
-            f.write("# Generated automatically\n\n")
-            f.write(repr(cache_data))
-        print(f"💾 Saved full environment cache ({len(cache_data['scons_dump'])} bytes)")
-        
-        # Parse und ausgeben der SCons Environment Variablen mit robuster Fehlerbehandlung
+        """
+        Save full SCons environment with validation data, signature, and PIO version.
+        """
         try:
-            scons_vars = eval(env_dump)
-            print("\n=== SCons Environment Variables and Contents ===")
+            hash_details = self.get_project_hash_with_details()
+            env_dump = self.env.Dump(format='pretty')
+            pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
+            cache_data = {
+                'scons_dump': env_dump,
+                'project_hash': hash_details['final_hash'],
+                'hash_details': hash_details['file_hashes'],
+                'pioenv': str(self.env['PIOENV']),
+                'timestamp': datetime.datetime.now().isoformat(),
+                'performance': hash_details.get('performance', {}),
+                'pio_version': pio_version,
+            }
+            # Compute and add signature
+            cache_data['signature'] = self.compute_signature(cache_data)
+            os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                f.write("# LDF Cache - Full SCons Environment\n")
+                f.write("# Generated automatically\n\n")
+                f.write(repr(cache_data))
+            print(f"💾 Saved full environment cache ({len(cache_data['scons_dump'])} bytes)")
             
-            successful_outputs = 0
-            failed_outputs = 0
-            
-            for var_name, var_value in scons_vars.items():
+            # Parse und ausgeben der SCons Environment Variablen mit robuster Fehlerbehandlung
+            try:
+                scons_vars = eval(env_dump)
+                print("\n=== SCons Environment Variables and Contents ===")
+                
+                successful_outputs = 0
+                failed_outputs = 0
+                
+                for var_name, var_value in scons_vars.items():
+                    try:
+                        # Versuche die Variable auszugeben
+                        print(f"{var_name}: {var_value}")
+                        successful_outputs += 1
+                    except Exception as var_error:
+                        # Nur diese Variable überspringen, aber weitermachen
+                        print(f"{var_name}: <Error displaying value: {type(var_error).__name__}>")
+                        failed_outputs += 1
+                        
+                print("=" * 50)
+                print(f"📊 Ausgabe-Statistik: {successful_outputs} erfolgreich, {failed_outputs} mit Fehlern")
+                
+            except Exception as parse_error:
+                # Fallback: Versuche zeilenweise zu parsen
+                print(f"⚠ Error parsing complete environment dump: {parse_error}")
+                print("🔄 Attempting line-by-line parsing...")
+                
                 try:
-                    # Versuche die Variable auszugeben
-                    print(f"{var_name}: {var_value}")
-                    successful_outputs += 1
+                    # Versuche das Environment manuell zu parsen
+                    self._parse_env_dump_manually(env_dump)
+                except Exception as manual_error:
+                    print(f"⚠ Manual parsing also failed: {manual_error}")
+                    
+        except Exception as e:
+            print(f"✗ Error saving cache: {e}")
+
+    def _parse_env_dump_manually(self, env_dump):
+        """
+        Manueller Parser für Environment Dump als Fallback-Option.
+        """
+        print("\n=== SCons Environment Variables (Manual Parse) ===")
+        
+        # Einfacher Regex-basierter Parser für Key-Value Paare
+        import re
+        
+        successful_outputs = 0
+        failed_outputs = 0
+        
+        # Suche nach Patterns wie 'KEY': 'VALUE' oder 'KEY': [...]
+        pattern = r"'([^']+)':\s*(.+?)(?=,\s*'[^']+':|\s*})"
+        
+        try:
+            matches = re.findall(pattern, env_dump, re.DOTALL)
+            
+            for var_name, var_value in matches:
+                try:
+                    # Versuche den Wert sicher zu evaluieren
+                    try:
+                        # Für einfache Werte
+                        if var_value.strip().startswith(("'", '"', '[', '{')):
+                            evaluated_value = eval(var_value.strip().rstrip(','))
+                        else:
+                            # Für andere Werte als String behandeln
+                            evaluated_value = var_value.strip().rstrip(',')
+                        
+                        print(f"{var_name}: {evaluated_value}")
+                        successful_outputs += 1
+                        
+                    except:
+                        # Falls eval fehlschlägt, als String ausgeben
+                        cleaned_value = var_value.strip().rstrip(',')
+                        print(f"{var_name}: {cleaned_value}")
+                        successful_outputs += 1
+                        
                 except Exception as var_error:
-                    # Nur diese Variable überspringen, aber weitermachen
-                    print(f"{var_name}: <Error displaying value: {type(var_error).__name__}>")
+                    print(f"{var_name}: <Error processing: {type(var_error).__name__}>")
                     failed_outputs += 1
                     
-            print("=" * 50)
-            print(f"📊 Ausgabe-Statistik: {successful_outputs} erfolgreich, {failed_outputs} mit Fehlern")
+        except Exception as regex_error:
+            print(f"⚠ Regex parsing failed: {regex_error}")
             
-        except Exception as parse_error:
-            # Fallback: Versuche zeilenweise zu parsen
-            print(f"⚠ Error parsing complete environment dump: {parse_error}")
-            print("🔄 Attempting line-by-line parsing...")
-            
-            try:
-                # Versuche das Environment manuell zu parsen
-                self._parse_env_dump_manually(env_dump)
-            except Exception as manual_error:
-                print(f"⚠ Manual parsing also failed: {manual_error}")
-                
-    except Exception as e:
-        print(f"✗ Error saving cache: {e}")
-
-def _parse_env_dump_manually(self, env_dump):
-    """
-    Manueller Parser für Environment Dump als Fallback-Option.
-    """
-    print("\n=== SCons Environment Variables (Manual Parse) ===")
-    
-    # Einfacher Regex-basierter Parser für Key-Value Paare
-    import re
-    
-    successful_outputs = 0
-    failed_outputs = 0
-    
-    # Suche nach Patterns wie 'KEY': 'VALUE' oder 'KEY': [...]
-    pattern = r"'([^']+)':\s*(.+?)(?=,\s*'[^']+':|\s*})"
-    
-    try:
-        matches = re.findall(pattern, env_dump, re.DOTALL)
+            # Letzter Fallback: Zeige rohen Dump in Abschnitten
+            print("\n=== Raw Environment Dump (First 2000 chars) ===")
+            print(env_dump[:2000])
+            if len(env_dump) > 2000:
+                print(f"\n... (truncated, total length: {len(env_dump)} chars)")
         
-        for var_name, var_value in matches:
-            try:
-                # Versuche den Wert sicher zu evaluieren
-                try:
-                    # Für einfache Werte
-                    if var_value.strip().startswith(("'", '"', '[', '{')):
-                        evaluated_value = eval(var_value.strip().rstrip(','))
-                    else:
-                        # Für andere Werte als String behandeln
-                        evaluated_value = var_value.strip().rstrip(',')
-                    
-                    print(f"{var_name}: {evaluated_value}")
-                    successful_outputs += 1
-                    
-                except:
-                    # Falls eval fehlschlägt, als String ausgeben
-                    cleaned_value = var_value.strip().rstrip(',')
-                    print(f"{var_name}: {cleaned_value}")
-                    successful_outputs += 1
-                    
-            except Exception as var_error:
-                print(f"{var_name}: <Error processing: {type(var_error).__name__}>")
-                failed_outputs += 1
-                
-    except Exception as regex_error:
-        print(f"⚠ Regex parsing failed: {regex_error}")
-        
-        # Letzter Fallback: Zeige rohen Dump in Abschnitten
-        print("\n=== Raw Environment Dump (First 2000 chars) ===")
-        print(env_dump[:2000])
-        if len(env_dump) > 2000:
-            print(f"\n... (truncated, total length: {len(env_dump)} chars)")
-    
-    print("=" * 50)
-    print(f"📊 Manual Parse Statistik: {successful_outputs} erfolgreich, {failed_outputs} mit Fehlern")
-
+        print("=" * 50)
+        print(f"📊 Manual Parse Statistik: {successful_outputs} erfolgreich, {failed_outputs} mit Fehlern")
 
     # ------------------- Main Logic --------------------------------------------
 
