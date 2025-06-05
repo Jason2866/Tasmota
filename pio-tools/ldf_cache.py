@@ -1,8 +1,8 @@
 # ldf_cache.py
 """
-PlatformIO Advanced Script for intelligent LDF caching using LDF interception.
-This module optimizes build performance by intercepting LDF execution and reusing
-the results to bypass LDF on subsequent builds.
+PlatformIO Advanced Script for intelligent LDF caching using existing idedata.json.
+This module optimizes build performance by reading LDF results from idedata.json
+and reusing them to bypass LDF on subsequent builds.
 
 Copyright: Jason2866
 """
@@ -14,15 +14,14 @@ import datetime
 import time
 import re
 import json
-import subprocess
 from platformio.project.config import ProjectConfig
 
 class LDFCacheOptimizer:
     """
     Intelligent LDF (Library Dependency Finder) cache optimizer for PlatformIO.
 
-    This class intercepts LDF execution and converts results to reusable configuration,
-    allowing subsequent builds to bypass LDF entirely while maintaining all dependencies.
+    This class reads LDF results from existing idedata.json and converts them to 
+    reusable configuration, allowing subsequent builds to bypass LDF entirely.
     """
 
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
@@ -49,10 +48,11 @@ class LDFCacheOptimizer:
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         self.cache_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"ldf_cache_{self.env['PIOENV']}.py")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
+        self.idedata_file = os.path.join(self.project_dir, ".pio", "build", self.env['PIOENV'], "idedata.json")
         self.original_ldf_mode = None
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
 
-    # ------------------- PlatformIO.ini Modification Methods (ORIGINAL) -------
+    # ------------------- PlatformIO.ini Modification Methods -------------------
 
     def find_lib_ldf_mode_in_ini(self):
         """
@@ -431,66 +431,30 @@ class LDFCacheOptimizer:
         raw = repr(data).encode()
         return hashlib.sha256(raw).hexdigest()
 
-    # ------------------- LDF Interception & Results Extraction ----------------
+    # ------------------- Simplified LDF Results Extraction --------------------
 
-    def intercept_ldf_execution(self):
+    def read_existing_idedata(self):
         """
-        Rufe LDF gezielt auf und fange die Ergebnisse ab.
+        Lese die bereits vorhandene idedata.json Datei.
         """
         try:
-            print("🎯 Executing targeted LDF interception...")
-            
-            # 1. LDF-Prozess abfangen
-            ldf_results = self._execute_ldf_and_capture()
-            
-            # 2. Ergebnisse in verwertbarer Form verarbeiten
-            if ldf_results:
-                return self._process_raw_ldf_results(ldf_results)
+            if os.path.exists(self.idedata_file):
+                print(f"✅ Found existing idedata.json: {self.idedata_file}")
+                with open(self.idedata_file, 'r') as f:
+                    idedata = json.loads(f.read())
+                    return self._process_idedata_results(idedata)
             else:
-                print("⚠ No LDF results captured")
+                print(f"⚠ idedata.json not found: {self.idedata_file}")
+                print("   This is normal for the first build.")
                 return None
                 
         except Exception as e:
-            print(f"❌ LDF interception failed: {e}")
+            print(f"❌ Error reading idedata.json: {e}")
             return None
 
-    def _execute_ldf_and_capture(self):
+    def _process_idedata_results(self, idedata):
         """
-        Führe LDF aus und fange die Rohergebnisse ab.
-        """
-        try:
-            # LDF als separaten Prozess ausführen um idedata.json zu generieren
-            cmd = [
-                "pio", "run", 
-                "--environment", self.env['PIOENV'],
-                "--target", "idedata",  # Generiert idedata.json mit LDF-Ergebnissen
-                "--project-dir", self.project_dir
-            ]
-            
-            print(f"🔧 Executing: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=self.project_dir)
-            
-            if result.returncode == 0:
-                # Lese idedata.json - enthält alle LDF-Ergebnisse
-                idedata_file = os.path.join(self.project_dir, ".pio", "build", self.env['PIOENV'], "idedata.json")
-                if os.path.exists(idedata_file):
-                    print(f"✅ Found idedata.json: {idedata_file}")
-                    with open(idedata_file, 'r') as f:
-                        return json.loads(f.read())
-                else:
-                    print(f"❌ idedata.json not found: {idedata_file}")
-            else:
-                print(f"❌ LDF execution failed: {result.stderr}")
-            
-            return None
-            
-        except Exception as e:
-            print(f"❌ Error executing LDF: {e}")
-            return None
-
-    def _process_raw_ldf_results(self, idedata):
-        """
-        Verarbeite die rohen LDF-Ergebnisse aus idedata.json.
+        Verarbeite die LDF-Ergebnisse aus idedata.json.
         """
         ldf_cache = {
             'libraries': [],
@@ -609,7 +573,7 @@ class LDFCacheOptimizer:
 
     def apply_ldf_cache(self, cache_data):
         """
-        Restore full build environment from cache (ORIGINAL LOGIC).
+        Restore full build environment from cache.
         """
         try:
             ldf_results = cache_data.get('ldf_results', {})
@@ -652,13 +616,13 @@ class LDFCacheOptimizer:
 
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
-        Führe gezielten LDF-Aufruf durch und speichere Ergebnisse.
+        Lese idedata.json und speichere LDF-Ergebnisse.
         """
         try:
             hash_details = self.get_project_hash_with_details()
             
-            # Gezielter LDF-Aufruf mit Interception
-            ldf_results = self.intercept_ldf_execution()
+            # Lese die bereits vorhandene idedata.json
+            ldf_results = self.read_existing_idedata()
             
             if ldf_results:
                 # Generiere vollständige platformio.ini Konfiguration
@@ -685,7 +649,7 @@ class LDFCacheOptimizer:
                 # Speichere als JSON
                 with open(self.cache_file, 'w', encoding='utf-8') as f:
                     f.write("# LDF Cache - Complete Build Environment\n")
-                    f.write("# Generated automatically via LDF interception\n\n")
+                    f.write("# Generated automatically from idedata.json\n\n")
                     f.write("import json\n\n")
                     f.write("cache_json = '''\n")
                     f.write(json.dumps(cache_data, ensure_ascii=False, indent=2, default=str))
@@ -700,18 +664,19 @@ class LDFCacheOptimizer:
                 print(f"   🚩 Build flags: {len(ldf_results['build_flags'])}")
                 
             else:
-                print("❌ LDF interception failed - no results captured")
+                print("⚠ No idedata.json found - LDF cache not created")
+                print("   Run the build again to generate the cache.")
                 
         except Exception as e:
             print(f"✗ Error saving LDF cache: {e}")
 
-    # ------------------- Main Logic (ORIGINAL) --------------------------------
+    # ------------------- Main Logic --------------------------------------------
 
     def setup_ldf_caching(self):
         """
         Orchestrate caching process with smart invalidation, signature, and version check.
         """
-        print("\n=== LDF Cache Optimizer (LDF Interception Mode) ===")
+        print("\n=== LDF Cache Optimizer (idedata.json Mode) ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
             print("🚀 Valid cache found - disabling LDF")
@@ -719,7 +684,7 @@ class LDFCacheOptimizer:
                 self.apply_ldf_cache(cache_data)
                 self.env.AddPostAction("checkprogsize", lambda *args: self.restore_platformio_ini())
         else:
-            print("🔄 No valid cache - running full LDF with interception")
+            print("🔄 No valid cache - running full LDF")
             self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
         print("=" * 60)
 
