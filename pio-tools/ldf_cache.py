@@ -1,9 +1,8 @@
 # ldf_cache.py
 """
 PlatformIO Advanced Script for intelligent LDF caching using idedata.json.
-This script ensures idedata.json is always generated (when a real build is requested)
-by adding the 'idedata' target to the build, then reads and caches LDF results
-for fast subsequent builds.
+This script ensures idedata.json is always generated (when a real build is requested),
+reads and caches LDF results as a Python dict (not JSON!) for robust subsequent builds.
 
 Copyright: Jason2866
 """
@@ -24,6 +23,7 @@ import os
 import hashlib
 import datetime
 import re
+import pprint
 import json
 from platformio.project.config import ProjectConfig
 
@@ -33,6 +33,7 @@ class LDFCacheOptimizer:
 
     Reads LDF results from idedata.json and converts them to reusable configuration,
     allowing subsequent builds to bypass LDF entirely.
+    Cache is stored as a Python dict (not JSON) for maximum robustness.
     """
 
     def __init__(self, environment):
@@ -332,7 +333,7 @@ class LDFCacheOptimizer:
 
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
         """
-        Read idedata.json and save LDF results for future builds.
+        Read idedata.json and save LDF results for future builds as a Python dict.
         """
         try:
             hash_details = self.get_project_hash_with_details()
@@ -351,14 +352,13 @@ class LDFCacheOptimizer:
                 }
                 cache_data['signature'] = self.compute_signature(cache_data)
                 os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
+                # Save as Python dict using pprint.pformat
                 with open(self.cache_file, 'w', encoding='utf-8') as f:
                     f.write("# LDF Cache - Complete Build Environment\n")
-                    f.write("# Generated from REAL idedata.json structure\n\n")
-                    f.write("import json\n\n")
-                    f.write("cache_json = '''\n")
-                    f.write(json.dumps(cache_data, ensure_ascii=False, indent=2, default=str))
-                    f.write("\n'''\n\n")
-                    f.write("cache_data = json.loads(cache_json)\n")
+                    f.write("# Generated as Python dict\n\n")
+                    f.write("cache_data = \\\n")
+                    f.write(pprint.pformat(cache_data, indent=2, width=120))
+                    f.write("\n")
                 print(f"💾 LDF Cache saved successfully!")
             else:
                 print("❌ No valid LDF results found in idedata.json")
@@ -389,7 +389,7 @@ class LDFCacheOptimizer:
 
     def load_and_validate_cache(self):
         """
-        Load and validate cache with hash and signature.
+        Load and validate cache with hash and signature from Python dict file.
         Returns:
             dict or None: Cache data if valid, None if invalid or non-existent
         """
@@ -399,11 +399,9 @@ class LDFCacheOptimizer:
         try:
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 cache_content = f.read()
-            if 'cache_json' in cache_content:
-                exec(cache_content)
-                cache_data = locals()['cache_data']
-            else:
-                cache_data = eval(cache_content.split('\n\n', 1)[1])
+            local_vars = {}
+            exec(cache_content, {}, local_vars)
+            cache_data = local_vars.get('cache_data')
             expected_signature = cache_data.get('signature')
             actual_signature = self.compute_signature(cache_data)
             if expected_signature != actual_signature:
@@ -435,7 +433,7 @@ class LDFCacheOptimizer:
         """
         Orchestrate caching process with hash validation and LDF disabling.
         """
-        print("\n=== LDF Cache Optimizer (idedata.json Mode) ===")
+        print("\n=== LDF Cache Optimizer (idedata.json Mode, Python dict cache) ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
             print("🚀 Valid cache found - disabling LDF")
@@ -474,11 +472,9 @@ def show_ldf_cache_info():
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 cache_content = f.read()
-            if 'cache_json' in cache_content:
-                exec(cache_content)
-                cache_data = locals()['cache_data']
-            else:
-                cache_data = eval(cache_content.split('\n\n', 1)[1])
+            local_vars = {}
+            exec(cache_content, {}, local_vars)
+            cache_data = local_vars.get('cache_data')
             ldf_results = cache_data.get('ldf_results', {})
             print("\n=== LDF Cache Info ===")
             print(f"Environment:  {cache_data.get('pioenv', 'unknown')}")
