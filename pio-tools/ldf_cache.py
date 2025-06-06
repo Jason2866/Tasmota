@@ -2,9 +2,7 @@
 PlatformIO Advanced Script for intelligent LDF caching using idedata.json.
 All LDF-cached build options (except lib_ldf_mode) are written to ldf_cache.ini,
 which must be included in platformio.ini via 'extra_configs = ldf_cache.ini'.
-Framework and toolchain files are excluded from the project hash.
-idedata.json is always generated together with the build using a smart pre-action.
-idedata.json copy is stored in project folder in .ldf_dat directory.
+idedata.json is always generated using a smart pre-action.
 
 Copyright: Jason2866
 """
@@ -42,7 +40,7 @@ def smart_build_integrated(source, target, env):
     original_idedata_path = os.path.join(env.subst("$BUILD_DIR"), "idedata.json")
     
     if not os.path.exists(idedata_path) and not os.path.exists(original_idedata_path):
-        print(f"idedata.json for {env_name} missing - running idedata Build")
+        print(f"idedata.json for {env_name} missing - running idedata build")
 
         env_copy = os.environ.copy()
         env_copy["SMART_BUILD_RUNNING"] = "1"
