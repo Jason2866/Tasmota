@@ -20,16 +20,12 @@ import sys
 import shutil
 from platformio.project.config import ProjectConfig
 
-def smart_build_integrated(source, target, env):
+def smart_build_integrated():
     """
     Ensure idedata.json is generated for the current environment.
     If missing, re-invoke PlatformIO for this environment with idedata target.
     Store idedata.json copy in project folder in .ldf_dat directory.
     """
-    # Prevent recursion during smart build execution
-    if os.environ.get("SMART_BUILD_RUNNING"):
-        return
-
     env_name = env.get("PIOENV")
     
     # Store idedata.json copy in project folder in .ldf_dat directory
@@ -38,6 +34,14 @@ def smart_build_integrated(source, target, env):
     
     # Original path for fallback check
     original_idedata_path = os.path.join(env.subst("$BUILD_DIR"), "idedata.json")
+    if os.path.exists(original_idedata_path):
+        os.makedirs(ldf_dat_dir, exist_ok=True)
+        shutil.copy2(original_idedata_path, idedata_path)
+        print(f"idedata.json copied to {idedata_path}")
+    
+    # Prevent recursion during smart build execution
+    if os.environ.get("SMART_BUILD_RUNNING"):
+        return
     
     if not os.path.exists(idedata_path) and not os.path.exists(original_idedata_path):
         print(f"idedata.json for {env_name} missing - running idedata build")
@@ -64,8 +68,7 @@ def smart_build_integrated(source, target, env):
             print(f"idedata build failed: {e}")
             Exit(1)
 
-# Register PreAction for buildprog to ensure early execution and idedata.json presence
-env.AddPreAction("buildprog", smart_build_integrated)
+smart_build_integrated()
 
 class LDFCacheOptimizer:
     """
