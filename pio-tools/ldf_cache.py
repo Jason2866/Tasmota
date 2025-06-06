@@ -20,39 +20,24 @@ def generate_idedata_directly():
     Generate idedata.json directly using PlatformIO's internal method.
     """
     projenv = env
+    env_name = env.get("PIOENV")
+    ldf_dat_dir = os.path.join(env.subst("$PROJECT_DIR"), ".ldf_dat")
+    idedata_path = os.path.join(ldf_dat_dir, f"idedata_{env_name}.json")
+    os.makedirs(ldf_dat_dir, exist_ok=True)
     data = projenv.DumpIntegrationData(env)
     with open(
-        projenv.subst(os.path.join("$BUILD_DIR", "idedata.json")),
+        projenv.subst(idedata_path),
         mode="w",
         encoding="utf8",
     ) as fp:
         json.dump(data, fp)
 
-def smart_build_integrated():
-    """
-    Ensure idedata.json is generated for the current environment.
-    """
-    env_name = env.get("PIOENV")
-    ldf_dat_dir = os.path.join(env.subst("$PROJECT_DIR"), ".ldf_dat")
-    idedata_path = os.path.join(ldf_dat_dir, f"idedata_{env_name}.json")
-    original_idedata_path = os.path.join(env.subst("$BUILD_DIR"), "idedata.json")
-
-    if not os.path.exists(idedata_path) and not os.path.exists(original_idedata_path):
-        print(f"idedata.json for {env_name} missing - generating directly")
-        
-        try:
-            generate_idedata_directly()
-            # After generation, copy to cache location
-            if os.path.exists(original_idedata_path):
-                os.makedirs(ldf_dat_dir, exist_ok=True)
-                shutil.copy2(original_idedata_path, idedata_path)
-                print(f"idedata.json copied to {idedata_path}")
-            
-        except Exception as e:
-            print(f"idedata generation failed: {e}")
-            env.Exit(1)
-
-smart_build_integrated()
+env_name = env.get("PIOENV")
+ldf_dat_dir = os.path.join(env.subst("$PROJECT_DIR"), ".ldf_dat")
+idedata_path = os.path.join(ldf_dat_dir, f"idedata_{env_name}.json")
+if not os.path.exists(idedata_path):
+    print(f"idedata.json missing - generating directly")
+    generate_idedata_directly()
 
 class LDFCacheOptimizer:
     """
