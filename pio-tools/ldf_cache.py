@@ -254,12 +254,15 @@ class LDFCacheOptimizer:
                         if file == generated_cpp:
                             continue
                         file_path = os.path.join(root, file)
-                        if file_ext in self.HEADER_EXTENSIONS or file_ext in self.CONFIG_EXTENSIONS:
-                            file_hash = self._get_file_hash(file_path)
-                        elif file_ext in self.SOURCE_EXTENSIONS:
+                        if file_ext in self.SOURCE_EXTENSIONS:
                             file_hash = self.get_include_relevant_hash(file_path)
+                        elif file_ext in self.HEADER_EXTENSIONS:
+                            file_hash = self._get_file_hash(file_path)
+                        elif file_ext in self.CONFIG_EXTENSIONS:
+                            file_hash = self._get_file_hash(file_path)
                         else:
                             continue
+                    
                         file_hashes[file_path] = file_hash
                         hash_data.append(file_hash)
             except (IOError, OSError, PermissionError) as e:
