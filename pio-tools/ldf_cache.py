@@ -1,9 +1,7 @@
 """
-PlatformIO Advanced Script for intelligent LDF caching using idedata.json.
-All LDF-cached build options (except lib_ldf_mode) are written to ldf_cache.ini,
+PlatformIO Advanced Script for intelligent LDF caching.
+All LDF-cached build options are written to ldf_cache.ini,
 which must be included in platformio.ini via 'extra_configs = ldf_cache.ini'.
-idedata.json is always generated using a smart pre-action.
-Enhanced with .a/.o file tracking, static library generation, and direct SCons environment manipulation.
 
 Copyright: Jason2866
 """
