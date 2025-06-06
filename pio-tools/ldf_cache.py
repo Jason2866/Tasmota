@@ -80,14 +80,12 @@ class LDFCacheOptimizer:
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
         self.platformio_ini_backup = os.path.join(self.project_dir, ".pio", f"platformio_backup_{self.env['PIOENV']}.ini")
         self.idedata_file = os.path.join(self.project_dir, ".ldf_dat", f"idedata_{self.env['PIOENV']}.json")
-        self.original_ldf_mode = None
-        self.ldf_mode_modification_info = None
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = self.env.subst("$PLATFORMIO_PACKAGES_DIR")
 
     def create_ini_backup(self):
         """
-        Create an exact backup of platformio.ini with all metadata.
+        Create a backup of platformio.ini.
         """
         try:
             if os.path.exists(self.platformio_ini):
@@ -107,128 +105,50 @@ class LDFCacheOptimizer:
             if os.path.exists(self.platformio_ini_backup):
                 shutil.copy2(self.platformio_ini_backup, self.platformio_ini)
                 os.remove(self.platformio_ini_backup)
-                print("🔓 platformio.ini restored from backup (exact format)")
+                print("🔓 platformio.ini restored from backup")
                 return True
         except Exception as e:
             print(f"❌ Error restoring from backup: {e}")
         return False
 
-    def find_lib_ldf_mode_in_ini(self):
+    def modify_platformio_ini_simple(self, new_ldf_mode):
         """
-        Find lib_ldf_mode entries with position and formatting info.
-        """
-        lib_ldf_mode_entries = []
-        try:
-            if os.path.exists(self.platformio_ini):
-                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                for i, line in enumerate(lines):
-                    if 'lib_ldf_mode' in line.lower() and '=' in line:
-                        section = None
-                        for j in range(i, -1, -1):
-                            if lines[j].strip().startswith('[') and lines[j].strip().endswith(']'):
-                                section = lines[j].strip()
-                                break
-                        match = re.match(r'^(\s*)(lib_ldf_mode)(\s*)(=)(\s*)([^\s#;]+)(.*)', line)
-                        if match:
-                            lib_ldf_mode_entries.append({
-                                'section': section,
-                                'line_number': i + 1,
-                                'line_index': i,
-                                'original_line': line,
-                                'leading_space': match.group(1),
-                                'key': match.group(2),
-                                'pre_equals_space': match.group(3),
-                                'equals': match.group(4),
-                                'post_equals_space': match.group(5),
-                                'value': match.group(6),
-                                'trailing': match.group(7)
-                            })
-                return lib_ldf_mode_entries
-        except Exception as e:
-            print(f"❌ Error reading platformio.ini: {e}")
-        return []
-
-    def modify_platformio_ini_preserve_exact_format(self, new_ldf_mode):
-        """
-        Modify lib_ldf_mode while preserving exact formatting.
+        Modify lib_ldf_mode in platformio.ini
         """
         if not self.create_ini_backup():
             return False
         try:
-            ldf_entries = self.find_lib_ldf_mode_in_ini()
-            if ldf_entries:
-                entry = ldf_entries[0]
-                self.original_ldf_mode = entry['value']
-                self.ldf_mode_modification_info = entry
-                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                new_line = (entry['leading_space'] +
-                            entry['key'] +
-                            entry['pre_equals_space'] +
-                            entry['equals'] +
-                            entry['post_equals_space'] +
-                            new_ldf_mode +
-                            entry['trailing'])
-                lines[entry['line_index']] = new_line
-                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
-                    f.writelines(lines)
-                print(f"🔧 Modified {entry['section']}: lib_ldf_mode = {new_ldf_mode} (format preserved)")
-                return True
-            else:
-                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                self.original_ldf_mode = "chain"
-                platformio_match = re.search(r'^(\[platformio\])', content, re.MULTILINE)
-                if platformio_match:
-                    insert_pos = platformio_match.end()
-                    new_content = (content[:insert_pos] +
-                                   f'\nlib_ldf_mode = {new_ldf_mode}' +
-                                   content[insert_pos:])
-                else:
-                    new_content = f'[platformio]\nlib_ldf_mode = {new_ldf_mode}\n\n' + content
-                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
-                    f.write(new_content)
-                print(f"🔧 Added to [platformio]: lib_ldf_mode = {new_ldf_mode}")
-                return True
+            with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            found = False
+            for i, line in enumerate(lines):
+                if 'lib_ldf_mode' in line.lower() and '=' in line:
+                    # Replace only the value after '='
+                    parts = line.split('=', 1)
+                    lines[i] = parts[0] + '= ' + new_ldf_mode + '\n'
+                    found = True
+                    print(f"🔧 Modified lib_ldf_mode = {new_ldf_mode}")
+                    break
+            if not found:
+                # Add to [platformio] section or create it
+                section_found = False
+                for i, line in enumerate(lines):
+                    if line.strip().lower() == '[platformio]':
+                        lines.insert(i + 1, f'lib_ldf_mode = {new_ldf_mode}\n')
+                        section_found = True
+                        print(f"🔧 Added lib_ldf_mode = {new_ldf_mode} to [platformio]")
+                        break
+                if not section_found:
+                    # Add at the beginning if section doesn't exist
+                    lines = [f'[platformio]\nlib_ldf_mode = {new_ldf_mode}\n\n'] + lines
+                    print(f"🔧 Created [platformio] section with lib_ldf_mode = {new_ldf_mode}")
+            with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+            return True
         except Exception as e:
-            print(f"❌ Error in format-preserving modification: {e}")
+            print(f"❌ Error modifying platformio.ini: {e}")
             self.restore_ini_from_backup()
             return False
-
-    def restore_platformio_ini_exact(self):
-        """
-        Restore lib_ldf_mode with exact original formatting.
-        """
-        if self.original_ldf_mode is None:
-            return self.restore_ini_from_backup()
-        try:
-            if self.ldf_mode_modification_info:
-                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                entry = self.ldf_mode_modification_info
-                if self.original_ldf_mode == "chain":
-                    lines.pop(entry['line_index'])
-                else:
-                    restored_line = (entry['leading_space'] +
-                                     entry['key'] +
-                                     entry['pre_equals_space'] +
-                                     entry['equals'] +
-                                     entry['post_equals_space'] +
-                                     self.original_ldf_mode +
-                                     entry['trailing'])
-                    lines[entry['line_index']] = restored_line
-                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
-                    f.writelines(lines)
-                print(f"🔓 Restored lib_ldf_mode = {self.original_ldf_mode} (exact format)")
-                if os.path.exists(self.platformio_ini_backup):
-                    os.remove(self.platformio_ini_backup)
-                return True
-            else:
-                return self.restore_ini_from_backup()
-        except Exception as e:
-            print(f"❌ Error in exact restoration: {e}")
-            return self.restore_ini_from_backup()
 
     def resolve_pio_placeholders(self, path):
         """
@@ -770,15 +690,16 @@ class LDFCacheOptimizer:
 
     def setup_ldf_caching(self):
         """
-        Main entry point with exact format preservation.
+        Main entry point using backup/restore for platformio.ini.
         """
-        print("\n=== LDF Cache Optimizer (Exact Format Preservation) ===")
+        print("\n=== LDF Cache Optimizer ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
-            print("🚀 Valid cache found - disabling LDF with exact format preservation")
-            if self.modify_platformio_ini_preserve_exact_format("off") and self.apply_ldf_cache_complete(cache_data):
+            print("🚀 Valid cache found - disabling LDF with backup/restore")
+            if self.modify_platformio_ini_simple("off") and self.apply_ldf_cache_complete(cache_data):
                 print("✅ SCons environment restored from cache")
-                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_platformio_ini_exact())
+                # Restore platformio.ini after build
+                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
             else:
                 print("❌ Cache application failed - falling back to full LDF")
                 self.restore_ini_from_backup()
