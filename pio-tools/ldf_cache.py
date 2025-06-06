@@ -24,8 +24,8 @@ from platformio.project.config import ProjectConfig
 
 def smart_build_integrated(source, target, env):
     """
-    Ensure idedata.json is generated together with the build for the current environment.
-    If missing, re-invoke PlatformIO for this environment with buildprog and idedata targets.
+    Ensure idedata.json is generated for the current environment.
+    If missing, re-invoke PlatformIO for this environment with idedata target.
     Store idedata.json copy in project folder in .ldf_dat directory.
     """
     # Prevent recursion during smart build execution
@@ -35,14 +35,14 @@ def smart_build_integrated(source, target, env):
     env_name = env.get("PIOENV")
     
     # Store idedata.json copy in project folder in .ldf_dat directory
-    ldf_dat_dir = os.path.join(env.get("PROJECT_DIR"), ".ldf_dat")
+    ldf_dat_dir = os.path.join(env.subst("$PROJECT_DIR"), ".ldf_dat")
     idedata_path = os.path.join(ldf_dat_dir, f"idedata_{env_name}.json")
     
     # Original path for fallback check
-    original_idedata_path = os.path.join(env.get("BUILD_DIR"), "idedata.json")
-
+    original_idedata_path = os.path.join(env.subst("$BUILD_DIR"), "idedata.json")
+    
     if not os.path.exists(idedata_path) and not os.path.exists(original_idedata_path):
-        print(f"idedata.json for {env_name} missing - running Smart Build")
+        print(f"idedata.json for {env_name} missing - running idedata Build")
 
         env_copy = os.environ.copy()
         env_copy["SMART_BUILD_RUNNING"] = "1"
@@ -50,8 +50,8 @@ def smart_build_integrated(source, target, env):
         try:
             subprocess.run([
                 sys.executable, "-m", "platformio",
-                "run", "-e", env_name, "-t", "buildprog", "-t", "idedata"
-            ], cwd=env.get("PROJECT_DIR"), env=env_copy, check=True)
+                "run", "-e", env_name, "-t", "idedata"
+            ], cwd=env.subst("$PROJECT_DIR"), env=env_copy, check=True)
 
             # Copy idedata.json from build directory to .ldf_dat folder with env name
             if os.path.exists(original_idedata_path):
@@ -59,11 +59,11 @@ def smart_build_integrated(source, target, env):
                 shutil.copy2(original_idedata_path, idedata_path)
                 print(f"idedata.json copied to {idedata_path}")
 
-            print("Smart Build successful - skipping further build steps")
+            print("idedata build successful")
             Exit(0)
 
         except subprocess.CalledProcessError as e:
-            print(f"Smart Build failed: {e}")
+            print(f"idedata build failed: {e}")
             Exit(1)
 
 # Register PreAction for buildprog to ensure early execution and idedata.json presence
