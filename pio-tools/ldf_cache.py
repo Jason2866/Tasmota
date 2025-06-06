@@ -129,9 +129,6 @@ class LDFCacheOptimizer:
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = self.env.subst("$PLATFORMIO_PACKAGES_DIR")
 
-    # [Rest of the class methods remain unchanged...]
-
-
     def validate_ldf_mode_compatibility(self):
         """
         Validate that the project uses chain mode or off mode only.
