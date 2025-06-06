@@ -1,11 +1,10 @@
-# ldf_cache.py
 """
 PlatformIO Advanced Script for intelligent LDF caching using idedata.json.
 All LDF-cached build options (except lib_ldf_mode) are written to ldf_cache.ini,
 which must be included in platformio.ini via 'extra_configs = ldf_cache.ini'.
 Framework and toolchain files are excluded from the project hash.
 idedata.json is always generated together with the build using a smart pre-action.
-idedata.json is stored in .pio directory with environment name extension.
+idedata.json copy is stored in project folder in .ldf_dat directory.
 
 Copyright: Jason2866
 """
@@ -27,7 +26,7 @@ def smart_build_integrated(source, target, env):
     """
     Ensure idedata.json is generated together with the build for the current environment.
     If missing, re-invoke PlatformIO for this environment with buildprog and idedata targets.
-    idedata.json is stored in .pio directory with environment name extension.
+    Store idedata.json copy in project folder in .ldf_dat directory.
     """
     # Prevent recursion during smart build execution
     if os.environ.get("SMART_BUILD_RUNNING"):
@@ -35,9 +34,9 @@ def smart_build_integrated(source, target, env):
 
     env_name = env.get("PIOENV")
     
-    # Store idedata.json in .pio path with env extension
-    pio_dir = os.path.join(env.get("PROJECT_DIR"), ".pio")
-    idedata_path = os.path.join(pio_dir, f"idedata_{env_name}.json")
+    # Store idedata.json copy in project folder in .ldf_dat directory
+    ldf_dat_dir = os.path.join(env.get("PROJECT_DIR"), ".ldf_dat")
+    idedata_path = os.path.join(ldf_dat_dir, f"idedata_{env_name}.json")
     
     # Original path for fallback check
     original_idedata_path = os.path.join(env.get("BUILD_DIR"), "idedata.json")
@@ -54,9 +53,9 @@ def smart_build_integrated(source, target, env):
                 "run", "-e", env_name, "-t", "buildprog", "-t", "idedata"
             ], cwd=env.get("PROJECT_DIR"), env=env_copy, check=True)
 
-            # Copy idedata.json from build directory to .pio path with env name
+            # Copy idedata.json from build directory to .ldf_dat folder with env name
             if os.path.exists(original_idedata_path):
-                os.makedirs(pio_dir, exist_ok=True)
+                os.makedirs(ldf_dat_dir, exist_ok=True)
                 shutil.copy2(original_idedata_path, idedata_path)
                 print(f"idedata.json copied to {idedata_path}")
 
@@ -77,7 +76,7 @@ class LDFCacheOptimizer:
     Reads LDF results from idedata.json, writes all build options to ldf_cache.ini,
     and stores the cache as a Python dict for robust validation.
     Framework and toolchain files are excluded from the project hash.
-    idedata.json is stored in .pio directory with environment name extension.
+    idedata.json copy is stored in project folder in .ldf_dat directory.
     """
 
     # File extensions for different types of source files
@@ -108,8 +107,8 @@ class LDFCacheOptimizer:
         self.ldf_cache_ini = os.path.join(self.project_dir, "ldf_cache.ini")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
         
-        # Changed: idedata.json in .pio path with env name extension
-        self.idedata_file = os.path.join(self.project_dir, ".pio", f"idedata_{self.env['PIOENV']}.json")
+        # Changed: idedata.json copy in project folder in .ldf_dat directory
+        self.idedata_file = os.path.join(self.project_dir, ".ldf_dat", f"idedata_{self.env['PIOENV']}.json")
         
         self.original_ldf_mode = None
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
@@ -337,6 +336,7 @@ class LDFCacheOptimizer:
                             'line': line.strip(),
                             'line_index': i
                         })
+                
                 return lib_ldf_mode_lines
             else:
                 print(f"❌ platformio.ini not found: {self.platformio_ini}")
