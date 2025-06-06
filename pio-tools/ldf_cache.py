@@ -15,7 +15,28 @@ import json
 import subprocess
 import sys
 import shutil
+import click
 from platformio.project.config import ProjectConfig
+
+def generate_idedata_directly():
+    """
+    Generate idedata.json directly using PlatformIO's internal method.
+    """
+    if env.IsIntegrationDump():
+        projenv = None
+        try:
+            Import("projenv")
+        except:
+            projenv = env
+        data = projenv.DumpIntegrationData(env)
+        with open(
+            projenv.subst(os.path.join("$BUILD_DIR", "idedata.json")),
+            mode="w",
+            encoding="utf8",
+        ) as fp:
+            json.dump(data, fp)
+        click.echo("\n%s\n" % json.dumps(data))
+        env.Exit(0)
 
 def smart_build_integrated():
     """
@@ -35,23 +56,42 @@ def smart_build_integrated():
         return
 
     if not os.path.exists(idedata_path) and not os.path.exists(original_idedata_path):
-        print(f"idedata.json for {env_name} missing - running idedata build")
-        env_copy = os.environ.copy()
-        env_copy["SMART_BUILD_RUNNING"] = "1"
+        print(f"idedata.json for {env_name} missing - generating directly")
+        
+        # Set environment variable to prevent recursion
+        os.environ["SMART_BUILD_RUNNING"] = "1"
+        
         try:
-            subprocess.run([
-                sys.executable, "-m", "platformio",
-                "run", "-e", env_name, "-t", "idedata"
-            ], cwd=env.subst("$PROJECT_DIR"), env=env_copy, check=True)
+            # Generate idedata.json directly instead of subprocess call
+            generate_idedata_directly()
+            
+            # After generation, copy to cache location
             if os.path.exists(original_idedata_path):
                 os.makedirs(ldf_dat_dir, exist_ok=True)
                 shutil.copy2(original_idedata_path, idedata_path)
                 print(f"idedata.json copied to {idedata_path}")
-            print("idedata build successful")
-            Exit(0)
-        except subprocess.CalledProcessError as e:
-            print(f"idedata build failed: {e}")
-            Exit(1)
+            print("idedata generation successful")
+            
+        except Exception as e:
+            print(f"idedata generation failed: {e}")
+            # Fallback to subprocess if direct generation fails
+            try:
+                subprocess.run([
+                    sys.executable, "-m", "platformio",
+                    "run", "-e", env_name, "-t", "idedata"
+                ], cwd=env.subst("$PROJECT_DIR"), check=True)
+                if os.path.exists(original_idedata_path):
+                    os.makedirs(ldf_dat_dir, exist_ok=True)
+                    shutil.copy2(original_idedata_path, idedata_path)
+                    print(f"idedata.json copied to {idedata_path}")
+                print("idedata build successful (fallback)")
+            except subprocess.CalledProcessError as fallback_e:
+                print(f"idedata build failed (fallback): {fallback_e}")
+                env.Exit(1)
+        finally:
+            # Clean up environment variable
+            if "SMART_BUILD_RUNNING" in os.environ:
+                del os.environ["SMART_BUILD_RUNNING"]
 
 smart_build_integrated()
 
@@ -90,6 +130,9 @@ class LDFCacheOptimizer:
         self.idedata_file = os.path.join(self.project_dir, ".ldf_dat", f"idedata_{self.env['PIOENV']}.json")
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = self.env.subst("$PLATFORMIO_PACKAGES_DIR")
+
+    # [Rest of the class methods remain unchanged...]
+
 
     def validate_ldf_mode_compatibility(self):
         """
