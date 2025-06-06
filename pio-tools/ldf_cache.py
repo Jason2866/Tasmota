@@ -66,6 +66,7 @@ class LDFCacheOptimizer:
     stores the cache as a Python dict for robust validation, and directly manipulates
     SCons environment variables. Enhanced with .a/.o file tracking and static library
     generation for .o files, plus proper LIBPATH management.
+    All paths containing '${platformio.packages_dir}' are resolved to their absolute value.
     """
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
     SOURCE_EXTENSIONS = frozenset(['.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'])
@@ -88,8 +89,20 @@ class LDFCacheOptimizer:
         self.idedata_file = os.path.join(self.project_dir, ".ldf_dat", f"idedata_{self.env['PIOENV']}.json")
         self.original_ldf_mode = None
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
+        self.real_packages_dir = self.env.subst("$PLATFORMIO_PACKAGES_DIR")
+
+    def resolve_pio_placeholders(self, path):
+        """
+        Replace '${platformio.packages_dir}' with the actual PlatformIO packages directory.
+        """
+        if not isinstance(path, str):
+            return path
+        return path.replace("${platformio.packages_dir}", self.real_packages_dir)
 
     def is_platformio_path(self, path):
+        """
+        Check if a path is within PlatformIO's own directories.
+        """
         platformio_paths = set()
         if 'PLATFORMIO_CORE_DIR' in os.environ:
             platformio_paths.add(os.path.normpath(os.environ['PLATFORMIO_CORE_DIR']))
@@ -100,6 +113,9 @@ class LDFCacheOptimizer:
         return any(norm_path.startswith(pio_path) for pio_path in platformio_paths)
 
     def _get_file_hash(self, file_path):
+        """
+        Return a truncated SHA256 hash of a file's contents.
+        """
         try:
             with open(file_path, 'rb') as f:
                 return hashlib.sha256(f.read()).hexdigest()[:16]
@@ -107,6 +123,9 @@ class LDFCacheOptimizer:
             return "unreadable"
 
     def get_include_relevant_hash(self, file_path):
+        """
+        Calculate a hash based on relevant #include and #define lines in a source file.
+        """
         include_lines = []
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -124,6 +143,9 @@ class LDFCacheOptimizer:
             return self._get_file_hash(file_path)
 
     def get_project_hash_with_details(self):
+        """
+        Scan all relevant project, library, and include files to produce a hash and metadata.
+        """
         start_time = time.time()
         file_hashes = {}
         hash_data = []
@@ -203,6 +225,9 @@ class LDFCacheOptimizer:
         }
 
     def find_lib_ldf_mode_in_ini(self):
+        """
+        Find all lines in platformio.ini that set lib_ldf_mode.
+        """
         lib_ldf_mode_lines = []
         try:
             if os.path.exists(self.platformio_ini):
@@ -230,6 +255,9 @@ class LDFCacheOptimizer:
             return []
 
     def modify_platformio_ini(self, new_ldf_mode):
+        """
+        Modify or insert lib_ldf_mode in platformio.ini.
+        """
         try:
             ldf_entries = self.find_lib_ldf_mode_in_ini()
             if ldf_entries:
@@ -259,6 +287,9 @@ class LDFCacheOptimizer:
             return False
 
     def add_lib_ldf_mode_to_platformio_section(self, new_ldf_mode):
+        """
+        Add lib_ldf_mode to the [platformio] section of platformio.ini.
+        """
         try:
             with open(self.platformio_ini, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -280,6 +311,9 @@ class LDFCacheOptimizer:
             return False
 
     def restore_platformio_ini(self):
+        """
+        Restore the original lib_ldf_mode in platformio.ini.
+        """
         if self.original_ldf_mode is None:
             return
         try:
@@ -303,6 +337,9 @@ class LDFCacheOptimizer:
             print(f"❌ Error restoring platformio.ini: {e}")
 
     def read_existing_idedata(self):
+        """
+        Read idedata.json and process its structure.
+        """
         try:
             if not os.path.exists(self.idedata_file):
                 print(f"❌ idedata.json not found: {self.idedata_file}")
@@ -317,6 +354,9 @@ class LDFCacheOptimizer:
             return None
 
     def _process_real_idedata_structure(self, idedata):
+        """
+        Process idedata.json structure and resolve all package placeholders.
+        """
         ldf_cache = {
             'libraries': [],
             'include_paths': [],
@@ -331,23 +371,24 @@ class LDFCacheOptimizer:
             return ldf_cache
         libsource_dirs = idedata.get('libsource_dirs', [])
         for lib_dir in libsource_dirs:
-            ldf_cache['libsource_dirs'].append(lib_dir)
+            resolved_lib_dir = self.resolve_pio_placeholders(lib_dir)
+            ldf_cache['libsource_dirs'].append(resolved_lib_dir)
             if 'lib/' in lib_dir and self.project_dir in lib_dir:
                 lib_name = os.path.basename(lib_dir)
                 lib_deps_entry = f"./lib/{lib_name}"
             elif 'framework-' in lib_dir:
-                lib_deps_entry = lib_dir.replace(os.path.expanduser('~/.platformio/packages'), '${platformio.packages_dir}')
+                lib_deps_entry = lib_dir.replace(os.path.expanduser('~/.platformio/packages'), self.real_packages_dir)
             else:
-                lib_deps_entry = lib_dir
+                lib_deps_entry = resolved_lib_dir
             ldf_cache['lib_deps_entries'].append(lib_deps_entry)
             ldf_cache['libraries'].append({
                 'name': os.path.basename(lib_dir),
-                'path': lib_dir,
+                'path': resolved_lib_dir,
                 'lib_deps_entry': lib_deps_entry
             })
         includes_build = idedata.get('includes', {}).get('build', [])
         for include_path in includes_build:
-            ldf_cache['include_paths'].append(include_path)
+            ldf_cache['include_paths'].append(self.resolve_pio_placeholders(include_path))
         defines = idedata.get('defines', [])
         for define in defines:
             ldf_cache['defines'].append(define)
@@ -355,8 +396,9 @@ class LDFCacheOptimizer:
         cxx_flags = idedata.get('cxx_flags', [])
         all_flags = cc_flags + cxx_flags
         for flag in all_flags:
-            if flag not in ldf_cache['build_flags']:
-                ldf_cache['build_flags'].append(flag)
+            resolved_flag = self.resolve_pio_placeholders(flag)
+            if resolved_flag not in ldf_cache['build_flags']:
+                ldf_cache['build_flags'].append(resolved_flag)
         build_dir = idedata.get('build_dir', '')
         if build_dir and os.path.exists(build_dir):
             lib_build_dir = os.path.join(build_dir, 'lib')
@@ -365,19 +407,22 @@ class LDFCacheOptimizer:
                     for file in files:
                         if file.endswith('.a'):
                             lib_path = os.path.join(root, file)
-                            ldf_cache['compiled_libraries'].append(lib_path)
+                            ldf_cache['compiled_libraries'].append(self.resolve_pio_placeholders(lib_path))
             for root, dirs, files in os.walk(build_dir):
                 if '/src' in root.replace('\\', '/') or root.endswith('src'):
                     continue
                 for file in files:
                     if file.endswith('.o'):
                         obj_path = os.path.join(root, file)
-                        ldf_cache['compiled_objects'].append(obj_path)
+                        ldf_cache['compiled_objects'].append(self.resolve_pio_placeholders(obj_path))
         print(f"📦 Found {len(ldf_cache['compiled_libraries'])} .a files")
         print(f"📦 Found {len(ldf_cache['compiled_objects'])} .o files (excluding src)")
         return ldf_cache
 
     def compute_signature(self, cache_data):
+        """
+        Compute a hash signature for the cache data.
+        """
         data = dict(cache_data)
         data.pop('signature', None)
         try:
@@ -387,6 +432,9 @@ class LDFCacheOptimizer:
         return hashlib.sha256(raw.encode()).hexdigest()
 
     def save_ldf_cache(self, target=None, source=None, env_arg=None, **kwargs):
+        """
+        Save the current LDF cache to disk after a successful build.
+        """
         try:
             hash_details = self.get_project_hash_with_details()
             ldf_results = self.read_existing_idedata()
@@ -421,6 +469,9 @@ class LDFCacheOptimizer:
             traceback.print_exc()
 
     def load_and_validate_cache(self):
+        """
+        Load and validate the LDF cache. If invalid, clear it.
+        """
         if not os.path.exists(self.cache_file):
             print("🔍 No cache file exists")
             return None
@@ -448,11 +499,13 @@ class LDFCacheOptimizer:
             ldf_results = cache_data.get('ldf_results', {})
             missing_artifacts = []
             for lib_path in ldf_results.get('compiled_libraries', []):
-                if not os.path.exists(lib_path):
-                    missing_artifacts.append(lib_path)
+                resolved_lib_path = self.resolve_pio_placeholders(lib_path)
+                if not os.path.exists(resolved_lib_path):
+                    missing_artifacts.append(resolved_lib_path)
             for obj_path in ldf_results.get('compiled_objects', []):
-                if not os.path.exists(obj_path):
-                    missing_artifacts.append(obj_path)
+                resolved_obj_path = self.resolve_pio_placeholders(obj_path)
+                if not os.path.exists(resolved_obj_path):
+                    missing_artifacts.append(resolved_obj_path)
             if missing_artifacts:
                 print(f"⚠ Cache invalid: {len(missing_artifacts)} build artifacts missing")
                 print(f"   First missing: {missing_artifacts[0]}")
@@ -468,6 +521,9 @@ class LDFCacheOptimizer:
             return None
 
     def write_ldf_cache_ini(self, ldf_results):
+        """
+        Write LDF cache configuration to ldf_cache.ini for PlatformIO extra_configs.
+        """
         ini_lines = [
             f"[env:{self.env['PIOENV']}]",
             "lib_deps ="
@@ -488,6 +544,9 @@ class LDFCacheOptimizer:
         print(f"📝 Wrote LDF cache config to {self.ldf_cache_ini}")
 
     def apply_ldf_cache_complete(self, cache_data):
+        """
+        Apply all cached LDF results to the SCons environment, resolving all placeholders.
+        """
         try:
             ldf_results = cache_data.get('ldf_results', {})
             if not ldf_results:
@@ -507,8 +566,11 @@ class LDFCacheOptimizer:
             return False
 
     def _apply_library_paths(self, ldf_results):
-        libsource_dirs = ldf_results.get('libsource_dirs', [])
-        compiled_libraries = ldf_results.get('compiled_libraries', [])
+        """
+        Add all library directories to LIBPATH, resolving any placeholders.
+        """
+        libsource_dirs = [self.resolve_pio_placeholders(p) for p in ldf_results.get('libsource_dirs', [])]
+        compiled_libraries = [self.resolve_pio_placeholders(p) for p in ldf_results.get('compiled_libraries', [])]
         lib_dirs_from_files = set()
         for lib_path in compiled_libraries:
             if os.path.exists(lib_path):
@@ -527,7 +589,10 @@ class LDFCacheOptimizer:
                 print("   All library paths already present in LIBPATH")
 
     def _apply_static_libraries(self, ldf_results):
-        compiled_libraries = ldf_results.get('compiled_libraries', [])
+        """
+        Add all static libraries (.a) to LIBS, resolving any placeholders.
+        """
+        compiled_libraries = [self.resolve_pio_placeholders(p) for p in ldf_results.get('compiled_libraries', [])]
         valid_libs = []
         for lib_path in compiled_libraries:
             if os.path.exists(lib_path):
@@ -542,7 +607,10 @@ class LDFCacheOptimizer:
             print(f"   Added {len(valid_libs)} static libraries to LIBS")
 
     def _apply_object_files_as_static_library(self, ldf_results):
-        compiled_objects = ldf_results.get('compiled_objects', [])
+        """
+        Bundle all object files into a temporary static library and add to LIBS.
+        """
+        compiled_objects = [self.resolve_pio_placeholders(p) for p in ldf_results.get('compiled_objects', [])]
         valid_objects = [obj for obj in compiled_objects if os.path.exists(obj)]
         if not valid_objects:
             print("   No valid object files found")
@@ -587,7 +655,10 @@ class LDFCacheOptimizer:
             print(f"   Fallback: Added {len(valid_objects)} objects directly")
 
     def _apply_build_flags_systematically(self, ldf_results):
-        build_flags = ldf_results.get('build_flags', [])
+        """
+        Systematically apply build flags to the SCons environment, resolving any placeholders.
+        """
+        build_flags = [self.resolve_pio_placeholders(flag) for flag in ldf_results.get('build_flags', [])]
         if not build_flags:
             return
         cc_flags = []
@@ -653,7 +724,10 @@ class LDFCacheOptimizer:
             print(f"   Added {len(link_flags)} linker flags")
 
     def _apply_include_paths_and_defines(self, ldf_results):
-        include_paths = ldf_results.get('include_paths', [])
+        """
+        Add all include paths and defines to the SCons environment, resolving any placeholders.
+        """
+        include_paths = [self.resolve_pio_placeholders(p) for p in ldf_results.get('include_paths', [])]
         if include_paths:
             existing_includes = [str(path) for path in self.env.get('CPPPATH', [])]
             new_includes = [inc for inc in include_paths 
@@ -670,6 +744,9 @@ class LDFCacheOptimizer:
                 print(f"   Added {len(new_defines)} preprocessor defines")
 
     def setup_ldf_caching(self):
+        """
+        Main entry point: load and apply cache if valid, otherwise set up for cache generation.
+        """
         print("\n=== LDF Cache Optimizer (Enhanced .a/.o tracking, Direct SCons Mode) ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
@@ -686,6 +763,9 @@ class LDFCacheOptimizer:
         print("=" * 80)
 
 def clear_ldf_cache():
+    """
+    Delete the LDF cache file for the current environment.
+    """
     project_dir = env.subst("$PROJECT_DIR")
     cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env['PIOENV']}.py")
     if os.path.exists(cache_file):
@@ -698,6 +778,9 @@ def clear_ldf_cache():
         print("ℹ No LDF Cache present")
 
 def show_ldf_cache_info():
+    """
+    Print information about the current LDF cache.
+    """
     project_dir = env.subst("$PROJECT_DIR")
     cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env['PIOENV']}.py")
     if os.path.exists(cache_file):
