@@ -1,7 +1,5 @@
 """
 PlatformIO Advanced Script for intelligent LDF caching.
-All LDF-cached build options are written to ldf_cache.ini,
-which must be included in platformio.ini via 'extra_configs = ldf_cache.ini'.
 
 Copyright: Jason2866
 """
@@ -22,19 +20,20 @@ from platformio.project.config import ProjectConfig
 def smart_build_integrated():
     """
     Ensure idedata.json is generated for the current environment.
-    If missing, re-invoke PlatformIO for this environment with idedata target.
-    Store idedata.json copy in project folder in .ldf_dat directory.
     """
     env_name = env.get("PIOENV")
     ldf_dat_dir = os.path.join(env.subst("$PROJECT_DIR"), ".ldf_dat")
     idedata_path = os.path.join(ldf_dat_dir, f"idedata_{env_name}.json")
     original_idedata_path = os.path.join(env.subst("$BUILD_DIR"), "idedata.json")
+
     if os.path.exists(original_idedata_path):
         os.makedirs(ldf_dat_dir, exist_ok=True)
         shutil.copy2(original_idedata_path, idedata_path)
         print(f"idedata.json copied to {idedata_path}")
+
     if os.environ.get("SMART_BUILD_RUNNING"):
         return
+
     if not os.path.exists(idedata_path) and not os.path.exists(original_idedata_path):
         print(f"idedata.json for {env_name} missing - running idedata build")
         env_copy = os.environ.copy()
@@ -59,19 +58,14 @@ smart_build_integrated()
 class LDFCacheOptimizer:
     """
     PlatformIO LDF (Library Dependency Finder) cache optimizer.
-
-    Reads LDF results from idedata.json, writes all build options to ldf_cache.ini,
-    stores the cache as a Python dict for robust validation, and directly manipulates
-    SCons environment variables. Enhanced with .a/.o file tracking and static library
-    generation for .o files, plus proper LIBPATH management.
-    All paths containing '${platformio.packages_dir}' are resolved to their absolute value.
     """
+
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
     SOURCE_EXTENSIONS = frozenset(['.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'])
     CONFIG_EXTENSIONS = frozenset(['.json', '.properties', '.txt', '.ini'])
     IGNORE_DIRS = frozenset([
         '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
-        'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants', 
+        'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants',
         'berry', 'berry_tasmota', 'berry_matter', 'berry_custom',
         'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc',
         'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
@@ -84,10 +78,157 @@ class LDFCacheOptimizer:
         self.cache_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"ldf_cache_{self.env['PIOENV']}.py")
         self.ldf_cache_ini = os.path.join(self.project_dir, "ldf_cache.ini")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
+        self.platformio_ini_backup = os.path.join(self.project_dir, ".pio", f"platformio_backup_{self.env['PIOENV']}.ini")
         self.idedata_file = os.path.join(self.project_dir, ".ldf_dat", f"idedata_{self.env['PIOENV']}.json")
         self.original_ldf_mode = None
+        self.ldf_mode_modification_info = None
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = self.env.subst("$PLATFORMIO_PACKAGES_DIR")
+
+    def create_ini_backup(self):
+        """
+        Create an exact backup of platformio.ini with all metadata.
+        """
+        try:
+            if os.path.exists(self.platformio_ini):
+                os.makedirs(os.path.dirname(self.platformio_ini_backup), exist_ok=True)
+                shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
+                print("🔒 platformio.ini backup created")
+                return True
+        except Exception as e:
+            print(f"❌ Error creating backup: {e}")
+        return False
+
+    def restore_ini_from_backup(self):
+        """
+        Restore platformio.ini from backup.
+        """
+        try:
+            if os.path.exists(self.platformio_ini_backup):
+                shutil.copy2(self.platformio_ini_backup, self.platformio_ini)
+                os.remove(self.platformio_ini_backup)
+                print("🔓 platformio.ini restored from backup (exact format)")
+                return True
+        except Exception as e:
+            print(f"❌ Error restoring from backup: {e}")
+        return False
+
+    def find_lib_ldf_mode_in_ini(self):
+        """
+        Find lib_ldf_mode entries with position and formatting info.
+        """
+        lib_ldf_mode_entries = []
+        try:
+            if os.path.exists(self.platformio_ini):
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                for i, line in enumerate(lines):
+                    if 'lib_ldf_mode' in line.lower() and '=' in line:
+                        section = None
+                        for j in range(i, -1, -1):
+                            if lines[j].strip().startswith('[') and lines[j].strip().endswith(']'):
+                                section = lines[j].strip()
+                                break
+                        match = re.match(r'^(\s*)(lib_ldf_mode)(\s*)(=)(\s*)([^\s#;]+)(.*)', line)
+                        if match:
+                            lib_ldf_mode_entries.append({
+                                'section': section,
+                                'line_number': i + 1,
+                                'line_index': i,
+                                'original_line': line,
+                                'leading_space': match.group(1),
+                                'key': match.group(2),
+                                'pre_equals_space': match.group(3),
+                                'equals': match.group(4),
+                                'post_equals_space': match.group(5),
+                                'value': match.group(6),
+                                'trailing': match.group(7)
+                            })
+                return lib_ldf_mode_entries
+        except Exception as e:
+            print(f"❌ Error reading platformio.ini: {e}")
+        return []
+
+    def modify_platformio_ini_preserve_exact_format(self, new_ldf_mode):
+        """
+        Modify lib_ldf_mode while preserving exact formatting.
+        """
+        if not self.create_ini_backup():
+            return False
+        try:
+            ldf_entries = self.find_lib_ldf_mode_in_ini()
+            if ldf_entries:
+                entry = ldf_entries[0]
+                self.original_ldf_mode = entry['value']
+                self.ldf_mode_modification_info = entry
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                new_line = (entry['leading_space'] +
+                            entry['key'] +
+                            entry['pre_equals_space'] +
+                            entry['equals'] +
+                            entry['post_equals_space'] +
+                            new_ldf_mode +
+                            entry['trailing'])
+                lines[entry['line_index']] = new_line
+                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                print(f"🔧 Modified {entry['section']}: lib_ldf_mode = {new_ldf_mode} (format preserved)")
+                return True
+            else:
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                self.original_ldf_mode = "chain"
+                platformio_match = re.search(r'^(\[platformio\])', content, re.MULTILINE)
+                if platformio_match:
+                    insert_pos = platformio_match.end()
+                    new_content = (content[:insert_pos] +
+                                   f'\nlib_ldf_mode = {new_ldf_mode}' +
+                                   content[insert_pos:])
+                else:
+                    new_content = f'[platformio]\nlib_ldf_mode = {new_ldf_mode}\n\n' + content
+                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+                print(f"🔧 Added to [platformio]: lib_ldf_mode = {new_ldf_mode}")
+                return True
+        except Exception as e:
+            print(f"❌ Error in format-preserving modification: {e}")
+            self.restore_ini_from_backup()
+            return False
+
+    def restore_platformio_ini_exact(self):
+        """
+        Restore lib_ldf_mode with exact original formatting.
+        """
+        if self.original_ldf_mode is None:
+            return self.restore_ini_from_backup()
+        try:
+            if self.ldf_mode_modification_info:
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                entry = self.ldf_mode_modification_info
+                if self.original_ldf_mode == "chain":
+                    lines.pop(entry['line_index'])
+                else:
+                    restored_line = (entry['leading_space'] +
+                                     entry['key'] +
+                                     entry['pre_equals_space'] +
+                                     entry['equals'] +
+                                     entry['post_equals_space'] +
+                                     self.original_ldf_mode +
+                                     entry['trailing'])
+                    lines[entry['line_index']] = restored_line
+                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                print(f"🔓 Restored lib_ldf_mode = {self.original_ldf_mode} (exact format)")
+                if os.path.exists(self.platformio_ini_backup):
+                    os.remove(self.platformio_ini_backup)
+                return True
+            else:
+                return self.restore_ini_from_backup()
+        except Exception as e:
+            print(f"❌ Error in exact restoration: {e}")
+            return self.restore_ini_from_backup()
 
     def resolve_pio_placeholders(self, path):
         """
@@ -131,8 +272,8 @@ class LDFCacheOptimizer:
                     stripped = line.strip()
                     if stripped.startswith('//'):
                         continue
-                    if (stripped.startswith('#include') or 
-                        (stripped.startswith('#define') and 
+                    if (stripped.startswith('#include') or
+                        (stripped.startswith('#define') and
                          any(keyword in stripped.upper() for keyword in ['INCLUDE', 'PATH', 'CONFIG']))):
                         include_lines.append(stripped)
             content = '\n'.join(include_lines)
@@ -222,118 +363,6 @@ class LDFCacheOptimizer:
             'files_relevant': total_relevant
         }
 
-    def find_lib_ldf_mode_in_ini(self):
-        """
-        Find all lines in platformio.ini that set lib_ldf_mode.
-        """
-        lib_ldf_mode_lines = []
-        try:
-            if os.path.exists(self.platformio_ini):
-                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                for i, line in enumerate(lines):
-                    if 'lib_ldf_mode' in line.lower():
-                        section = None
-                        for j in range(i, -1, -1):
-                            if lines[j].strip().startswith('[') and lines[j].strip().endswith(']'):
-                                section = lines[j].strip()
-                                break
-                        lib_ldf_mode_lines.append({
-                            'section': section, 
-                            'line_number': i+1, 
-                            'line': line.strip(),
-                            'line_index': i
-                        })
-                return lib_ldf_mode_lines
-            else:
-                print(f"❌ platformio.ini not found: {self.platformio_ini}")
-                return []
-        except Exception as e:
-            print(f"❌ Error reading platformio.ini: {e}")
-            return []
-
-    def modify_platformio_ini(self, new_ldf_mode):
-        """
-        Modify or insert lib_ldf_mode in platformio.ini.
-        """
-        try:
-            ldf_entries = self.find_lib_ldf_mode_in_ini()
-            if ldf_entries:
-                first_entry = ldf_entries[0]
-                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                current_line = lines[first_entry['line_index']]
-                match = re.search(r'lib_ldf_mode\s*=\s*(\w+)', current_line)
-                if match:
-                    self.original_ldf_mode = match.group(1)
-                else:
-                    self.original_ldf_mode = "chain"
-                lines[first_entry['line_index']] = re.sub(
-                    r'lib_ldf_mode\s*=\s*\w+', 
-                    f'lib_ldf_mode = {new_ldf_mode}', 
-                    current_line
-                )
-                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
-                    f.writelines(lines)
-                print(f"🔧 Modified {first_entry['section']}: lib_ldf_mode = {new_ldf_mode}")
-                return True
-            else:
-                print("🔍 No existing lib_ldf_mode found, adding to [platformio] section")
-                return self.add_lib_ldf_mode_to_platformio_section(new_ldf_mode)
-        except Exception as e:
-            print(f"❌ Error modifying platformio.ini: {e}")
-            return False
-
-    def add_lib_ldf_mode_to_platformio_section(self, new_ldf_mode):
-        """
-        Add lib_ldf_mode to the [platformio] section of platformio.ini.
-        """
-        try:
-            with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                content = f.read()
-            self.original_ldf_mode = "chain"
-            platformio_section = re.search(r'\[platformio\]', content)
-            if platformio_section:
-                insert_pos = platformio_section.end()
-                new_content = (content[:insert_pos] + 
-                             f'\nlib_ldf_mode = {new_ldf_mode}' + 
-                             content[insert_pos:])
-            else:
-                new_content = f'[platformio]\nlib_ldf_mode = {new_ldf_mode}\n\n' + content
-            with open(self.platformio_ini, 'w', encoding='utf-8') as f:
-                f.write(new_content)
-            print(f"🔧 Added to [platformio]: lib_ldf_mode = {new_ldf_mode}")
-            return True
-        except Exception as e:
-            print(f"❌ Error adding lib_ldf_mode: {e}")
-            return False
-
-    def restore_platformio_ini(self):
-        """
-        Restore the original lib_ldf_mode in platformio.ini.
-        """
-        if self.original_ldf_mode is None:
-            return
-        try:
-            ldf_entries = self.find_lib_ldf_mode_in_ini()
-            if ldf_entries:
-                first_entry = ldf_entries[0]
-                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                if self.original_ldf_mode == "chain":
-                    lines.pop(first_entry['line_index'])
-                else:
-                    lines[first_entry['line_index']] = re.sub(
-                        r'lib_ldf_mode\s*=\s*\w+', 
-                        f'lib_ldf_mode = {self.original_ldf_mode}', 
-                        lines[first_entry['line_index']]
-                    )
-                with open(self.platformio_ini, 'w', encoding='utf-8') as f:
-                    f.writelines(lines)
-                print(f"🔧 Restored lib_ldf_mode = {self.original_ldf_mode}")
-        except Exception as e:
-            print(f"❌ Error restoring platformio.ini: {e}")
-
     def read_existing_idedata(self):
         """
         Read idedata.json and process its structure.
@@ -341,7 +370,6 @@ class LDFCacheOptimizer:
         try:
             if not os.path.exists(self.idedata_file):
                 print(f"❌ idedata.json not found: {self.idedata_file}")
-                print("   This should never happen if idedata is a dependency!")
                 return None
             print(f"✅ Reading idedata.json: {self.idedata_file}")
             with open(self.idedata_file, 'r') as f:
@@ -629,7 +657,7 @@ class LDFCacheOptimizer:
         temp_lib_file = temp_lib_target + ".a"
         if os.path.exists(temp_lib_file):
             lib_mtime = os.path.getmtime(temp_lib_file)
-            objects_newer = any(os.path.getmtime(obj) > lib_mtime 
+            objects_newer = any(os.path.getmtime(obj) > lib_mtime
                                for obj in valid_objects if os.path.exists(obj))
             if not objects_newer:
                 self.env.Append(LIBS=[os.path.basename(temp_lib_name)])
@@ -662,7 +690,6 @@ class LDFCacheOptimizer:
         cc_flags = []
         cxx_flags = []
         link_flags = []
-        asm_flags = []
         cpp_defines = []
         cpp_paths = []
         lib_paths = []
@@ -728,7 +755,7 @@ class LDFCacheOptimizer:
         include_paths = [self.resolve_pio_placeholders(p) for p in ldf_results.get('include_paths', [])]
         if include_paths:
             existing_includes = [str(path) for path in self.env.get('CPPPATH', [])]
-            new_includes = [inc for inc in include_paths 
+            new_includes = [inc for inc in include_paths
                            if os.path.exists(inc) and inc not in existing_includes]
             if new_includes:
                 self.env.Append(CPPPATH=new_includes)
@@ -743,17 +770,18 @@ class LDFCacheOptimizer:
 
     def setup_ldf_caching(self):
         """
-        Main entry point: load and apply cache if valid, otherwise set up for cache generation.
+        Main entry point with exact format preservation.
         """
-        print("\n=== LDF Cache Optimizer (Enhanced .a/.o tracking, Direct SCons Mode) ===")
+        print("\n=== LDF Cache Optimizer (Exact Format Preservation) ===")
         cache_data = self.load_and_validate_cache()
         if cache_data:
-            print("🚀 Valid cache found - disabling LDF and applying to SCons")
-            if self.modify_platformio_ini("off") and self.apply_ldf_cache_complete(cache_data):
+            print("🚀 Valid cache found - disabling LDF with exact format preservation")
+            if self.modify_platformio_ini_preserve_exact_format("off") and self.apply_ldf_cache_complete(cache_data):
                 print("✅ SCons environment restored from cache")
-                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_platformio_ini())
+                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_platformio_ini_exact())
             else:
                 print("❌ Cache application failed - falling back to full LDF")
+                self.restore_ini_from_backup()
                 self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
         else:
             print("🔄 No valid cache - running full LDF")
@@ -808,6 +836,5 @@ def show_ldf_cache_info():
     else:
         print("ℹ No LDF Cache present")
 
-# Instantiate and use the optimizer
 ldf_optimizer = LDFCacheOptimizer(env)
 ldf_optimizer.setup_ldf_caching()
