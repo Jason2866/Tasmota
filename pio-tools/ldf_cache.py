@@ -58,6 +58,7 @@ smart_build_integrated()
 class LDFCacheOptimizer:
     """
     PlatformIO LDF (Library Dependency Finder) cache optimizer.
+    Designed specifically for lib_ldf_mode = chain.
     Invalidates cache only when #include directives change in source files.
     """
 
@@ -89,6 +90,43 @@ class LDFCacheOptimizer:
         self.idedata_file = os.path.join(self.project_dir, ".ldf_dat", f"idedata_{self.env['PIOENV']}.json")
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = self.env.subst("$PLATFORMIO_PACKAGES_DIR")
+
+    def validate_ldf_mode_compatibility(self):
+        """
+        Validate that the project uses chain mode or off mode only.
+        This cache optimizer is designed specifically for chain mode.
+        
+        Returns:
+            bool: True if LDF mode is compatible (chain or off), False otherwise
+        """
+        try:
+            config = ProjectConfig()
+            env_section = f"env:{self.env['PIOENV']}"
+            
+            # Check environment-specific setting first
+            if config.has_option(env_section, "lib_ldf_mode"):
+                ldf_mode = config.get(env_section, "lib_ldf_mode")
+            # Check global platformio section
+            elif config.has_option("platformio", "lib_ldf_mode"):
+                ldf_mode = config.get("platformio", "lib_ldf_mode")
+            else:
+                # Default is chain mode
+                ldf_mode = "chain"
+            
+            ldf_mode = ldf_mode.strip().lower()
+            
+            if ldf_mode in ['chain', 'off']:
+                print(f"✅ LDF mode '{ldf_mode}' is compatible with cache optimizer")
+                return True
+            else:
+                print(f"❌ LDF Cache optimizer only supports 'chain' mode! Current mode: '{ldf_mode}'")
+                print("   Modes 'deep', 'chain+', 'deep+' require full LDF analysis")
+                return False
+                
+        except Exception as e:
+            print(f"⚠ Warning: Could not determine LDF mode: {e}")
+            print("   Assuming 'chain' mode (default)")
+            return True
 
     def create_ini_backup(self):
         """
@@ -221,13 +259,14 @@ class LDFCacheOptimizer:
     def get_include_relevant_hash(self, file_path):
         """
         Calculate a hash based on relevant #include and #define lines in a source file.
-        This ensures cache is only invalidated when include dependencies change.
+        This is optimized for chain mode which only follows #include directives.
+        Chain mode ignores #ifdef, #if, #elif preprocessor directives.
         
         Args:
             file_path (str): Path to the source file
             
         Returns:
-            str: Hash based on include-relevant content
+            str: Hash based on include-relevant content for chain mode
         """
         include_lines = []
         try:
@@ -236,6 +275,8 @@ class LDFCacheOptimizer:
                     stripped = line.strip()
                     if stripped.startswith('//'):
                         continue
+                    # For chain mode: only #include and relevant #define directives matter
+                    # Chain mode ignores #ifdef, #if, #elif, #else preprocessor evaluation
                     if (stripped.startswith('#include') or
                         (stripped.startswith('#define') and
                          any(keyword in stripped.upper() for keyword in ['INCLUDE', 'PATH', 'CONFIG']))):
@@ -248,7 +289,7 @@ class LDFCacheOptimizer:
     def get_project_hash_with_details(self):
         """
         Scan project files and produce a hash based only on LDF-relevant changes.
-        Only invalidates cache when #include directives change in source files.
+        Optimized for chain mode - only invalidates cache when #include directives change.
         
         Returns:
             dict: Hash details and scan metadata
@@ -310,9 +351,9 @@ class LDFCacheOptimizer:
                             continue
                         file_path = os.path.join(root, file)
                         
-                        # Selective hash usage - only include LDF-relevant changes
+                        # Selective hash usage - only include LDF-relevant changes for chain mode
                         if file_ext in self.SOURCE_EXTENSIONS:
-                            # Source files: Only #include relevant parts
+                            # Source files: Only #include relevant parts (chain mode optimization)
                             file_hash = self.get_include_relevant_hash(file_path)
                             file_hashes[file_path] = file_hash
                             hash_data.append(file_hash)  # Include in final hash
@@ -338,7 +379,7 @@ class LDFCacheOptimizer:
                             else:
                                 continue
                             file_hashes[file_path] = file_hash
-                            # Do NOT add to hash_data - not relevant for cache invalidation
+                            # Do NOT add to hash_data - not relevant for cache invalidation in chain mode
                             
             except (IOError, OSError, PermissionError) as e:
                 print(f"⚠ Warning: Could not scan directory {scan_dir}: {e}")
@@ -347,10 +388,10 @@ class LDFCacheOptimizer:
         scan_elapsed = time.time() - scan_start_time
         final_hash = hashlib.sha256(''.join(hash_data).encode()).hexdigest()[:16]
         total_elapsed = time.time() - start_time
-        print(f"🔍 Include-focused scanning completed in {scan_elapsed:.2f}s")
+        print(f"🔍 Chain mode optimized scanning completed in {scan_elapsed:.2f}s")
         print(f"🔍 Total hash calculation completed in {total_elapsed:.2f}s")
         print(f"🔍 Scan complete: {total_scanned} files scanned, {total_relevant} relevant, {len(file_hashes)} hashed")
-        print(f"🔍 Cache hash based on {len(hash_data)} LDF-relevant files")
+        print(f"🔍 Cache hash based on {len(hash_data)} LDF-relevant files for chain mode")
         if total_scanned > 0:
             print(f"🔍 Performance: {((total_relevant/total_scanned)*100):.1f}% relevance ratio")
         return {
@@ -506,17 +547,19 @@ class LDFCacheOptimizer:
                     'pioenv': str(self.env['PIOENV']),
                     'timestamp': datetime.datetime.now().isoformat(),
                     'pio_version': pio_version,
-                    'ldf_cache_ini': self.ldf_cache_ini
+                    'ldf_cache_ini': self.ldf_cache_ini,
+                    'ldf_mode': 'chain'  # This cache is designed for chain mode only
                 }
                 cache_data['signature'] = self.compute_signature(cache_data)
                 os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
                 with open(self.cache_file, 'w', encoding='utf-8') as f:
                     f.write("# LDF Cache - Complete Build Environment with .a/.o tracking\n")
+                    f.write("# Optimized for lib_ldf_mode = chain\n")
                     f.write("# Generated as Python dict\n\n")
                     f.write("cache_data = \\\n")
                     f.write(pprint.pformat(cache_data, indent=2, width=120))
                     f.write("\n")
-                print(f"💾 LDF Cache saved successfully!")
+                print(f"💾 LDF Cache saved successfully for chain mode!")
                 print(f"   Libraries: {len(ldf_results.get('compiled_libraries', []))}")
                 print(f"   Objects: {len(ldf_results.get('compiled_objects', []))}")
             else:
@@ -547,6 +590,13 @@ class LDFCacheOptimizer:
             current_pio_version = getattr(self.env, "PioVersion", lambda: "unknown")()
             if cache_data.get('pio_version') != current_pio_version:
                 print(f"⚠ Cache invalid: PlatformIO version changed from {cache_data.get('pio_version')} to {current_pio_version}")
+                clear_ldf_cache()
+                return None
+            
+            # Validate LDF mode compatibility
+            cached_ldf_mode = cache_data.get('ldf_mode', 'chain')
+            if cached_ldf_mode != 'chain':
+                print(f"⚠ Cache invalid: Cache was created for LDF mode '{cached_ldf_mode}', but this optimizer requires 'chain' mode")
                 clear_ldf_cache()
                 return None
             
@@ -630,13 +680,13 @@ class LDFCacheOptimizer:
             ldf_results = cache_data.get('ldf_results', {})
             if not ldf_results:
                 return False
-            print("🔧 Restoring complete SCons environment from cache...")
+            print("🔧 Restoring complete SCons environment from chain mode cache...")
             self._apply_library_paths(ldf_results)
             self._apply_static_libraries(ldf_results)
             self._apply_object_files_as_static_library(ldf_results)
             self._apply_include_paths_and_defines(ldf_results)
             self._apply_build_flags_systematically(ldf_results)
-            print("✅ Complete SCons environment restored from cache")
+            print("✅ Complete SCons environment restored from chain mode cache")
             return True
         except Exception as e:
             print(f"✗ Error in complete cache restoration: {e}")
@@ -853,14 +903,23 @@ class LDFCacheOptimizer:
     def setup_ldf_caching(self):
         """
         Main entry point using backup/restore for platformio.ini.
-        Sets up intelligent LDF caching that only invalidates on include changes.
+        Sets up intelligent LDF caching optimized for chain mode.
+        Only invalidates cache when #include directives change.
         """
-        print("\n=== LDF Cache Optimizer ===")
+        print("\n=== LDF Cache Optimizer (Chain Mode) ===")
+        
+        # Validate LDF mode compatibility first
+        if not self.validate_ldf_mode_compatibility():
+            print("🔄 Falling back to normal LDF due to incompatible mode")
+            self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
+            print("=" * 80)
+            return
+        
         cache_data = self.load_and_validate_cache()
         if cache_data:
-            print("🚀 Valid cache found - disabling LDF with backup/restore")
+            print("🚀 Valid chain mode cache found - disabling LDF with backup/restore")
             if self.modify_platformio_ini_simple("off") and self.apply_ldf_cache_complete(cache_data):
-                print("✅ SCons environment restored from cache")
+                print("✅ SCons environment restored from chain mode cache")
                 # Restore platformio.ini after build
                 self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
             else:
@@ -868,7 +927,7 @@ class LDFCacheOptimizer:
                 self.restore_ini_from_backup()
                 self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
         else:
-            print("🔄 No valid cache - running full LDF")
+            print("🔄 No valid cache - running full LDF in chain mode")
             self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
         print("=" * 80)
 
@@ -903,18 +962,15 @@ def show_ldf_cache_info():
             ldf_results = cache_data.get('ldf_results', {})
             print("\n=== LDF Cache Info ===")
             print(f"Environment:  {cache_data.get('pioenv', 'unknown')}")
-            print(f"Project hash: {cache_data.get('project_hash', 'unknown')}")
-            print(f"PlatformIO version: {cache_data.get('pio_version', 'unknown')}")
-            print(f"Signature:    {cache_data.get('signature', 'none')}")
+            print(f"LDF Mode:     {cache_data.get('ldf_mode', 'unknown')}")
             print(f"Created:      {cache_data.get('timestamp', 'unknown')}")
-            print(f"File size:    {os.path.getsize(cache_file)} bytes")
-            print(f"Libraries:    {len(ldf_results.get('libraries', []))}")
-            print(f"Include paths: {len(ldf_results.get('include_paths', []))}")
+            print(f"PIO Version:  {cache_data.get('pio_version', 'unknown')}")
+            print(f"Project Hash: {cache_data.get('project_hash', 'unknown')}")
+            print(f"Libraries:    {len(ldf_results.get('compiled_libraries', []))}")
+            print(f"Objects:      {len(ldf_results.get('compiled_objects', []))}")
+            print(f"Include Paths: {len(ldf_results.get('include_paths', []))}")
             print(f"Defines:      {len(ldf_results.get('defines', []))}")
-            print(f"Build flags:  {len(ldf_results.get('build_flags', []))}")
-            print(f"Compiled .a:  {len(ldf_results.get('compiled_libraries', []))}")
-            print(f"Compiled .o:  {len(ldf_results.get('compiled_objects', []))}")
-            print("===")
+            print("=" * 50)
         except Exception as e:
             print(f"✗ Error reading cache info: {e}")
     else:
