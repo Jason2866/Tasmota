@@ -15,7 +15,6 @@ import json
 import subprocess
 import sys
 import shutil
-import click
 from platformio.project.config import ProjectConfig
 
 def generate_idedata_directly():
@@ -35,7 +34,6 @@ def generate_idedata_directly():
             encoding="utf8",
         ) as fp:
             json.dump(data, fp)
-        click.echo("\n%s\n" % json.dumps(data))
         env.Exit(0)
 
 def smart_build_integrated():
