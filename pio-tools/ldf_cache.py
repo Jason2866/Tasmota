@@ -51,12 +51,15 @@ class LDFCacheOptimizer:
         self.platformio_ini_backup = os.path.join(self.project_dir, ".pio", f"platformio_backup_{self.env['PIOENV']}.ini")
         self.idedata_dir = os.path.join(self.project_dir, ".pio", "ldf_cache")
         self.idedata_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"idedata_{self.env['PIOENV']}.json")
+        # Neuer Cache-Ordner für Artefakte
+        self.artifacts_cache_dir = os.path.join(self.project_dir, ".pio", "ldf_cache", "artifacts", self.env_name)
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = os.path.join(ProjectConfig.get_instance().get("platformio", "packages_dir"))
 
         if not os.path.exists(self.idedata_file):
-            # Generate idedata.json if missing
+            #print(f"idedata.json missing - generating")
             env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", self.generate_idedata)
+
 
     def generate_idedata(self, source, target, env):
         """
@@ -71,6 +74,7 @@ class LDFCacheOptimizer:
             encoding="utf8",
         ) as fp:
             json.dump(data, fp)
+
 
     def validate_ldf_mode_compatibility(self):
         """
@@ -387,6 +391,56 @@ class LDFCacheOptimizer:
             'files_relevant': total_relevant
         }
 
+    def copy_artifacts_to_cache(self, lib_build_dir):
+        """
+        Kopiert alle .a und .o Dateien in den Cache-Ordner.
+        
+        Args:
+            lib_build_dir (str): Build-Verzeichnis
+            
+        Returns:
+            dict: Mapping von Original- zu Cache-Pfaden
+        """
+        if not os.path.exists(lib_build_dir):
+            return {}
+        
+        # Cache-Ordner erstellen
+        os.makedirs(self.artifacts_cache_dir, exist_ok=True)
+        
+        path_mapping = {}
+        copied_count = 0
+        
+        print(f"📦 Kopiere Artefakte nach {self.artifacts_cache_dir}")
+        
+        for root, dirs, files in os.walk(lib_build_dir):
+            for file in files:
+                if file.endswith(('.a', '.o')):
+                    # Überspringe src und ld Ordner für .o Dateien
+                    if file.endswith('.o'):
+                        if '/src' in root.replace('\\', '/') or root.endswith('src'):
+                            continue
+                        if '/ld' in root.replace('\\', '/') or root.endswith('ld'):
+                            continue
+                    
+                    original_path = os.path.join(root, file)
+                    
+                    # Relativen Pfad vom Build-Ordner erstellen
+                    rel_path = os.path.relpath(original_path, lib_build_dir)
+                    cache_path = os.path.join(self.artifacts_cache_dir, rel_path)
+                    
+                    # Zielordner erstellen
+                    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                    
+                    try:
+                        shutil.copy2(original_path, cache_path)
+                        path_mapping[original_path] = cache_path
+                        copied_count += 1
+                    except Exception as e:
+                        print(f"⚠ Fehler beim Kopieren {original_path}: {e}")
+        
+        print(f"📦 {copied_count} Artefakte in Cache kopiert")
+        return path_mapping
+
     def read_existing_idedata(self):
         """
         Read idedata.json and process its structure.
@@ -398,7 +452,7 @@ class LDFCacheOptimizer:
             if not os.path.exists(self.idedata_file):
                 print(f"❌ idedata.json not found: {self.idedata_file}")
                 return None
-            # Read idedata.json
+            #print(f"✅ Reading idedata.json: {self.idedata_file}")
             with open(self.idedata_file, 'r') as f:
                 idedata = json.loads(f.read())
                 return self._process_real_idedata_structure(idedata)
@@ -409,6 +463,7 @@ class LDFCacheOptimizer:
     def _process_real_idedata_structure(self, idedata):
         """
         Process idedata.json structure and resolve all package placeholders.
+        Kopiert Artefakte in Cache und passt Pfade an.
         
         Args:
             idedata (dict): Raw idedata structure
@@ -471,27 +526,22 @@ class LDFCacheOptimizer:
             if resolved_flag not in ldf_cache['build_flags']:
                 ldf_cache['build_flags'].append(resolved_flag)
         
-        # Process compiled artifacts
+        # Process compiled artifacts - WICHTIGE ÄNDERUNG HIER
         lib_build_dir = os.path.join(self.project_dir, '.pio', 'build', self.env_name)
-        if lib_build_dir and os.path.exists(lib_build_dir):
-            if os.path.exists(lib_build_dir):
-                for root, dirs, files in os.walk(lib_build_dir):
-                    for file in files:
-                        if file.endswith('.a'):
-                            lib_path = os.path.join(root, file)
-                            ldf_cache['compiled_libraries'].append(self.resolve_pio_placeholders(lib_path))
-            for root, dirs, files in os.walk(lib_build_dir):
-                if '/src' in root.replace('\\', '/') or root.endswith('src'):
-                    continue
-                if '/ld' in root.replace('\\', '/') or root.endswith('ld'):
-                    continue
-                for file in files:
-                    if file.endswith('.o'):
-                        obj_path = os.path.join(root, file)
-                        ldf_cache['compiled_objects'].append(self.resolve_pio_placeholders(obj_path))
         
-        print(f"📦 Found {len(ldf_cache['compiled_libraries'])} Libraries (*.a) files")
-        print(f"📦 Found {len(ldf_cache['compiled_objects'])} Object files (*.o) (excluding src and ld)")
+        if lib_build_dir and os.path.exists(lib_build_dir):
+            # Artefakte in Cache kopieren
+            path_mapping = self.copy_artifacts_to_cache(lib_build_dir)
+            
+            # .a und .o Dateien sammeln (aus Cache-Pfaden)
+            for original_path, cache_path in path_mapping.items():
+                if original_path.endswith('.a'):
+                    ldf_cache['compiled_libraries'].append(cache_path)
+                elif original_path.endswith('.o'):
+                    ldf_cache['compiled_objects'].append(cache_path)
+        
+        print(f"📦 Found {len(ldf_cache['compiled_libraries'])} Libraries (*.a) files in cache")
+        print(f"📦 Found {len(ldf_cache['compiled_objects'])} Object files (*.o) in cache")
         return ldf_cache
 
     def compute_signature(self, cache_data):
@@ -600,24 +650,25 @@ class LDFCacheOptimizer:
                 self.clear_ldf_cache()
                 return None
             
-            # Validate build artifacts exist
+            # Validate build artifacts exist IN CACHE - WICHTIGE ÄNDERUNG
             ldf_results = cache_data.get('ldf_results', {})
             missing_artifacts = []
+            
+            # Prüfe Cache-Artefakte statt Build-Artefakte
             for lib_path in ldf_results.get('compiled_libraries', []):
-                resolved_lib_path = self.resolve_pio_placeholders(lib_path)
-                if not os.path.exists(resolved_lib_path):
-                    missing_artifacts.append(resolved_lib_path)
+                if not os.path.exists(lib_path):  # lib_path ist bereits Cache-Pfad
+                    missing_artifacts.append(lib_path)
             for obj_path in ldf_results.get('compiled_objects', []):
-                resolved_obj_path = self.resolve_pio_placeholders(obj_path)
-                if not os.path.exists(resolved_obj_path):
-                    missing_artifacts.append(resolved_obj_path)
+                if not os.path.exists(obj_path):  # obj_path ist bereits Cache-Pfad
+                    missing_artifacts.append(obj_path)
+                    
             if missing_artifacts:
-                print(f"⚠ Cache invalid: {len(missing_artifacts)} build artifacts missing")
+                print(f"⚠ Cache invalid: {len(missing_artifacts)} cached artifacts missing")
                 print(f"   First missing: {missing_artifacts[0]}")
                 self.clear_ldf_cache()
                 return None
             
-            print("✅ Cache valid - all build artifacts present")
+            print("✅ Cache valid - all cached artifacts present")
             print(f"   Libraries: {len(ldf_results.get('compiled_libraries', []))}")
             print(f"   Objects: {len(ldf_results.get('compiled_objects', []))}")
             return cache_data
@@ -625,6 +676,33 @@ class LDFCacheOptimizer:
             print(f"⚠ Cache validation failed: {e}")
             self.clear_ldf_cache()
             return None
+
+    def clear_ldf_cache(self):
+        """
+        Delete the LDF cache file and artifacts for the current environment.
+        """
+        deleted_something = False
+        
+        # Cache-Datei löschen
+        if os.path.exists(self.cache_file):
+            try:
+                os.remove(self.cache_file)
+                print("✓ LDF Cache file deleted")
+                deleted_something = True
+            except Exception as e:
+                print(f"✗ Error deleting cache file: {e}")
+        
+        # Artefakte-Cache löschen
+        if os.path.exists(self.artifacts_cache_dir):
+            try:
+                shutil.rmtree(self.artifacts_cache_dir)
+                print("✓ LDF Cache artifacts deleted")
+                deleted_something = True
+            except Exception as e:
+                print(f"✗ Error deleting cache artifacts: {e}")
+        
+        if not deleted_something:
+            print("ℹ No LDF Cache present")
 
     def write_ldf_cache_ini(self, ldf_results):
         """
@@ -640,13 +718,13 @@ class LDFCacheOptimizer:
         for lib_dep in ldf_results['lib_deps_entries']:
             ini_lines.append(f"    {lib_dep}")
         ini_lines.append("")
-        ini_lines.append("build_flags =")
-        for flag in ldf_results['build_flags']:
-            ini_lines.append(f"    {flag}")
+        ini_lines.append("build_flags = ${env.build_flags}")
+#        for flag in ldf_results['build_flags']:
+#            ini_lines.append(f"    {flag}")
         for include_path in ldf_results['include_paths']:
             ini_lines.append(f"    -I\"{include_path}\"")
-        for define in ldf_results['defines']:
-            ini_lines.append(f"    -D{define}")
+#        for define in ldf_results['defines']:
+#            ini_lines.append(f"    -D{define}")
         ini_content = "\n".join(ini_lines)
         with open(self.ldf_cache_ini, "w", encoding="utf-8") as f:
             f.write(ini_content)
@@ -668,7 +746,7 @@ class LDFCacheOptimizer:
                 return False
             print("🔧 Restoring complete SCons environment from chain mode cache...")
             self._apply_static_libraries(ldf_results)
-            self._apply_object_files_directly(ldf_results)
+            self._apply_object_files(ldf_results)
             self._apply_include_paths_and_defines(ldf_results)
             self._apply_build_flags_systematically(ldf_results)
             print("✅ Complete SCons environment restored from chain mode cache")
@@ -692,17 +770,14 @@ class LDFCacheOptimizer:
             if os.path.exists(lib_path):
                 lib_name = os.path.basename(lib_path)
                 if lib_name.startswith('lib') and lib_name.endswith('.a'):
-                    clean_name = lib_name[3:-2]
-                    valid_libs.append(clean_name)
-                else:
                     valid_libs.append(lib_path)
         if valid_libs:
             self.env.Append(LIBS=valid_libs)
-            print(f"   Added {len(valid_libs)} static libraries to LIBS")
+            print(f"   ✅ Added {len(valid_libs)} static libraries to LIBS")
 
-    def _apply_object_files_directly(self, ldf_results):
+    def _apply_object_files(self, ldf_results):
         """
-        Add all object files directly to the SCons OBJECTS environment.
+        Add all object files to the SCons OBJECTS environment.
         
         Args:
             ldf_results (dict): LDF results containing compiled objects
@@ -714,9 +789,8 @@ class LDFCacheOptimizer:
             print("   No valid object files found")
             return
         
-        # Direct usage of object files
         self.env.Append(OBJECTS=valid_objects)
-        print(f"   ✅ Added {len(valid_objects)} object files directly to OBJECTS")
+        print(f"   ✅ Added {len(valid_objects)} object files to OBJECTS")
         
         # Debug output of first few object files
         for obj_path in valid_objects[:3]:
@@ -781,24 +855,24 @@ class LDFCacheOptimizer:
             if new_paths:
                 self.env.Append(CPPPATH=new_paths)
                 print(f"   Added {len(new_paths)} include paths from build flags")
-        if cpp_defines:
-            self.env.Append(CPPDEFINES=cpp_defines)
-            print(f"   Added {len(cpp_defines)} defines from build flags")
+#        if cpp_defines:
+#            self.env.Append(CPPDEFINES=cpp_defines)
+#            print(f"   Added {len(cpp_defines)} defines from build flags")
         if lib_paths:
             existing_libpaths = [str(p) for p in self.env.get('LIBPATH', [])]
             new_libpaths = [p for p in lib_paths if p not in existing_libpaths]
             if new_libpaths:
                 self.env.Append(LIBPATH=new_libpaths)
                 print(f"   Added {len(new_libpaths)} library paths from build flags")
-        if cc_flags:
-            self.env.Append(CCFLAGS=cc_flags)
-            print(f"   Added {len(cc_flags)} C compiler flags")
-        if cxx_flags:
-            self.env.Append(CXXFLAGS=cxx_flags)
-            print(f"   Added {len(cxx_flags)} C++ compiler flags")
-        if link_flags:
-            self.env.Append(LINKFLAGS=link_flags)
-            print(f"   Added {len(link_flags)} linker flags")
+#        if cc_flags:
+#            self.env.Append(CCFLAGS=cc_flags)
+#            print(f"   Added {len(cc_flags)} C compiler flags")
+#        if cxx_flags:
+#            self.env.Append(CXXFLAGS=cxx_flags)
+#            print(f"   Added {len(cxx_flags)} C++ compiler flags")
+#        if link_flags:
+#            self.env.Append(LINKFLAGS=link_flags)
+#            print(f"   Added {len(link_flags)} linker flags")
 
     def _apply_include_paths_and_defines(self, ldf_results):
         """
@@ -826,105 +900,97 @@ class LDFCacheOptimizer:
                 self.env.Append(CPPDEFINES=new_defines)
                 print(f"   Added {len(new_defines)} preprocessor defines")
 
-    def clear_ldf_cache(self):
-        """
-        Clear all LDF cache files and restore original configuration.
-        """
-        try:
-            # Remove cache file
-            if os.path.exists(self.cache_file):
-                os.remove(self.cache_file)
-                print("🗑️ Removed LDF cache file")
-            
-            # Remove ldf_cache.ini
-            if os.path.exists(self.ldf_cache_ini):
-                os.remove(self.ldf_cache_ini)
-                print("🗑️ Removed ldf_cache.ini")
-            
-            # Remove idedata file
-            if os.path.exists(self.idedata_file):
-                os.remove(self.idedata_file)
-                print("🗑️ Removed idedata.json")
-            
-            # Restore platformio.ini from backup if exists
-            self.restore_ini_from_backup()
-            
-        except Exception as e:
-            print(f"⚠ Warning during cache cleanup: {e}")
-
     def setup_ldf_caching(self):
         """
         Main entry point using backup/restore for platformio.ini.
         Sets up intelligent LDF caching optimized for chain mode.
         Only invalidates cache when #include directives change.
         """
-        print("🚀 === LDF Cache Optimizer (Chain Mode) ===")
+        print("\n=== LDF Cache Optimizer (Chain Mode) ===")
         
-        # Validate LDF mode compatibility
+        # Validate LDF mode compatibility first
         if not self.validate_ldf_mode_compatibility():
-            print("❌ Incompatible LDF mode - cache optimizer disabled")
+            print("🔄 Falling back to normal LDF due to incompatible mode")
+            self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
+            print("=" * 80)
             return
         
-        # Check for existing valid cache
         cache_data = self.load_and_validate_cache()
         if cache_data:
-            # Validate project hash
-            current_hash_details = self.get_project_hash_with_details()
-            cached_hash = cache_data.get('project_hash')
-            
-            if current_hash_details['final_hash'] == cached_hash:
-                print("✅ Project hash matches - applying cached LDF results")
-                if self.apply_ldf_cache_complete(cache_data):
-                    print("🎯 LDF cache hit! Build accelerated with chain mode optimization")
-                    return
-                else:
-                    print("❌ Cache application failed - proceeding with normal build")
+            print("🚀 Valid chain mode cache found - disabling LDF with backup/restore")
+            if self.modify_platformio_ini_simple("off") and self.apply_ldf_cache_complete(cache_data):
+                print("✅ SCons environment restored from chain mode cache")
+                # Restore platformio.ini after build
+                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
             else:
-                print(f"🔄 Project hash changed: {cached_hash} -> {current_hash_details['final_hash']}")
-                print("   Cache invalidated - proceeding with normal build")
-        
-        # No valid cache - set up for normal build with cache saving
-        print("🔧 Setting up LDF cache generation for chain mode")
-        
-        # Temporarily disable LDF for faster build
-        if self.modify_platformio_ini_simple('off'):
-            print("⚡ LDF temporarily disabled for faster build")
-            
-            # Schedule cache saving after successful build
-            env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", self.save_ldf_cache)
-            
-            # Schedule restoration of original platformio.ini
-            def restore_original_ini(source, target, env_arg):
+                print("❌ Cache application failed - falling back to full LDF")
                 self.restore_ini_from_backup()
-                print("🔓 Original platformio.ini restored")
-            
-            env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", restore_original_ini)
+                self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
         else:
-            print("⚠ Could not modify platformio.ini - proceeding with normal LDF")
-
+            print("🔄 No valid cache - running full LDF in chain mode")
+            self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
+        print("=" * 80)
 
 def clear_ldf_cache():
     """
-    Global function to clear LDF cache - can be called from outside.
+    Delete the LDF cache file and artifacts for the current environment.
     """
-    try:
-        project_dir = env.subst("$PROJECT_DIR")
-        cache_dir = os.path.join(project_dir, ".pio", "ldf_cache")
-        ldf_cache_ini = os.path.join(project_dir, "ldf_cache.ini")
-        
-        if os.path.exists(cache_dir):
-            shutil.rmtree(cache_dir)
-            print("🗑️ Cleared LDF cache directory")
-        
-        if os.path.exists(ldf_cache_ini):
-            os.remove(ldf_cache_ini)
-            print("🗑️ Removed ldf_cache.ini")
-            
-        print("✅ LDF cache cleared successfully")
-    except Exception as e:
-        print(f"❌ Error clearing cache: {e}")
+    project_dir = env.subst("$PROJECT_DIR")
+    env_name = env.get("PIOENV")
+    cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env_name}.py")
+    artifacts_cache_dir = os.path.join(project_dir, ".pio", "ldf_cache", "artifacts", env_name)
+    
+    deleted_something = False
+    
+    if os.path.exists(cache_file):
+        try:
+            os.remove(cache_file)
+            print("✓ LDF Cache file deleted")
+            deleted_something = True
+        except Exception as e:
+            print(f"✗ Error deleting cache file: {e}")
+    
+    if os.path.exists(artifacts_cache_dir):
+        try:
+            shutil.rmtree(artifacts_cache_dir)
+            print("✓ LDF Cache artifacts deleted")
+            deleted_something = True
+        except Exception as e:
+            print(f"✗ Error deleting cache artifacts: {e}")
+    
+    if not deleted_something:
+        print("ℹ No LDF Cache present")
 
+def show_ldf_cache_info():
+    """
+    Print information about the current LDF cache.
+    """
+    project_dir = env.subst("$PROJECT_DIR")
+    cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env['PIOENV']}.py")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache_content = f.read()
+            local_vars = {}
+            exec(cache_content, {}, local_vars)
+            cache_data = local_vars.get('cache_data')
+            ldf_results = cache_data.get('ldf_results', {})
+            print("\n=== LDF Cache Info ===")
+            print(f"Environment:  {cache_data.get('pioenv', 'unknown')}")
+            print(f"LDF Mode:     {cache_data.get('ldf_mode', 'unknown')}")
+            print(f"Created:      {cache_data.get('timestamp', 'unknown')}")
+            print(f"PIO Version:  {cache_data.get('pio_version', 'unknown')}")
+            print(f"Project Hash: {cache_data.get('project_hash', 'unknown')}")
+            print(f"Libraries:    {len(ldf_results.get('compiled_libraries', []))}")
+            print(f"Objects:      {len(ldf_results.get('compiled_objects', []))}")
+            print(f"Include Paths: {len(ldf_results.get('include_paths', []))}")
+            print(f"Defines:      {len(ldf_results.get('defines', []))}")
+            print("=" * 40)
+        except Exception as e:
+            print(f"✗ Error reading cache info: {e}")
+    else:
+        print("ℹ No LDF Cache present")
 
-# Initialize and run the LDF cache optimizer
+# Initialize and setup LDF caching
 ldf_optimizer = LDFCacheOptimizer(env)
 ldf_optimizer.setup_ldf_caching()
