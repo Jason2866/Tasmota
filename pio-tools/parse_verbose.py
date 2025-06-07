@@ -7,61 +7,58 @@ from datetime import datetime
 
 Import("env")
 
-def find_platformio_executable():
-    """Findet den korrekten PlatformIO-Pfad"""
+def create_bypass_script():
+    """Erstellt ein temporäres Script das den Parser umgeht"""
     
-    # Mögliche PlatformIO-Pfade
-    possible_paths = [
-        'pio',
-        'platformio', 
-        '~/.platformio/penv/bin/pio',
-        '~/.platformio/penv/Scripts/pio.exe',
-        sys.executable + ' -m platformio',
-        'python -m platformio',
-        'python3 -m platformio'
-    ]
-    
-    for path in possible_paths:
-        try:
-            if path.startswith('python'):
-                # Teste Python-Modul Aufruf
-                result = subprocess.run(
-                    path.split() + ['--version'], 
-                    capture_output=True, 
-                    text=True, 
-                    timeout=10
-                )
-                if result.returncode == 0:
-                    return path.split()
-            else:
-                # Teste direkten Aufruf
-                expanded_path = os.path.expanduser(path)
-                result = subprocess.run(
-                    [expanded_path, '--version'], 
-                    capture_output=True, 
-                    text=True, 
-                    timeout=10
-                )
-                if result.returncode == 0:
-                    return [expanded_path]
-        except:
-            continue
-    
-    return None
+    bypass_script = """
+import os
+import sys
 
-def run_platformio_verbose():
-    """Führt PlatformIO mit Verbose-Modus aus"""
+# Verhindere Parser-Ausführung
+os.environ['PIO_COMMANDS_PARSED'] = '1'
+os.environ['PIO_PARSER_BYPASS'] = '1'
+
+# Führe normalen Build aus
+print("[BYPASS] Parser umgangen, normaler Build")
+"""
     
-    # Finde PlatformIO
-    pio_cmd = find_platformio_executable()
-    if not pio_cmd:
-        return "FEHLER: PlatformIO CLI nicht gefunden"
+    with open("bypass_parser.py", "w") as f:
+        f.write(bypass_script)
     
-    print(f"[VERBOSE-PARSER] Verwende PlatformIO: {' '.join(pio_cmd)}")
+    return "bypass_parser.py"
+
+def run_platformio_with_bypass():
+    """Führt PlatformIO mit Parser-Bypass aus"""
+    
+    # Erstelle Bypass-Script
+    bypass_file = create_bypass_script()
     
     try:
-        # Führe PlatformIO run -v aus
-        cmd = pio_cmd + ['run', '-v']
+        # Temporäre platformio.ini mit Bypass erstellen
+        original_ini = "platformio.ini"
+        backup_ini = "platformio.ini.backup"
+        temp_ini = "platformio_temp.ini"
+        
+        # Backup der Original-INI
+        if os.path.exists(original_ini):
+            with open(original_ini, 'r') as f:
+                original_content = f.read()
+            
+            with open(backup_ini, 'w') as f:
+                f.write(original_content)
+            
+            # Modifizierte INI erstellen (ohne Pre-Script)
+            modified_content = re.sub(
+                r'extra_scripts\s*=\s*pre:.*\.py', 
+                f'extra_scripts = pre:{bypass_file}', 
+                original_content
+            )
+            
+            with open(temp_ini, 'w') as f:
+                f.write(modified_content)
+        
+        # PlatformIO mit temporärer Konfiguration ausführen
+        cmd = [sys.executable, '-m', 'platformio', 'run', '-v', '-c', temp_ini]
         
         print(f"[VERBOSE-PARSER] Führe aus: {' '.join(cmd)}")
         
@@ -70,150 +67,105 @@ def run_platformio_verbose():
             cwd=os.getcwd(),
             capture_output=True,
             text=True,
-            timeout=300  # 5 Minuten Timeout
+            timeout=300
         )
         
-        full_output = result.stdout + result.stderr
+        return result.stdout + result.stderr, result.returncode
         
-        print(f"[VERBOSE-PARSER] Return Code: {result.returncode}")
-        print(f"[VERBOSE-PARSER] Output Length: {len(full_output)} Zeichen")
-        
-        return full_output, result.returncode
-        
-    except subprocess.TimeoutExpired:
-        return "FEHLER: PlatformIO Timeout", 1
     except Exception as e:
-        return f"FEHLER: {str(e)}", 1
+        print(f"[VERBOSE-PARSER] Fehler: {e}")
+        return str(e), 1
+    
+    finally:
+        # Cleanup
+        for temp_file in [bypass_file, temp_ini]:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
 
 def parse_verbose_output(output):
-    """Parst den Verbose-Output"""
+    """Parst Verbose-Output"""
     
     compile_commands = []
     link_commands = []
-    archive_commands = []
     
-    # Verbesserte Regex-Patterns
+    # Compile-Kommandos
     compile_patterns = [
-        r'.*?(?:g\+\+|gcc|clang\+\+|clang).*?-c.*?\.(?:cpp|c|cc|cxx).*?-o.*?\.o',
-        r'.*?xtensa-esp32.*?-c.*?-o.*?\.o',
-        r'.*?riscv32.*?-c.*?-o.*?\.o',
-        r'.*?arm-none-eabi.*?-c.*?-o.*?\.o'
+        r'.*?(?:g\+\+|gcc|clang).*?-c.*?\.(?:cpp|c|cc).*?-o.*?\.o',
+        r'.*?xtensa-esp32.*?-c.*?-o.*?\.o'
     ]
     
     for pattern in compile_patterns:
-        matches = re.findall(pattern, output, re.MULTILINE | re.IGNORECASE)
+        matches = re.findall(pattern, output, re.MULTILINE)
         compile_commands.extend([cmd.strip() for cmd in matches])
     
-    # Link-Kommandos
+    # Link-Kommandos  
     link_patterns = [
-        r'.*?(?:g\+\+|gcc|ld).*?\.o.*?-o.*?\.elf',
-        r'.*?xtensa-esp32.*?\.o.*?-o.*?\.elf',
-        r'.*?riscv32.*?\.o.*?-o.*?\.elf',
-        r'.*?arm-none-eabi.*?\.o.*?-o.*?\.elf'
+        r'.*?(?:g\+\+|gcc).*?\.o.*?-o.*?\.elf',
+        r'.*?xtensa-esp32.*?\.o.*?-o.*?\.elf'
     ]
     
     for pattern in link_patterns:
-        matches = re.findall(pattern, output, re.MULTILINE | re.IGNORECASE)
+        matches = re.findall(pattern, output, re.MULTILINE)
         link_commands.extend([cmd.strip() for cmd in matches])
     
-    # Archive-Kommandos
-    archive_patterns = [
-        r'.*?ar.*?rcs.*?\.a.*?\.o',
-        r'.*?xtensa-esp32.*?ar.*?\.a',
-        r'.*?arm-none-eabi-ar.*?\.a'
-    ]
-    
-    for pattern in archive_patterns:
-        matches = re.findall(pattern, output, re.MULTILINE | re.IGNORECASE)
-        archive_commands.extend([cmd.strip() for cmd in matches])
-    
-    return compile_commands, link_commands, archive_commands
+    return compile_commands, link_commands
 
-def save_parsed_commands(compile_cmds, link_cmds, archive_cmds, full_output):
-    """Speichert alle geparsten Kommandos"""
+def save_commands(compile_cmds, link_cmds, full_output):
+    """Speichert extrahierte Kommandos"""
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # Shell-Script
     with open(f"build_commands_{timestamp}.sh", "w") as f:
-        f.write("#!/bin/bash\n")
-        f.write(f"# Generated: {datetime.now()}\n")
-        f.write(f"# Total Commands: {len(compile_cmds) + len(link_cmds) + len(archive_cmds)}\n\n")
-        
+        f.write("#!/bin/bash\n\n")
         f.write("# COMPILE COMMANDS\n")
         for cmd in compile_cmds:
             f.write(f"{cmd}\n")
-        
-        f.write("\n# ARCHIVE COMMANDS\n")
-        for cmd in archive_cmds:
-            f.write(f"{cmd}\n")
-        
         f.write("\n# LINK COMMANDS\n")
         for cmd in link_cmds:
             f.write(f"{cmd}\n")
     
-    # JSON
-    data = {
-        'timestamp': datetime.now().isoformat(),
-        'compile_commands': compile_cmds,
-        'link_commands': link_cmds,
-        'archive_commands': archive_cmds,
-        'total_commands': len(compile_cmds) + len(link_cmds) + len(archive_cmds)
-    }
-    
-    with open(f"build_commands_{timestamp}.json", "w") as f:
-        json.dump(data, f, indent=2)
-    
     # Vollständiger Output
-    with open(f"pio_verbose_output_{timestamp}.log", "w") as f:
+    with open(f"verbose_output_{timestamp}.log", "w") as f:
         f.write(full_output)
     
-    print(f"\n=== BUILD COMMANDS EXTRACTED ===")
-    print(f"Compile Commands: {len(compile_cmds)}")
-    print(f"Link Commands: {len(link_cmds)}")
-    print(f"Archive Commands: {len(archive_cmds)}")
-    print(f"Total: {len(compile_cmds) + len(link_cmds) + len(archive_cmds)}")
-    print(f"\nDateien erstellt:")
-    print(f"  - build_commands_{timestamp}.sh")
-    print(f"  - build_commands_{timestamp}.json")
-    print(f"  - pio_verbose_output_{timestamp}.log")
+    print(f"\n=== KOMMANDOS EXTRAHIERT ===")
+    print(f"Compile: {len(compile_cmds)}")
+    print(f"Link: {len(link_cmds)}")
+    print(f"Dateien: build_commands_{timestamp}.sh, verbose_output_{timestamp}.log")
 
-def pre_script_verbose_parser(env):
-    """Hauptfunktion für Pre-Script"""
+def pre_script_parser(env):
+    """Hauptfunktion - verhindert Deadlock"""
     
-    # Rekursionsverhinderung
-    if os.environ.get('PIO_COMMANDS_PARSED') == '1':
-        print('[VERBOSE-PARSER] Bereits geparst, fahre fort')
+    # Prüfe ob wir im Bypass-Modus sind
+    if os.environ.get('PIO_PARSER_BYPASS') == '1':
+        print('[BYPASS] Parser übersprungen')
         return True
     
-    print('[VERBOSE-PARSER] Starte PlatformIO Verbose-Parsing...')
+    # Prüfe Rekursion
+    if os.environ.get('PIO_COMMANDS_PARSED') == '1':
+        print('[VERBOSE-PARSER] Bereits verarbeitet')
+        return True
     
-    # Markiere dass wir parsen
+    print('[VERBOSE-PARSER] Starte Kommando-Extraktion...')
+    
+    # Markiere als verarbeitet
     os.environ['PIO_COMMANDS_PARSED'] = '1'
     
-    # Führe PlatformIO aus
-    output, returncode = run_platformio_verbose()
+    # Führe PlatformIO mit Bypass aus
+    output, returncode = run_platformio_with_bypass()
     
-    if returncode != 0:
-        print(f'[VERBOSE-PARSER] PlatformIO fehlgeschlagen: {output}')
-        return False
+    if returncode == 0:
+        # Parse und speichere Kommandos
+        compile_cmds, link_cmds = parse_verbose_output(output)
+        save_commands(compile_cmds, link_cmds, output)
+        print('[VERBOSE-PARSER] Erfolgreich abgeschlossen')
+    else:
+        print(f'[VERBOSE-PARSER] Fehler: Return Code {returncode}')
     
-    # Parse Kommandos
-    compile_cmds, link_cmds, archive_cmds = parse_verbose_output(output)
-    
-    # Speichere Ergebnisse
-    save_parsed_commands(compile_cmds, link_cmds, archive_cmds, output)
-    
-    print('[VERBOSE-PARSER] Parsing abgeschlossen')
-    sys.exit(returncode)
+    # Beende das Script hier - nicht den gesamten Build
+    sys.exit(0)
 
 # Für PlatformIO extra_scripts
 if 'env' in globals():
-    pre_script_verbose_parser(env)
-else:
-    print('[VERBOSE-PARSER] Standalone-Ausführung')
-    # Für direkten Test
-    output, code = run_platformio_verbose()
-    if code == 0:
-        compile_cmds, link_cmds, archive_cmds = parse_verbose_output(output)
-        save_parsed_commands(compile_cmds, link_cmds, archive_cmds, output)
+    pre_script_parser(env)
