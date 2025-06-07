@@ -49,13 +49,13 @@ class LDFCacheOptimizer:
         self.ldf_cache_ini = os.path.join(self.project_dir, "ldf_cache.ini")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
         self.platformio_ini_backup = os.path.join(self.project_dir, ".pio", f"platformio_backup_{self.env['PIOENV']}.ini")
-        self.idedata_file = os.path.join(self.project_dir, ".ldf_dat", f"idedata_{self.env['PIOENV']}.json")
-        self.ldf_dat_dir = os.path.join(self.env.subst("$PROJECT_DIR"), ".ldf_dat")
+        self.idedata_dir = os.path.join(self.project_dir, ".pio", "ldf_cache")
+        self.idedata_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"idedata_{self.env['PIOENV']}.json")
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = os.path.join(ProjectConfig.get_instance().get("platformio", "packages_dir"))
 
         if not os.path.exists(self.idedata_file):
-            print(f"idedata.json missing - generating directly")
+            #print(f"idedata.json missing - generating")
             env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", self.generate_idedata)
 
 
@@ -63,7 +63,8 @@ class LDFCacheOptimizer:
         """
         Generate idedata.json directly using PlatformIO's internal method.
         """
-        os.makedirs(self.ldf_dat_dir, exist_ok=True)
+        if not os.path.exists(self.idedata_dir):
+            os.makedirs(self.idedata_dir)
         data = env.DumpIntegrationData(env)
         with open(
             env.subst(self.idedata_file),
