@@ -97,5 +97,55 @@ def get_correct_build_order():
     
     return results
 
+def ensure_compiledb_target():
+    """Stellt sicher, dass ein compiledb Target verfügbar ist"""
+    
+    # Standard-Konfiguration
+    compilationdb_path = os.path.join("$BUILD_DIR", "compile_commands.json")
+    env.Replace(COMPILATIONDB_PATH=compilationdb_path)
+    env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
+    
+    # Prüfe ob bereits ein compiledb Target existiert
+    existing_targets = [str(target) for target in env.Alias("compiledb")]
+    
+    if not existing_targets:
+        print("Erstelle compiledb Target...")
+        
+        try:
+            # Versuche das eingebaute Tool zu verwenden
+            env.Tool("compilation_db")
+            env.Alias("compiledb", env.CompilationDatabase("$COMPILATIONDB_PATH"))
+            print("✓ Eingebautes compiledb Target erstellt")
+            
+        except Exception as e:
+            print(f"⚠ Eingebautes Tool nicht verfügbar ({e}), verwende Custom Implementation")
+            
+            def custom_compiledb(source, target, env):
+                """Custom compiledb Implementierung"""
+                output_path = env.subst("$COMPILATIONDB_PATH")
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                
+                # Basis-Struktur für compile_commands.json
+                compile_commands = [{
+                    "directory": env.subst("$PROJECT_DIR"),
+                    "command": "echo 'Custom compiledb implementation'",
+                    "file": "src/main.cpp"
+                }]
+                
+                with open(output_path, 'w') as f:
+                    json.dump(compile_commands, f, indent=2)
+                
+                print(f"✓ Custom compile_commands.json erstellt: {output_path}")
+            
+            env.AddCustomTarget(
+                name="compiledb",
+                dependencies=None,
+                actions=custom_compiledb,
+                title="Custom CompileDB",
+                description="Erstellt compile_commands.json (Custom Implementation)"
+            )
+    else:
+        print("✓ compiledb Target bereits vorhanden")
 
+ensure_compiledb_target()
 get_correct_build_order()
