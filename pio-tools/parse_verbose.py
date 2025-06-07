@@ -7,55 +7,134 @@ from datetime import datetime
 
 Import("env")
 
+def find_platformio_executable():
+    """Findet den korrekten PlatformIO-Pfad"""
+    
+    # Mögliche PlatformIO-Pfade
+    possible_paths = [
+        'pio',
+        'platformio', 
+        '~/.platformio/penv/bin/pio',
+        '~/.platformio/penv/Scripts/pio.exe',
+        sys.executable + ' -m platformio',
+        'python -m platformio',
+        'python3 -m platformio'
+    ]
+    
+    for path in possible_paths:
+        try:
+            if path.startswith('python'):
+                # Teste Python-Modul Aufruf
+                result = subprocess.run(
+                    path.split() + ['--version'], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    return path.split()
+            else:
+                # Teste direkten Aufruf
+                expanded_path = os.path.expanduser(path)
+                result = subprocess.run(
+                    [expanded_path, '--version'], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    return [expanded_path]
+        except:
+            continue
+    
+    return None
+
+def run_platformio_verbose():
+    """Führt PlatformIO mit Verbose-Modus aus"""
+    
+    # Finde PlatformIO
+    pio_cmd = find_platformio_executable()
+    if not pio_cmd:
+        return "FEHLER: PlatformIO CLI nicht gefunden"
+    
+    print(f"[VERBOSE-PARSER] Verwende PlatformIO: {' '.join(pio_cmd)}")
+    
+    try:
+        # Führe PlatformIO run -v aus
+        cmd = pio_cmd + ['run', '-v']
+        
+        print(f"[VERBOSE-PARSER] Führe aus: {' '.join(cmd)}")
+        
+        result = subprocess.run(
+            cmd,
+            cwd=os.getcwd(),
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 Minuten Timeout
+        )
+        
+        full_output = result.stdout + result.stderr
+        
+        print(f"[VERBOSE-PARSER] Return Code: {result.returncode}")
+        print(f"[VERBOSE-PARSER] Output Length: {len(full_output)} Zeichen")
+        
+        return full_output, result.returncode
+        
+    except subprocess.TimeoutExpired:
+        return "FEHLER: PlatformIO Timeout", 1
+    except Exception as e:
+        return f"FEHLER: {str(e)}", 1
+
 def parse_verbose_output(output):
-    """Parst den Verbose-Output und extrahiert alle Kommandos"""
+    """Parst den Verbose-Output"""
     
     compile_commands = []
     link_commands = []
     archive_commands = []
     
-    # Compile-Kommandos (C/C++)
+    # Verbesserte Regex-Patterns
     compile_patterns = [
-        r'.*?g\+\+.*?-c.*?\.cpp.*?-o.*?\.o',
-        r'.*?gcc.*?-c.*?\.c.*?-o.*?\.o',
+        r'.*?(?:g\+\+|gcc|clang\+\+|clang).*?-c.*?\.(?:cpp|c|cc|cxx).*?-o.*?\.o',
         r'.*?xtensa-esp32.*?-c.*?-o.*?\.o',
-        r'.*?riscv32.*?-c.*?-o.*?\.o'
+        r'.*?riscv32.*?-c.*?-o.*?\.o',
+        r'.*?arm-none-eabi.*?-c.*?-o.*?\.o'
     ]
     
     for pattern in compile_patterns:
-        matches = re.findall(pattern, output, re.MULTILINE)
+        matches = re.findall(pattern, output, re.MULTILINE | re.IGNORECASE)
         compile_commands.extend([cmd.strip() for cmd in matches])
     
     # Link-Kommandos
     link_patterns = [
-        r'.*?g\+\+.*?\.o.*?-o.*?\.elf',
+        r'.*?(?:g\+\+|gcc|ld).*?\.o.*?-o.*?\.elf',
         r'.*?xtensa-esp32.*?\.o.*?-o.*?\.elf',
-        r'.*?riscv32.*?\.o.*?-o.*?\.elf'
+        r'.*?riscv32.*?\.o.*?-o.*?\.elf',
+        r'.*?arm-none-eabi.*?\.o.*?-o.*?\.elf'
     ]
     
     for pattern in link_patterns:
-        matches = re.findall(pattern, output, re.MULTILINE)
+        matches = re.findall(pattern, output, re.MULTILINE | re.IGNORECASE)
         link_commands.extend([cmd.strip() for cmd in matches])
     
     # Archive-Kommandos
     archive_patterns = [
         r'.*?ar.*?rcs.*?\.a.*?\.o',
         r'.*?xtensa-esp32.*?ar.*?\.a',
-        r'.*?riscv32.*?ar.*?\.a'
+        r'.*?arm-none-eabi-ar.*?\.a'
     ]
     
     for pattern in archive_patterns:
-        matches = re.findall(pattern, output, re.MULTILINE)
+        matches = re.findall(pattern, output, re.MULTILINE | re.IGNORECASE)
         archive_commands.extend([cmd.strip() for cmd in matches])
     
     return compile_commands, link_commands, archive_commands
 
 def save_parsed_commands(compile_cmds, link_cmds, archive_cmds, full_output):
-    """Speichert geparste Kommandos"""
+    """Speichert alle geparsten Kommandos"""
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Shell-Script mit allen Kommandos
+    # Shell-Script
     with open(f"build_commands_{timestamp}.sh", "w") as f:
         f.write("#!/bin/bash\n")
         f.write(f"# Generated: {datetime.now()}\n")
@@ -73,7 +152,7 @@ def save_parsed_commands(compile_cmds, link_cmds, archive_cmds, full_output):
         for cmd in link_cmds:
             f.write(f"{cmd}\n")
     
-    # JSON-Format
+    # JSON
     data = {
         'timestamp': datetime.now().isoformat(),
         'compile_commands': compile_cmds,
@@ -94,119 +173,47 @@ def save_parsed_commands(compile_cmds, link_cmds, archive_cmds, full_output):
     print(f"Link Commands: {len(link_cmds)}")
     print(f"Archive Commands: {len(archive_cmds)}")
     print(f"Total: {len(compile_cmds) + len(link_cmds) + len(archive_cmds)}")
-
-def check_verbose_mode():
-    """Prüft ob Verbose-Modus aktiv ist"""
-    
-    # Prüfe SCONSFLAGS Environment-Variable
-    sconsflags = os.environ.get('SCONSFLAGS', '')
-    if '-v' in sconsflags or '--verbose' in sconsflags:
-        return True
-    
-    # Prüfe Kommandozeilen-Argumente
-    if '--verbose' in sys.argv or '-v' in sys.argv:
-        return True
-    
-    # Prüfe ob SCons mit Debug/Verbose gestartet wurde
-    if '--debug' in sys.argv:
-        return True
-    
-    return False
+    print(f"\nDateien erstellt:")
+    print(f"  - build_commands_{timestamp}.sh")
+    print(f"  - build_commands_{timestamp}.json")
+    print(f"  - pio_verbose_output_{timestamp}.log")
 
 def pre_script_verbose_parser(env):
-    """Pre-Script das Verbose-Modus erzwingt und Output parst"""
+    """Hauptfunktion für Pre-Script"""
     
-    verbose_active = check_verbose_mode()
+    # Rekursionsverhinderung
+    if os.environ.get('PIO_COMMANDS_PARSED') == '1':
+        print('[VERBOSE-PARSER] Bereits geparst, fahre fort')
+        return True
     
-    print(f'[VERBOSE-PARSER] Script gestartet')
-    print(f'[VERBOSE-PARSER] sys.argv: {sys.argv}')
-    print(f'[VERBOSE-PARSER] SCONSFLAGS: {os.environ.get("SCONSFLAGS", "not set")}')
-    print(f'[VERBOSE-PARSER] Verbose aktiv: {verbose_active}')
+    print('[VERBOSE-PARSER] Starte PlatformIO Verbose-Parsing...')
     
-    if verbose_active:
-        print('[VERBOSE-PARSER] Verbose-Modus erkannt - Parse-Modus aktiviert')
-        
-        # Rekursionsverhinderung
-        if os.environ.get('PIO_COMMANDS_PARSED') == '1':
-            print('[VERBOSE-PARSER] Kommandos bereits geparst, fahre mit normalem Build fort')
-            return True
-        
-        # Markiere dass wir parsen werden
-        os.environ['PIO_COMMANDS_PARSED'] = '1'
-        
-        print('[VERBOSE-PARSER] Starte Build-Parsing...')
-        
-        try:
-            # Bestimme das PlatformIO-Kommando
-            pio_cmd = ['pio', 'run', '-v']
-            
-            # Versuche aktuelles Environment zu ermitteln
-            try:
-                current_env = env.get('PIOENV')
-                if current_env:
-                    pio_cmd.extend(['-e', current_env])
-            except:
-                pass
-            
-            print(f'[VERBOSE-PARSER] Führe aus: {" ".join(pio_cmd)}')
-            
-            # Führe PlatformIO mit Verbose aus
-            result = subprocess.run(
-                pio_cmd, 
-                cwd=os.getcwd(), 
-                capture_output=True, 
-                text=True
-            )
-            
-            full_output = result.stdout + result.stderr
-            
-            # Parse die Kommandos
-            compile_cmds, link_cmds, archive_cmds = parse_verbose_output(full_output)
-            
-            # Speichere Ergebnisse
-            save_parsed_commands(compile_cmds, link_cmds, archive_cmds, full_output)
-            
-            print('[VERBOSE-PARSER] Parsing abgeschlossen, beende Script')
-            sys.exit(result.returncode)
-            
-        except Exception as e:
-            print(f'[VERBOSE-PARSER] Fehler beim Parsing: {e}')
-            return False
+    # Markiere dass wir parsen
+    os.environ['PIO_COMMANDS_PARSED'] = '1'
     
-    else:
-        print('[VERBOSE-PARSER] Kein Verbose-Modus, starte PlatformIO neu mit -v')
-        
-        # Rekursionsverhinderung
-        if os.environ.get('PIO_VERBOSE_RESTART') == '1':
-            print('[VERBOSE-PARSER] Rekursion erkannt, Abbruch')
-            sys.exit(1)
-        
-        # Markiere Neustart
-        os.environ['PIO_VERBOSE_RESTART'] = '1'
-        
-        try:
-            # Starte PlatformIO mit Verbose-Modus
-            pio_cmd = ['pio', 'run', '-v']
-            
-            # Versuche aktuelles Environment hinzuzufügen
-            try:
-                current_env = env.get('PIOENV')
-                if current_env:
-                    pio_cmd.extend(['-e', current_env])
-            except:
-                pass
-            
-            print(f'[VERBOSE-PARSER] Starte PlatformIO neu: {" ".join(pio_cmd)}')
-            
-            result = subprocess.run(pio_cmd, cwd=os.getcwd())
-            sys.exit(result.returncode)
-            
-        except Exception as e:
-            print(f'[VERBOSE-PARSER] Fehler beim Neustart: {e}')
-            sys.exit(1)
+    # Führe PlatformIO aus
+    output, returncode = run_platformio_verbose()
+    
+    if returncode != 0:
+        print(f'[VERBOSE-PARSER] PlatformIO fehlgeschlagen: {output}')
+        return False
+    
+    # Parse Kommandos
+    compile_cmds, link_cmds, archive_cmds = parse_verbose_output(output)
+    
+    # Speichere Ergebnisse
+    save_parsed_commands(compile_cmds, link_cmds, archive_cmds, output)
+    
+    print('[VERBOSE-PARSER] Parsing abgeschlossen')
+    sys.exit(returncode)
 
 # Für PlatformIO extra_scripts
 if 'env' in globals():
     pre_script_verbose_parser(env)
 else:
-    print('[VERBOSE-PARSER] Kein PlatformIO Environment gefunden')
+    print('[VERBOSE-PARSER] Standalone-Ausführung')
+    # Für direkten Test
+    output, code = run_platformio_verbose()
+    if code == 0:
+        compile_cmds, link_cmds, archive_cmds = parse_verbose_output(output)
+        save_parsed_commands(compile_cmds, link_cmds, archive_cmds, output)
