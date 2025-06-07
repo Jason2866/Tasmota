@@ -372,7 +372,7 @@ class LDFCacheOptimizer:
         total_elapsed = time.time() - start_time
         print(f"🔍 Chain mode optimized scanning completed in {scan_elapsed:.2f}s")
         print(f"🔍 Total hash calculation completed in {total_elapsed:.2f}s")
-        print(f"🔍 Scan complete: {total_scanned} files scanned, {total_relevant} relevant, {len(file_hashes)} hashed")
+        print(f"🔍 Scan complete: {total_scanned} files scanned, {total_relevant} relevant and hashed")
         print(f"🔍 Cache hash based on {len(hash_data)} LDF-relevant files for chain mode")
         if total_scanned > 0:
             print(f"🔍 Performance: {((total_relevant/total_scanned)*100):.1f}% relevance ratio")
@@ -485,8 +485,8 @@ class LDFCacheOptimizer:
                         obj_path = os.path.join(root, file)
                         ldf_cache['compiled_objects'].append(self.resolve_pio_placeholders(obj_path))
         
-        print(f"📦 Found {len(ldf_cache['compiled_libraries'])} .a files")
-        print(f"📦 Found {len(ldf_cache['compiled_objects'])} .o files (excluding src and ld)")
+        print(f"📦 Found {len(ldf_cache['compiled_libraries'])} Libraries (*.a) files")
+        print(f"📦 Found {len(ldf_cache['compiled_objects'])} Object files (*.o) (excluding src and ld)")
         return ldf_cache
 
     def compute_signature(self, cache_data):
@@ -543,8 +543,6 @@ class LDFCacheOptimizer:
                     f.write(pprint.pformat(cache_data, indent=2, width=120))
                     f.write("\n")
                 print(f"💾 LDF Cache saved successfully for chain mode!")
-                print(f"   Libraries: {len(ldf_results.get('compiled_libraries', []))}")
-                print(f"   Objects: {len(ldf_results.get('compiled_objects', []))}")
             else:
                 print("❌ No valid LDF results found in idedata.json")
         except Exception as e:
