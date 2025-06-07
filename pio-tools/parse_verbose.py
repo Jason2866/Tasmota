@@ -95,20 +95,33 @@ def save_parsed_commands(compile_cmds, link_cmds, archive_cmds, full_output):
     print(f"Archive Commands: {len(archive_cmds)}")
     print(f"Total: {len(compile_cmds) + len(link_cmds) + len(archive_cmds)}")
 
+def check_verbose_mode():
+    """Prüft ob Verbose-Modus aktiv ist"""
+    
+    # Prüfe SCONSFLAGS Environment-Variable
+    sconsflags = os.environ.get('SCONSFLAGS', '')
+    if '-v' in sconsflags or '--verbose' in sconsflags:
+        return True
+    
+    # Prüfe Kommandozeilen-Argumente
+    if '--verbose' in sys.argv or '-v' in sys.argv:
+        return True
+    
+    # Prüfe ob SCons mit Debug/Verbose gestartet wurde
+    if '--debug' in sys.argv:
+        return True
+    
+    return False
+
 def pre_script_verbose_parser(env):
     """Pre-Script das Verbose-Modus erzwingt und Output parst"""
     
-    # Prüfen ob wir bereits im Verbose-Modus sind
-    # SCons verbose wird über SCONSFLAGS oder Kommandozeile gesetzt
-    verbose_active = False
+    verbose_active = check_verbose_mode()
     
-    # Prüfe verschiedene Verbose-Indikatoren
-    if os.environ.get('SCONSFLAGS') and '-v' in os.environ.get('SCONSFLAGS', ''):
-        verbose_active = True
-    elif '--verbose' in sys.argv or '-v' in sys.argv:
-        verbose_active = True
-    elif env.GetOption('verbose'):
-        verbose_active = True
+    print(f'[VERBOSE-PARSER] Script gestartet')
+    print(f'[VERBOSE-PARSER] sys.argv: {sys.argv}')
+    print(f'[VERBOSE-PARSER] SCONSFLAGS: {os.environ.get("SCONSFLAGS", "not set")}')
+    print(f'[VERBOSE-PARSER] Verbose aktiv: {verbose_active}')
     
     if verbose_active:
         print('[VERBOSE-PARSER] Verbose-Modus erkannt - Parse-Modus aktiviert')
@@ -124,16 +137,16 @@ def pre_script_verbose_parser(env):
         print('[VERBOSE-PARSER] Starte Build-Parsing...')
         
         try:
-            # Finde das ursprüngliche PlatformIO-Kommando
-            # SCons wird von PlatformIO über pio run aufgerufen
-            
-            # Bestimme das PlatformIO-Kommando das zu diesem SCons-Aufruf geführt hat
+            # Bestimme das PlatformIO-Kommando
             pio_cmd = ['pio', 'run', '-v']
             
-            # Wenn spezifisches Environment, füge es hinzu
-            current_env = env.get('PIOENV')
-            if current_env:
-                pio_cmd.extend(['-e', current_env])
+            # Versuche aktuelles Environment zu ermitteln
+            try:
+                current_env = env.get('PIOENV')
+                if current_env:
+                    pio_cmd.extend(['-e', current_env])
+            except:
+                pass
             
             print(f'[VERBOSE-PARSER] Führe aus: {" ".join(pio_cmd)}')
             
@@ -175,10 +188,13 @@ def pre_script_verbose_parser(env):
             # Starte PlatformIO mit Verbose-Modus
             pio_cmd = ['pio', 'run', '-v']
             
-            # Aktuelles Environment hinzufügen falls verfügbar
-            current_env = env.get('PIOENV')
-            if current_env:
-                pio_cmd.extend(['-e', current_env])
+            # Versuche aktuelles Environment hinzuzufügen
+            try:
+                current_env = env.get('PIOENV')
+                if current_env:
+                    pio_cmd.extend(['-e', current_env])
+            except:
+                pass
             
             print(f'[VERBOSE-PARSER] Starte PlatformIO neu: {" ".join(pio_cmd)}')
             
@@ -191,8 +207,6 @@ def pre_script_verbose_parser(env):
 
 # Für PlatformIO extra_scripts
 if 'env' in globals():
-    print(f'[VERBOSE-PARSER] Script gestartet, sys.argv: {sys.argv}')
-    print(f'[VERBOSE-PARSER] SCONSFLAGS: {os.environ.get("SCONSFLAGS", "not set")}')
     pre_script_verbose_parser(env)
 else:
     print('[VERBOSE-PARSER] Kein PlatformIO Environment gefunden')
