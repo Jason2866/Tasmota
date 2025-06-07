@@ -300,6 +300,9 @@ class LDFCacheOptimizer:
         lib_dir = os.path.join(self.project_dir, "lib")
         if os.path.exists(lib_dir) and not self.is_platformio_path(lib_dir):
             scan_dirs.append(('library', lib_dir))
+        include_dir = os.path.join(self.project_dir, "include")
+        if os.path.exists(include_dir) and not self.is_platformio_path(include_dir):
+            scan_dirs.append(('include', include_dir))
         for inc_path in self.env.get('CPPPATH', []):
             inc_dir = str(inc_path)
             if self.is_platformio_path(inc_dir):
