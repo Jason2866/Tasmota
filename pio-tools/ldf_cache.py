@@ -452,13 +452,12 @@ class LDFCacheOptimizer:
         
         # Process include paths
         includes_build = idedata.get('includes', {}).get('build', [])
-        for include_path in includes_build:
-            ldf_cache['include_paths'].append(self.resolve_pio_placeholders(include_path))
-
-        # Process include paths from compatible section
         includes_compatlib = idedata.get('includes', {}).get('compatlib', [])
-        for include_path in includes_compatlib:
-            ldf_cache['include_paths'].append(self.resolve_pio_placeholders(include_path))
+        all_includes = includes_build + includes_compatlib
+        for include_path in all_includes:
+            resolved_path = self.resolve_pio_placeholders(include_path)
+            if resolved_path not in ldf_cache['include_paths']:
+                ldf_cache['include_paths'].append(self.resolve_pio_placeholders(include_path))
         
         # Process defines
         defines = idedata.get('defines', [])
