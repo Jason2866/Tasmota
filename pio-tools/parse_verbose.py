@@ -94,21 +94,26 @@ def save_parsed_commands(compile_cmds, link_cmds, archive_cmds, full_output):
     print(f"Link Commands: {len(link_cmds)}")
     print(f"Archive Commands: {len(archive_cmds)}")
     print(f"Total: {len(compile_cmds) + len(link_cmds) + len(archive_cmds)}")
-    print(f"\nDateien erstellt:")
-    print(f"  - build_commands_{timestamp}.sh")
-    print(f"  - build_commands_{timestamp}.json")
-    print(f"  - pio_verbose_output_{timestamp}.log")
 
 def pre_script_verbose_parser(env):
     """Pre-Script das Verbose-Modus erzwingt und Output parst"""
     
     # Prüfen ob wir bereits im Verbose-Modus sind
-    verbose_flag = env.GetProjectOption('verbose', False)
+    # SCons verbose wird über SCONSFLAGS oder Kommandozeile gesetzt
+    verbose_active = False
     
-    if verbose_flag:
+    # Prüfe verschiedene Verbose-Indikatoren
+    if os.environ.get('SCONSFLAGS') and '-v' in os.environ.get('SCONSFLAGS', ''):
+        verbose_active = True
+    elif '--verbose' in sys.argv or '-v' in sys.argv:
+        verbose_active = True
+    elif env.GetOption('verbose'):
+        verbose_active = True
+    
+    if verbose_active:
         print('[VERBOSE-PARSER] Verbose-Modus erkannt - Parse-Modus aktiviert')
         
-        # Prüfen ob wir bereits geparst haben (Rekursionsverhinderung)
+        # Rekursionsverhinderung
         if os.environ.get('PIO_COMMANDS_PARSED') == '1':
             print('[VERBOSE-PARSER] Kommandos bereits geparst, fahre mit normalem Build fort')
             return True
@@ -118,27 +123,24 @@ def pre_script_verbose_parser(env):
         
         print('[VERBOSE-PARSER] Starte Build-Parsing...')
         
-        # Aktuelles PlatformIO-Kommando mit Verbose ausführen und Output erfassen
         try:
-            cwd = os.getcwd()
+            # Finde das ursprüngliche PlatformIO-Kommando
+            # SCons wird von PlatformIO über pio run aufgerufen
             
-            # Bestimme das ursprüngliche Kommando
-            original_args = sys.argv[:]
-            if 'pio' not in original_args[0]:
-                # Wir sind in einem SCons-Kontext, verwende pio run
-                cmd = ['pio', 'run', '-v']
-            else:
-                # Erweitere bestehende Argumente um -v
-                cmd = original_args[:]
-                if '-v' not in cmd:
-                    cmd.append('-v')
+            # Bestimme das PlatformIO-Kommando das zu diesem SCons-Aufruf geführt hat
+            pio_cmd = ['pio', 'run', '-v']
             
-            print(f'[VERBOSE-PARSER] Führe aus: {" ".join(cmd)}')
+            # Wenn spezifisches Environment, füge es hinzu
+            current_env = env.get('PIOENV')
+            if current_env:
+                pio_cmd.extend(['-e', current_env])
             
-            # Führe Kommando aus und erfasse Output
+            print(f'[VERBOSE-PARSER] Führe aus: {" ".join(pio_cmd)}')
+            
+            # Führe PlatformIO mit Verbose aus
             result = subprocess.run(
-                cmd, 
-                cwd=cwd, 
+                pio_cmd, 
+                cwd=os.getcwd(), 
                 capture_output=True, 
                 text=True
             )
@@ -159,7 +161,7 @@ def pre_script_verbose_parser(env):
             return False
     
     else:
-        print('[VERBOSE-PARSER] Kein Verbose-Modus, starte neu mit -v')
+        print('[VERBOSE-PARSER] Kein Verbose-Modus, starte PlatformIO neu mit -v')
         
         # Rekursionsverhinderung
         if os.environ.get('PIO_VERBOSE_RESTART') == '1':
@@ -170,21 +172,17 @@ def pre_script_verbose_parser(env):
         os.environ['PIO_VERBOSE_RESTART'] = '1'
         
         try:
-            cwd = os.getcwd()
+            # Starte PlatformIO mit Verbose-Modus
+            pio_cmd = ['pio', 'run', '-v']
             
-            # Bestimme Neustart-Kommando
-            if len(sys.argv) > 1:
-                # Erweitere bestehende Argumente
-                cmd = sys.argv[:]
-                if '-v' not in cmd:
-                    cmd.append('-v')
-            else:
-                # Standard pio run mit verbose
-                cmd = ['pio', 'run', '-v']
+            # Aktuelles Environment hinzufügen falls verfügbar
+            current_env = env.get('PIOENV')
+            if current_env:
+                pio_cmd.extend(['-e', current_env])
             
-            print(f'[VERBOSE-PARSER] Starte neu: {" ".join(cmd)}')
+            print(f'[VERBOSE-PARSER] Starte PlatformIO neu: {" ".join(pio_cmd)}')
             
-            result = subprocess.run(cmd, cwd=cwd)
+            result = subprocess.run(pio_cmd, cwd=os.getcwd())
             sys.exit(result.returncode)
             
         except Exception as e:
@@ -193,6 +191,8 @@ def pre_script_verbose_parser(env):
 
 # Für PlatformIO extra_scripts
 if 'env' in globals():
+    print(f'[VERBOSE-PARSER] Script gestartet, sys.argv: {sys.argv}')
+    print(f'[VERBOSE-PARSER] SCONSFLAGS: {os.environ.get("SCONSFLAGS", "not set")}')
     pre_script_verbose_parser(env)
 else:
     print('[VERBOSE-PARSER] Kein PlatformIO Environment gefunden')
