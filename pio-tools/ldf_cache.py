@@ -681,6 +681,24 @@ class LDFCacheOptimizer:
             traceback.print_exc()
             return False
 
+    def _apply_static_libraries(self, ldf_results):
+        """
+        Add all static libraries (.a) to LIBS, resolving any placeholders.
+        
+        Args:
+            ldf_results (dict): LDF results containing compiled libraries
+        """
+        compiled_libraries = [self.resolve_pio_placeholders(p) for p in ldf_results.get('compiled_libraries', [])]
+        valid_libs = []
+        for lib_path in compiled_libraries:
+            if os.path.exists(lib_path):
+                lib_name = os.path.basename(lib_path)
+                if lib_name.startswith('lib') and lib_name.endswith('.a'):
+                    valid_libs.append(lib_path)
+        if valid_libs:
+            self.env.Append(LIBS=valid_libs)
+            print(f"   ✅ Added {len(valid_libs)} static libraries to LIBS")
+
     def _apply_object_files(self, ldf_results):
         """
         Add all object files to the SCons OBJECTS environment.
@@ -695,7 +713,6 @@ class LDFCacheOptimizer:
             print("   No valid object files found")
             return
         
-        # Direct usage of object files
         self.env.Append(OBJECTS=valid_objects)
         print(f"   ✅ Added {len(valid_objects)} object files to OBJECTS")
         
