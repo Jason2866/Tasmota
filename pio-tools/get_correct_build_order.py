@@ -97,5 +97,5 @@ def get_correct_build_order():
     
     return results
 
-if __name__ == "__main__":
-    get_correct_build_order()
+
+get_correct_build_order()
