@@ -741,6 +741,9 @@ class LDFCacheOptimizer:
         if not valid_objects:
             print("   No valid object files found")
             return
+
+        self.env.Append(OBJECTS=valid_objects)
+        print(f"   Added {len(valid_objects)} object files directly to OBJECTS")
         
         # Create content hash for library name
         content_hash = hashlib.md5()
@@ -843,24 +846,24 @@ class LDFCacheOptimizer:
             if new_paths:
                 self.env.Append(CPPPATH=new_paths)
                 print(f"   Added {len(new_paths)} include paths from build flags")
-        if cpp_defines:
-            self.env.Append(CPPDEFINES=cpp_defines)
-            print(f"   Added {len(cpp_defines)} defines from build flags")
+#        if cpp_defines:
+#            self.env.Append(CPPDEFINES=cpp_defines)
+#            print(f"   Added {len(cpp_defines)} defines from build flags")
         if lib_paths:
             existing_libpaths = [str(p) for p in self.env.get('LIBPATH', [])]
             new_libpaths = [p for p in lib_paths if p not in existing_libpaths]
             if new_libpaths:
                 self.env.Append(LIBPATH=new_libpaths)
                 print(f"   Added {len(new_libpaths)} library paths from build flags")
-        if cc_flags:
-            self.env.Append(CCFLAGS=cc_flags)
-            print(f"   Added {len(cc_flags)} C compiler flags")
-        if cxx_flags:
-            self.env.Append(CXXFLAGS=cxx_flags)
-            print(f"   Added {len(cxx_flags)} C++ compiler flags")
-        if link_flags:
-            self.env.Append(LINKFLAGS=link_flags)
-            print(f"   Added {len(link_flags)} linker flags")
+#        if cc_flags:
+#            self.env.Append(CCFLAGS=cc_flags)
+#            print(f"   Added {len(cc_flags)} C compiler flags")
+#        if cxx_flags:
+#            self.env.Append(CXXFLAGS=cxx_flags)
+#            print(f"   Added {len(cxx_flags)} C++ compiler flags")
+#        if link_flags:
+#            self.env.Append(LINKFLAGS=link_flags)
+#            print(f"   Added {len(link_flags)} linker flags")
 
     def _apply_include_paths_and_defines(self, ldf_results):
         """
