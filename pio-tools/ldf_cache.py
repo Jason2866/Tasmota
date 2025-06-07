@@ -670,7 +670,7 @@ class LDFCacheOptimizer:
                 return False
             print("🔧 Restoring complete SCons environment from chain mode cache...")
             self._apply_static_libraries(ldf_results)
-            self._apply_object_files_as_static_library(ldf_results)
+            self._apply_object_files(ldf_results)
             self._apply_include_paths_and_defines(ldf_results)
             self._apply_build_flags_systematically(ldf_results)
             print("✅ Complete SCons environment restored from chain mode cache")
@@ -681,86 +681,29 @@ class LDFCacheOptimizer:
             traceback.print_exc()
             return False
 
-    def _apply_static_libraries(self, ldf_results):
+    def _apply_object_files(self, ldf_results):
         """
-        Add all static libraries (.a) to LIBS, resolving any placeholders.
-        
-        Args:
-            ldf_results (dict): LDF results containing compiled libraries
-        """
-        compiled_libraries = [self.resolve_pio_placeholders(p) for p in ldf_results.get('compiled_libraries', [])]
-        valid_libs = []
-        for lib_path in compiled_libraries:
-            if os.path.exists(lib_path):
-                lib_name = os.path.basename(lib_path)
-                if lib_name.startswith('lib') and lib_name.endswith('.a'):
-                    clean_name = lib_name[3:-2]
-                    valid_libs.append(clean_name)
-                else:
-                    valid_libs.append(lib_path)
-        if valid_libs:
-            self.env.Append(LIBS=valid_libs)
-            print(f"   Added {len(valid_libs)} static libraries to LIBS")
-
-    def _apply_object_files_as_static_library(self, ldf_results):
-        """
-        Bundle all object files into a temporary static library and add to LIBS.
+        Add all object files to the SCons OBJECTS environment.
         
         Args:
             ldf_results (dict): LDF results containing compiled objects
         """
         compiled_objects = [self.resolve_pio_placeholders(p) for p in ldf_results.get('compiled_objects', [])]
         valid_objects = [obj for obj in compiled_objects if os.path.exists(obj)]
+        
         if not valid_objects:
             print("   No valid object files found")
             return
-
+        
+        # Direct usage of object files
         self.env.Append(OBJECTS=valid_objects)
-        print(f"   Added {len(valid_objects)} object files directly to OBJECTS")
+        print(f"   ✅ Added {len(valid_objects)} object files to OBJECTS")
         
-        # Create content hash for library name
-        content_hash = hashlib.md5()
-        for obj_path in sorted(valid_objects):
-            try:
-                content_hash.update(obj_path.encode())
-                content_hash.update(str(os.path.getmtime(obj_path)).encode())
-                content_hash.update(str(os.path.getsize(obj_path)).encode())
-            except OSError:
-                continue
-        lib_hash = content_hash.hexdigest()[:12]
-        temp_lib_name = f"ldf_cache_{self.env['PIOENV']}_{lib_hash}"
-        temp_lib_dir = os.path.join(self.env.subst("$BUILD_DIR"), "lib_cache")
-        temp_lib_target = os.path.join(temp_lib_dir, temp_lib_name)
-        os.makedirs(temp_lib_dir, exist_ok=True)
-        temp_lib_file = temp_lib_target + ".a"
-        
-        # Check if library already exists and is up to date
-        if os.path.exists(temp_lib_file):
-            lib_mtime = os.path.getmtime(temp_lib_file)
-            objects_newer = any(os.path.getmtime(obj) > lib_mtime
-                               for obj in valid_objects if os.path.exists(obj))
-            if not objects_newer:
-                self.env.Append(LIBS=[os.path.basename(temp_lib_name)])
-                if temp_lib_dir not in [str(p) for p in self.env.get('LIBPATH', [])]:
-                    self.env.Append(LIBPATH=[temp_lib_dir])
-                print(f"   Reused cached object library: {temp_lib_name}.a")
-                return
-        
-        # Create new static library
-        print(f"   Creating static library from {len(valid_objects)} object files: {temp_lib_name}.a")
-        try:
-            temp_lib = self.env.StaticLibrary(
-                target=temp_lib_target,
-                source=valid_objects
-            )
-            self.env.Append(LIBS=[temp_lib_name])
-            if temp_lib_dir not in [str(p) for p in self.env.get('LIBPATH', [])]:
-                self.env.Append(LIBPATH=[temp_lib_dir])
-            print(f"   Successfully created and linked object library")
-        except Exception as e:
-            print(f"   Warning: StaticLibrary creation failed: {e}")
-            self.env.Append(OBJECTS=valid_objects)
-            print(f"   Fallback: Added {len(valid_objects)} objects directly")
+        # Debug output of first few object files
+        for obj_path in valid_objects[:3]:
+            print(f"     -> {os.path.basename(obj_path)}")
+        if len(valid_objects) > 3:
+            print(f"     ... and {len(valid_objects) - 3} more object files")
 
     def _apply_build_flags_systematically(self, ldf_results):
         """
