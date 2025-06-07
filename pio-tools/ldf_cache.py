@@ -400,7 +400,7 @@ class LDFCacheOptimizer:
             if not os.path.exists(self.idedata_file):
                 print(f"❌ idedata.json not found: {self.idedata_file}")
                 return None
-            print(f"✅ Reading idedata.json: {self.idedata_file}")
+            #print(f"✅ Reading idedata.json: {self.idedata_file}")
             with open(self.idedata_file, 'r') as f:
                 idedata = json.loads(f.read())
                 return self._process_real_idedata_structure(idedata)
