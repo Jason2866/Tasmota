@@ -669,7 +669,6 @@ class LDFCacheOptimizer:
             if not ldf_results:
                 return False
             print("🔧 Restoring complete SCons environment from chain mode cache...")
-            self._apply_library_paths(ldf_results)
             self._apply_static_libraries(ldf_results)
             self._apply_object_files_as_static_library(ldf_results)
             self._apply_include_paths_and_defines(ldf_results)
@@ -681,32 +680,6 @@ class LDFCacheOptimizer:
             import traceback
             traceback.print_exc()
             return False
-
-    def _apply_library_paths(self, ldf_results):
-        """
-        Add all library directories to LIBPATH, resolving any placeholders.
-        
-        Args:
-            ldf_results (dict): LDF results containing library paths
-        """
-        libsource_dirs = [self.resolve_pio_placeholders(p) for p in ldf_results.get('libsource_dirs', [])]
-        compiled_libraries = [self.resolve_pio_placeholders(p) for p in ldf_results.get('compiled_libraries', [])]
-        lib_dirs_from_files = set()
-        for lib_path in compiled_libraries:
-            if os.path.exists(lib_path):
-                lib_dirs_from_files.add(os.path.dirname(lib_path))
-        all_lib_paths = set(libsource_dirs) | lib_dirs_from_files
-        valid_libpaths = [path for path in all_lib_paths if os.path.exists(path)]
-        if valid_libpaths:
-            existing_libpaths = [str(p) for p in self.env.get('LIBPATH', [])]
-            new_libpaths = [p for p in valid_libpaths if p not in existing_libpaths]
-            if new_libpaths:
-                self.env.Append(LIBPATH=new_libpaths)
-                print(f"   Added {len(new_libpaths)} library paths to LIBPATH")
-                for path in new_libpaths[:3]:
-                    print(f"     -> {path}")
-            else:
-                print("   All library paths already present in LIBPATH")
 
     def _apply_static_libraries(self, ldf_results):
         """
