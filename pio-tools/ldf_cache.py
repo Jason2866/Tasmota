@@ -52,7 +52,7 @@ class LDFCacheOptimizer:
         self.idedata_file = os.path.join(self.project_dir, ".ldf_dat", f"idedata_{self.env['PIOENV']}.json")
         self.ldf_dat_dir = os.path.join(self.env.subst("$PROJECT_DIR"), ".ldf_dat")
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
-        self.real_packages_dir = self.env.subst("$PLATFORMIO_PACKAGES_DIR")
+        self.real_packages_dir = os.path.join(ProjectConfig.get_instance().get("platformio", "packages_dir"))
 
         if not os.path.exists(self.idedata_file):
             print(f"idedata.json missing - generating directly")
