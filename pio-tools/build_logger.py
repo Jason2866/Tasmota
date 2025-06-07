@@ -1,10 +1,12 @@
 import os
-import json
+import pickle
 import time
 from datetime import datetime
 import hashlib
 
-class BuildLogger:
+Import("env")
+
+class SConsCompatibleLogger:
     def __init__(self, log_dir="build_logs"):
         self.log_dir = log_dir
         self.session_id = hashlib.md5(str(time.time()).encode()).hexdigest()[:8]
@@ -17,96 +19,117 @@ class BuildLogger:
     def get_timestamp(self):
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
+    def serialize_scons_object(self, obj):
+        """Konvertiert SCons-Objekte in serialisierbare Formate"""
+        if hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes)):
+            try:
+                # Listen und Tupel
+                return [self.serialize_scons_object(item) for item in obj]
+            except:
+                return str(obj)
+        elif hasattr(obj, '__dict__'):
+            # Objekte mit Attributen
+            try:
+                return {
+                    '_type': type(obj).__name__,
+                    '_str': str(obj),
+                    'attributes': {k: self.serialize_scons_object(v) 
+                                 for k, v in obj.__dict__.items() 
+                                 if not k.startswith('_')}
+                }
+            except:
+                return str(obj)
+        else:
+            # Primitive Typen oder nicht serialisierbare Objekte
+            try:
+                # Test ob JSON-serialisierbar
+                import json
+                json.dumps(obj)
+                return obj
+            except:
+                return str(obj)
+    
+    def extract_env_data(self, env):
+        """Extrahiert relevante Daten aus SCons Environment"""
+        safe_data = {}
+        
+        # Wichtige Keys die wir extrahieren wollen
+        important_keys = [
+            'CC', 'CXX', 'AR', 'LINK', 'AS',
+            'CPPFLAGS', 'CXXFLAGS', 'CCFLAGS', 'LINKFLAGS', 'ASFLAGS',
+            'CPPPATH', 'LIBPATH', 'LIBS', 'CPPDEFINES',
+            'BUILD_FLAGS', 'BUILD_DIR', 'PROJECT_DIR',
+            'PIOPLATFORM', 'PIOFRAMEWORK', 'BOARD', 'BUILD_TYPE',
+            'CXXCOM', 'CCCOM', 'LINKCOM', 'ARCOM', 'ASCOM'
+        ]
+        
+        for key in important_keys:
+            try:
+                value = env.get(key)
+                if value is not None:
+                    safe_data[key] = self.serialize_scons_object(value)
+            except Exception as e:
+                safe_data[key] = f"ERROR: {str(e)}"
+        
+        return safe_data
+    
     def log_build_phase(self, phase, target, source, env):
         timestamp = self.get_timestamp()
         
-        # Basis-Informationen sammeln
+        # Sichere Datenextraktion
         build_info = {
             'timestamp': timestamp,
             'session_id': self.session_id,
             'phase': phase,
-            'target': str(target[0]) if target else None,
-            'source_files': [str(s) for s in source] if source else [],
+            'target': self.serialize_scons_object(target),
+            'source': self.serialize_scons_object(source),
             'source_count': len(source) if source else 0,
-            'platform_info': {
-                'platform': env.get('PIOPLATFORM', 'unknown'),
-                'framework': env.get('PIOFRAMEWORK', []),
-                'board': env.get('BOARD', 'unknown'),
-                'build_type': env.get('BUILD_TYPE', 'release')
-            },
-            'compiler_info': {
-                'cc': env.get('CC', 'unknown'),
-                'cxx': env.get('CXX', 'unknown'),
-                'ar': env.get('AR', 'unknown'),
-                'ld': env.get('LINK', 'unknown')
-            },
-            'build_flags': {
-                'cppflags': env.get('CPPFLAGS', []),
-                'cxxflags': env.get('CXXFLAGS', []),
-                'ccflags': env.get('CCFLAGS', []),
-                'linkflags': env.get('LINKFLAGS', []),
-                'build_flags': env.get('BUILD_FLAGS', [])
-            },
-            'paths': {
-                'cpppath': env.get('CPPPATH', []),
-                'libpath': env.get('LIBPATH', []),
-                'build_dir': str(env.get('BUILD_DIR', '')),
-                'project_dir': str(env.get('PROJECT_DIR', ''))
-            },
-            'defines_and_libs': {
-                'cppdefines': env.get('CPPDEFINES', []),
-                'libs': env.get('LIBS', [])
-            }
+            'env_data': self.extract_env_data(env)
         }
         
-        # Kommandos erfassen
+        # Kommandos sicher extrahieren
         commands = {}
         for cmd_type in ['CXXCOM', 'CCCOM', 'LINKCOM', 'ARCOM', 'ASCOM']:
-            template = env.get(cmd_type)
-            if template:
-                try:
+            try:
+                template = env.get(cmd_type)
+                if template:
                     resolved = env.subst(template, target=target, source=source)
                     commands[cmd_type] = {
                         'template': str(template),
-                        'resolved': resolved,
-                        'length': len(resolved)
+                        'resolved': str(resolved),
+                        'length': len(str(resolved))
                     }
-                except Exception as e:
-                    commands[cmd_type] = {
-                        'template': str(template),
-                        'error': str(e)
-                    }
+            except Exception as e:
+                commands[cmd_type] = {'error': str(e)}
         
         build_info['commands'] = commands
         
-        # In verschiedene Dateien schreiben
-        self.write_json_log(phase, build_info)
-        self.write_readable_log(phase, build_info)
-        self.write_commands_only(phase, build_info)
+        # In verschiedene Formate schreiben
+        self.write_pickle_log(phase, build_info)
+        self.write_text_log(phase, build_info)
+        self.write_commands_log(phase, build_info)
         
-        # Konsolen-Output
-        print(f"\n[BUILD-LOG] {timestamp} - {phase} - {build_info['target']}")
+        print(f"[BUILD-LOG] {timestamp} - {phase} - {build_info['target']}")
+    
+    def write_pickle_log(self, phase, build_info):
+        """Vollständige Daten als Pickle (Python-spezifisch aber vollständig)"""
+        filename = f"{self.log_dir}/build_{self.session_id}_{phase}.pkl"
         
-    def write_json_log(self, phase, build_info):
-        """Vollständige Informationen als JSON"""
-        filename = f"{self.log_dir}/build_{self.session_id}_{phase}.json"
-        
-        # Bestehende Daten laden oder neue Liste erstellen
         data = []
         if os.path.exists(filename):
             try:
-                with open(filename, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+                with open(filename, 'rb') as f:
+                    data = pickle.load(f)
             except:
                 data = []
         
         data.append(build_info)
         
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        with open(filename, 'wb') as f:
+            pickle.dump(data, f)
     
-    def write_readable_log(self, phase, build_info):
-        """Lesbare Textdatei"""
+    def write_text_log(self, phase, build_info):
+        """Menschenlesbare Textdatei"""
         filename = f"{self.log_dir}/build_{self.session_id}_{phase}.txt"
         
         with open(filename, 'a', encoding='utf-8') as f:
@@ -117,68 +140,57 @@ class BuildLogger:
             f.write(f"SOURCE COUNT: {build_info['source_count']}\n")
             f.write(f"{'='*80}\n")
             
-            # Platform Info
-            f.write(f"\nPLATFORM INFO:\n")
-            for key, value in build_info['platform_info'].items():
-                f.write(f"  {key}: {value}\n")
+            # Environment-Daten
+            f.write(f"\nENVIRONMENT DATA:\n")
+            for key, value in build_info['env_data'].items():
+                if isinstance(value, list) and len(value) > 5:
+                    f.write(f"  {key}: [{len(value)} items] {value[:3]}...\n")
+                else:
+                    f.write(f"  {key}: {value}\n")
             
-            # Compiler Info
-            f.write(f"\nCOMPILER INFO:\n")
-            for key, value in build_info['compiler_info'].items():
-                f.write(f"  {key}: {value}\n")
-            
-            # Commands
+            # Kommandos
             f.write(f"\nCOMMANDS:\n")
             for cmd_type, cmd_info in build_info['commands'].items():
                 f.write(f"\n  {cmd_type}:\n")
-                if 'resolved' in cmd_info:
-                    f.write(f"    Template: {cmd_info['template']}\n")
-                    f.write(f"    Resolved: {cmd_info['resolved']}\n")
-                    f.write(f"    Length: {cmd_info['length']} chars\n")
-                else:
-                    f.write(f"    Error: {cmd_info.get('error', 'Unknown')}\n")
-            
-            # Build Flags
-            f.write(f"\nBUILD FLAGS:\n")
-            for flag_type, flags in build_info['build_flags'].items():
-                if flags:
-                    f.write(f"  {flag_type}: {flags}\n")
+                for key, value in cmd_info.items():
+                    if key == 'resolved' and len(str(value)) > 200:
+                        f.write(f"    {key}: {str(value)[:200]}...\n")
+                    else:
+                        f.write(f"    {key}: {value}\n")
             
             f.write(f"\n{'-'*80}\n")
     
-    def write_commands_only(self, phase, build_info):
-        """Nur die aufgelösten Kommandos"""
+    def write_commands_log(self, phase, build_info):
+        """Nur ausführbare Kommandos"""
         filename = f"{self.log_dir}/commands_{self.session_id}_{phase}.sh"
         
         with open(filename, 'a', encoding='utf-8') as f:
-            f.write(f"\n# {build_info['timestamp']} - {phase} - {build_info['target']}\n")
+            f.write(f"\n# {build_info['timestamp']} - {phase}\n")
+            f.write(f"# Target: {build_info['target']}\n")
             
             for cmd_type, cmd_info in build_info['commands'].items():
                 if 'resolved' in cmd_info:
-                    f.write(f"# {cmd_type}\n")
-                    f.write(f"{cmd_info['resolved']}\n\n")
+                    f.write(f"\n# {cmd_type}\n")
+                    f.write(f"{cmd_info['resolved']}\n")
     
-    def write_summary(self, env):
-        """Build-Summary am Ende"""
-        summary_file = f"{self.log_dir}/build_summary_{self.session_id}.txt"
+    def write_csv_log(self, phase, build_info):
+        """CSV für einfache Analyse"""
+        filename = f"{self.log_dir}/build_summary_{self.session_id}.csv"
         
-        with open(summary_file, 'w', encoding='utf-8') as f:
-            f.write(f"BUILD SUMMARY\n")
-            f.write(f"Session ID: {self.session_id}\n")
-            f.write(f"Timestamp: {self.get_timestamp()}\n")
-            f.write(f"Project: {env.get('PROJECT_DIR', 'unknown')}\n")
-            f.write(f"Platform: {env.get('PIOPLATFORM', 'unknown')}\n")
-            f.write(f"Board: {env.get('BOARD', 'unknown')}\n")
-            f.write(f"Framework: {env.get('PIOFRAMEWORK', [])}\n")
+        # Header schreiben wenn Datei nicht existiert
+        write_header = not os.path.exists(filename)
+        
+        with open(filename, 'a', encoding='utf-8') as f:
+            if write_header:
+                f.write("timestamp,phase,target,source_count,platform,board,framework\n")
             
-            # Log-Dateien auflisten
-            f.write(f"\nGenerated Log Files:\n")
-            for file in os.listdir(self.log_dir):
-                if self.session_id in file:
-                    f.write(f"  - {file}\n")
+            env_data = build_info['env_data']
+            f.write(f"{build_info['timestamp']},{phase},{build_info['target']},"
+                   f"{build_info['source_count']},{env_data.get('PIOPLATFORM', '')},"
+                   f"{env_data.get('BOARD', '')},{env_data.get('PIOFRAMEWORK', '')}\n")
 
 # Globale Logger-Instanz
-build_logger = BuildLogger()
+build_logger = SConsCompatibleLogger()
 
 def log_compile_phase(target, source, env):
     build_logger.log_build_phase("COMPILE", target, source, env)
@@ -191,14 +203,11 @@ def log_archive_phase(target, source, env):
 
 def log_build_complete(target, source, env):
     build_logger.log_build_phase("COMPLETE", target, source, env)
-    build_logger.write_summary(env)
 
 # Build-Hooks registrieren
-env.AddPreAction("*.o", log_compile_phase)      # Compile-Phase
-env.AddPreAction("*.a", log_archive_phase)      # Archive-Phase  
-env.AddPreAction("$BUILD_DIR/${PROGNAME}.elf", log_link_phase)  # Link-Phase
-
-# Post-Build Hook
+env.AddPreAction("*.o", log_compile_phase)
+env.AddPreAction("*.a", log_archive_phase)  
+env.AddPreAction("$BUILD_DIR/${PROGNAME}.elf", log_link_phase)
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", log_build_complete)
 
 print(f"[BUILD-LOGGER] Initialisiert - Session: {build_logger.session_id}")
