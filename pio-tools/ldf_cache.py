@@ -467,17 +467,18 @@ class LDFCacheOptimizer:
                 ldf_cache['build_flags'].append(resolved_flag)
         
         # Process compiled artifacts
-        build_dir = idedata.get('build_dir', '')
-        if build_dir and os.path.exists(build_dir):
-            lib_build_dir = os.path.join(build_dir, 'lib')
+        lib_build_dir = os.path.join(self.project_dir, '.pio', 'build', self.env_name)
+        if lib_build_dir and os.path.exists(lib_build_dir):
             if os.path.exists(lib_build_dir):
                 for root, dirs, files in os.walk(lib_build_dir):
                     for file in files:
                         if file.endswith('.a'):
                             lib_path = os.path.join(root, file)
                             ldf_cache['compiled_libraries'].append(self.resolve_pio_placeholders(lib_path))
-            for root, dirs, files in os.walk(build_dir):
+            for root, dirs, files in os.walk(lib_build_dir):
                 if '/src' in root.replace('\\', '/') or root.endswith('src'):
+                    continue
+                if '/ld' in root.replace('\\', '/') or root.endswith('ld'):
                     continue
                 for file in files:
                     if file.endswith('.o'):
@@ -485,7 +486,7 @@ class LDFCacheOptimizer:
                         ldf_cache['compiled_objects'].append(self.resolve_pio_placeholders(obj_path))
         
         print(f"📦 Found {len(ldf_cache['compiled_libraries'])} .a files")
-        print(f"📦 Found {len(ldf_cache['compiled_objects'])} .o files (excluding src)")
+        print(f"📦 Found {len(ldf_cache['compiled_objects'])} .o files (excluding src and ld)")
         return ldf_cache
 
     def compute_signature(self, cache_data):
