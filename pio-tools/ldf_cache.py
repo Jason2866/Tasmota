@@ -642,13 +642,13 @@ class LDFCacheOptimizer:
         for lib_dep in ldf_results['lib_deps_entries']:
             ini_lines.append(f"    {lib_dep}")
         ini_lines.append("")
-        ini_lines.append("build_flags =")
-        for flag in ldf_results['build_flags']:
-            ini_lines.append(f"    {flag}")
+        ini_lines.append("build_flags = ${env.build_flags}")
+#        for flag in ldf_results['build_flags']:
+#            ini_lines.append(f"    {flag}")
         for include_path in ldf_results['include_paths']:
             ini_lines.append(f"    -I\"{include_path}\"")
-        for define in ldf_results['defines']:
-            ini_lines.append(f"    -D{define}")
+#        for define in ldf_results['defines']:
+#            ini_lines.append(f"    -D{define}")
         ini_content = "\n".join(ini_lines)
         with open(self.ldf_cache_ini, "w", encoding="utf-8") as f:
             f.write(ini_content)
