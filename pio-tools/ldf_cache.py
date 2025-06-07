@@ -370,8 +370,7 @@ class LDFCacheOptimizer:
         scan_elapsed = time.time() - scan_start_time
         final_hash = hashlib.sha256(''.join(hash_data).encode()).hexdigest()[:16]
         total_elapsed = time.time() - start_time
-        print(f"🔍 Chain mode optimized scanning completed in {scan_elapsed:.2f}s")
-        print(f"🔍 Total hash calculation completed in {total_elapsed:.2f}s")
+        print(f"🔍 Chain mode optimized scanning completed in {total_elapsed:.2f}s")
         print(f"🔍 Scan complete: {total_scanned} files scanned, {total_relevant} relevant and hashed")
         print(f"🔍 Cache hash based on {len(hash_data)} LDF-relevant files for chain mode")
         if total_scanned > 0:
