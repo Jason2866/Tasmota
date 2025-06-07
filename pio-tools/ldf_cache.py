@@ -15,7 +15,7 @@ import json
 import shutil
 from platformio.project.config import ProjectConfig
 
-def generate_idedata_directly():
+def generate_idedata_directly(source, target, env):
     """
     Generate idedata.json directly using PlatformIO's internal method.
     """
@@ -37,7 +37,7 @@ ldf_dat_dir = os.path.join(env.subst("$PROJECT_DIR"), ".ldf_dat")
 idedata_path = os.path.join(ldf_dat_dir, f"idedata_{env_name}.json")
 if not os.path.exists(idedata_path):
     print(f"idedata.json missing - generating directly")
-    generate_idedata_directly()
+    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", generate_idedata_directly)
 
 class LDFCacheOptimizer:
     """
