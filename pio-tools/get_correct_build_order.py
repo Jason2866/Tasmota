@@ -1,19 +1,22 @@
 import os
 import json
+from os.path import join
 from datetime import datetime
 
 Import("env")
+env = DefaultEnvironment()
 
 def get_correct_build_order():
     """Kombiniert compile_commands.json (Reihenfolge) mit Build-Artefakten (Pfade)"""
-    
+
+    build_dir = env.subst("$BUILD_DIR")
+    path_compile_commands = join(build_dir, "compile_commands.json")
     # 1. Lade compile_commands.json für korrekte Reihenfolge
-    if not os.path.exists("compile_commands.json"):
+    if not os.path.exists(path_compile_commands):
         print("FEHLER: compile_commands.json nicht gefunden")
-        print("Führe erst aus: python -m platformio run -t compiledb")
         return None
-    
-    with open("compile_commands.json", "r") as f:
+
+    with open(path_compile_commands, "r") as f:
         compile_db = json.load(f)
     
     # 2. Finde Build-Verzeichnis
