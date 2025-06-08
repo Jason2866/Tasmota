@@ -55,7 +55,7 @@ def get_correct_build_order():
     with open(f"correct_build_order_{env_name}.txt", "w") as f:
 #        f.write(f"KORREKTE BUILD-REIHENFOLGE für {env_name}\n")
 #        f.write("Reihenfolge basiert auf compile_commands.json\n\n")
-        for obj_info in ordered_objects:
+        for obj_info in ordered_objects[:-1]:
 #            f.write(f"{obj_info['order']:3d}: {obj_info['source']}\n")
             f.write(f"{obj_info['source']}\n")
 #            f.write(f"{obj_info['object']}\n")
@@ -64,7 +64,7 @@ def get_correct_build_order():
     with open(f"correct_link_order_{env_name}.txt", "w") as f:
 #        f.write(f"#KORREKTE LINKER-REIHENFOLGE für {env_name}\n")
 #        f.write("# Reihenfolge basiert auf compile_commands.json\n\n")
-        for obj_info in ordered_objects:
+        for obj_info in ordered_objects[:-1]:
             f.write(f"{obj_info['object']}\n")
         
     print(f"Erstellt: correct_build_order_{env_name}.txt")
