@@ -101,31 +101,72 @@ def get_correct_build_order():
     
     return results
 
-# Konfiguration
-env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
-compile_db_path = os.path.join(env.subst("$BUILD_DIR"), "compile_commands.json")
-env.Replace(COMPILATIONDB_PATH=compile_db_path)
-
-def generate_compiledb_direct(target, source, env):
-    """Generiert compiledb direkt ohne Subprocess"""
-    if os.path.exists(compile_db_path):
-        print(f"✓ compile_commands.json bereits vorhanden: {compile_db_path}")
+def environment_specific_compiledb_restart():
+    """Environment-spezifische compiledb mit env-spezifischem Dateinamen"""
+    
+    current_targets = COMMAND_LINE_TARGETS[:]
+    is_build_target = (
+        not current_targets or
+        any(target in ["build", "buildprog"] for target in current_targets)
+    )
+    
+    if not is_build_target:
         return
     
-    # Verwende SCons Command statt Subprocess
-    return env.Execute(f'pio run -e {env["PIOENV"]} -t compiledb')
-
-# Erstelle SCons Command statt Post-Action
-current_targets = COMMAND_LINE_TARGETS[:]
-if not current_targets or any(t in ["build", "buildprog"] for t in current_targets):
-    # Erstelle Alias für compiledb nach Build
-    compiledb_alias = env.Alias("auto_compiledb", None, generate_compiledb_direct)
-    env.Depends(compiledb_alias, "$BUILD_DIR/${PROGNAME}.elf")
-    env.AlwaysBuild(compiledb_alias)
+    env_name = env.get("PIOENV")
     
-    # Füge zum Default hinzu
-    env.Default(compiledb_alias)
+    if not env_name:
+        print("✗ Fehler: Kein Environment definiert")
+        sys.exit(1)
+    
+    # Environment-spezifischer Dateiname
+    compile_db_path = os.path.join(env.subst("$PROJECT_DIR"), f"compile_commands_{env_name}.json")
+    
+    if os.path.exists(compile_db_path):
+        return  # Environment-spezifische JSON existiert bereits
+    
+    print("=" * 60)
+    print(f"COMPILE_COMMANDS_{env_name.upper()}.JSON FEHLT - ERSTELLE UND STARTE NEU")
+    print("=" * 60)
+    
+    project_dir = env.subst("$PROJECT_DIR")
+    original_args = sys.argv[1:]  # Alle ursprünglichen pio run Argumente
+    
+    try:
+        print(f"Environment: {env_name}")
+        print("1. Breche aktuellen Build ab...")
+        print(f"2. Erstelle compile_commands_{env_name}.json...")
+        
+        # Environment-spezifische compiledb Erstellung
+        compiledb_cmd = ["pio", "run", "-e", env_name, "-t", "compiledb"]
+        print(f"   Ausführe: {' '.join(compiledb_cmd)}")
+        
+        result = subprocess.run(compiledb_cmd, cwd=project_dir)
+        
+        if result.returncode != 0:
+            print(f"✗ Fehler bei compile_commands_{env_name}.json Erstellung")
+            sys.exit(1)
+        
+        # Umbenennen der erstellten compile_commands.json zu environment-spezifischem Namen
+        standard_path = os.path.join(project_dir, "compile_commands.json")
+        if os.path.exists(standard_path):
+            os.rename(standard_path, compile_db_path)
+            print(f"✓ compile_commands_{env_name}.json erfolgreich erstellt")
+        else:
+            print("✗ Standard compile_commands.json nicht gefunden")
+            sys.exit(1)
+        
+        # Starte mit ursprünglichen Argumenten neu
+        print("3. Starte ursprünglichen Build neu...")
+        restart_cmd = ["pio", "run"] + original_args
+        print(f"   Ausführe: {' '.join(restart_cmd)}")
+        
+        restart_result = subprocess.run(restart_cmd, cwd=project_dir)
+        sys.exit(restart_result.returncode)
+        
+    except Exception as e:
+        print(f"✗ Fehler: {e}")
+        sys.exit(1)
 
-
-
+environment_specific_compiledb_restart()
 get_correct_build_order()
