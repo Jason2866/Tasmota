@@ -135,7 +135,17 @@ def environment_specific_compiledb_restart():
     print(f"COMPILE_COMMANDS_{env_name.upper()}.JSON FEHLT")
     print("=" * 60)
     
-    original_args = sys.argv[1:]
+    # Rekonstruiere korrekte PlatformIO Argumente
+    pio_args = []
+    
+    # Environment hinzufügen
+    pio_args.extend(["-e", env_name])
+    
+    # Targets hinzufügen (falls vorhanden)
+    if current_targets:
+        for target in current_targets:
+            if target not in ["compiledb"]:  # compiledb ausschließen
+                pio_args.extend(["-t", target])
     
     try:
         print(f"Environment: {env_name}")
@@ -179,7 +189,7 @@ def environment_specific_compiledb_restart():
         
         # Starte ursprünglichen Build neu
         print("4. Starte ursprünglichen Build neu...")
-        restart_cmd = ["pio", "run"] + original_args
+        restart_cmd = ["pio", "run"] + pio_args
         print(f"   Ausführe: {' '.join(restart_cmd)}")
         print("=" * 60)
         
