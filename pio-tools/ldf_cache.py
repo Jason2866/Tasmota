@@ -1519,132 +1519,128 @@ class LDFCacheOptimizer:
             new_libpaths = [p for p in lib_paths if p not in existing_libpaths]
             if new_libpaths:
                 self.env.Append(LIBPATH=new_libpaths)
-                print(f"   Added {len(new_libpaths)} library paths from build flags")
-#        if cc_flags:
-#            self.env.Append(CCFLAGS=cc_flags)
-#            print(f"   Added {len(cc_flags)} C compiler flags")
-#        if cxx_flags:
-#            self.env.Append(CXXFLAGS=cxx_flags)
-#            print(f"   Added {len(cxx_flags)} C++ compiler flags")
-#        if link_flags:
-#            self.env.Append(LINKFLAGS=link_flags)
-#            print(f"   Added {len(link_flags)} linker flags")
+                print(f"  Added {len(new_libpaths)} library paths from build flags")
+
+        if cpp_defines:
+            existing_defines = [str(d) for d in self.env.get('CPPDEFINES', [])]
+            new_defines = [d for d in cpp_defines if d not in existing_defines]
+            if new_defines:
+                self.env.Append(CPPDEFINES=new_defines)
+                print(f"  Added {len(new_defines)} defines from build flags")
+
+        if cc_flags:
+            self.env.Append(CCFLAGS=cc_flags)
+            print(f"  Added {len(cc_flags)} CC flags")
+
+        if cxx_flags:
+            self.env.Append(CXXFLAGS=cxx_flags)
+            print(f"  Added {len(cxx_flags)} CXX flags")
+
+        if link_flags:
+            self.env.Append(LINKFLAGS=link_flags)
+            print(f"  Added {len(link_flags)} linker flags")
+
+        print(f"  ✅ Systematically applied {len(build_flags)} build flags")
 
     def _apply_include_paths_and_defines(self, ldf_results):
         """
-        Add all include paths and defines to the SCons environment, resolving any placeholders.
+        Apply include paths and defines from LDF results to the SCons environment.
         
         Args:
             ldf_results (dict): LDF results containing include paths and defines
         """
-        # Apply include paths
         include_paths = [self.resolve_pio_placeholders(p) for p in ldf_results.get('include_paths', [])]
+        defines = ldf_results.get('defines', [])
+
+        # Apply include paths
         if include_paths:
-            existing_includes = [str(path) for path in self.env.get('CPPPATH', [])]
-            new_includes = [inc for inc in include_paths
-                           if os.path.exists(inc) and inc not in existing_includes]
-            if new_includes:
-                self.env.Append(CPPPATH=new_includes)
-                print(f"   Added {len(new_includes)} include paths")
+            existing_paths = [str(p) for p in self.env.get('CPPPATH', [])]
+            new_paths = [p for p in include_paths if p not in existing_paths and os.path.exists(p)]
+            
+            if new_paths:
+                self.env.Append(CPPPATH=new_paths)
+                print(f"  ✅ Added {len(new_paths)} include paths")
 
         # Apply defines
-        defines = ldf_results.get('defines', [])
         if defines:
             existing_defines = [str(d) for d in self.env.get('CPPDEFINES', [])]
-            new_defines = [d for d in defines if str(d) not in existing_defines]
+            new_defines = [d for d in defines if d not in existing_defines]
+            
             if new_defines:
                 self.env.Append(CPPDEFINES=new_defines)
-                print(f"   Added {len(new_defines)} preprocessor defines")
+                print(f"  ✅ Added {len(new_defines)} preprocessor defines")
 
     def setup_ldf_caching(self):
         """
         Main entry point for LDF caching with build order management.
+        Replaces LDF completely with cached data and correct build order.
         """
         print("\n=== LDF Cache Optimizer with Build Order Management ===")
 
-        # Validate LDF mode compatibility
+        # Validate LDF mode compatibility first
         if not self.validate_ldf_mode_compatibility():
-            print("❌ LDF mode incompatible - aborting")
+            print("❌ LDF mode incompatible - aborting cache optimization")
             return
 
-        # Always use the complete replacement function with linker optimization
-        print("🔧 Using complete LDF replacement with linker optimization")
-    
-        # Switch to off mode and apply complete solution
-        if self.modify_platformio_ini_simple("off"):
-            success = self.create_complete_ldf_replacement_with_linker()
+        # Check for combined cache first
+        combined_cache = self.load_combined_cache()
         
-            if success:
-                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
+        if combined_cache:
+            print("🚀 Valid combined cache found")
+            
+            # Switch LDF off and apply cache
+            if self.modify_platformio_ini_simple("off"):
+                success = self.apply_ldf_cache_with_build_order(combined_cache)
+                
+                if success:
+                    print("✅ Complete LDF replacement solution applied from cache")
+                    self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
+                else:
+                    print("❌ Cache application failed - fallback to normal build")
+                    self.restore_ini_from_backup()
+                    self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
             else:
-                self.restore_ini_from_backup()
+                print("❌ Could not modify platformio.ini")
                 self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
         else:
-            print("❌ Could not modify platformio.ini")
-            self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
+            print("🔄 No valid cache - creating complete LDF replacement solution")
+            
+            # CRITICAL FIX: Call the complete replacement function with linker optimization
+            if self.modify_platformio_ini_simple("off"):
+                # Use the advanced function with linker optimization
+                success = self.create_complete_ldf_replacement_with_linker()
+                
+                if success:
+                    print("✅ Complete LDF replacement with linker optimization successful")
+                    self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
+                else:
+                    print("❌ Advanced replacement failed - fallback to standard caching")
+                    self.restore_ini_from_backup()
+                    self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
+            else:
+                print("❌ Could not modify platformio.ini - using standard caching")
+                self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
 
         print("=" * 80)
 
-def clear_ldf_cache():
-    """
-    Delete the LDF cache file and artifacts for the current environment.
-    """
-    project_dir = env.subst("$PROJECT_DIR")
-    env_name = env.get("PIOENV")
-    cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env_name}.py")
-    artifacts_cache_dir = os.path.join(project_dir, ".pio", "ldf_cache", "artifacts", env_name)
 
-    deleted_something = False
+# =============================================================================
+# SCRIPT INITIALIZATION AND EXECUTION
+# =============================================================================
 
-    if os.path.exists(cache_file):
-        try:
-            os.remove(cache_file)
-            print("✓ LDF Cache file deleted")
-            deleted_something = True
-        except Exception as e:
-            print(f"✗ Error deleting cache file: {e}")
+try:
+    # Initialize the LDF Cache Optimizer
+    ldf_optimizer = LDFCacheOptimizer(env)
+    
+    # Start the LDF caching process
+    ldf_optimizer.setup_ldf_caching()
+    
+except Exception as e:
+    print(f"❌ Critical error in LDF Cache Optimizer: {e}")
+    import traceback
+    traceback.print_exc()
+    print("⚠ Continuing with standard PlatformIO build process...")
 
-    if os.path.exists(artifacts_cache_dir):
-        try:
-            shutil.rmtree(artifacts_cache_dir)
-            print("✓ LDF Cache artifacts deleted")
-            deleted_something = True
-        except Exception as e:
-            print(f"✗ Error deleting cache artifacts: {e}")
-
-    if not deleted_something:
-        print("ℹ No LDF Cache present")
-
-def show_ldf_cache_info():
-    """
-    Print information about the current LDF cache.
-    """
-    project_dir = env.subst("$PROJECT_DIR")
-    cache_file = os.path.join(project_dir, ".pio", "ldf_cache", f"ldf_cache_{env['PIOENV']}.py")
-    if os.path.exists(cache_file):
-        try:
-            with open(cache_file, 'r', encoding='utf-8') as f:
-                cache_content = f.read()
-            local_vars = {}
-            exec(cache_content, {}, local_vars)
-            cache_data = local_vars.get('cache_data')
-            ldf_results = cache_data.get('ldf_results', {})
-            print("\n=== LDF Cache Info ===")
-            print(f"Environment:  {cache_data.get('pioenv', 'unknown')}")
-            print(f"LDF Mode:     {cache_data.get('ldf_mode', 'unknown')}")
-            print(f"Created:      {cache_data.get('timestamp', 'unknown')}")
-            print(f"PIO Version:  {cache_data.get('pio_version', 'unknown')}")
-            print(f"Project Hash: {cache_data.get('project_hash', 'unknown')}")
-            print(f"Libraries:    {len(ldf_results.get('compiled_libraries', []))}")
-            print(f"Objects:      {len(ldf_results.get('compiled_objects', []))}")
-            print(f"Include Paths: {len(ldf_results.get('include_paths', []))}")
-            print(f"Defines:      {len(ldf_results.get('defines', []))}")
-            print("=" * 40)
-        except Exception as e:
-            print(f"✗ Error reading cache info: {e}")
-    else:
-        print("ℹ No LDF Cache present")
-
-# Initialize and setup LDF caching
-ldf_optimizer = LDFCacheOptimizer(env)
-ldf_optimizer.setup_ldf_caching()
+# =============================================================================
+# END OF SCRIPT
+# =============================================================================
