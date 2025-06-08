@@ -102,7 +102,7 @@ def get_correct_build_order():
     return results
 
 def environment_specific_compiledb_restart():
-    """Environment-spezifische compiledb mit env-spezifischem Dateinamen"""
+    """Environment-spezifische compiledb mit sicherem Pfad"""
     
     current_targets = COMMAND_LINE_TARGETS[:]
     is_build_target = (
@@ -119,8 +119,9 @@ def environment_specific_compiledb_restart():
         print("✗ Fehler: Kein Environment definiert")
         sys.exit(1)
     
-    # Environment-spezifischer Dateiname
-    compile_db_path = os.path.join(env.subst("$PROJECT_DIR"), f"compile_commands_{env_name}.json")
+    # Sicherer Pfad: .pio/compiledb/ Verzeichnis
+    compiledb_dir = os.path.join(env.subst("$PROJECT_DIR"), ".pio", "compiledb")
+    compile_db_path = os.path.join(compiledb_dir, f"compile_commands_{env_name}.json")
     
     if os.path.exists(compile_db_path):
         return  # Environment-spezifische JSON existiert bereits
@@ -130,12 +131,21 @@ def environment_specific_compiledb_restart():
     print("=" * 60)
     
     project_dir = env.subst("$PROJECT_DIR")
-    original_args = sys.argv[1:]  # Alle ursprünglichen pio run Argumente
+    original_args = sys.argv[1:]
     
     try:
         print(f"Environment: {env_name}")
         print("1. Breche aktuellen Build ab...")
         print(f"2. Erstelle compile_commands_{env_name}.json...")
+        
+        # Erstelle Verzeichnis falls es nicht existiert
+        os.makedirs(compiledb_dir, exist_ok=True)
+        
+        # WICHTIG: Setze den sicheren Pfad VOR der compiledb Erstellung
+        env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
+        env.Replace(COMPILATIONDB_PATH=compile_db_path)
+        
+        print(f"   Ziel-Pfad: {compile_db_path}")
         
         # Environment-spezifische compiledb Erstellung
         compiledb_cmd = ["pio", "run", "-e", env_name, "-t", "compiledb"]
@@ -147,13 +157,10 @@ def environment_specific_compiledb_restart():
             print(f"✗ Fehler bei compile_commands_{env_name}.json Erstellung")
             sys.exit(1)
         
-        # Umbenennen der erstellten compile_commands.json zu environment-spezifischem Namen
-        standard_path = os.path.join(project_dir, "compile_commands.json")
-        if os.path.exists(standard_path):
-            os.rename(standard_path, compile_db_path)
+        if os.path.exists(compile_db_path):
             print(f"✓ compile_commands_{env_name}.json erfolgreich erstellt")
         else:
-            print("✗ Standard compile_commands.json nicht gefunden")
+            print(f"✗ compile_commands_{env_name}.json nicht gefunden nach Erstellung")
             sys.exit(1)
         
         # Starte mit ursprünglichen Argumenten neu
