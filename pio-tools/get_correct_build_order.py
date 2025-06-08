@@ -136,6 +136,9 @@ def setup_conditional_compiledb():
         env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
         compilationdb_path = os.path.join("$BUILD_DIR", "compile_commands.json")
         env.Replace(COMPILATIONDB_PATH=compilationdb_path)
+        env.Tool("compilation_db")
+        env.Alias("compiledb", env.CompilationDatabase("$COMPILATIONDB_PATH"))
+        print("✓ Eingebautes compiledb Target erstellt")
     else:
         print(f"compiledb übersprungen für Targets: {current_targets}")
 
