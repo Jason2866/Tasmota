@@ -1,5 +1,6 @@
 import os
 import json
+import subprocess
 from os.path import join
 from datetime import datetime
 
@@ -100,48 +101,46 @@ def get_correct_build_order():
     
     return results
 
-def setup_conditional_compiledb():
-    """Fügt compiledb nur bei build Target hinzu"""
-    
-    # Hole die aktuellen Command Line Targets
-    current_targets = COMMAND_LINE_TARGETS[:]
-    
-    # Prüfe ob "build" oder kein spezifisches Target angegeben wurde
-    # (kein Target bedeutet Standard-Build)
-    should_add_compiledb = (
-        not current_targets or  # Kein Target = Standard Build
-        "build" in current_targets or
-        "buildprog" in current_targets
-    )
-    
-    if should_add_compiledb:
-        # Erstelle neue Target-Liste mit compiledb am Anfang
-        new_targets = ["compiledb"]
-        
-        # Füge ursprüngliche Targets hinzu (außer compiledb)
-        for target in current_targets:
-            if target != "compiledb":
-                new_targets.append(target)
-        
-        # Wenn keine Targets vorhanden waren, füge build hinzu
-        if not current_targets:
-            new_targets.append("build")
-        
-        # Setze die modifizierten Targets
-        COMMAND_LINE_TARGETS[:] = new_targets
-        
-        print(f"compiledb für Build-Target hinzugefügt: {new_targets}")
-        
-        # Konfiguriere Compilation Database
-        env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
-        compilationdb_path = os.path.join("$BUILD_DIR", "compile_commands.json")
-        env.Replace(COMPILATIONDB_PATH=compilationdb_path)
-        env.Tool("compilation_db")
-        env.Alias("compiledb", env.CompilationDatabase("$COMPILATIONDB_PATH"))
-        print("✓ Eingebautes compiledb Target erstellt")
-    else:
-        print(f"compiledb übersprungen für Targets: {current_targets}")
 
-# Führe die bedingte Target-Manipulation aus
-setup_conditional_compiledb()
+# Konfiguration für compiledb
+env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
+compile_db_path = os.path.join(env.subst("$BUILD_DIR"), "compile_commands.json")
+env.Replace(COMPILATIONDB_PATH=compile_db_path)
+
+def conditional_generate_compiledb(source, target, env):
+    """Generiert compiledb nur wenn compile_commands.json nicht existiert"""
+    
+    # Prüfe ob compile_commands.json bereits existiert
+    if os.path.exists(compile_db_path):
+        print(f"✓ compile_commands.json bereits vorhanden: {compile_db_path}")
+        return
+    
+    print(f"compile_commands.json nicht gefunden, erstelle neue...")
+    
+    try:
+        cmd = ["pio", "run", "-e", env["PIOENV"], "-t", "compiledb"]
+        result = subprocess.run(cmd, 
+                              cwd=env.subst("$PROJECT_DIR"),
+                              capture_output=True, 
+                              text=True)
+        
+        if result.returncode == 0:
+            if os.path.exists(compile_db_path):
+                size = os.path.getsize(compile_db_path)
+                print(f"✓ compile_commands.json erstellt ({size} bytes)")
+            else:
+                print("✗ compile_commands.json nicht gefunden nach Erstellung")
+        else:
+            print(f"✗ compiledb Fehler: {result.stderr}")
+            
+    except Exception as e:
+        print(f"✗ Fehler beim Erstellen der compile_commands.json: {e}")
+
+# Nur bei Build-Targets ausführen
+current_targets = COMMAND_LINE_TARGETS[:]
+if not current_targets or "build" in current_targets or "buildprog" in current_targets:
+    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", conditional_generate_compiledb)
+    print("✓ Bedingte Auto-compiledb für Build aktiviert")
+
+
 get_correct_build_order()
