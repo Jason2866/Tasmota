@@ -101,46 +101,31 @@ def get_correct_build_order():
     
     return results
 
-
-# Konfiguration für compiledb
+# Konfiguration
 env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
 compile_db_path = os.path.join(env.subst("$BUILD_DIR"), "compile_commands.json")
 env.Replace(COMPILATIONDB_PATH=compile_db_path)
 
-def conditional_generate_compiledb(source, target, env):
-    """Generiert compiledb nur wenn compile_commands.json nicht existiert"""
-    
-    # Prüfe ob compile_commands.json bereits existiert
+def generate_compiledb_direct(target, source, env):
+    """Generiert compiledb direkt ohne Subprocess"""
     if os.path.exists(compile_db_path):
         print(f"✓ compile_commands.json bereits vorhanden: {compile_db_path}")
         return
     
-    print(f"compile_commands.json nicht gefunden, erstelle neue...")
-    
-    try:
-        cmd = ["pio", "run", "-e", env["PIOENV"], "-t", "compiledb"]
-        result = subprocess.run(cmd, 
-                              cwd=env.subst("$PROJECT_DIR"),
-                              capture_output=True, 
-                              text=True)
-        
-        if result.returncode == 0:
-            if os.path.exists(compile_db_path):
-                size = os.path.getsize(compile_db_path)
-                print(f"✓ compile_commands.json erstellt ({size} bytes)")
-            else:
-                print("✗ compile_commands.json nicht gefunden nach Erstellung")
-        else:
-            print(f"✗ compiledb Fehler: {result.stderr}")
-            
-    except Exception as e:
-        print(f"✗ Fehler beim Erstellen der compile_commands.json: {e}")
+    # Verwende SCons Command statt Subprocess
+    return env.Execute(f'pio run -e {env["PIOENV"]} -t compiledb')
 
-# Nur bei Build-Targets ausführen
+# Erstelle SCons Command statt Post-Action
 current_targets = COMMAND_LINE_TARGETS[:]
-if not current_targets or "build" in current_targets or "buildprog" in current_targets:
-    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", conditional_generate_compiledb)
-    print("✓ Bedingte Auto-compiledb für Build aktiviert")
+if not current_targets or any(t in ["build", "buildprog"] for t in current_targets):
+    # Erstelle Alias für compiledb nach Build
+    compiledb_alias = env.Alias("auto_compiledb", None, generate_compiledb_direct)
+    env.Depends(compiledb_alias, "$BUILD_DIR/${PROGNAME}.elf")
+    env.AlwaysBuild(compiledb_alias)
+    
+    # Füge zum Default hinzu
+    env.Default(compiledb_alias)
+
 
 
 get_correct_build_order()
