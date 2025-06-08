@@ -1198,8 +1198,8 @@ class LDFCacheOptimizer:
                                 hash_data.append(file_hash)
                                 total_relevant += 1
 
-                                relative_path = os.path.relpath(file_path, self.project_dir)
-                                file_hashes[relative_path] = file_hash
+                            relative_path = os.path.relpath(file_path, self.project_dir)
+                            file_hashes[relative_path] = file_hash
 
             except Exception as e:
                 print(f"⚠ Error scanning {scan_dir}: {e}")
