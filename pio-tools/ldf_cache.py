@@ -78,6 +78,7 @@ class LDFCacheOptimizer:
         """
         Environment-specific compiledb creation with moving and renaming.
         Ensures compile_commands_{env}.json exists for build order analysis.
+        After compiledb creation, automatically restarts the normal build process.
         """
         current_targets = COMMAND_LINE_TARGETS[:]
         is_build_target = (
@@ -144,7 +145,7 @@ class LDFCacheOptimizer:
                 print(f"✗ Error moving file")
                 sys.exit(1)
 
-            # Restart original build
+            # Restart original build - THIS IS THE NORMAL FIRST BUILD RUN
             print("4. Restarting original build...")
             restart_cmd = ["pio", "run"] + pio_args
             print(f" Executing: {' '.join(restart_cmd)}")
@@ -648,9 +649,10 @@ class LDFCacheOptimizer:
     def implement_two_run_strategy(self):
         """
         Implements the complete two-run strategy:
-        1. First run: LDF active, create comprehensive cache
-        2. Second run: LDF off, use cache for all dependencies
-        User manually starts second run when desired.
+        1. Check for existing cache first
+        2. If no cache: ensure compiledb exists (triggers normal first build automatically)
+        3. Cache gets created during/after the normal first build
+        4. lib_ldf_mode gets set to 'off' after successful build
         
         Returns:
             bool: True if strategy was successful
@@ -669,45 +671,18 @@ class LDFCacheOptimizer:
             else:
                 print("⚠ Cache application failed, falling back to first run")
         
-        # First run: Create cache with LDF active
-        print("🔄 First run: Creating comprehensive LDF cache...")
+        # First run preparation: This will trigger the normal first build automatically
+        print("🔄 Preparing first run: Checking compile_commands...")
         
-        # Ensure we have compile commands for build order
+        # This call will:
+        # 1. Create compiledb if missing
+        # 2. Automatically restart the normal build process
+        # 3. The normal build will then create the cache via post-build action
         self.environment_specific_compiledb_restart()
         
-        # Create build order and analyze artifacts
-        build_order_data = self.get_correct_build_order()
-        if not build_order_data:
-            print("❌ Could not create build order in first run")
-            return False
-        
-        artifacts_data = self.analyze_build_artifacts()
-        hash_details = self.get_project_hash_with_details()
-        
-        # Create comprehensive cache
-        combined_data = {
-            'build_order': build_order_data,
-            'artifacts': artifacts_data,
-            'project_hash': hash_details['final_hash'],
-            'hash_details': hash_details['file_hashes'],
-            'env_name': self.env_name,
-            'timestamp': datetime.datetime.now().isoformat(),
-            'pio_version': getattr(self.env, "PioVersion", lambda: "unknown")(),
-            'ldf_mode': 'off',  # Target mode for second run
-            'two_run_strategy': True
-        }
-        
-        # Save cache
-        self.save_combined_cache(combined_data)
-        
-        # Prepare for second run by setting lib_ldf_mode = off
-        if self.modify_platformio_ini_for_second_run('off'):
-            print("✅ First run complete - platformio.ini modified for second run")
-            print("💡 Run 'pio run' again to use cached dependencies with LDF disabled")
-            return True
-        else:
-            print("❌ Failed to prepare second run")
-            return False
+        # If we reach this point, compiledb already exists
+        print("✅ compile_commands available - proceeding with cache strategy")
+        return True
 
     def create_complete_ldf_replacement_with_linker(self):
         """
@@ -868,6 +843,8 @@ class LDFCacheOptimizer:
     def save_ldf_cache_with_build_order(self, target=None, source=None, env_arg=None, **kwargs):
         """
         Saves LDF cache together with build order information.
+        Called as post-build action AFTER successful normal build completion.
+        This is where lib_ldf_mode gets set to 'off' for the second run.
         
         Args:
             target: SCons target (unused)
@@ -876,6 +853,8 @@ class LDFCacheOptimizer:
             **kwargs: Additional arguments (unused)
         """
         try:
+            print("\n=== Post-Build: Creating LDF Cache ===")
+            
             # Create build order
             build_order_data = self.get_correct_build_order()
             
@@ -894,11 +873,20 @@ class LDFCacheOptimizer:
                     'env_name': self.env_name,
                     'timestamp': datetime.datetime.now().isoformat(),
                     'pio_version': getattr(self.env, "PioVersion", lambda: "unknown")(),
-                    'ldf_mode': 'off'  # We work with LDF disabled
+                    'ldf_mode': 'off',  # Target mode for second run
+                    'two_run_strategy': True
                 }
                 
                 self.save_combined_cache(combined_data)
                 print("💾 LDF cache with build order successfully saved!")
+                
+                # NOW set lib_ldf_mode = off AFTER successful complete build
+                if self.modify_platformio_ini_for_second_run('off'):
+                    print("🔧 lib_ldf_mode set to 'off' for second run")
+                    print("💡 Run 'pio run' again to use cached dependencies with LDF disabled")
+                else:
+                    print("❌ Failed to set lib_ldf_mode for second run")
+                    
             else:
                 print("❌ Could not create build order or analyze artifacts")
 
