@@ -1556,35 +1556,34 @@ class LDFCacheOptimizer:
                 self.env.Append(CPPDEFINES=new_defines)
                 print(f"   Added {len(new_defines)} preprocessor defines")
 
-def setup_ldf_caching(self):
-    """
-    Main entry point for LDF caching with build order management.
-    """
-    print("\n=== LDF Cache Optimizer with Build Order Management ===")
+    def setup_ldf_caching(self):
+        """
+        Main entry point for LDF caching with build order management.
+        """
+        print("\n=== LDF Cache Optimizer with Build Order Management ===")
 
-    # Validate LDF mode compatibility
-    if not self.validate_ldf_mode_compatibility():
-        print("❌ LDF mode incompatible - aborting")
-        return
+        # Validate LDF mode compatibility
+        if not self.validate_ldf_mode_compatibility():
+            print("❌ LDF mode incompatible - aborting")
+            return
 
-    # Always use the complete replacement function with linker optimization
-    print("🔧 Using complete LDF replacement with linker optimization")
+        # Always use the complete replacement function with linker optimization
+        print("🔧 Using complete LDF replacement with linker optimization")
     
-    # Switch to off mode and apply complete solution
-    if self.modify_platformio_ini_simple("off"):
-        success = self.create_complete_ldf_replacement_with_linker()
+        # Switch to off mode and apply complete solution
+        if self.modify_platformio_ini_simple("off"):
+            success = self.create_complete_ldf_replacement_with_linker()
         
-        if success:
-            self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
+            if success:
+                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
+            else:
+                self.restore_ini_from_backup()
+                self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
         else:
-            self.restore_ini_from_backup()
+            print("❌ Could not modify platformio.ini")
             self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
-    else:
-        print("❌ Could not modify platformio.ini")
-        self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
 
-    print("=" * 80)
-
+        print("=" * 80)
 
 def clear_ldf_cache():
     """
