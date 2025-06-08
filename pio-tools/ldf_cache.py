@@ -1,6 +1,9 @@
 """
+
 PlatformIO Advanced Script for intelligent LDF caching with build order management.
+
 Copyright: Jason2866
+
 """
 
 Import("env")
@@ -15,6 +18,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from platformio.project.config import ProjectConfig
 
 class LDFCacheOptimizer:
@@ -23,7 +27,6 @@ class LDFCacheOptimizer:
     Designed specifically for lib_ldf_mode = chain and off modes.
     Invalidates cache only when #include directives change in source files.
     Includes complete build order management for correct linking.
-    
     Implements a two-run strategy:
     1. First run: LDF active, create comprehensive cache
     2. Second run: LDF off, use cache for all dependencies
@@ -32,7 +35,6 @@ class LDFCacheOptimizer:
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
     SOURCE_EXTENSIONS = frozenset(['.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'])
     CONFIG_EXTENSIONS = frozenset(['.json', '.properties', '.txt', '.ini'])
-
     IGNORE_DIRS = frozenset([
         '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
         'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants',
@@ -53,26 +55,114 @@ class LDFCacheOptimizer:
         self.project_dir = self.env.subst("$PROJECT_DIR")
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         self.build_dir = self.env.subst("$BUILD_DIR")
-        
+
         # Cache files
         self.cache_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"ldf_cache_{self.env_name}.py")
         self.ldf_cache_ini = os.path.join(self.project_dir, "ldf_cache.ini")
         self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
         self.platformio_ini_backup = os.path.join(self.project_dir, ".pio", f"platformio_backup_{self.env_name}.ini")
-        
+
         # Build order files
         self.build_order_file = os.path.join(self.project_dir, f"correct_build_order_{self.env_name}.txt")
         self.link_order_file = os.path.join(self.project_dir, f"correct_link_order_{self.env_name}.txt")
-        
+
         # Compile commands
         self.compiledb_dir = os.path.join(self.project_dir, ".pio", "compiledb")
         self.compile_commands_file = os.path.join(self.compiledb_dir, f"compile_commands_{self.env_name}.json")
-        
+
         # Artifacts cache
         self.artifacts_cache_dir = os.path.join(self.project_dir, ".pio", "ldf_cache", "artifacts", self.env_name)
-        
+
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = os.path.join(ProjectConfig.get_instance().get("platformio", "packages_dir"))
+
+    def _is_log2compdb_available(self):
+        """Check if log2compdb is available."""
+        try:
+            subprocess.run(["log2compdb", "--help"], capture_output=True, check=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    def _install_log2compdb(self):
+        """Install log2compdb using pip."""
+        print("Installing log2compdb...")
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "log2compdb"],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                print("✅ log2compdb installed successfully")
+                return True
+            else:
+                print(f"❌ Failed to install log2compdb: {result.stderr}")
+                return False
+        except Exception as e:
+            print(f"❌ Error installing log2compdb: {e}")
+            return False
+
+    def _ensure_log2compdb_available(self):
+        """Ensure log2compdb is available, install if necessary."""
+        if self._is_log2compdb_available():
+            return True
+        print("log2compdb not found, attempting to install...")
+        return self._install_log2compdb()
+
+    def create_compiledb_with_log2compdb(self):
+        """
+        Build the project and generate compile_commands.json using log2compdb.
+        Replaces the traditional compiledb creation logic.
+        """
+        if not self._ensure_log2compdb_available():
+            print("❌ log2compdb not available and installation failed")
+            return False
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as log_file:
+            log_path = log_file.name
+
+        try:
+            build_cmd = ["pio", "run", "-e", self.env_name, "-v"]
+            process = subprocess.run(
+                build_cmd,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=self.project_dir
+            )
+            log_file.close()
+
+            if process.returncode != 0:
+                print(f"❌ Build failed with return code {process.returncode}")
+                return False
+
+            log2compdb_cmd = [
+                "log2compdb",
+                "-i", log_path,
+                "-o", self.compile_commands_file,
+                "-c", "xtensa-esp32-elf-gcc",
+                "-c", "xtensa-esp32-elf-g++",
+                "-c", "riscv32-esp-elf-gcc",
+                "-c", "riscv32-esp-elf-g++",
+                "-c", "arm-none-eabi-gcc",
+                "-c", "arm-none-eabi-g++"
+            ]
+
+            result = subprocess.run(log2compdb_cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"❌ log2compdb failed: {result.stderr}")
+                return False
+
+            print(f"✅ Generated {self.compile_commands_file} from build log")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error during build or compiledb generation: {e}")
+            return False
+        finally:
+            if os.path.exists(log_path):
+                os.unlink(log_path)
 
     def environment_specific_compiledb_restart(self):
         """
@@ -99,7 +189,6 @@ class LDFCacheOptimizer:
 
         # Reconstruct correct PlatformIO arguments
         pio_args = ["-e", self.env_name]
-        
         if current_targets:
             for target in current_targets:
                 if target not in ["compiledb"]:
@@ -182,7 +271,7 @@ class LDFCacheOptimizer:
         include_paths = set()
         defines = set()
         build_flags = set()
-        
+
         for i, entry in enumerate(compile_db, 1):
             source_file = entry.get('file', '')
             command = entry.get('command', '')
@@ -227,7 +316,7 @@ class LDFCacheOptimizer:
 
             print(f"✓ Created: correct_build_order_{self.env_name}.txt")
             print(f"✓ Created: correct_link_order_{self.env_name}.txt")
-            
+
             return {
                 'ordered_objects': ordered_objects,
                 'build_order_file': self.build_order_file,
@@ -257,7 +346,7 @@ class LDFCacheOptimizer:
 
         try:
             ordered_objects = build_order_data.get('ordered_objects', [])
-            
+
             # Collect all object files in correct order
             object_files = []
             for obj_info in ordered_objects[:-1]:  # Exclude last element
@@ -271,16 +360,16 @@ class LDFCacheOptimizer:
 
             # Set OBJECTS in correct order
             self.env.Replace(OBJECTS=object_files)
-            
+
             # Apply include paths and defines from compile commands
             self._apply_compile_data_to_environment(build_order_data)
-            
+
             # CRITICAL: Implement correct linker order
             self._apply_correct_linker_order(object_files)
-            
+
             print(f"✅ Build order applied: {len(object_files)} object files")
             print(f"✅ Linker order configured for correct symbol resolution")
-            
+
             return True
 
         except Exception as e:
@@ -302,7 +391,7 @@ class LDFCacheOptimizer:
                 new_paths = [p for p in include_paths if p not in existing_paths]
                 if new_paths:
                     self.env.Append(CPPPATH=new_paths)
-                    print(f"  ✅ Added {len(new_paths)} include paths from compile commands")
+                    print(f" ✅ Added {len(new_paths)} include paths from compile commands")
 
             # Apply defines
             defines = build_order_data.get('defines', [])
@@ -311,14 +400,14 @@ class LDFCacheOptimizer:
                 new_defines = [d for d in defines if d not in existing_defines]
                 if new_defines:
                     self.env.Append(CPPDEFINES=new_defines)
-                    print(f"  ✅ Added {len(new_defines)} defines from compile commands")
+                    print(f" ✅ Added {len(new_defines)} defines from compile commands")
 
             # Apply build flags
             build_flags = build_order_data.get('build_flags', [])
             if build_flags:
                 self.env.Append(CCFLAGS=list(build_flags))
                 self.env.Append(CXXFLAGS=list(build_flags))
-                print(f"  ✅ Added {len(build_flags)} build flags from compile commands")
+                print(f" ✅ Added {len(build_flags)} build flags from compile commands")
 
         except Exception as e:
             print(f"⚠ Warning applying compile data: {e}")
@@ -334,47 +423,47 @@ class LDFCacheOptimizer:
         try:
             # Save current LINKFLAGS
             current_linkflags = self.env.get('LINKFLAGS', [])
-            
+
             # Create optimized linker command structure
             # Based on GitHub Issue #3208: Object files BEFORE linker flags
             custom_linkcom = (
                 "$LINK -o $TARGET "
                 "${_long_sources_hook(__env__, SOURCES)} "  # Objects first
-                "$LINKFLAGS "                               # Then flags
-                "$__RPATH $_LIBDIRFLAGS $_LIBFLAGS"        # Libraries last
+                "$LINKFLAGS "  # Then flags
+                "$__RPATH $_LIBDIRFLAGS $_LIBFLAGS"  # Libraries last
             )
-            
+
             # Apply correct linker order
             self.env.Replace(LINKCOM=custom_linkcom)
-            
+
             # Optimize linker flags for symbol resolution
             optimized_linkflags = []
-            
+
             # Group related objects for better symbol resolution
             optimized_linkflags.extend([
                 "-Wl,--start-group",  # Begin grouping
             ])
-            
+
             # Add existing LINKFLAGS (without duplicates)
             for flag in current_linkflags:
                 if flag not in optimized_linkflags:
                     optimized_linkflags.append(flag)
-            
+
             # Close grouping for circular dependencies
             optimized_linkflags.extend([
-                "-Wl,--end-group",    # End grouping
+                "-Wl,--end-group",  # End grouping
                 "-Wl,--gc-sections",  # Remove unused sections
             ])
-            
+
             # Set optimized linker flags
             self.env.Replace(LINKFLAGS=optimized_linkflags)
-            
+
             # Special handling for linker scripts (if present)
             self._handle_linker_scripts()
-            
+
             print(f"🔗 Linker command optimized for correct symbol resolution")
             print(f"🔗 {len(optimized_linkflags)} linker flags configured")
-            
+
         except Exception as e:
             print(f"⚠ Warning during linker optimization: {e}")
             # Fallback to standard behavior
@@ -389,7 +478,7 @@ class LDFCacheOptimizer:
             linkflags = self.env.get('LINKFLAGS', [])
             linker_script_flags = []
             other_flags = []
-            
+
             # Separate linker script flags from other flags
             for flag in linkflags:
                 if isinstance(flag, str):
@@ -399,13 +488,13 @@ class LDFCacheOptimizer:
                         other_flags.append(flag)
                 else:
                     other_flags.append(flag)
-            
+
             if linker_script_flags:
                 # Linker scripts must come BEFORE other flags
                 reordered_flags = linker_script_flags + other_flags
                 self.env.Replace(LINKFLAGS=reordered_flags)
                 print(f"🔗 {len(linker_script_flags)} linker script(s) correctly positioned")
-                
+
         except Exception as e:
             print(f"⚠ Warning during linker script handling: {e}")
 
@@ -467,7 +556,7 @@ class LDFCacheOptimizer:
             dict: Artifact analysis results
         """
         lib_build_dir = os.path.join(self.project_dir, '.pio', 'build', self.env_name)
-        
+
         if not os.path.exists(lib_build_dir):
             print(f"⚠ Build directory not found: {lib_build_dir}")
             return {}
@@ -478,7 +567,7 @@ class LDFCacheOptimizer:
         # Collect library and object information
         compiled_libraries = []
         compiled_objects = []
-        
+
         for original_path, cache_path in path_mapping.items():
             if original_path.endswith('.a'):
                 compiled_libraries.append(cache_path)
@@ -508,19 +597,19 @@ class LDFCacheOptimizer:
         try:
             build_order = cache_data.get('build_order', {})
             artifacts = cache_data.get('artifacts', {})
-            
+
             if not build_order:
                 return False
 
             print("🔧 Applying build order with artifact integration...")
-            
+
             # Apply build order with compile data
             success_build_order = self.apply_build_order_to_environment(build_order)
-            
+
             # Apply cached artifacts
             if artifacts and success_build_order:
                 self._apply_cached_artifacts(artifacts)
-                
+
             return success_build_order
 
         except Exception as e:
@@ -541,7 +630,7 @@ class LDFCacheOptimizer:
                 valid_libs = [lib for lib in compiled_libraries if os.path.exists(lib)]
                 if valid_libs:
                     self.env.Append(LIBS=valid_libs)
-                    print(f"  ✅ Added {len(valid_libs)} cached static libraries")
+                    print(f" ✅ Added {len(valid_libs)} cached static libraries")
 
             # Apply object files
             compiled_objects = artifacts.get('compiled_objects', [])
@@ -549,7 +638,7 @@ class LDFCacheOptimizer:
                 valid_objects = [obj for obj in compiled_objects if os.path.exists(obj)]
                 if valid_objects:
                     self.env.Append(OBJECTS=valid_objects)
-                    print(f"  ✅ Added {len(valid_objects)} cached object files")
+                    print(f" ✅ Added {len(valid_objects)} cached object files")
 
         except Exception as e:
             print(f"⚠ Warning applying cached artifacts: {e}")
@@ -658,10 +747,9 @@ class LDFCacheOptimizer:
             bool: True if strategy was successful
         """
         print("\n=== Two-Run LDF Cache Strategy ===")
-        
+
         # Check if we already have a valid cache
         existing_cache = self.load_combined_cache()
-        
         if existing_cache:
             print("✅ Valid cache found - applying cached dependencies")
             success = self.apply_ldf_cache_with_build_order(existing_cache)
@@ -670,16 +758,16 @@ class LDFCacheOptimizer:
                 return True
             else:
                 print("⚠ Cache application failed, falling back to first run")
-        
+
         # First run preparation: This will trigger the normal first build automatically
         print("🔄 Preparing first run: Checking compile_commands...")
-        
+
         # This call will:
         # 1. Create compiledb if missing
         # 2. Automatically restart the normal build process
         # 3. The normal build will then create the cache via post-build action
         self.environment_specific_compiledb_restart()
-        
+
         # If we reach this point, compiledb already exists
         print("✅ compile_commands available - proceeding with cache strategy")
         return True
@@ -692,11 +780,11 @@ class LDFCacheOptimizer:
             bool: True if successful
         """
         print("\n=== Complete LDF Replacement Solution with Linker Optimization ===")
-        
+
         try:
             # Ensure compile_commands.json exists
             self.environment_specific_compiledb_restart()
-            
+
             # Create build order with compile data extraction
             build_order_data = self.get_correct_build_order()
             if not build_order_data:
@@ -757,9 +845,9 @@ class LDFCacheOptimizer:
         """
         try:
             combined_data['signature'] = self.compute_signature(combined_data)
-            
+
             os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
-            
+
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 f.write("# LDF Cache - Complete Build Environment with Build Order\n")
                 f.write("# Optimized for lib_ldf_mode = off with correct build order\n")
@@ -767,9 +855,9 @@ class LDFCacheOptimizer:
                 f.write("cache_data = \\\n")
                 f.write(pprint.pformat(combined_data, indent=2, width=120))
                 f.write("\n")
-            
+
             print(f"💾 Combined cache saved: {self.cache_file}")
-            
+
         except Exception as e:
             print(f"✗ Error saving combined cache: {e}")
 
@@ -788,7 +876,7 @@ class LDFCacheOptimizer:
         try:
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 cache_content = f.read()
-            
+
             local_vars = {}
             exec(cache_content, {}, local_vars)
             cache_data = local_vars.get('cache_data')
@@ -805,14 +893,14 @@ class LDFCacheOptimizer:
             # Check project hash for changes (only include-relevant changes)
             current_hash = self.get_project_hash_with_details()['final_hash']
             cached_hash = cache_data.get('project_hash')
-            
+
             if cached_hash != current_hash:
                 print("🔄 Project files changed - cache invalidated")
                 return None
 
             # Check if build order files exist
             build_order = cache_data.get('build_order', {})
-            if not (os.path.exists(build_order.get('build_order_file', '')) and 
+            if not (os.path.exists(build_order.get('build_order_file', '')) and
                     os.path.exists(build_order.get('link_order_file', ''))):
                 print("⚠ Build order files missing")
                 return None
@@ -820,11 +908,11 @@ class LDFCacheOptimizer:
             # Check if cached artifacts exist
             artifacts = cache_data.get('artifacts', {})
             missing_artifacts = []
-            
+
             for lib_path in artifacts.get('compiled_libraries', []):
                 if not os.path.exists(lib_path):
                     missing_artifacts.append(lib_path)
-            
+
             for obj_path in artifacts.get('compiled_objects', []):
                 if not os.path.exists(obj_path):
                     missing_artifacts.append(obj_path)
@@ -854,13 +942,13 @@ class LDFCacheOptimizer:
         """
         try:
             print("\n=== Post-Build: Creating LDF Cache ===")
-            
+
             # Create build order
             build_order_data = self.get_correct_build_order()
-            
+
             # Analyze artifacts
             artifacts_data = self.analyze_build_artifacts()
-            
+
             # Get project hash
             hash_details = self.get_project_hash_with_details()
 
@@ -876,17 +964,17 @@ class LDFCacheOptimizer:
                     'ldf_mode': 'off',  # Target mode for second run
                     'two_run_strategy': True
                 }
-                
+
                 self.save_combined_cache(combined_data)
                 print("💾 LDF cache with build order successfully saved!")
-                
+
                 # NOW set lib_ldf_mode = off AFTER successful complete build
                 if self.modify_platformio_ini_for_second_run('off'):
                     print("🔧 lib_ldf_mode set to 'off' for second run")
                     print("💡 Run 'pio run' again to use cached dependencies with LDF disabled")
                 else:
                     print("❌ Failed to set lib_ldf_mode for second run")
-                    
+
             else:
                 print("❌ Could not create build order or analyze artifacts")
 
@@ -906,7 +994,7 @@ class LDFCacheOptimizer:
         try:
             config = ProjectConfig()
             env_section = f"env:{self.env['PIOENV']}"
-            
+
             # Check environment-specific setting first
             if config.has_option(env_section, "lib_ldf_mode"):
                 ldf_mode = config.get(env_section, "lib_ldf_mode")
@@ -964,6 +1052,7 @@ class LDFCacheOptimizer:
 
         pio_home = os.path.join(ProjectConfig.get_instance().get("platformio", "platforms_dir"))
         platformio_paths.add(os.path.normpath(pio_home))
+
         platformio_paths.add(os.path.normpath(os.path.join(self.project_dir, ".pio")))
 
         norm_path = os.path.normpath(path)
@@ -1004,6 +1093,7 @@ class LDFCacheOptimizer:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 for line in f:
                     stripped = line.strip()
+
                     if stripped.startswith('//'):
                         continue
 
@@ -1091,7 +1181,6 @@ class LDFCacheOptimizer:
                     for file in files:
                         total_scanned += 1
                         file_ext = os.path.splitext(file)[1].lower()
-
                         if file_ext in self.ALL_RELEVANT_EXTENSIONS:
                             relevant_files.append(file)
 
@@ -1109,8 +1198,8 @@ class LDFCacheOptimizer:
                                 hash_data.append(file_hash)
                                 total_relevant += 1
 
-                            relative_path = os.path.relpath(file_path, self.project_dir)
-                            file_hashes[relative_path] = file_hash
+                                relative_path = os.path.relpath(file_path, self.project_dir)
+                                file_hashes[relative_path] = file_hash
 
             except Exception as e:
                 print(f"⚠ Error scanning {scan_dir}: {e}")
