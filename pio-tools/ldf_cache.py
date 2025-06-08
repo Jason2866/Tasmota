@@ -1556,36 +1556,35 @@ class LDFCacheOptimizer:
                 self.env.Append(CPPDEFINES=new_defines)
                 print(f"   Added {len(new_defines)} preprocessor defines")
 
-    def setup_ldf_caching(self):
-        """
-        Main entry point using backup/restore for platformio.ini.
-        Sets up intelligent LDF caching optimized for chain mode.
-        Only invalidates cache when #include directives change.
-        """
-        print("\n=== LDF Cache Optimizer (Chain Mode) ===")
+def setup_ldf_caching(self):
+    """
+    Main entry point for LDF caching with build order management.
+    """
+    print("\n=== LDF Cache Optimizer with Build Order Management ===")
 
-        # Validate LDF mode compatibility first
-        if not self.validate_ldf_mode_compatibility():
-            print("🔄 Falling back to normal LDF due to incompatible mode")
-            self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
-            print("=" * 80)
-            return
+    # Validate LDF mode compatibility
+    if not self.validate_ldf_mode_compatibility():
+        print("❌ LDF mode incompatible - aborting")
+        return
 
-        cache_data = self.load_and_validate_cache()
-        if cache_data:
-            print("🚀 Valid chain mode cache found - disabling LDF with backup/restore")
-            if self.modify_platformio_ini_simple("off") and self.apply_ldf_cache_complete(cache_data):
-                print("✅ SCons environment restored from chain mode cache")
-                # Restore platformio.ini after build
-                self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
-            else:
-                print("❌ Cache application failed - falling back to full LDF")
-                self.restore_ini_from_backup()
-                self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
+    # Always use the complete replacement function with linker optimization
+    print("🔧 Using complete LDF replacement with linker optimization")
+    
+    # Switch to off mode and apply complete solution
+    if self.modify_platformio_ini_simple("off"):
+        success = self.create_complete_ldf_replacement_with_linker()
+        
+        if success:
+            self.env.AddPostAction("checkprogsize", lambda *args: self.restore_ini_from_backup())
         else:
-            print("🔄 No valid cache - running full LDF in chain mode")
-            self.env.AddPostAction("checkprogsize", self.save_ldf_cache)
-        print("=" * 80)
+            self.restore_ini_from_backup()
+            self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
+    else:
+        print("❌ Could not modify platformio.ini")
+        self.env.AddPostAction("checkprogsize", self.save_ldf_cache_with_build_order)
+
+    print("=" * 80)
+
 
 def clear_ldf_cache():
     """
