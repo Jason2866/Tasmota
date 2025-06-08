@@ -4,7 +4,6 @@ import json
 import subprocess
 import shutil
 from os.path import join
-from datetime import datetime
 
 Import("env")
 env = DefaultEnvironment()
@@ -24,15 +23,13 @@ def get_correct_build_order():
     
     # 2. Finde Build-Verzeichnis
     build_dir = os.path.join(env.subst("$BUILD_DIR"))
-    print(f"Suche nach Build-Verzeichnis: {build_dir}")
     if not build_dir:
-        print("FEHLER: Kein .pio/build Verzeichnis gefunden")
+        print("FEHLER: build Verzeichnis nicht gefunden")
         return None
     
     results = {}
     env_name = os.path.basename(build_dir)
-    print(f"\nAnalysiere Environment: {env_name}")
-        
+
     # 3. Mappe Source-Dateien zu Objekt-Dateien
     ordered_objects = []
         
@@ -46,54 +43,32 @@ def get_correct_build_order():
             
         if obj_match:
             obj_file = obj_match.group(1)
-                
-            # Prüfe ob Objekt-Datei existiert
-            if os.path.exists(obj_file):
-                ordered_objects.append({
-                    'order': i,
-                    'source': source_file,
-                    'object': obj_file,
-                    'exists': True
-                })
-            else:
-                ordered_objects.append({
-                    'order': i,
-                    'source': source_file,
-                    'object': obj_file,
-                    'exists': False
-                })
+            ordered_objects.append({
+                'order': i,
+                'source': source_file,
+                'object': obj_file,
+            })
         
     results[env_name] = ordered_objects
         
     # 4. Speichere Ergebnisse
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-    with open(f"correct_build_order_{env_name}_{timestamp}.txt", "w") as f:
-        f.write(f"KORREKTE BUILD-REIHENFOLGE für {env_name}\n")
-        f.write("=" * 60 + "\n\n")
-        f.write("Reihenfolge basiert auf compile_commands.json\n")
-        f.write("(nicht auf Datei-Erstellungszeit)\n\n")
-            
+    with open(f"correct_build_order_{env_name}.txt", "w") as f:
+#        f.write(f"KORREKTE BUILD-REIHENFOLGE für {env_name}\n")
+#        f.write("Reihenfolge basiert auf compile_commands.json\n\n")
         for obj_info in ordered_objects:
-            status = "✓" if obj_info['exists'] else "✗"
-            f.write(f"{obj_info['order']:3d}: {status} {obj_info['source']}\n")
-            f.write(f"     -> {obj_info['object']}\n\n")
+#            f.write(f"{obj_info['order']:3d}: {obj_info['source']}\n")
+#            f.write(f"{obj_info['source']}\n")
+            f.write(f"{obj_info['object']}\n")
         
-    # 5. Erstelle korrektes Linker-Kommando
-    with open(f"correct_link_command_{env_name}_{timestamp}.sh", "w") as f:
-        f.write("#!/bin/bash\n")
-        f.write(f"# Korrektes Linker-Kommando für {env_name}\n")
-        f.write("# Reihenfolge basiert auf compile_commands.json\n\n")
-            
-        f.write("g++ \\\n")
+    # 5. Erstelle korrekte Linker Reihenfolge
+    with open(f"correct_link_order_{env_name}.txt", "w") as f:
+#        f.write(f"#KORREKTE LINKER-REIHENFOLGE für {env_name}\n")
+#        f.write("# Reihenfolge basiert auf compile_commands.json\n\n")
         for obj_info in ordered_objects:
-            if obj_info['exists']:
-                f.write(f"  {obj_info['object']} \\\n")
-        f.write(f"  -o {build_dir}/firmware.elf\n")
+            f.write(f"{obj_info['object']}\n")
         
-    print(f"Erstellt: correct_build_order_{env_name}_{timestamp}.txt")
-    print(f"Erstellt: correct_link_command_{env_name}_{timestamp}.sh")
-    print(f"Objekt-Dateien: {len([o for o in ordered_objects if o['exists']])}/{len(ordered_objects)}")
+    print(f"Erstellt: correct_build_order_{env_name}.txt")
+    print(f"Erstellt: correct_link_order_{env_name}.txt")
     
     return results
 
