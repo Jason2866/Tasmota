@@ -26,7 +26,7 @@ class LDFCacheOptimizer:
     
     Implements a two-run strategy:
     1. First run: LDF active, create comprehensive cache
-    2. Second run: LDF disabled, use cache for all dependencies
+    2. Second run: LDF off, use cache for all dependencies
     """
 
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
@@ -650,6 +650,7 @@ class LDFCacheOptimizer:
         Implements the complete two-run strategy:
         1. First run: LDF active, create comprehensive cache
         2. Second run: LDF off, use cache for all dependencies
+        User manually starts second run when desired.
         
         Returns:
             bool: True if strategy was successful
@@ -665,6 +666,8 @@ class LDFCacheOptimizer:
             if success:
                 print("🚀 Second run: Using cached dependencies, LDF bypassed")
                 return True
+            else:
+                print("⚠ Cache application failed, falling back to first run")
         
         # First run: Create cache with LDF active
         print("🔄 First run: Creating comprehensive LDF cache...")
@@ -696,36 +699,15 @@ class LDFCacheOptimizer:
         
         # Save cache
         self.save_combined_cache(combined_data)
-
-    def trigger_second_run_restart(self):
-        """
-        Triggers a restart of the build process for the second run with LDF disabled.
-        """
-        try:
-            current_targets = COMMAND_LINE_TARGETS[:]
-            pio_args = ["-e", self.env_name]
-            
-            if current_targets:
-                for target in current_targets:
-                    if target not in ["compiledb"]:
-                        pio_args.extend(["-t", target])
-            
-            print("🔄 Triggering second run with cached dependencies...")
-            restart_cmd = ["pio", "run"] + pio_args
-            print(f" Executing: {' '.join(restart_cmd)}")
-            print("=" * 60)
-            
-            restart_result = subprocess.run(restart_cmd, cwd=self.project_dir)
-            
-            # Restore original platformio.ini after second run
-            self.restore_ini_from_backup()
-            
-            sys.exit(restart_result.returncode)
-            
-        except Exception as e:
-            print(f"✗ Error triggering second run: {e}")
-            self.restore_ini_from_backup()
-            sys.exit(1)
+        
+        # Prepare for second run by setting lib_ldf_mode = off
+        if self.modify_platformio_ini_for_second_run('off'):
+            print("✅ First run complete - platformio.ini modified for second run")
+            print("💡 Run 'pio run' again to use cached dependencies with LDF disabled")
+            return True
+        else:
+            print("❌ Failed to prepare second run")
+            return False
 
     def create_complete_ldf_replacement_with_linker(self):
         """
@@ -819,6 +801,8 @@ class LDFCacheOptimizer:
     def load_combined_cache(self):
         """
         Loads and validates the combined cache.
+        Cache is only invalidated when #include directives change in source files
+        or platformio.ini changes (excluding lib_ldf_mode).
         
         Returns:
             dict: Valid cache data or None if invalid
@@ -834,17 +818,21 @@ class LDFCacheOptimizer:
             exec(cache_content, {}, local_vars)
             cache_data = local_vars.get('cache_data')
 
-            # Validate signature
-            expected_signature = cache_data.get('signature')
-            actual_signature = self.compute_signature(cache_data)
-            
-            if expected_signature != actual_signature:
-                print("⚠ Cache invalid: Signature mismatch")
+            if not cache_data:
+                print("⚠ Cache file contains no data")
                 return None
 
             # Validate environment
             if cache_data.get('env_name') != self.env_name:
                 print(f"🔄 Environment changed: {cache_data.get('env_name')} -> {self.env_name}")
+                return None
+
+            # Check project hash for changes (only include-relevant changes)
+            current_hash = self.get_project_hash_with_details()['final_hash']
+            cached_hash = cache_data.get('project_hash')
+            
+            if cached_hash != current_hash:
+                print("🔄 Project files changed - cache invalidated")
                 return None
 
             # Check if build order files exist
@@ -1014,6 +1002,7 @@ class LDFCacheOptimizer:
         Calculate a hash based on relevant #include and #define lines in a source file.
         This is optimized for chain mode which only follows #include directives.
         Chain mode ignores #ifdef, #if, #elif preprocessor directives.
+        Only invalidates cache when #include directives actually change.
         
         Args:
             file_path (str): Path to the source file
@@ -1047,6 +1036,7 @@ class LDFCacheOptimizer:
         """
         Scan project files and produce a hash based only on LDF-relevant changes.
         Optimized for chain mode - only invalidates cache when #include directives change.
+        Excludes lib_ldf_mode changes from platformio.ini to support two-run strategy.
         
         Returns:
             dict: Hash details and scan metadata
@@ -1057,12 +1047,13 @@ class LDFCacheOptimizer:
 
         generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
 
-        # platformio.ini is always relevant for LDF
+        # platformio.ini is always relevant for LDF, but exclude lib_ldf_mode changes
         if os.path.exists(self.platformio_ini):
             try:
                 with open(self.platformio_ini, 'r', encoding='utf-8') as f:
                     ini_content = f.read()
 
+                # CRITICAL: Remove lib_ldf_mode before hashing to support two-run strategy
                 filtered_content = re.sub(r'lib_ldf_mode\s*=\s*\w+\n?', '', ini_content)
                 ini_hash = hashlib.sha256(filtered_content.encode()).hexdigest()[:16]
                 hash_data.append(ini_hash)  # Relevant for LDF
@@ -1160,22 +1151,19 @@ class LDFCacheOptimizer:
 
     def compute_signature(self, cache_data):
         """
-        Compute a signature for cache validation.
+        Compute a simplified signature for cache validation.
+        Simplified to avoid constant cache invalidation.
         
         Args:
             cache_data (dict): Cache data to sign
             
         Returns:
-            str: Computed signature
+            str: Computed signature based on environment and project hash
         """
         try:
-            # Create a copy without the signature field
-            data_copy = cache_data.copy()
-            data_copy.pop('signature', None)
-            
-            # Convert to string and hash
-            data_str = str(sorted(data_copy.items()))
-            return hashlib.sha256(data_str.encode()).hexdigest()[:16]
+            env_name = cache_data.get('env_name', '')
+            project_hash = cache_data.get('project_hash', '')
+            return hashlib.sha256(f"{env_name}_{project_hash}".encode()).hexdigest()[:16]
         except Exception:
             return "invalid"
 
