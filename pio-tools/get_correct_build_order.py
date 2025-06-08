@@ -11,9 +11,11 @@ env = DefaultEnvironment()
 
 def get_correct_build_order():
     """Kombiniert compile_commands.json (Reihenfolge) mit Build-Artefakten (Pfade)"""
-
-    build_dir = env.subst("$BUILD_DIR")
-    path_compile_commands = join(build_dir, "compile_commands.json")
+    env_name = env.get("PIOENV")
+    project_dir = env.subst("$PROJECT_DIR")
+    compiledb_dir = os.path.join(project_dir, ".pio", "compiledb")
+    #build_dir = os.path.join(project_dir, ".pio", "compiledb")
+    path_compile_commands = os.path.join(compiledb_dir, f"compile_commands_{env_name}.json")
     # 1. Lade compile_commands.json für korrekte Reihenfolge
     if not os.path.exists(path_compile_commands):
         print("FEHLER: compile_commands.json nicht gefunden")
