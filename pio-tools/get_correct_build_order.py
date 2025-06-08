@@ -100,55 +100,45 @@ def get_correct_build_order():
     
     return results
 
-def ensure_compiledb_target():
-    """Stellt sicher, dass ein compiledb Target verfügbar ist"""
+def setup_conditional_compiledb():
+    """Fügt compiledb nur bei build Target hinzu"""
     
-    # Standard-Konfiguration
-    compilationdb_path = os.path.join("$BUILD_DIR", "compile_commands.json")
-    env.Replace(COMPILATIONDB_PATH=compilationdb_path)
-    env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
+    # Hole die aktuellen Command Line Targets
+    current_targets = COMMAND_LINE_TARGETS[:]
     
-    # Prüfe ob bereits ein compiledb Target existiert
-    existing_targets = [str(target) for target in env.Alias("compiledb")]
+    # Prüfe ob "build" oder kein spezifisches Target angegeben wurde
+    # (kein Target bedeutet Standard-Build)
+    should_add_compiledb = (
+        not current_targets or  # Kein Target = Standard Build
+        "build" in current_targets or
+        "buildprog" in current_targets
+    )
     
-    if not existing_targets:
-        print("Erstelle compiledb Target...")
+    if should_add_compiledb:
+        # Erstelle neue Target-Liste mit compiledb am Anfang
+        new_targets = ["compiledb"]
         
-        try:
-            # Versuche das eingebaute Tool zu verwenden
-            env.Tool("compilation_db")
-            env.Alias("compiledb", env.CompilationDatabase("$COMPILATIONDB_PATH"))
-            print("✓ Eingebautes compiledb Target erstellt")
-            
-        except Exception as e:
-            print(f"⚠ Eingebautes Tool nicht verfügbar ({e}), verwende Custom Implementation")
-            
-            def custom_compiledb(source, target, env):
-                """Custom compiledb Implementierung"""
-                output_path = env.subst("$COMPILATIONDB_PATH")
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                
-                # Basis-Struktur für compile_commands.json
-                compile_commands = [{
-                    "directory": env.subst("$PROJECT_DIR"),
-                    "command": "echo 'Custom compiledb implementation'",
-                    "file": "src/main.cpp"
-                }]
-                
-                with open(output_path, 'w') as f:
-                    json.dump(compile_commands, f, indent=2)
-                
-                print(f"✓ Custom compile_commands.json erstellt: {output_path}")
-            
-            env.AddCustomTarget(
-                name="compiledb",
-                dependencies=None,
-                actions=custom_compiledb,
-                title="Custom CompileDB",
-                description="Erstellt compile_commands.json (Custom Implementation)"
-            )
+        # Füge ursprüngliche Targets hinzu (außer compiledb)
+        for target in current_targets:
+            if target != "compiledb":
+                new_targets.append(target)
+        
+        # Wenn keine Targets vorhanden waren, füge build hinzu
+        if not current_targets:
+            new_targets.append("build")
+        
+        # Setze die modifizierten Targets
+        COMMAND_LINE_TARGETS[:] = new_targets
+        
+        print(f"compiledb für Build-Target hinzugefügt: {new_targets}")
+        
+        # Konfiguriere Compilation Database
+        env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
+        compilationdb_path = os.path.join("$BUILD_DIR", "compile_commands.json")
+        env.Replace(COMPILATIONDB_PATH=compilationdb_path)
     else:
-        print("✓ compiledb Target bereits vorhanden")
+        print(f"compiledb übersprungen für Targets: {current_targets}")
 
-ensure_compiledb_target()
+# Führe die bedingte Target-Manipulation aus
+setup_conditional_compiledb()
 get_correct_build_order()
