@@ -1,6 +1,7 @@
 import os
 import json
 import subprocess
+import shutil
 from os.path import join
 from datetime import datetime
 
@@ -102,7 +103,7 @@ def get_correct_build_order():
     return results
 
 def environment_specific_compiledb_restart():
-    """Environment-spezifische compiledb mit sicherem Pfad"""
+    """Environment-spezifische compiledb mit Verschieben und Umbenennen"""
     
     current_targets = COMMAND_LINE_TARGETS[:]
     is_build_target = (
@@ -119,33 +120,35 @@ def environment_specific_compiledb_restart():
         print("✗ Fehler: Kein Environment definiert")
         sys.exit(1)
     
-    # Sicherer Pfad: .pio/compiledb/ Verzeichnis
-    compiledb_dir = os.path.join(env.subst("$PROJECT_DIR"), ".pio", "compiledb")
-    compile_db_path = os.path.join(compiledb_dir, f"compile_commands_{env_name}.json")
-    
-    if os.path.exists(compile_db_path):
-        return  # Environment-spezifische JSON existiert bereits
-    
-    print("=" * 60)
-    print(f"COMPILE_COMMANDS_{env_name.upper()}.JSON FEHLT - ERSTELLE UND STARTE NEU")
-    print("=" * 60)
-    
+    # Pfade definieren
     project_dir = env.subst("$PROJECT_DIR")
+    compiledb_dir = os.path.join(project_dir, ".pio", "compiledb")
+    standard_compile_db_path = os.path.join(project_dir, "compile_commands.json")
+    target_compile_db_path = os.path.join(compiledb_dir, f"compile_commands_{env_name}.json")
+    
+    # Prüfe ob environment-spezifische Datei bereits existiert
+    if os.path.exists(target_compile_db_path):
+        print(f"✓ compile_commands_{env_name}.json bereits vorhanden")
+        return
+    
+    print("=" * 60)
+    print(f"COMPILE_COMMANDS_{env_name.upper()}.JSON FEHLT")
+    print("=" * 60)
+    
     original_args = sys.argv[1:]
     
     try:
         print(f"Environment: {env_name}")
         print("1. Breche aktuellen Build ab...")
-        print(f"2. Erstelle compile_commands_{env_name}.json...")
+        print("2. Erstelle compile_commands.json...")
         
-        # Erstelle Verzeichnis falls es nicht existiert
+        # Erstelle Zielverzeichnis falls es nicht existiert
         os.makedirs(compiledb_dir, exist_ok=True)
         
-        # WICHTIG: Setze den sicheren Pfad VOR der compiledb Erstellung
-        env.Replace(COMPILATIONDB_INCLUDE_TOOLCHAIN=True)
-        env.Replace(COMPILATIONDB_PATH=compile_db_path)
-        
-        print(f"   Ziel-Pfad: {compile_db_path}")
+        # Lösche eventuell vorhandene Standard-Datei
+        if os.path.exists(standard_compile_db_path):
+            os.remove(standard_compile_db_path)
+            print("   Alte compile_commands.json gelöscht")
         
         # Environment-spezifische compiledb Erstellung
         compiledb_cmd = ["pio", "run", "-e", env_name, "-t", "compiledb"]
@@ -154,26 +157,45 @@ def environment_specific_compiledb_restart():
         result = subprocess.run(compiledb_cmd, cwd=project_dir)
         
         if result.returncode != 0:
-            print(f"✗ Fehler bei compile_commands_{env_name}.json Erstellung")
+            print(f"✗ Fehler bei compile_commands.json Erstellung")
             sys.exit(1)
         
-        if os.path.exists(compile_db_path):
-            print(f"✓ compile_commands_{env_name}.json erfolgreich erstellt")
+        # Prüfe ob Standard-Datei erstellt wurde
+        if not os.path.exists(standard_compile_db_path):
+            print(f"✗ compile_commands.json wurde nicht erstellt")
+            sys.exit(1)
+        
+        # Verschiebe und benenne um
+        print(f"3. Verschiebe zu compile_commands_{env_name}.json...")
+        shutil.move(standard_compile_db_path, target_compile_db_path)
+        
+        # Prüfe ob Verschiebung erfolgreich war
+        if os.path.exists(target_compile_db_path):
+            file_size = os.path.getsize(target_compile_db_path)
+            print(f"✓ compile_commands_{env_name}.json erfolgreich erstellt ({file_size} bytes)")
         else:
-            print(f"✗ compile_commands_{env_name}.json nicht gefunden nach Erstellung")
+            print(f"✗ Fehler beim Verschieben der Datei")
             sys.exit(1)
         
-        # Starte mit ursprünglichen Argumenten neu
-        print("3. Starte ursprünglichen Build neu...")
+        # Starte ursprünglichen Build neu
+        print("4. Starte ursprünglichen Build neu...")
         restart_cmd = ["pio", "run"] + original_args
         print(f"   Ausführe: {' '.join(restart_cmd)}")
+        print("=" * 60)
         
         restart_result = subprocess.run(restart_cmd, cwd=project_dir)
         sys.exit(restart_result.returncode)
         
+    except FileNotFoundError as e:
+        print(f"✗ Datei nicht gefunden: {e}")
+        sys.exit(1)
+    except PermissionError as e:
+        print(f"✗ Berechtigung verweigert: {e}")
+        sys.exit(1)
     except Exception as e:
-        print(f"✗ Fehler: {e}")
+        print(f"✗ Unerwarteter Fehler: {e}")
         sys.exit(1)
 
+# Führe Check sofort aus
 environment_specific_compiledb_restart()
 get_correct_build_order()
