@@ -665,8 +665,6 @@ class LDFCacheOptimizer:
             if success:
                 print("🚀 Second run: Using cached dependencies, LDF bypassed")
                 return True
-            else:
-                print("⚠ Cache application failed, falling back to first run")
         
         # First run: Create cache with LDF active
         print("🔄 First run: Creating comprehensive LDF cache...")
@@ -698,18 +696,6 @@ class LDFCacheOptimizer:
         
         # Save cache
         self.save_combined_cache(combined_data)
-        
-        # Prepare for second run by setting lib_ldf_mode = off
-        if self.modify_platformio_ini_for_second_run('off'):
-            print("✅ First run complete - platformio.ini modified for second run")
-            print("🔄 Restart build to use cached dependencies with LDF disabled")
-            
-            # Trigger restart for second run
-            self.trigger_second_run_restart()
-            return True
-        else:
-            print("❌ Failed to prepare second run")
-            return False
 
     def trigger_second_run_restart(self):
         """
