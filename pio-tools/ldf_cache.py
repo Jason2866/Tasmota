@@ -123,19 +123,26 @@ class LDFCacheOptimizer:
             log_path = log_file.name
 
         try:
+            print(f"🔨 Building project and capturing verbose output...")
             build_cmd = ["pio", "run", "-e", self.env_name, "-v"]
-            process = subprocess.run(
-                build_cmd,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                text=True,
-                cwd=self.project_dir
-            )
-            log_file.close()
+            
+            with open(log_path, 'w') as log_file:
+                process = subprocess.run(
+                    build_cmd,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    cwd=self.project_dir
+                )
 
             if process.returncode != 0:
                 print(f"❌ Build failed with return code {process.returncode}")
                 return False
+
+            print(f"🔧 Generating compile_commands.json with log2compdb...")
+            
+            # Create target directory if it doesn't exist
+            os.makedirs(self.compiledb_dir, exist_ok=True)
 
             log2compdb_cmd = [
                 "log2compdb",
@@ -154,8 +161,13 @@ class LDFCacheOptimizer:
                 print(f"❌ log2compdb failed: {result.stderr}")
                 return False
 
-            print(f"✅ Generated {self.compile_commands_file} from build log")
-            return True
+            if os.path.exists(self.compile_commands_file):
+                file_size = os.path.getsize(self.compile_commands_file)
+                print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
+                return True
+            else:
+                print(f"❌ compile_commands.json was not created")
+                return False
 
         except Exception as e:
             print(f"❌ Error during build or compiledb generation: {e}")
@@ -166,7 +178,7 @@ class LDFCacheOptimizer:
 
     def environment_specific_compiledb_restart(self):
         """
-        Environment-specific compiledb creation with moving and renaming.
+        Environment-specific compiledb creation using log2compdb.
         Ensures compile_commands_{env}.json exists for build order analysis.
         After compiledb creation, automatically restarts the normal build process.
         """
@@ -197,45 +209,15 @@ class LDFCacheOptimizer:
         try:
             print(f"Environment: {self.env_name}")
             print("1. Aborting current build...")
-            print("2. Creating compile_commands.json...")
+            print("2. Creating compile_commands.json with log2compdb...")
 
-            # Create target directory if it doesn't exist
-            os.makedirs(self.compiledb_dir, exist_ok=True)
-
-            # Delete potentially existing standard file
-            standard_compile_db_path = os.path.join(self.project_dir, "compile_commands.json")
-            if os.path.exists(standard_compile_db_path):
-                os.remove(standard_compile_db_path)
-                print(" Old compile_commands.json deleted")
-
-            # Environment-specific compiledb creation
-            compiledb_cmd = ["pio", "run", "-e", self.env_name, "-t", "compiledb"]
-            print(f" Executing: {' '.join(compiledb_cmd)}")
-            result = subprocess.run(compiledb_cmd, cwd=self.project_dir)
-
-            if result.returncode != 0:
-                print(f"✗ Error creating compile_commands.json")
-                sys.exit(1)
-
-            # Check if standard file was created
-            if not os.path.exists(standard_compile_db_path):
-                print(f"✗ compile_commands.json was not created")
-                sys.exit(1)
-
-            # Move and rename
-            print(f"3. Moving to compile_commands_{self.env_name}.json...")
-            shutil.move(standard_compile_db_path, self.compile_commands_file)
-
-            # Check if move was successful
-            if os.path.exists(self.compile_commands_file):
-                file_size = os.path.getsize(self.compile_commands_file)
-                print(f"✓ compile_commands_{self.env_name}.json successfully created ({file_size} bytes)")
-            else:
-                print(f"✗ Error moving file")
+            # Use log2compdb instead of traditional compiledb
+            if not self.create_compiledb_with_log2compdb():
+                print(f"✗ Error creating compile_commands.json with log2compdb")
                 sys.exit(1)
 
             # Restart original build - THIS IS THE NORMAL FIRST BUILD RUN
-            print("4. Restarting original build...")
+            print("3. Restarting original build...")
             restart_cmd = ["pio", "run"] + pio_args
             print(f" Executing: {' '.join(restart_cmd)}")
             print("=" * 60)
@@ -763,7 +745,7 @@ class LDFCacheOptimizer:
         print("🔄 Preparing first run: Checking compile_commands...")
 
         # This call will:
-        # 1. Create compiledb if missing
+        # 1. Create compiledb if missing using log2compdb
         # 2. Automatically restart the normal build process
         # 3. The normal build will then create the cache via post-build action
         self.environment_specific_compiledb_restart()
@@ -782,7 +764,7 @@ class LDFCacheOptimizer:
         print("\n=== Complete LDF Replacement Solution with Linker Optimization ===")
 
         try:
-            # Ensure compile_commands.json exists
+            # Ensure compile_commands.json exists using log2compdb
             self.environment_specific_compiledb_restart()
 
             # Create build order with compile data extraction
