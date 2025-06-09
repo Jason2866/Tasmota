@@ -83,6 +83,33 @@ class LDFCacheOptimizer:
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = Path(ProjectConfig.get_instance().get("platformio", "packages_dir"))
 
+    def validate_ldf_mode_compatibility(self):
+        """
+        Validate that the current LDF mode is compatible with caching.
+        Supports 'chain' and 'off' modes for optimal caching.
+        
+        Returns:
+            bool: True if LDF mode is compatible
+        """
+        try:
+            # Get current LDF mode from environment or platformio.ini
+            ldf_mode = self.env.GetProjectOption("lib_ldf_mode", "chain")
+            
+            compatible_modes = ["chain", "off"]
+            
+            if ldf_mode.lower() in compatible_modes:
+                print(f"✅ LDF mode '{ldf_mode}' is compatible with caching")
+                return True
+            else:
+                print(f"⚠ LDF mode '{ldf_mode}' not optimal for caching")
+                print(f"💡 Recommended modes: {', '.join(compatible_modes)}")
+                return False
+                
+        except Exception as e:
+            print(f"⚠ Could not determine LDF mode: {e}")
+            print("🔄 Assuming 'chain' mode for compatibility")
+            return True
+
     def _normalize_path(self, path):
         """
         Platform-independent path normalization using pathlib.
@@ -939,6 +966,49 @@ class LDFCacheOptimizer:
             print(f"⚠ Error loading cache: {e}")
             return None
 
+    def save_ldf_cache_with_build_order(self, target, source, env):
+        """
+        Post-build action to save LDF cache with build order.
+        This is called after successful build completion.
+        
+        Args:
+            target: SCons target
+            source: SCons source
+            env: SCons environment
+        """
+        try:
+            print("\n🔧 Creating LDF cache with build order after successful build...")
+
+            # Create build order data
+            build_order_data = self.get_correct_build_order()
+            if not build_order_data:
+                print("⚠ Could not create build order data")
+                return
+
+            # Collect build artifacts paths (no copying)
+            artifacts_data = self.collect_build_artifacts_paths()
+
+            # Create combined cache data
+            combined_data = {
+                'build_order': build_order_data,
+                'artifacts': artifacts_data,
+                'project_hash': self.get_project_hash_with_details()['final_hash'],
+                'timestamp': datetime.datetime.now().isoformat(),
+                'env_name': self.env_name,
+                'linker_optimized': True,
+                'direct_paths': True  # Flag indicating no file copying
+            }
+
+            # Save cache for future runs
+            if self.save_combined_cache(combined_data):
+                print("✅ LDF cache with build order saved successfully")
+                print("🚀 Future builds will use cached dependencies with direct path references")
+            else:
+                print("⚠ Failed to save LDF cache")
+
+        except Exception as e:
+            print(f"❌ Error in post-build cache creation: {e}")
+
     def create_ini_backup(self):
         """
         Create a backup of platformio.ini before modifying it for the second run.
@@ -1151,7 +1221,23 @@ class LDFCacheOptimizer:
             return self.fallback_to_standard_ldf()
 
 
-# Initialize and run the LDF cache optimizer
-if __name__ == "__main__":
-    optimizer = LDFCacheOptimizer(env)
-    optimizer.run_optimization()
+# Initialize and execute the LDF cache optimizer
+try:
+    ldf_optimizer = LDFCacheOptimizer(env)
+    
+    # Validate LDF mode compatibility
+    if ldf_optimizer.validate_ldf_mode_compatibility():
+        # Execute the two-run strategy
+        success = ldf_optimizer.implement_two_run_strategy()
+        
+        if success:
+            # Register post-build action for cache creation
+            env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", ldf_optimizer.save_ldf_cache_with_build_order)
+        else:
+            print("⚠ LDF Cache strategy initialization failed, using standard LDF")
+    else:
+        print("⚠ LDF mode not compatible, using standard LDF")
+        
+except Exception as e:
+    print(f"❌ LDF Cache Optimizer initialization failed: {e}")
+    print("⚠ Falling back to standard LDF behavior")
