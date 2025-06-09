@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 from platformio.project.config import ProjectConfig
 
 class LDFCacheOptimizer:
@@ -56,26 +57,234 @@ class LDFCacheOptimizer:
         self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
         self.build_dir = self.env.subst("$BUILD_DIR")
 
-        # Cache files
-        self.cache_file = os.path.join(self.project_dir, ".pio", "ldf_cache", f"ldf_cache_{self.env_name}.py")
-        self.ldf_cache_ini = os.path.join(self.project_dir, "ldf_cache.ini")
-        self.platformio_ini = os.path.join(self.project_dir, "platformio.ini")
-        self.platformio_ini_backup = os.path.join(self.project_dir, ".pio", f"platformio_backup_{self.env_name}.ini")
+        # Cache files - using pathlib for cross-platform compatibility
+        cache_base = Path(self.project_dir) / ".pio" / "ldf_cache"
+        self.cache_file = cache_base / f"ldf_cache_{self.env_name}.py"
+        self.ldf_cache_ini = Path(self.project_dir) / "ldf_cache.ini"
+        self.platformio_ini = Path(self.project_dir) / "platformio.ini"
+        self.platformio_ini_backup = Path(self.project_dir) / ".pio" / f"platformio_backup_{self.env_name}.ini"
 
         # Build order files
-        self.build_order_file = os.path.join(self.project_dir, f"correct_build_order_{self.env_name}.txt")
-        self.link_order_file = os.path.join(self.project_dir, f"correct_link_order_{self.env_name}.txt")
+        self.build_order_file = Path(self.project_dir) / f"correct_build_order_{self.env_name}.txt"
+        self.link_order_file = Path(self.project_dir) / f"correct_link_order_{self.env_name}.txt"
 
         # Compile commands
-        self.compiledb_dir = os.path.join(self.project_dir, ".pio", "compiledb")
-        self.compile_commands_file = os.path.join(self.compiledb_dir, f"compile_commands_{self.env_name}.json")
-        self.compile_commands_log_file = os.path.join(self.compiledb_dir, f"compile_commands_{self.env_name}.log")
+        compiledb_base = Path(self.project_dir) / ".pio" / "compiledb"
+        self.compiledb_dir = compiledb_base
+        self.compile_commands_file = compiledb_base / f"compile_commands_{self.env_name}.json"
+        self.compile_commands_log_file = compiledb_base / f"compile_commands_{self.env_name}.log"
 
         # Artifacts cache
-        self.artifacts_cache_dir = os.path.join(self.project_dir, ".pio", "ldf_cache", "artifacts", self.env_name)
+        self.artifacts_cache_dir = Path(self.project_dir) / ".pio" / "ldf_cache" / "artifacts" / self.env_name
 
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
-        self.real_packages_dir = os.path.join(ProjectConfig.get_instance().get("platformio", "packages_dir"))
+        self.real_packages_dir = Path(ProjectConfig.get_instance().get("platformio", "packages_dir"))
+
+    def _normalize_path(self, path):
+        """
+        Platform-independent path normalization using pathlib.
+        Converts all paths to forward slashes for internal consistency.
+        
+        Args:
+            path (str or Path): Path to normalize
+            
+        Returns:
+            str: Normalized path with forward slashes
+        """
+        if not path:
+            return ""
+        
+        # Convert to Path object and normalize
+        normalized = Path(path).resolve()
+        # Convert to string with forward slashes for consistency
+        return str(normalized).replace(os.sep, '/')
+
+    def _is_ignored_directory(self, dir_path):
+        """
+        Platform-independent directory checking against ignore list.
+        Uses pathlib for robust path handling across platforms.
+        
+        Args:
+            dir_path (str or Path): Directory path to check
+            
+        Returns:
+            bool: True if directory should be ignored
+        """
+        if not dir_path:
+            return False
+            
+        path_obj = Path(dir_path)
+        
+        # Check directory name directly
+        if path_obj.name in self.IGNORE_DIRS:
+            return True
+            
+        # Check all path segments
+        for part in path_obj.parts:
+            if part in self.IGNORE_DIRS:
+                return True
+                
+        return False
+
+    def _should_skip_object_file(self, obj_path, root_dir):
+        """
+        Enhanced object file filtering with consistent path handling.
+        Uses pathlib for cross-platform path operations.
+        
+        Args:
+            obj_path (str or Path): Object file path
+            root_dir (str or Path): Root directory path
+            
+        Returns:
+            bool: True if object file should be skipped
+        """
+        obj_path = Path(obj_path)
+        root_dir = Path(root_dir)
+        
+        if obj_path.suffix != '.o':
+            return False
+            
+        # Skip src and ld directories for .o files
+        skip_patterns = ['src', 'ld']
+        
+        # Check if any parent directory matches skip patterns
+        for parent in root_dir.parents:
+            if parent.name in skip_patterns:
+                return True
+                
+        if root_dir.name in skip_patterns:
+            return True
+            
+        # Check if path is in an ignored directory
+        return self._is_ignored_directory(root_dir)
+
+    def _get_relative_path_from_project(self, file_path):
+        """
+        Calculate relative path from project root with consistent path handling.
+        Uses pathlib for robust cross-platform path operations.
+        
+        Args:
+            file_path (str or Path): File path to make relative
+            
+        Returns:
+            str: Relative path from project root with forward slashes
+        """
+        try:
+            file_path = Path(file_path).resolve()
+            project_dir = Path(self.project_dir).resolve()
+            
+            # Calculate relative path
+            rel_path = file_path.relative_to(project_dir)
+            
+            # Convert to string with forward slashes
+            return str(rel_path).replace(os.sep, '/')
+            
+        except (ValueError, OSError):
+            # Fallback for paths outside project directory
+            return str(Path(file_path)).replace(os.sep, '/')
+
+    def _extract_includes(self, file_path):
+        """
+        Extract #include directives with improved path handling.
+        Uses pathlib for robust file operations.
+        
+        Args:
+            file_path (str or Path): Source file to analyze
+            
+        Returns:
+            set: Set of normalized include paths
+        """
+        includes = set()
+        
+        try:
+            file_path = Path(file_path)
+            
+            with file_path.open('r', encoding='utf-8', errors='ignore') as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if line.startswith('#include'):
+                        # Extract include statement
+                        include_match = re.search(r'#include\s*[<"]([^>"]+)[>"]', line)
+                        if include_match:
+                            include_path = include_match.group(1)
+                            # Normalize include path to forward slashes
+                            normalized_include = str(Path(include_path)).replace(os.sep, '/')
+                            includes.add(normalized_include)
+                            
+        except (IOError, OSError, UnicodeDecodeError) as e:
+            print(f"⚠ Could not read {file_path}: {e}")
+            
+        return includes
+
+    def get_project_hash_with_details(self):
+        """
+        Calculate project hash with improved path handling using pathlib.
+        Only includes LDF-relevant files for precise cache invalidation.
+        
+        Returns:
+            dict: Hash details including file hashes and final combined hash
+        """
+        file_hashes = {}
+        
+        # Walk through source directories using pathlib
+        src_path = Path(self.src_dir)
+        
+        for file_path in src_path.rglob('*'):
+            # Skip directories and ignored paths
+            if file_path.is_dir() or self._is_ignored_directory(file_path.parent):
+                continue
+                
+            # Only process relevant file extensions
+            if file_path.suffix in self.ALL_RELEVANT_EXTENSIONS:
+                try:
+                    # Calculate relative path from project
+                    rel_path = self._get_relative_path_from_project(file_path)
+                    
+                    # Calculate file hash
+                    file_content = file_path.read_bytes()
+                    file_hash = hashlib.md5(file_content).hexdigest()
+                    file_hashes[rel_path] = file_hash
+                    
+                except (IOError, OSError) as e:
+                    print(f"⚠ Could not hash {file_path}: {e}")
+                    continue
+
+        # Add platformio.ini hash
+        if self.platformio_ini.exists():
+            try:
+                rel_ini_path = self._get_relative_path_from_project(self.platformio_ini)
+                ini_content = self.platformio_ini.read_bytes()
+                file_hashes[rel_ini_path] = hashlib.md5(ini_content).hexdigest()
+            except (IOError, OSError) as e:
+                print(f"⚠ Could not hash platformio.ini: {e}")
+
+        # Create final hash
+        combined_content = json.dumps(file_hashes, sort_keys=True)
+        final_hash = hashlib.sha256(combined_content.encode()).hexdigest()
+
+        return {
+            'file_hashes': file_hashes,
+            'final_hash': final_hash,
+            'file_count': len(file_hashes)
+        }
+
+    def compute_signature(self, data):
+        """
+        Compute signature for cache data validation.
+        
+        Args:
+            data (dict): Data to sign
+            
+        Returns:
+            str: SHA256 signature
+        """
+        # Remove signature field if present to avoid recursive signing
+        data_copy = data.copy()
+        data_copy.pop('signature', None)
+        
+        # Create deterministic string representation
+        data_str = json.dumps(data_copy, sort_keys=True)
+        return hashlib.sha256(data_str.encode()).hexdigest()
 
     def _is_log2compdb_available(self):
         """Check if log2compdb is available."""
@@ -127,7 +336,7 @@ class LDFCacheOptimizer:
             return
 
         # Check if environment-specific file already exists
-        if os.path.exists(self.compile_commands_file):
+        if self.compile_commands_file.exists():
             print(f"✅ {self.compile_commands_file} exists, using existing file.")
             return
 
@@ -136,38 +345,38 @@ class LDFCacheOptimizer:
         print("Creating during current build...")
         print("=" * 60)
 
-        # Aktiviere Verbose-Modus für den aktuellen Build
+        # Enable verbose mode for current build
         os.environ["PLATFORMIO_SETTING_FORCE_VERBOSE"] = "true"
     
-        # Registriere Post-Build Action um compile_commands.json zu erstellen
+        # Register post-build action to create compile_commands.json
         def create_compiledb_post_build(target, source, env):
-            """Post-Build Action um compile_commands.json zu erstellen"""
+            """Post-build action to create compile_commands.json"""
             try:
                 print("🔧 Creating compile_commands.json from current build log...")
             
-                # Suche nach dem aktuellen Build-Log
+                # Search for current build log
                 build_log = None
                 possible_logs = [
-                    os.path.join(self.project_dir, f"build_{self.env_name}.log"),
-                    os.path.join(self.build_dir, "build.log"),
+                    Path(self.project_dir) / f"build_{self.env_name}.log",
+                    Path(self.build_dir) / "build.log",
                     self.compile_commands_log_file
                 ]
             
                 for log_path in possible_logs:
-                    if os.path.exists(log_path):
-                        build_log = log_path
+                    if log_path.exists():
+                        build_log = str(log_path)
                         break
             
                 if not build_log:
                     print("⚠ No build log found, creating from verbose output capture")
                     return
             
-                # Führe log2compdb aus
+                # Execute log2compdb
                 if self._ensure_log2compdb_available():
                     log2compdb_cmd = [
                         "log2compdb",
                         "-i", build_log,
-                        "-o", self.compile_commands_file,
+                        "-o", str(self.compile_commands_file),
                         "-c", "xtensa-esp32-elf-gcc",
                         "-c", "xtensa-esp32-elf-g++",
                         "-c", "riscv32-esp-elf-gcc", 
@@ -176,11 +385,11 @@ class LDFCacheOptimizer:
                         "-c", "arm-none-eabi-g++"
                     ]
                 
-                    os.makedirs(self.compiledb_dir, exist_ok=True)
+                    self.compiledb_dir.mkdir(parents=True, exist_ok=True)
                     result = subprocess.run(log2compdb_cmd, capture_output=True, text=True)
                 
-                    if result.returncode == 0 and os.path.exists(self.compile_commands_file):
-                        file_size = os.path.getsize(self.compile_commands_file)
+                    if result.returncode == 0 and self.compile_commands_file.exists():
+                        file_size = self.compile_commands_file.stat().st_size
                         print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
                     else:
                         print(f"❌ log2compdb failed: {result.stderr}")
@@ -188,7 +397,7 @@ class LDFCacheOptimizer:
             except Exception as e:
                 print(f"⚠ Error creating compile_commands.json: {e}")
     
-        # Registriere die Post-Build Action
+        # Register the post-build action
         self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_compiledb_post_build)
     
         print("✅ Verbose mode activated for current build")
@@ -204,19 +413,19 @@ class LDFCacheOptimizer:
             return False
 
         # Create target directory if it doesn't exist
-        os.makedirs(self.compiledb_dir, exist_ok=True)
+        self.compiledb_dir.mkdir(parents=True, exist_ok=True)
     
         try:
-            # Option 1: Verwende bereits vorhandene Log-Datei falls verfügbar
+            # Option 1: Use existing log file if available
             existing_log = None
             possible_logs = [
-                os.path.join(self.project_dir, f"build_{self.env_name}.log"),
-                os.path.join(self.build_dir, "build.log")
+                Path(self.project_dir) / f"build_{self.env_name}.log",
+                Path(self.build_dir) / "build.log"
             ]
         
             for log_path in possible_logs:
-                if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
-                    existing_log = log_path
+                if log_path.exists() and log_path.stat().st_size > 0:
+                    existing_log = str(log_path)
                     print(f"📄 Using existing build log: {existing_log}")
                     break
 
@@ -226,7 +435,7 @@ class LDFCacheOptimizer:
             log2compdb_cmd = [
                 "log2compdb",
                 "-i", input_log,
-                "-o", self.compile_commands_file,
+                "-o", str(self.compile_commands_file),
                 "-c", "xtensa-esp32-elf-gcc",
                 "-c", "xtensa-esp32-elf-g++",
                 "-c", "riscv32-esp-elf-gcc",
@@ -240,8 +449,8 @@ class LDFCacheOptimizer:
                 print(f"❌ log2compdb failed: {result.stderr}")
                 return False
 
-            if os.path.exists(self.compile_commands_file):
-                file_size = os.path.getsize(self.compile_commands_file)
+            if self.compile_commands_file.exists():
+                file_size = self.compile_commands_file.stat().st_size
                 print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
                 return True
             else:
@@ -261,12 +470,12 @@ class LDFCacheOptimizer:
             dict: Build order data with ordered objects and file paths
         """
         # Load compile_commands.json for correct order
-        if not os.path.exists(self.compile_commands_file):
+        if not self.compile_commands_file.exists():
             print(f"⚠ compile_commands_{self.env_name}.json not found")
             return None
 
         try:
-            with open(self.compile_commands_file, "r") as f:
+            with self.compile_commands_file.open("r") as f:
                 compile_db = json.load(f)
         except Exception as e:
             print(f"✗ Error reading compile_commands.json: {e}")
@@ -296,8 +505,8 @@ class LDFCacheOptimizer:
             include_matches = re.findall(r'-I\s*([^\s]+)', command)
             for inc_path in include_matches:
                 inc_path = inc_path.strip('"\'')
-                if os.path.exists(inc_path):
-                    include_paths.add(inc_path)
+                if Path(inc_path).exists():
+                    include_paths.add(str(Path(inc_path)))
 
             # Extract defines from compile commands
             define_matches = re.findall(r'-D\s*([^\s]+)', command)
@@ -311,12 +520,12 @@ class LDFCacheOptimizer:
 
         # Save build order
         try:
-            with open(self.build_order_file, "w") as f:
+            with self.build_order_file.open("w") as f:
                 for obj_info in ordered_objects:
                     f.write(f"{obj_info['source']}\n")
 
             # Create correct linker order
-            with open(self.link_order_file, "w") as f:
+            with self.link_order_file.open("w") as f:
                 for obj_info in ordered_objects:
                     f.write(f"{obj_info['object']}\n")
 
@@ -325,8 +534,8 @@ class LDFCacheOptimizer:
 
             return {
                 'ordered_objects': ordered_objects,
-                'build_order_file': self.build_order_file,
-                'link_order_file': self.link_order_file,
+                'build_order_file': str(self.build_order_file),
+                'link_order_file': str(self.link_order_file),
                 'include_paths': list(include_paths),
                 'defines': list(defines),
                 'build_flags': list(build_flags)
@@ -357,7 +566,7 @@ class LDFCacheOptimizer:
             object_files = []
             for obj_info in ordered_objects:
                 obj_path = obj_info['object']
-                if os.path.exists(obj_path):
+                if Path(obj_path).exists():
                     object_files.append(obj_path)
 
             if not object_files:
@@ -506,47 +715,56 @@ class LDFCacheOptimizer:
 
     def copy_artifacts_to_cache(self, lib_build_dir):
         """
-        Copies all .a and .o files to the cache folder.
+        Copies all .a and .o files to the cache folder with improved path handling.
+        Uses pathlib for robust cross-platform file operations.
         
         Args:
-            lib_build_dir (str): Build directory
+            lib_build_dir (str or Path): Build directory
             
         Returns:
             dict: Mapping from original to cache paths
         """
-        if not os.path.exists(lib_build_dir):
+        lib_build_path = Path(lib_build_dir)
+        if not lib_build_path.exists():
             return {}
 
         # Create cache folder
-        os.makedirs(self.artifacts_cache_dir, exist_ok=True)
+        self.artifacts_cache_dir.mkdir(parents=True, exist_ok=True)
 
         path_mapping = {}
         copied_count = 0
 
         print(f"📦 Copying artifacts to {self.artifacts_cache_dir}")
 
-        for root, dirs, files in os.walk(lib_build_dir):
+        for root, dirs, files in os.walk(lib_build_path):
+            root_path = Path(root)
+            
+            # Filter ignored directories BEFORE os.walk enters them
+            dirs[:] = [d for d in dirs if not self._is_ignored_directory(root_path / d)]
+            
             for file in files:
                 if file.endswith(('.a', '.o')):
-                    # Skip src and ld folders for .o files
-                    if file.endswith('.o'):
-                        if '/src' in root.replace('\\', '/') or root.endswith('src'):
-                            continue
-                        if '/ld' in root.replace('\\', '/') or root.endswith('ld'):
-                            continue
+                    original_path = root_path / file
+                    
+                    # Use improved object file filtering
+                    if self._should_skip_object_file(original_path, root_path):
+                        continue
 
-                    original_path = os.path.join(root, file)
-
-                    # Create relative path from build folder
-                    rel_path = os.path.relpath(original_path, lib_build_dir)
-                    cache_path = os.path.join(self.artifacts_cache_dir, rel_path)
+                    # Create relative path from build folder with consistent handling
+                    try:
+                        rel_path = original_path.relative_to(lib_build_path)
+                        cache_path = self.artifacts_cache_dir / rel_path
+                        
+                    except (ValueError, OSError) as e:
+                        print(f"⚠ Path calculation error for {original_path}: {e}")
+                        continue
 
                     # Create target folder
-                    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                    cache_path.parent.mkdir(parents=True, exist_ok=True)
 
                     try:
-                        shutil.copy2(original_path, cache_path)
-                        path_mapping[original_path] = cache_path
+                        shutil.copy2(str(original_path), str(cache_path))
+                        path_mapping[str(original_path)] = str(cache_path)
                         copied_count += 1
                     except Exception as e:
                         print(f"⚠ Error copying {original_path}: {e}")
@@ -561,9 +779,9 @@ class LDFCacheOptimizer:
         Returns:
             dict: Artifact analysis results
         """
-        lib_build_dir = os.path.join(self.project_dir, '.pio', 'build', self.env_name)
+        lib_build_dir = Path(self.project_dir) / '.pio' / 'build' / self.env_name
 
-        if not os.path.exists(lib_build_dir):
+        if not lib_build_dir.exists():
             print(f"⚠ Build directory not found: {lib_build_dir}")
             return {}
 
@@ -633,7 +851,7 @@ class LDFCacheOptimizer:
             # Apply static libraries
             compiled_libraries = artifacts.get('compiled_libraries', [])
             if compiled_libraries:
-                valid_libs = [lib for lib in compiled_libraries if os.path.exists(lib)]
+                valid_libs = [lib for lib in compiled_libraries if Path(lib).exists()]
                 if valid_libs:
                     self.env.Append(LIBS=valid_libs)
                     print(f" ✅ Added {len(valid_libs)} cached static libraries")
@@ -641,7 +859,7 @@ class LDFCacheOptimizer:
             # Apply object files
             compiled_objects = artifacts.get('compiled_objects', [])
             if compiled_objects:
-                valid_objects = [obj for obj in compiled_objects if os.path.exists(obj)]
+                valid_objects = [obj for obj in compiled_objects if Path(obj).exists()]
                 if valid_objects:
                     self.env.Append(OBJECTS=valid_objects)
                     print(f" ✅ Added {len(valid_objects)} cached object files")
@@ -657,9 +875,9 @@ class LDFCacheOptimizer:
             bool: True if backup was created successfully
         """
         try:
-            if os.path.exists(self.platformio_ini):
-                os.makedirs(os.path.dirname(self.platformio_ini_backup), exist_ok=True)
-                shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
+            if self.platformio_ini.exists():
+                self.platformio_ini_backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(self.platformio_ini), str(self.platformio_ini_backup))
                 print("🔒 platformio.ini backup created for two-run strategy")
                 return True
         except Exception as e:
@@ -675,9 +893,9 @@ class LDFCacheOptimizer:
             bool: True if restore was successful
         """
         try:
-            if os.path.exists(self.platformio_ini_backup):
-                shutil.copy2(self.platformio_ini_backup, self.platformio_ini)
-                os.remove(self.platformio_ini_backup)
+            if self.platformio_ini_backup.exists():
+                shutil.copy2(str(self.platformio_ini_backup), str(self.platformio_ini))
+                self.platformio_ini_backup.unlink()
                 print("🔓 platformio.ini restored from backup - original configuration preserved")
                 return True
             else:
@@ -703,8 +921,7 @@ class LDFCacheOptimizer:
             return False
 
         try:
-            with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+            lines = self.platformio_ini.read_text(encoding='utf-8').splitlines(keepends=True)
 
             found = False
             for i, line in enumerate(lines):
@@ -731,9 +948,7 @@ class LDFCacheOptimizer:
                     lines = [f'[platformio]\nlib_ldf_mode = {new_ldf_mode}\n\n'] + lines
                     print(f"🔧 Created [platformio] section with lib_ldf_mode = {new_ldf_mode} for second run")
 
-            with open(self.platformio_ini, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
-
+            self.platformio_ini.write_text(''.join(lines), encoding='utf-8')
             return True
 
         except Exception as e:
@@ -850,9 +1065,9 @@ class LDFCacheOptimizer:
         try:
             combined_data['signature'] = self.compute_signature(combined_data)
 
-            os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
+            with self.cache_file.open('w', encoding='utf-8') as f:
                 f.write("# LDF Cache - Complete Build Environment with Build Order\n")
                 f.write("# Optimized for lib_ldf_mode = off with correct build order\n")
                 f.write("# Generated as Python dict\n\n")
@@ -874,12 +1089,11 @@ class LDFCacheOptimizer:
         Returns:
             dict: Valid cache data or None if invalid
         """
-        if not os.path.exists(self.cache_file):
+        if not self.cache_file.exists():
             return None
 
         try:
-            with open(self.cache_file, 'r', encoding='utf-8') as f:
-                cache_content = f.read()
+            cache_content = self.cache_file.read_text(encoding='utf-8')
 
             local_vars = {}
             exec(cache_content, {}, local_vars)
@@ -904,8 +1118,8 @@ class LDFCacheOptimizer:
 
             # Check if build order files exist
             build_order = cache_data.get('build_order', {})
-            if not (os.path.exists(build_order.get('build_order_file', '')) and
-                    os.path.exists(build_order.get('link_order_file', ''))):
+            if not (Path(build_order.get('build_order_file', '')).exists() and
+                    Path(build_order.get('link_order_file', '')).exists()):
                 print("⚠ Build order files missing")
                 return None
 
@@ -914,11 +1128,11 @@ class LDFCacheOptimizer:
             missing_artifacts = []
 
             for lib_path in artifacts.get('compiled_libraries', []):
-                if not os.path.exists(lib_path):
+                if not Path(lib_path).exists():
                     missing_artifacts.append(lib_path)
 
             for obj_path in artifacts.get('compiled_objects', []):
-                if not os.path.exists(obj_path):
+                if not Path(obj_path).exists():
                     missing_artifacts.append(obj_path)
 
             if missing_artifacts:
@@ -1024,249 +1238,24 @@ class LDFCacheOptimizer:
             print("   Assuming 'chain' mode (default)")
             return True
 
-    def resolve_pio_placeholders(self, path):
-        """
-        Replace '${platformio.packages_dir}' with the actual PlatformIO packages directory.
-        
-        Args:
-            path (str): Path potentially containing placeholders
-            
-        Returns:
-            str: Path with resolved placeholders
-        """
-        if not isinstance(path, str):
-            return path
 
-        return path.replace("${platformio.packages_dir}", self.real_packages_dir)
-
-    def is_platformio_path(self, path):
-        """
-        Check if a path is within PlatformIO's own directories.
-        
-        Args:
-            path (str): Path to check
-            
-        Returns:
-            bool: True if path is within PlatformIO directories
-        """
-        platformio_paths = set()
-
-        if 'PLATFORMIO_CORE_DIR' in os.environ:
-            platformio_paths.add(os.path.normpath(os.environ['PLATFORMIO_CORE_DIR']))
-
-        pio_home = os.path.join(ProjectConfig.get_instance().get("platformio", "platforms_dir"))
-        platformio_paths.add(os.path.normpath(pio_home))
-
-        platformio_paths.add(os.path.normpath(os.path.join(self.project_dir, ".pio")))
-
-        norm_path = os.path.normpath(path)
-        return any(norm_path.startswith(pio_path) for pio_path in platformio_paths)
-
-    def _get_file_hash(self, file_path):
-        """
-        Return a truncated SHA256 hash of a file's contents.
-        
-        Args:
-            file_path (str): Path to the file
-            
-        Returns:
-            str: Truncated SHA256 hash or "unreadable" if file cannot be read
-        """
-        try:
-            with open(file_path, 'rb') as f:
-                return hashlib.sha256(f.read()).hexdigest()[:16]
-        except (IOError, OSError, PermissionError):
-            return "unreadable"
-
-    def get_include_relevant_hash(self, file_path):
-        """
-        Calculate a hash based on relevant #include and #define lines in a source file.
-        This is optimized for chain mode which only follows #include directives.
-        Chain mode ignores #ifdef, #if, #elif preprocessor directives.
-        Only invalidates cache when #include directives actually change.
-        
-        Args:
-            file_path (str): Path to the source file
-            
-        Returns:
-            str: Hash based on include-relevant content for chain mode
-        """
-        include_lines = []
-
-        try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                for line in f:
-                    stripped = line.strip()
-
-                    if stripped.startswith('//'):
-                        continue
-
-                    # For chain mode: only #include and relevant #define directives matter
-                    # Chain mode ignores #ifdef, #if, #elif, #else preprocessor evaluation
-                    if (stripped.startswith('#include') or
-                        (stripped.startswith('#define') and
-                         any(keyword in stripped.upper() for keyword in ['INCLUDE', 'PATH', 'CONFIG']))):
-                        include_lines.append(stripped)
-
-            content = '\n'.join(include_lines)
-            return hashlib.sha256(content.encode()).hexdigest()[:16]
-
-        except (IOError, OSError, PermissionError, UnicodeDecodeError):
-            return self._get_file_hash(file_path)
-
-    def get_project_hash_with_details(self):
-        """
-        Scan project files and produce a hash based only on LDF-relevant changes.
-        Optimized for chain mode - only invalidates cache when #include directives change.
-        Excludes lib_ldf_mode changes from platformio.ini to support two-run strategy.
-        
-        Returns:
-            dict: Hash details and scan metadata
-        """
-        start_time = time.time()
-        file_hashes = {}
-        hash_data = []  # Only for LDF-relevant hashes
-
-        generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
-
-        # platformio.ini is always relevant for LDF, but exclude lib_ldf_mode changes
-        if os.path.exists(self.platformio_ini):
-            try:
-                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
-                    ini_content = f.read()
-
-                # CRITICAL: Remove lib_ldf_mode before hashing to support two-run strategy
-                filtered_content = re.sub(r'lib_ldf_mode\s*=\s*\w+\n?', '', ini_content)
-                ini_hash = hashlib.sha256(filtered_content.encode()).hexdigest()[:16]
-                hash_data.append(ini_hash)  # Relevant for LDF
-                file_hashes['platformio.ini'] = ini_hash
-
-            except Exception as e:
-                print(f"⚠ Error reading platformio.ini: {e}")
-
-        # Define scan directories
-        scan_dirs = []
-
-        if os.path.exists(self.src_dir):
-            scan_dirs.append(('source', self.src_dir))
-
-        lib_dir = os.path.join(self.project_dir, "lib")
-        if os.path.exists(lib_dir) and not self.is_platformio_path(lib_dir):
-            scan_dirs.append(('library', lib_dir))
-
-        include_dir = os.path.join(self.project_dir, "include")
-        if os.path.exists(include_dir) and not self.is_platformio_path(include_dir):
-            scan_dirs.append(('include', include_dir))
-
-        for inc_path in self.env.get('CPPPATH', []):
-            inc_dir = str(inc_path)
-            if self.is_platformio_path(inc_dir):
-                continue
-            if any(skip_dir in inc_dir for skip_dir in ['variants', '.platformio', '.pio']):
-                continue
-            if os.path.exists(inc_dir) and inc_dir != self.src_dir:
-                scan_dirs.append(('include', inc_dir))
-
-        total_scanned = 0
-        total_relevant = 0
-        scan_start_time = time.time()
-
-        for dir_type, scan_dir in scan_dirs:
-            print(f"🔍 Scanning {dir_type} directory: {scan_dir}")
-
-            try:
-                for root, dirs, files in os.walk(scan_dir):
-                    if self.is_platformio_path(root):
-                        continue
-
-                    dirs[:] = [d for d in dirs if d not in self.IGNORE_DIRS]
-
-                    relevant_files = []
-                    for file in files:
-                        total_scanned += 1
-                        file_ext = os.path.splitext(file)[1].lower()
-                        if file_ext in self.ALL_RELEVANT_EXTENSIONS:
-                            relevant_files.append(file)
-
-                    if relevant_files:
-                        for file in relevant_files:
-                            file_path = os.path.join(root, file)
-                            file_ext = os.path.splitext(file)[1].lower()
-
-                            if file_ext in self.SOURCE_EXTENSIONS or file_ext in self.HEADER_EXTENSIONS:
-                                file_hash = self.get_include_relevant_hash(file_path)
-                            else:
-                                file_hash = self._get_file_hash(file_path)
-
-                            if file_hash != "unreadable":
-                                hash_data.append(file_hash)
-                                total_relevant += 1
-
-                            relative_path = os.path.relpath(file_path, self.project_dir)
-                            file_hashes[relative_path] = file_hash
-
-            except Exception as e:
-                print(f"⚠ Error scanning {scan_dir}: {e}")
-
-        # Calculate final hash
-        combined_content = ''.join(sorted(hash_data))
-        final_hash = hashlib.sha256(combined_content.encode()).hexdigest()[:32]
-
-        scan_duration = time.time() - scan_start_time
-        total_duration = time.time() - start_time
-
-        print(f"📊 Scan completed: {total_scanned} files scanned, {total_relevant} relevant for LDF")
-        print(f"⏱ Scan time: {scan_duration:.2f}s, Total time: {total_duration:.2f}s")
-        print(f"🔑 Project hash: {final_hash}")
-
-        return {
-            'final_hash': final_hash,
-            'file_hashes': file_hashes,
-            'scan_stats': {
-                'total_scanned': total_scanned,
-                'total_relevant': total_relevant,
-                'scan_duration': scan_duration,
-                'total_duration': total_duration
-            }
-        }
-
-    def compute_signature(self, cache_data):
-        """
-        Compute a simplified signature for cache validation.
-        Simplified to avoid constant cache invalidation.
-        
-        Args:
-            cache_data (dict): Cache data to sign
-            
-        Returns:
-            str: Computed signature based on environment and project hash
-        """
-        try:
-            env_name = cache_data.get('env_name', '')
-            project_hash = cache_data.get('project_hash', '')
-            return hashlib.sha256(f"{env_name}_{project_hash}".encode()).hexdigest()[:16]
-        except Exception:
-            return "invalid"
-
-
-# Initialize the LDF cache optimizer
-ldf_optimizer = LDFCacheOptimizer(env)
-
-# Check LDF mode compatibility
-if not ldf_optimizer.validate_ldf_mode_compatibility():
-    print("❌ Incompatible LDF mode - script disabled")
-    exit()
-
-# Implement the two-run strategy
+# Initialize and execute the LDF cache optimizer
 try:
-    success = ldf_optimizer.implement_two_run_strategy()
-    if success:
-        print("✅ Two-run LDF cache strategy completed successfully")
+    ldf_optimizer = LDFCacheOptimizer(env)
+    
+    # Validate LDF mode compatibility
+    if ldf_optimizer.validate_ldf_mode_compatibility():
+        # Execute the two-run strategy
+        success = ldf_optimizer.implement_two_run_strategy()
+        
+        if success:
+            # Register post-build action for cache creation
+            env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", ldf_optimizer.save_ldf_cache_with_build_order)
+        else:
+            print("⚠ LDF Cache strategy initialization failed, using standard LDF")
     else:
-        print("⚠ Two-run strategy failed, using standard LDF")
+        print("⚠ LDF mode not compatible, using standard LDF")
+        
 except Exception as e:
-    print(f"❌ Critical error in two-run strategy: {e}")
-    ldf_optimizer.fallback_to_standard_ldf()
-
-# Add post-build hook to save cache after successful build
-env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", ldf_optimizer.save_ldf_cache_with_build_order)
+    print(f"❌ LDF Cache Optimizer initialization failed: {e}")
+    print("⚠ Falling back to standard LDF behavior")
