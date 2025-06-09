@@ -312,12 +312,12 @@ class LDFCacheOptimizer:
         # Save build order
         try:
             with open(self.build_order_file, "w") as f:
-                for obj_info in ordered_objects[:-1]:  # Exclude last element
+                for obj_info in ordered_objects:
                     f.write(f"{obj_info['source']}\n")
 
             # Create correct linker order
             with open(self.link_order_file, "w") as f:
-                for obj_info in ordered_objects[:-1]:  # Exclude last element
+                for obj_info in ordered_objects:
                     f.write(f"{obj_info['object']}\n")
 
             print(f"✓ Created: correct_build_order_{self.env_name}.txt")
@@ -355,7 +355,7 @@ class LDFCacheOptimizer:
 
             # Collect all object files in correct order
             object_files = []
-            for obj_info in ordered_objects[:-1]:  # Exclude last element
+            for obj_info in ordered_objects:
                 obj_path = obj_info['object']
                 if os.path.exists(obj_path):
                     object_files.append(obj_path)
