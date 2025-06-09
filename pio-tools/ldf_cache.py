@@ -19,9 +19,178 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import shlex
 from pathlib import Path
 from platformio.project.config import ProjectConfig
 from SCons.Script import COMMAND_LINE_TARGETS
+from dataclasses import dataclass
+from typing import Optional
+
+# Integrated log2compdb components
+DIRCHANGE_PATTERN = re.compile(r"(?P<action>\w+) directory '(?P<path>.+)'")
+INFILE_PATTERN = re.compile(r"(?P<path>.+\.(cpp|cxx|cc|c|hpp|hxx|h))", re.IGNORECASE)
+
+@dataclass
+class CompileCommand:
+    file: str
+    output: str
+    directory: str
+    arguments: list
+
+    @classmethod
+    def from_cmdline(cls, cc_cmd: Path, cmd_args: list[str], directory=None) -> Optional["CompileCommand"]:
+        """cmd_args should already be split with shlex.split or similar."""
+        
+        # If the user-supplied compiler isn't in this supposed argument list, skip
+        if cc_cmd.name not in cmd_args[0]:
+            return None
+
+        cmd_args = cmd_args[:]
+        cmd_args[0] = str(cc_cmd)
+
+        if directory is None:
+            directory = Path.cwd()
+        else:
+            directory = Path(directory)
+
+        input_path = None
+
+        # Heuristic: look for a `-o <name>` and then look for a file matching that pattern
+        try:
+            output_index = cmd_args.index("-o")
+            output_arg = cmd_args[output_index + 1]
+
+            # Special case: if the output path is /dev/null, fallback to normal input path detection
+            if output_arg == "/dev/null":
+                output_path = None
+            else:
+                output_path = directory / Path(output_arg)
+
+        except (ValueError, IndexError):
+            output_index = None
+            output_path = None
+
+        if output_index is not None and output_path is not None:
+            # Prefer input files that match the expected pattern
+            stem_matches = [item for item in cmd_args if Path(item).stem == output_path.stem]
+            for item in stem_matches:
+                if input_file_match := INFILE_PATTERN.search(item):
+                    input_path = input_file_match.group("path")
+                    break
+
+            if not input_path and stem_matches:
+                input_path = stem_matches[0]
+
+            if not input_path:
+                return None
+
+            input_path = directory / Path(input_path)
+        else:
+            # Fallback to regex
+            match = None
+            for item in cmd_args:
+                match = INFILE_PATTERN.search(item)
+                if match:
+                    break
+
+            if not match:
+                return None
+
+            input_path = Path(match.group("path"))
+            output_path = None
+
+        return cls(
+            file=str(input_path),
+            arguments=cmd_args,
+            directory=str(directory),
+            output=str(output_path) if output_path else "",
+        )
+
+@dataclass
+class Compiler:
+    name: str
+    path: Path
+
+    @classmethod
+    def from_name(cls, compiler_name: str) -> "Compiler":
+        """Create compiler from name string."""
+        path = Path(compiler_name)
+        return cls(name=compiler_name, path=path)
+
+    def find_invocation_start(self, cmd_args: list[str]) -> int:
+        """Find compiler invocation in argument list."""
+        for index, arg in enumerate(cmd_args):
+            if self.name in arg or Path(arg).stem == self.name:
+                return index
+        raise ValueError(f"compiler invocation for {self.name} not found")
+
+def parse_build_log_to_compile_commands(logfile_path: Path, compiler_names: list[str]) -> list[CompileCommand]:
+    """
+    Integrated log2compdb functionality - parse build log to compile commands.
+    
+    Args:
+        logfile_path: Path to build log file
+        compiler_names: List of compiler names to look for
+        
+    Returns:
+        List of CompileCommand objects
+    """
+    if not logfile_path.exists():
+        return []
+
+    compilers = [Compiler.from_name(name) for name in compiler_names]
+    entries = []
+    file_entries = {}
+    dirstack = [os.getcwd()]
+
+    try:
+        with logfile_path.open('r', encoding='utf-8', errors='ignore') as logfile:
+            for line in logfile:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Handle directory changes
+                if dirchange_match := DIRCHANGE_PATTERN.search(line):
+                    action = dirchange_match.group("action")
+                    path = dirchange_match.group("path")
+                    if action == "Leaving":
+                        if len(dirstack) > 1:
+                            dirstack.pop()
+                    elif action == "Entering":
+                        dirstack.append(path)
+                    continue
+
+                # Parse command line
+                try:
+                    cmd_args = shlex.split(line)
+                except ValueError:
+                    continue
+
+                if not cmd_args:
+                    continue
+
+                # Look for compiler invocations
+                for compiler in compilers:
+                    try:
+                        compiler_invocation_start = compiler.find_invocation_start(cmd_args)
+                        entry = CompileCommand.from_cmdline(
+                            compiler.path, 
+                            cmd_args[compiler_invocation_start:], 
+                            dirstack[-1]
+                        )
+                        
+                        if entry is not None and entry.file not in file_entries:
+                            entries.append(entry)
+                            file_entries[entry.file] = entry
+                            break
+                    except ValueError:
+                        continue
+
+    except Exception as e:
+        print(f"⚠ Error parsing build log: {e}")
+
+    return entries
 
 class LDFCacheOptimizer:
     """
@@ -94,7 +263,7 @@ class LDFCacheOptimizer:
         try:
             # Get current LDF mode from environment or platformio.ini
             ldf_mode = self.env.GetProjectOption("lib_ldf_mode", "chain")
-            
+
             compatible_modes = ["chain", "off"]
             
             if ldf_mode.lower() in compatible_modes:
@@ -109,6 +278,78 @@ class LDFCacheOptimizer:
             print(f"⚠ Could not determine LDF mode: {e}")
             print("🔄 Assuming 'chain' mode for compatibility")
             return True
+
+    def create_compiledb_integrated(self):
+        """
+        Create compile_commands.json using integrated log parsing functionality.
+        No external dependencies required.
+        """
+        if self.compile_commands_file.exists():
+            print(f"✅ {self.compile_commands_file} exists")
+            return True
+
+        # Look for build log
+        build_log = None
+        possible_logs = [
+            self.build_log_file,
+            Path(self.project_dir) / f"build_{self.env_name}.log",
+            Path(self.build_dir) / "build.log"
+        ]
+
+        for log_path in possible_logs:
+            if log_path.exists() and log_path.stat().st_size > 0:
+                build_log = log_path
+                break
+
+        if not build_log:
+            print("⚠ No build log found for compile_commands.json generation")
+            return False
+
+        print(f"🔧 Generating compile_commands.json from {build_log}")
+
+        # ESP32/ARM compiler names to look for
+        compiler_names = [
+            "xtensa-esp32-elf-gcc",
+            "xtensa-esp32-elf-g++", 
+            "riscv32-esp-elf-gcc",
+            "riscv32-esp-elf-g++",
+            "arm-none-eabi-gcc",
+            "arm-none-eabi-g++"
+        ]
+
+        try:
+            # Use integrated parsing functionality
+            compile_commands = parse_build_log_to_compile_commands(build_log, compiler_names)
+
+            if not compile_commands:
+                print("❌ No compiler commands found in build log")
+                return False
+
+            # Create output directory
+            self.compiledb_dir.mkdir(parents=True, exist_ok=True)
+
+            # Convert to JSON format
+            json_entries = []
+            for cmd in compile_commands:
+                json_entries.append({
+                    'file': cmd.file,
+                    'output': cmd.output,
+                    'directory': cmd.directory,
+                    'arguments': cmd.arguments
+                })
+
+            # Write compile_commands.json
+            with self.compile_commands_file.open('w') as f:
+                json.dump(json_entries, f, indent=2)
+
+            file_size = self.compile_commands_file.stat().st_size
+            print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
+            print(f"✅ Found {len(compile_commands)} compiler invocations")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error creating compile_commands.json: {e}")
+            return False
 
     def _normalize_path(self, path):
         """
