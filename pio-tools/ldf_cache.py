@@ -209,25 +209,8 @@ class LDFCacheOptimizer:
                 print(f"✗ Error creating compile_commands.json with log2compdb")
                 sys.exit(1)
 
-            print("3. Creating build order and saving LDF cache...")
-            # Create build order and cache after successful compiledb creation
-            build_order_data = self.get_correct_build_order()
-            artifacts_data = self.analyze_build_artifacts()
-            
-            if build_order_data and artifacts_data:
-                combined_data = {
-                    'build_order': build_order_data,
-                    'artifacts': artifacts_data,
-                    'project_hash': self.get_project_hash_with_details()['final_hash'],
-                    'timestamp': datetime.datetime.now().isoformat(),
-                    'env_name': self.env_name,
-                    'linker_optimized': True
-                }
-                self.save_combined_cache(combined_data)
-                print("💾 LDF cache with build order successfully saved!")
-
             print("=" * 60)
-            print("Please rerun 'pio run' to use the cached dependencies.")
+            print("Please rerun 'pio run' to use the new compile_commands.json.")
             print("=" * 60)
             sys.exit(0)
 
@@ -981,7 +964,7 @@ class LDFCacheOptimizer:
             bool: True if LDF mode is compatible (chain or off), False otherwise
         """
         try:
-            config = ProjectConfig.get_instance()
+            config = ProjectConfig()
             env_section = f"env:{self.env['PIOENV']}"
 
             # Check environment-specific setting first
