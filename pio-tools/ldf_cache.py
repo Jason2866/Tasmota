@@ -174,7 +174,7 @@ class LDFCacheOptimizer:
         """
         Environment-specific compiledb creation using log2compdb.
         Ensures compile_commands_{env}.json exists for build order analysis.
-        After compiledb creation, automatically restarts the normal build process.
+        Integrates seamlessly into the current build without restart.
         """
         current_targets = COMMAND_LINE_TARGETS[:]
         is_build_target = (
@@ -187,39 +187,151 @@ class LDFCacheOptimizer:
 
         # Check if environment-specific file already exists
         if os.path.exists(self.compile_commands_file):
+            print(f"✅ {self.compile_commands_file} exists, using existing file.")
             return
 
         print("=" * 60)
         print(f"COMPILE_COMMANDS_{self.env_name.upper()}.JSON MISSING")
+        print("Creating during current build...")
         print("=" * 60)
 
-        # Reconstruct correct PlatformIO arguments
-        pio_args = ["-e", self.env_name]
-#        if current_targets:
-#            for target in current_targets:
-#                if target not in ["compiledb"]:
-#                    pio_args.extend(["-t", target])
+        # Aktiviere Verbose-Modus für den aktuellen Build
+        os.environ["PLATFORMIO_SETTING_FORCE_VERBOSE"] = "true"
+    
+        # Registriere Post-Build Action um compile_commands.json zu erstellen
+        def create_compiledb_post_build(target, source, env):
+            """Post-Build Action um compile_commands.json zu erstellen"""
+            try:
+                print("🔧 Creating compile_commands.json from current build log...")
+            
+                # Suche nach dem aktuellen Build-Log
+                build_log = None
+                possible_logs = [
+                    os.path.join(self.project_dir, f"build_{self.env_name}.log"),
+                    os.path.join(self.build_dir, "build.log"),
+                    self.compile_commands_log_file
+                ]
+            
+                for log_path in possible_logs:
+                    if os.path.exists(log_path):
+                        build_log = log_path
+                        break
+            
+                if not build_log:
+                    print("⚠ No build log found, creating from verbose output capture")
+                    return
+            
+                # Führe log2compdb aus
+                if self._ensure_log2compdb_available():
+                    log2compdb_cmd = [
+                        "log2compdb",
+                        "-i", build_log,
+                        "-o", self.compile_commands_file,
+                        "-c", "xtensa-esp32-elf-gcc",
+                        "-c", "xtensa-esp32-elf-g++",
+                        "-c", "riscv32-esp-elf-gcc", 
+                        "-c", "riscv32-esp-elf-g++",
+                        "-c", "arm-none-eabi-gcc",
+                        "-c", "arm-none-eabi-g++"
+                    ]
+                
+                    os.makedirs(self.compiledb_dir, exist_ok=True)
+                    result = subprocess.run(log2compdb_cmd, capture_output=True, text=True)
+                
+                    if result.returncode == 0 and os.path.exists(self.compile_commands_file):
+                        file_size = os.path.getsize(self.compile_commands_file)
+                        print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
+                    else:
+                        print(f"❌ log2compdb failed: {result.stderr}")
+            
+            except Exception as e:
+                print(f"⚠ Error creating compile_commands.json: {e}")
+    
+        # Registriere die Post-Build Action
+        self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_compiledb_post_build)
+    
+        print("✅ Verbose mode activated for current build")
+        print("✅ compile_commands.json will be created after build completion")
 
+    def create_compiledb_with_log2compdb(self):
+        """
+        Alternative method: Create compile_commands.json from existing verbose output
+        or capture current build output for log2compdb processing.
+        """
+        if not self._ensure_log2compdb_available():
+            print("❌ log2compdb not available and installation failed")
+            return False
+
+        # Create target directory if it doesn't exist
+        os.makedirs(self.compiledb_dir, exist_ok=True)
+    
         try:
-            print(f"Environment: {self.env_name}")
-            print("1. Aborting current build...")
-            print("2. Creating compile_commands.json with log2compdb...")
+            # Option 1: Verwende bereits vorhandene Log-Datei falls verfügbar
+            existing_log = None
+            possible_logs = [
+                os.path.join(self.project_dir, f"build_{self.env_name}.log"),
+                os.path.join(self.build_dir, "build.log")
+            ]
+        
+            for log_path in possible_logs:
+                if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
+                    existing_log = log_path
+                    print(f"📄 Using existing build log: {existing_log}")
+                    break
+        
+            if existing_log:
+                # Verwende vorhandenes Log
+                input_log = existing_log
+            else:
+                # Option 2: Erstelle neues Log nur wenn nötig
+                print(f"🔨 No existing log found, creating new verbose build log...")
+                build_cmd = ["pio", "run", "-e", self.env_name, "-v"]
 
-            if not self.create_compiledb_with_log2compdb():
-                print(f"✗ Error creating compile_commands.json with log2compdb")
-                sys.exit(1)
+                with open(self.compile_commands_log_file, 'w') as log_file:
+                    process = subprocess.run(
+                        build_cmd,
+                        stdout=log_file,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        cwd=self.project_dir
+                    )
 
-            # Restart original build - THIS IS THE NORMAL FIRST BUILD RUN
-            print("3. Restarting original build...")
-            restart_cmd = ["pio", "run"] + pio_args
-            print(f" Executing: {' '.join(restart_cmd)}")
-            print("=" * 60)
-            restart_result = subprocess.run(restart_cmd, cwd=self.project_dir)
-            sys.exit(restart_result.returncode)
+                if process.returncode != 0:
+                    print(f"❌ Build failed with return code {process.returncode}")
+                    return False
+            
+                input_log = self.compile_commands_log_file
+
+            print(f"🔧 Generating compile_commands.json with log2compdb from {input_log}...")
+    
+            log2compdb_cmd = [
+                "log2compdb",
+                "-i", input_log,
+                "-o", self.compile_commands_file,
+                "-c", "xtensa-esp32-elf-gcc",
+                "-c", "xtensa-esp32-elf-g++",
+                "-c", "riscv32-esp-elf-gcc",
+                "-c", "riscv32-esp-elf-g++",
+                "-c", "arm-none-eabi-gcc",
+                "-c", "arm-none-eabi-g++"
+            ]
+
+            result = subprocess.run(log2compdb_cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"❌ log2compdb failed: {result.stderr}")
+                return False
+
+            if os.path.exists(self.compile_commands_file):
+                file_size = os.path.getsize(self.compile_commands_file)
+                print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
+                return True
+            else:
+                print(f"❌ compile_commands.json was not created")
+                return False
 
         except Exception as e:
-            print(f"✗ Unexpected error: {e}")
-            sys.exit(1)
+            print(f"❌ Error during compiledb generation: {e}")
+            return False
 
     def get_correct_build_order(self):
         """
