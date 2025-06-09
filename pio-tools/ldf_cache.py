@@ -557,40 +557,6 @@ class LDFCacheOptimizer:
         data_str = json.dumps(data_copy, sort_keys=True)
         return hashlib.sha256(data_str.encode()).hexdigest()
 
-    def _is_log2compdb_available(self):
-        """Check if log2compdb is available."""
-        try:
-            subprocess.run(["log2compdb", "--help"], capture_output=True, check=True)
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
-
-    def _install_log2compdb(self):
-        """Install log2compdb using pip."""
-        print("Installing log2compdb...")
-        try:
-            result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "log2compdb"],
-                capture_output=True,
-                text=True
-            )
-            if result.returncode == 0:
-                print("✅ log2compdb installed successfully")
-                return True
-            else:
-                print(f"❌ Failed to install log2compdb: {result.stderr}")
-                return False
-        except Exception as e:
-            print(f"❌ Error installing log2compdb: {e}")
-            return False
-
-    def _ensure_log2compdb_available(self):
-        """Ensure log2compdb is available, install if necessary."""
-        if self._is_log2compdb_available():
-            return True
-        print("log2compdb not found, attempting to install...")
-        return self._install_log2compdb()
-
     def environment_specific_compiledb(self):
         """
         Environment-specific compiledb creation using log2compdb.
@@ -642,22 +608,21 @@ class LDFCacheOptimizer:
                     print("⚠ No build log found, creating from verbose output capture")
                     return
             
-                # Execute log2compdb
-                if self._ensure_log2compdb_available():
-                    log2compdb_cmd = [
-                        "log2compdb",
-                        "-i", build_log,
-                        "-o", str(self.compile_commands_file),
-                        "-c", "xtensa-esp32-elf-gcc",
-                        "-c", "xtensa-esp32-elf-g++",
-                        "-c", "riscv32-esp-elf-gcc", 
-                        "-c", "riscv32-esp-elf-g++",
-                        "-c", "arm-none-eabi-gcc",
-                        "-c", "arm-none-eabi-g++"
-                    ]
+                # Build log2compdb command
+                log2compdb_cmd = [
+                    "log2compdb",
+                    "-i", build_log,
+                    "-o", str(self.compile_commands_file),
+                    "-c", "xtensa-esp32-elf-gcc",
+                    "-c", "xtensa-esp32-elf-g++",
+                    "-c", "riscv32-esp-elf-gcc", 
+                    "-c", "riscv32-esp-elf-g++",
+                    "-c", "arm-none-eabi-gcc",
+                    "-c", "arm-none-eabi-g++"
+                ]
                 
                     self.compiledb_dir.mkdir(parents=True, exist_ok=True)
-                    result = subprocess.run(log2compdb_cmd, capture_output=True, text=True)
+                    #result = subprocess.run(log2compdb_cmd, capture_output=True, text=True)
                 
                     if result.returncode == 0 and self.compile_commands_file.exists():
                         file_size = self.compile_commands_file.stat().st_size
@@ -673,15 +638,6 @@ class LDFCacheOptimizer:
     
         print("✅ Verbose mode activated for current build")
         print("✅ compile_commands.json will be created after build completion")
-
-    def create_compiledb_with_log2compdb(self):
-        """
-        Alternative method: Create compile_commands.json from existing verbose output
-        or capture current build output for log2compdb processing.
-        """
-        if not self._ensure_log2compdb_available():
-            print("❌ log2compdb not available and installation failed")
-            return False
 
         # Create target directory if it doesn't exist
         self.compiledb_dir.mkdir(parents=True, exist_ok=True)
@@ -703,22 +659,6 @@ class LDFCacheOptimizer:
             input_log = existing_log
             print(f"🔧 Generating compile_commands.json with log2compdb from {input_log}...")
     
-            log2compdb_cmd = [
-                "log2compdb",
-                "-i", input_log,
-                "-o", str(self.compile_commands_file),
-                "-c", "xtensa-esp32-elf-gcc",
-                "-c", "xtensa-esp32-elf-g++",
-                "-c", "riscv32-esp-elf-gcc",
-                "-c", "riscv32-esp-elf-g++",
-                "-c", "arm-none-eabi-gcc",
-                "-c", "arm-none-eabi-g++"
-            ]
-
-            result = subprocess.run(log2compdb_cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"❌ log2compdb failed: {result.stderr}")
-                return False
 
             if self.compile_commands_file.exists():
                 file_size = self.compile_commands_file.stat().st_size
