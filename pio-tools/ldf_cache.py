@@ -127,6 +127,7 @@ class Compiler:
 def parse_build_log_to_compile_commands(logfile_path: Path, compiler_names: list[str]) -> list[CompileCommand]:
     """
     Integrated log2compdb functionality - parse build log to compile commands.
+    license = GPL-3.0-or-later  author = Nick Yamane
     
     Args:
         logfile_path: Path to build log file
