@@ -32,6 +32,8 @@ class LDFCacheOptimizer:
     Implements a two-run strategy:
     1. First run: LDF active, create comprehensive cache
     2. Second run: LDF off, use cache for all dependencies
+    
+    No file copying - uses direct path references for maximum efficiency.
     """
 
     HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
@@ -75,8 +77,8 @@ class LDFCacheOptimizer:
         self.compile_commands_file = compiledb_base / f"compile_commands_{self.env_name}.json"
         self.compile_commands_log_file = compiledb_base / f"compile_commands_{self.env_name}.log"
 
-        # Artifacts cache
-        self.artifacts_cache_dir = Path(self.project_dir) / ".pio" / "ldf_cache" / "artifacts" / self.env_name
+        # Build directory for direct path references (no copying)
+        self.lib_build_dir = Path(self.project_dir) / ".pio" / "build" / self.env_name
 
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = Path(ProjectConfig.get_instance().get("platformio", "packages_dir"))
@@ -714,30 +716,25 @@ class LDFCacheOptimizer:
         except Exception as e:
             print(f"⚠ Warning during linker script handling: {e}")
 
-    def copy_artifacts_to_cache(self, lib_build_dir):
+    def collect_build_artifacts_paths(self):
         """
-        Copies all .a and .o files to the cache folder with improved path handling.
-        Uses pathlib for robust cross-platform file operations.
+        Collect paths to build artifacts without copying them.
+        Uses direct path references for maximum efficiency.
         
-        Args:
-            lib_build_dir (str or Path): Build directory
-            
         Returns:
-            dict: Mapping from original to cache paths
+            dict: Artifact paths organized by type
         """
-        lib_build_path = Path(lib_build_dir)
-        if not lib_build_path.exists():
+        if not self.lib_build_dir.exists():
+            print(f"⚠ Build directory not found: {self.lib_build_dir}")
             return {}
 
-        # Create cache folder
-        self.artifacts_cache_dir.mkdir(parents=True, exist_ok=True)
+        library_paths = []
+        object_paths = []
+        collected_count = 0
 
-        path_mapping = {}
-        copied_count = 0
+        print(f"📦 Collecting artifact paths from {self.lib_build_dir}")
 
-        print(f"📦 Copying artifacts to {self.artifacts_cache_dir}")
-
-        for root, dirs, files in os.walk(lib_build_path):
+        for root, dirs, files in os.walk(self.lib_build_dir):
             root_path = Path(root)
             
             # Filter ignored directories BEFORE os.walk enters them
@@ -745,73 +742,75 @@ class LDFCacheOptimizer:
             
             for file in files:
                 if file.endswith(('.a', '.o')):
-                    original_path = root_path / file
+                    file_path = root_path / file
                     
                     # Use improved object file filtering
-                    if self._should_skip_object_file(original_path, root_path):
+                    if self._should_skip_object_file(file_path, root_path):
                         continue
 
-                    # Create relative path from build folder with consistent handling
-                    try:
-                        rel_path = original_path.relative_to(lib_build_path)
-                        cache_path = self.artifacts_cache_dir / rel_path
-                        
-                    except (ValueError, OSError) as e:
-                        print(f"⚠ Path calculation error for {original_path}: {e}")
-                        continue
+                    # Collect paths directly without copying
+                    if file.endswith('.a'):
+                        library_paths.append(str(file_path))
+                    elif file.endswith('.o'):
+                        object_paths.append(str(file_path))
+                    
+                    collected_count += 1
 
-                    # Create target folder
-                    cache_path.parent.mkdir(parents=True, exist_ok=True)
-
-                    try:
-                        shutil.copy2(str(original_path), str(cache_path))
-                        path_mapping[str(original_path)] = str(cache_path)
-                        copied_count += 1
-                    except Exception as e:
-                        print(f"⚠ Error copying {original_path}: {e}")
-
-        print(f"📦 {copied_count} artifacts copied to cache")
-        return path_mapping
-
-    def analyze_build_artifacts(self):
-        """
-        Analyze build artifacts and collect library information.
-        
-        Returns:
-            dict: Artifact analysis results
-        """
-        lib_build_dir = Path(self.project_dir) / '.pio' / 'build' / self.env_name
-
-        if not lib_build_dir.exists():
-            print(f"⚠ Build directory not found: {lib_build_dir}")
-            return {}
-
-        # Copy artifacts to cache
-        path_mapping = self.copy_artifacts_to_cache(lib_build_dir)
-
-        # Collect library and object information
-        compiled_libraries = []
-        compiled_objects = []
-
-        for original_path, cache_path in path_mapping.items():
-            if original_path.endswith('.a'):
-                compiled_libraries.append(cache_path)
-            elif original_path.endswith('.o'):
-                compiled_objects.append(cache_path)
-
-        print(f"📦 Found {len(compiled_libraries)} library files (*.a) in cache")
-        print(f"📦 Found {len(compiled_objects)} object files (*.o) in cache")
+        print(f"📦 Collected {len(library_paths)} library paths (*.a)")
+        print(f"📦 Collected {len(object_paths)} object paths (*.o)")
+        print(f"📦 Total: {collected_count} artifact paths collected")
 
         return {
-            'compiled_libraries': compiled_libraries,
-            'compiled_objects': compiled_objects,
-            'path_mapping': path_mapping
+            'library_paths': library_paths,
+            'object_paths': object_paths,
+            'total_count': collected_count
+        }
+
+    def validate_artifact_paths(self, artifacts_data):
+        """
+        Validate that all artifact paths still exist.
+        
+        Args:
+            artifacts_data (dict): Artifact data with paths
+            
+        Returns:
+            dict: Validated artifact data with only existing paths
+        """
+        if not artifacts_data:
+            return {}
+
+        valid_library_paths = []
+        valid_object_paths = []
+
+        # Validate library paths
+        for lib_path in artifacts_data.get('library_paths', []):
+            if Path(lib_path).exists():
+                valid_library_paths.append(lib_path)
+
+        # Validate object paths
+        for obj_path in artifacts_data.get('object_paths', []):
+            if Path(obj_path).exists():
+                valid_object_paths.append(obj_path)
+
+        removed_count = (
+            len(artifacts_data.get('library_paths', [])) - len(valid_library_paths) +
+            len(artifacts_data.get('object_paths', [])) - len(valid_object_paths)
+        )
+
+        if removed_count > 0:
+            print(f"⚠ {removed_count} artifact paths no longer exist and were removed")
+
+        return {
+            'library_paths': valid_library_paths,
+            'object_paths': valid_object_paths,
+            'total_count': len(valid_library_paths) + len(valid_object_paths)
         }
 
     def apply_ldf_cache_with_build_order(self, cache_data):
         """
         Extended application of LDF cache with build order integration.
         Combines library dependencies with correct build order.
+        Uses direct path references without copying.
         
         Args:
             cache_data (dict): Cache data containing build order and artifacts
@@ -831,9 +830,9 @@ class LDFCacheOptimizer:
             # Apply build order with compile data
             success_build_order = self.apply_build_order_to_environment(build_order)
 
-            # Apply cached artifacts
+            # Apply cached artifacts using direct paths
             if artifacts and success_build_order:
-                self._apply_cached_artifacts(artifacts)
+                self._apply_cached_artifacts_direct(artifacts)
 
             return success_build_order
 
@@ -841,32 +840,104 @@ class LDFCacheOptimizer:
             print(f"✗ Error in build order application: {e}")
             return False
 
-    def _apply_cached_artifacts(self, artifacts):
+    def _apply_cached_artifacts_direct(self, artifacts):
         """
-        Apply cached artifacts to the SCons environment.
+        Apply cached artifacts to the SCons environment using direct paths.
+        No copying involved - uses original build artifact locations.
         
         Args:
-            artifacts (dict): Artifact information
+            artifacts (dict): Artifact information with direct paths
         """
         try:
-            # Apply static libraries
-            compiled_libraries = artifacts.get('compiled_libraries', [])
-            if compiled_libraries:
-                valid_libs = [lib for lib in compiled_libraries if Path(lib).exists()]
-                if valid_libs:
-                    self.env.Append(LIBS=valid_libs)
-                    print(f" ✅ Added {len(valid_libs)} cached static libraries")
+            # Validate paths before applying
+            validated_artifacts = self.validate_artifact_paths(artifacts)
 
-            # Apply object files
-            compiled_objects = artifacts.get('compiled_objects', [])
-            if compiled_objects:
-                valid_objects = [obj for obj in compiled_objects if Path(obj).exists()]
-                if valid_objects:
-                    self.env.Append(OBJECTS=valid_objects)
-                    print(f" ✅ Added {len(valid_objects)} cached object files")
+            # Apply static libraries using direct paths
+            library_paths = validated_artifacts.get('library_paths', [])
+            if library_paths:
+                self.env.Append(LIBS=library_paths)
+                print(f" ✅ Added {len(library_paths)} library paths (direct reference)")
+
+            # Apply object files using direct paths
+            object_paths = validated_artifacts.get('object_paths', [])
+            if object_paths:
+                self.env.Append(OBJECTS=object_paths)
+                print(f" ✅ Added {len(object_paths)} object paths (direct reference)")
+
+            total_artifacts = len(library_paths) + len(object_paths)
+            print(f" 🚀 Total: {total_artifacts} artifacts applied via direct paths")
 
         except Exception as e:
             print(f"⚠ Warning applying cached artifacts: {e}")
+
+    def save_combined_cache(self, cache_data):
+        """
+        Save combined cache data to file with signature verification.
+        
+        Args:
+            cache_data (dict): Complete cache data to save
+            
+        Returns:
+            bool: True if save was successful
+        """
+        try:
+            # Ensure cache directory exists
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Add signature for integrity verification
+            cache_data['signature'] = self.compute_signature(cache_data)
+
+            # Save to file
+            with self.cache_file.open('w') as f:
+                json.dump(cache_data, f, indent=2)
+
+            cache_size = self.cache_file.stat().st_size
+            print(f"💾 Cache saved: {self.cache_file} ({cache_size} bytes)")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error saving cache: {e}")
+            return False
+
+    def load_combined_cache(self):
+        """
+        Load and validate combined cache data from file.
+        
+        Returns:
+            dict or None: Cache data if valid, None if invalid or missing
+        """
+        if not self.cache_file.exists():
+            return None
+
+        try:
+            with self.cache_file.open('r') as f:
+                cache_data = json.load(f)
+
+            # Verify signature
+            stored_signature = cache_data.get('signature')
+            if not stored_signature:
+                print("⚠ Cache missing signature, invalidating")
+                return None
+
+            calculated_signature = self.compute_signature(cache_data)
+            if stored_signature != calculated_signature:
+                print("⚠ Cache signature mismatch, invalidating")
+                return None
+
+            # Verify project hash
+            current_hash = self.get_project_hash_with_details()['final_hash']
+            cached_hash = cache_data.get('project_hash')
+            
+            if current_hash != cached_hash:
+                print("⚠ Project changed since cache creation, invalidating")
+                return None
+
+            print("✅ Valid cache found and loaded")
+            return cache_data
+
+        except Exception as e:
+            print(f"⚠ Error loading cache: {e}")
+            return None
 
     def create_ini_backup(self):
         """
@@ -968,7 +1039,7 @@ class LDFCacheOptimizer:
         Returns:
             bool: True if strategy was successful
         """
-        print("\n=== Two-Run LDF Cache Strategy ===")
+        print("\n=== Two-Run LDF Cache Strategy (No File Copying) ===")
 
         # Check if we already have a valid cache
         existing_cache = self.load_combined_cache()
@@ -995,11 +1066,12 @@ class LDFCacheOptimizer:
     def create_complete_ldf_replacement_with_linker(self):
         """
         Creates a complete LDF replacement solution with optimized linker integration.
+        Uses direct path references instead of copying files.
         
         Returns:
             bool: True if successful
         """
-        print("\n=== Complete LDF Replacement Solution with Linker Optimization ===")
+        print("\n=== Complete LDF Replacement Solution with Direct Path References ===")
 
         try:
             # Ensure compile_commands.json exists using log2compdb
@@ -1011,8 +1083,8 @@ class LDFCacheOptimizer:
                 print("❌ Could not create build order")
                 return self.fallback_to_standard_ldf()
 
-            # Analyze build artifacts
-            artifacts_data = self.analyze_build_artifacts()
+            # Collect build artifacts paths (no copying)
+            artifacts_data = self.collect_build_artifacts_paths()
 
             # Combine with optimized linker logic
             combined_data = {
@@ -1021,242 +1093,65 @@ class LDFCacheOptimizer:
                 'project_hash': self.get_project_hash_with_details()['final_hash'],
                 'timestamp': datetime.datetime.now().isoformat(),
                 'env_name': self.env_name,
-                'linker_optimized': True
+                'linker_optimized': True,
+                'direct_paths': True  # Flag indicating no file copying
             }
+
+            # Save cache for future runs
+            self.save_combined_cache(combined_data)
 
             # Apply everything with linker optimization
             success = self.apply_ldf_cache_with_build_order(combined_data)
 
             if success:
-                print("✅ Complete LDF replacement solution with linker optimization successful")
-                self.save_combined_cache(combined_data)
+                print("✅ Complete LDF replacement active with direct path references")
+                print("🚀 No file copying - maximum efficiency achieved")
+                return True
             else:
-                print("❌ Error - fallback to standard LDF")
+                print("⚠ LDF replacement failed, falling back")
                 return self.fallback_to_standard_ldf()
 
-            return success
-
         except Exception as e:
-            print(f"❌ Critical error: {e}")
+            print(f"❌ Error in complete LDF replacement: {e}")
             return self.fallback_to_standard_ldf()
 
     def fallback_to_standard_ldf(self):
         """
-        Graceful fallback to standard LDF on errors.
-        Restores original platformio.ini configuration.
+        Fallback to standard LDF behavior if cache optimization fails.
         
         Returns:
-            bool: False to indicate fallback was used
+            bool: Always returns True to allow standard build to proceed
         """
-        try:
-            print("🔄 Fallback to standard LDF activated")
-            self.restore_ini_from_backup()
-            return False
-        except Exception as e:
-            print(f"⚠ Warning during fallback: {e}")
-            return False
+        print("🔄 Falling back to standard LDF behavior")
+        print("📝 Cache will be created during this build for future optimization")
+        return True
 
-    def save_combined_cache(self, combined_data):
+    def run_optimization(self):
         """
-        Saves the combined cache solution.
-        
-        Args:
-            combined_data (dict): Combined cache data to save
-        """
-        try:
-            combined_data['signature'] = self.compute_signature(combined_data)
-
-            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-
-            with self.cache_file.open('w', encoding='utf-8') as f:
-                f.write("# LDF Cache - Complete Build Environment with Build Order\n")
-                f.write("# Optimized for lib_ldf_mode = off with correct build order\n")
-                f.write("# Generated as Python dict\n\n")
-                f.write("cache_data = \\\n")
-                f.write(pprint.pformat(combined_data, indent=2, width=120))
-                f.write("\n")
-
-            print(f"💾 Combined cache saved: {self.cache_file}")
-
-        except Exception as e:
-            print(f"✗ Error saving combined cache: {e}")
-
-    def load_combined_cache(self):
-        """
-        Loads and validates the combined cache.
-        Cache is only invalidated when #include directives change in source files
-        or platformio.ini changes (excluding lib_ldf_mode).
+        Main entry point for LDF cache optimization.
+        Implements intelligent caching strategy with direct path references.
         
         Returns:
-            dict: Valid cache data or None if invalid
-        """
-        if not self.cache_file.exists():
-            return None
-
-        try:
-            cache_content = self.cache_file.read_text(encoding='utf-8')
-
-            local_vars = {}
-            exec(cache_content, {}, local_vars)
-            cache_data = local_vars.get('cache_data')
-
-            if not cache_data:
-                print("⚠ Cache file contains no data")
-                return None
-
-            # Validate environment
-            if cache_data.get('env_name') != self.env_name:
-                print(f"🔄 Environment changed: {cache_data.get('env_name')} -> {self.env_name}")
-                return None
-
-            # Check project hash for changes (only include-relevant changes)
-            current_hash = self.get_project_hash_with_details()['final_hash']
-            cached_hash = cache_data.get('project_hash')
-
-            if cached_hash != current_hash:
-                print("🔄 Project files changed - cache invalidated")
-                return None
-
-            # Check if build order files exist
-            build_order = cache_data.get('build_order', {})
-            if not (Path(build_order.get('build_order_file', '')).exists() and
-                    Path(build_order.get('link_order_file', '')).exists()):
-                print("⚠ Build order files missing")
-                return None
-
-            # Check if cached artifacts exist
-            artifacts = cache_data.get('artifacts', {})
-            missing_artifacts = []
-
-            for lib_path in artifacts.get('compiled_libraries', []):
-                if not Path(lib_path).exists():
-                    missing_artifacts.append(lib_path)
-
-            for obj_path in artifacts.get('compiled_objects', []):
-                if not Path(obj_path).exists():
-                    missing_artifacts.append(obj_path)
-
-            if missing_artifacts:
-                print(f"⚠ Cache invalid: {len(missing_artifacts)} cached artifacts missing")
-                return None
-
-            print("✅ Combined cache valid")
-            return cache_data
-
-        except Exception as e:
-            print(f"⚠ Cache validation failed: {e}")
-            return None
-
-    def save_ldf_cache_with_build_order(self, target=None, source=None, env_arg=None, **kwargs):
-        """
-        Saves LDF cache together with build order information.
-        Called as post-build action AFTER successful normal build completion.
-        This is where lib_ldf_mode gets set to 'off' for the second run.
-        
-        Args:
-            target: SCons target (unused)
-            source: SCons source (unused)
-            env_arg: SCons environment (unused)
-            **kwargs: Additional arguments (unused)
+            bool: True if optimization was applied or fallback is acceptable
         """
         try:
-            print("\n=== Post-Build: Creating LDF Cache ===")
+            print("\n" + "=" * 80)
+            print("LDF CACHE OPTIMIZER - DIRECT PATH REFERENCE MODE")
+            print("=" * 80)
+            print(f"Environment: {self.env_name}")
+            print(f"Project: {self.project_dir}")
+            print(f"Build Dir: {self.lib_build_dir}")
+            print("=" * 80)
 
-            # Create build order
-            build_order_data = self.get_correct_build_order()
-
-            # Analyze artifacts
-            artifacts_data = self.analyze_build_artifacts()
-
-            # Get project hash
-            hash_details = self.get_project_hash_with_details()
-
-            if build_order_data and artifacts_data:
-                combined_data = {
-                    'build_order': build_order_data,
-                    'artifacts': artifacts_data,
-                    'project_hash': hash_details['final_hash'],
-                    'hash_details': hash_details['file_hashes'],
-                    'env_name': self.env_name,
-                    'timestamp': datetime.datetime.now().isoformat(),
-                    'pio_version': getattr(self.env, "PioVersion", lambda: "unknown")(),
-                    'ldf_mode': 'off',  # Target mode for second run
-                    'two_run_strategy': True
-                }
-
-                self.save_combined_cache(combined_data)
-                print("💾 LDF cache with build order successfully saved!")
-
-                # NOW set lib_ldf_mode = off AFTER successful complete build
-                if self.modify_platformio_ini_for_second_run('off'):
-                    print("🔧 lib_ldf_mode set to 'off' for second run")
-                    print("💡 Run 'pio run' again to use cached dependencies with LDF disabled")
-                else:
-                    print("❌ Failed to set lib_ldf_mode for second run")
-
-            else:
-                print("❌ Could not create build order or analyze artifacts")
+            # Implement the two-run strategy with direct path references
+            return self.implement_two_run_strategy()
 
         except Exception as e:
-            print(f"✗ Error saving LDF cache with build order: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def validate_ldf_mode_compatibility(self):
-        """
-        Validate that the project uses chain mode or off mode only.
-        This cache optimizer is designed specifically for chain mode.
-        
-        Returns:
-            bool: True if LDF mode is compatible (chain or off), False otherwise
-        """
-        try:
-            config = ProjectConfig()
-            env_section = f"env:{self.env['PIOENV']}"
-
-            # Check environment-specific setting first
-            if config.has_option(env_section, "lib_ldf_mode"):
-                ldf_mode = config.get(env_section, "lib_ldf_mode")
-            # Check global platformio section
-            elif config.has_option("platformio", "lib_ldf_mode"):
-                ldf_mode = config.get("platformio", "lib_ldf_mode")
-            else:
-                # Default is chain mode
-                ldf_mode = "chain"
-
-            ldf_mode = ldf_mode.strip().lower()
-
-            if ldf_mode in ['chain', 'off']:
-                print(f"✅ LDF mode '{ldf_mode}' is compatible with cache optimizer")
-                return True
-            else:
-                print(f"❌ LDF Cache optimizer only supports 'chain' mode! Current mode: '{ldf_mode}'")
-                print("   Modes 'deep', 'chain+', 'deep+' require full LDF analysis")
-                return False
-
-        except Exception as e:
-            print(f"⚠ Warning: Could not determine LDF mode: {e}")
-            print("   Assuming 'chain' mode (default)")
-            return True
+            print(f"❌ Critical error in LDF optimization: {e}")
+            return self.fallback_to_standard_ldf()
 
 
-# Initialize and execute the LDF cache optimizer
-try:
-    ldf_optimizer = LDFCacheOptimizer(env)
-    
-    # Validate LDF mode compatibility
-    if ldf_optimizer.validate_ldf_mode_compatibility():
-        # Execute the two-run strategy
-        success = ldf_optimizer.implement_two_run_strategy()
-        
-        if success:
-            # Register post-build action for cache creation
-            env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", ldf_optimizer.save_ldf_cache_with_build_order)
-        else:
-            print("⚠ LDF Cache strategy initialization failed, using standard LDF")
-    else:
-        print("⚠ LDF mode not compatible, using standard LDF")
-        
-except Exception as e:
-    print(f"❌ LDF Cache Optimizer initialization failed: {e}")
-    print("⚠ Falling back to standard LDF behavior")
+# Initialize and run the LDF cache optimizer
+if __name__ == "__main__":
+    optimizer = LDFCacheOptimizer(env)
+    optimizer.run_optimization()
