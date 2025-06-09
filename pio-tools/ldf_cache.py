@@ -21,6 +21,7 @@ import sys
 import tempfile
 from pathlib import Path
 from platformio.project.config import ProjectConfig
+from SCons.Script import COMMAND_LINE_TARGETS
 
 class LDFCacheOptimizer:
     """
