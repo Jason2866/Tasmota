@@ -1003,6 +1003,13 @@ class LDFCacheOptimizer:
             if self.save_combined_cache(combined_data):
                 print("✅ LDF cache with build order saved successfully")
                 print("🚀 Future builds will use cached dependencies with direct path references")
+                
+                # CRITICAL: Modify platformio.ini for second run strategy
+                if self.modify_platformio_ini_for_second_run('off'):
+                    print("🔧 platformio.ini modified: lib_ldf_mode = off for next build")
+                    print("🚀 Two-run strategy activated - next build will use cache")
+                else:
+                    print("⚠ Failed to modify platformio.ini - manual intervention required")
             else:
                 print("⚠ Failed to save LDF cache")
 
@@ -1115,6 +1122,11 @@ class LDFCacheOptimizer:
         existing_cache = self.load_combined_cache()
         if existing_cache:
             print("✅ Valid cache found - applying cached dependencies")
+            
+            # Restore original platformio.ini if backup exists
+            if self.platformio_ini_backup.exists():
+                self.restore_ini_from_backup()
+                
             success = self.apply_ldf_cache_with_build_order(existing_cache)
             if success:
                 print("🚀 Second run: Using cached dependencies, LDF bypassed")
