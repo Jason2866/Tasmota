@@ -351,6 +351,51 @@ class LDFCacheOptimizer:
             print(f"❌ Error creating compile_commands.json: {e}")
             return False
 
+    def environment_specific_compiledb(self):
+        """
+        Environment-specific compiledb creation with integrated parsing.
+        Captures build output for compile_commands.json generation.
+        """
+        current_targets = COMMAND_LINE_TARGETS[:]
+        is_build_target = (
+            not current_targets or
+            any(target in ["build", "buildprog"] for target in current_targets)
+        )
+
+        if not is_build_target:
+            return
+
+        if self.compile_commands_file.exists():
+            print(f"✅ {self.compile_commands_file} exists, using existing file")
+            return
+
+        print("=" * 60)
+        print(f"COMPILE_COMMANDS_{self.env_name.upper()}.JSON MISSING")
+        print("Creating during current build with integrated parser...")
+        print("=" * 60)
+
+        # Enable verbose mode for current build
+        os.environ["PLATFORMIO_SETTING_FORCE_VERBOSE"] = "true"
+
+        # Register post-build action to create compile_commands.json
+        def create_compiledb_post_build(target, source, env):
+            """Post-build action using integrated compile_commands generation"""
+            try:
+                print("🔧 Creating compile_commands.json with integrated parser...")
+                success = self.create_compiledb_integrated()
+                if success:
+                    print("✅ compile_commands.json created successfully")
+                else:
+                    print("⚠ Failed to create compile_commands.json")
+            except Exception as e:
+                print(f"⚠ Error in post-build compile_commands generation: {e}")
+
+        # Register the post-build action
+        self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_compiledb_post_build)
+
+        print("✅ Verbose mode activated for current build")
+        print("✅ Integrated compile_commands.json generation configured")
+
     def _normalize_path(self, path):
         """
         Platform-independent path normalization using pathlib.
@@ -556,121 +601,6 @@ class LDFCacheOptimizer:
         # Create deterministic string representation
         data_str = json.dumps(data_copy, sort_keys=True)
         return hashlib.sha256(data_str.encode()).hexdigest()
-
-    def environment_specific_compiledb(self):
-        """
-        Environment-specific compiledb creation using log2compdb.
-        Ensures compile_commands_{env}.json exists for build order analysis.
-        Integrates seamlessly into the current build.
-        """
-        current_targets = COMMAND_LINE_TARGETS[:]
-        is_build_target = (
-            not current_targets or
-            any(target in ["build", "buildprog"] for target in current_targets)
-        )
-
-        if not is_build_target:
-            return
-
-        # Check if environment-specific file already exists
-        if self.compile_commands_file.exists():
-            print(f"✅ {self.compile_commands_file} exists, using existing file.")
-            return
-
-        print("=" * 60)
-        print(f"COMPILE_COMMANDS_{self.env_name.upper()}.JSON MISSING")
-        print("Creating during current build...")
-        print("=" * 60)
-
-        # Enable verbose mode for current build
-        os.environ["PLATFORMIO_SETTING_FORCE_VERBOSE"] = "true"
-    
-        # Register post-build action to create compile_commands.json
-        def create_compiledb_post_build(target, source, env):
-            """Post-build action to create compile_commands.json"""
-            try:
-                print("🔧 Creating compile_commands.json from current build log...")
-            
-                # Search for current build log
-                build_log = None
-                possible_logs = [
-                    Path(self.project_dir) / f"build_{self.env_name}.log",
-                    Path(self.build_dir) / "build.log",
-                    self.compile_commands_log_file
-                ]
-            
-                for log_path in possible_logs:
-                    if log_path.exists():
-                        build_log = str(log_path)
-                        break
-            
-                if not build_log:
-                    print("⚠ No build log found, creating from verbose output capture")
-                    return
-            
-                # Build log2compdb command
-                log2compdb_cmd = [
-                    "log2compdb",
-                    "-i", build_log,
-                    "-o", str(self.compile_commands_file),
-                    "-c", "xtensa-esp32-elf-gcc",
-                    "-c", "xtensa-esp32-elf-g++",
-                    "-c", "riscv32-esp-elf-gcc", 
-                    "-c", "riscv32-esp-elf-g++",
-                    "-c", "arm-none-eabi-gcc",
-                    "-c", "arm-none-eabi-g++"
-                ]
-                
-                    self.compiledb_dir.mkdir(parents=True, exist_ok=True)
-                    #result = subprocess.run(log2compdb_cmd, capture_output=True, text=True)
-                
-                    if result.returncode == 0 and self.compile_commands_file.exists():
-                        file_size = self.compile_commands_file.stat().st_size
-                        print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
-                    else:
-                        print(f"❌ log2compdb failed: {result.stderr}")
-            
-            except Exception as e:
-                print(f"⚠ Error creating compile_commands.json: {e}")
-    
-        # Register the post-build action
-        self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_compiledb_post_build)
-    
-        print("✅ Verbose mode activated for current build")
-        print("✅ compile_commands.json will be created after build completion")
-
-        # Create target directory if it doesn't exist
-        self.compiledb_dir.mkdir(parents=True, exist_ok=True)
-    
-        try:
-            # Option 1: Use existing log file if available
-            existing_log = None
-            possible_logs = [
-                Path(self.project_dir) / f"build_{self.env_name}.log",
-                Path(self.build_dir) / "build.log"
-            ]
-        
-            for log_path in possible_logs:
-                if log_path.exists() and log_path.stat().st_size > 0:
-                    existing_log = str(log_path)
-                    print(f"📄 Using existing build log: {existing_log}")
-                    break
-
-            input_log = existing_log
-            print(f"🔧 Generating compile_commands.json with log2compdb from {input_log}...")
-    
-
-            if self.compile_commands_file.exists():
-                file_size = self.compile_commands_file.stat().st_size
-                print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
-                return True
-            else:
-                print(f"❌ compile_commands.json was not created")
-                return False
-
-        except Exception as e:
-            print(f"❌ Error during compiledb generation: {e}")
-            return False
 
     def get_correct_build_order(self):
         """
