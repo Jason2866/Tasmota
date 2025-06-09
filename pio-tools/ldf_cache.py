@@ -111,70 +111,11 @@ class LDFCacheOptimizer:
         print("log2compdb not found, attempting to install...")
         return self._install_log2compdb()
 
-    def create_compiledb_with_log2compdb(self):
-        """
-        Build the project and generate compile_commands.json using log2compdb.
-        Replaces the traditional compiledb creation logic.
-        """
-        if not self._ensure_log2compdb_available():
-            print("❌ log2compdb not available and installation failed")
-            return False
-
-        # Create target directory if it doesn't exist
-        os.makedirs(self.compiledb_dir, exist_ok=True)
-        try:
-            print(f"🔨 Building project and capturing verbose output...")
-            build_cmd = ["pio", "run", "-e", self.env_name, "-v"]
-
-            with open(self.compile_commands_log_file, 'w') as self.compile_commands_log_file:
-                process = subprocess.run(
-                    build_cmd,
-                    stdout=self.compile_commands_log_file,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    cwd=self.project_dir
-                )
-
-            if process.returncode != 0:
-                print(f"❌ Build failed with return code {process.returncode}")
-                return False
-
-            print(f"🔧 Generating compile_commands.json with log2compdb...")
-        
-            log2compdb_cmd = [
-                "log2compdb",
-                "-i", self.compiledb_dir,
-                "-o", self.compile_commands_file,
-                "-c", "xtensa-esp32-elf-gcc",
-                "-c", "xtensa-esp32-elf-g++",
-                "-c", "riscv32-esp-elf-gcc",
-                "-c", "riscv32-esp-elf-g++",
-                "-c", "arm-none-eabi-gcc",
-                "-c", "arm-none-eabi-g++"
-            ]
-
-            result = subprocess.run(log2compdb_cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"❌ log2compdb failed: {result.stderr}")
-                return False
-
-            if os.path.exists(self.compile_commands_file):
-                file_size = os.path.getsize(self.compile_commands_file)
-                print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
-                return True
-            else:
-                print(f"❌ compile_commands.json was not created")
-                return False
-
-        except Exception as e:
-            print(f"❌ Error during build or compiledb generation: {e}")
-            return False
-
-    def environment_specific_compiledb_restart(self):
+    def environment_specific_compiledb(self):
         """
         Environment-specific compiledb creation using log2compdb.
         Ensures compile_commands_{env}.json exists for build order analysis.
-        Integrates seamlessly into the current build without restart.
+        Integrates seamlessly into the current build.
         """
         current_targets = COMMAND_LINE_TARGETS[:]
         is_build_target = (
@@ -278,30 +219,8 @@ class LDFCacheOptimizer:
                     existing_log = log_path
                     print(f"📄 Using existing build log: {existing_log}")
                     break
-        
-            if existing_log:
-                # Verwende vorhandenes Log
-                input_log = existing_log
-            else:
-                # Option 2: Erstelle neues Log nur wenn nötig
-                print(f"🔨 No existing log found, creating new verbose build log...")
-                build_cmd = ["pio", "run", "-e", self.env_name, "-v"]
 
-                with open(self.compile_commands_log_file, 'w') as log_file:
-                    process = subprocess.run(
-                        build_cmd,
-                        stdout=log_file,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        cwd=self.project_dir
-                    )
-
-                if process.returncode != 0:
-                    print(f"❌ Build failed with return code {process.returncode}")
-                    return False
-            
-                input_log = self.compile_commands_log_file
-
+            input_log = existing_log
             print(f"🔧 Generating compile_commands.json with log2compdb from {input_log}...")
     
             log2compdb_cmd = [
@@ -826,7 +745,7 @@ class LDFCacheOptimizer:
         """
         Implements the complete two-run strategy:
         1. Check for existing cache first
-        2. If no cache: ensure compiledb exists (triggers normal first build automatically)
+        2. If no cache: ensure compiledb exists (by adding verbose to build)
         3. Cache gets created during/after the normal first build
         4. lib_ldf_mode gets set to 'off' after successful build
         
@@ -850,10 +769,8 @@ class LDFCacheOptimizer:
         print("🔄 Preparing first run: Checking compile_commands...")
 
         # This call will:
-        # 1. Create compiledb if missing using log2compdb
-        # 2. Automatically restart the normal build process
-        # 3. The normal build will then create the cache via post-build action
-        self.environment_specific_compiledb_restart()
+        # Create compiledb if missing using log2compdb in first compile run
+        self.environment_specific_compiledb()
 
         # If we reach this point, compiledb already exists
         print("✅ compile_commands available - proceeding with cache strategy")
@@ -870,7 +787,7 @@ class LDFCacheOptimizer:
 
         try:
             # Ensure compile_commands.json exists using log2compdb
-            self.environment_specific_compiledb_restart()
+            self.environment_specific_compiledb()
 
             # Create build order with compile data extraction
             build_order_data = self.get_correct_build_order()
