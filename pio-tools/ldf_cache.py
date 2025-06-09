@@ -251,6 +251,7 @@ class LDFCacheOptimizer:
 
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
         self.real_packages_dir = Path(ProjectConfig.get_instance().get("platformio", "packages_dir"))
+        self.build_log_file = Path(self.project_dir) / f"build_{self.env_name}.log"
 
     def validate_ldf_mode_compatibility(self):
         """
@@ -993,8 +994,16 @@ class LDFCacheOptimizer:
             # Apply static libraries using direct paths
             library_paths = validated_artifacts.get('library_paths', [])
             if library_paths:
-                self.env.Append(LIBS=library_paths)
+                # Extract directory for LIBPATH
+                lib_dirs = list(set(str(Path(p).parent) for p in library_paths))
+                # Extract name for LIBS (without 'lib' prefix)
+                lib_names = [Path(p).stem.replace('lib', '') for p in library_paths]
+                self.env.Append(LIBPATH=lib_dirs)
+                self.env.Append(LIBS=lib_names)
                 print(f" ✅ Added {len(library_paths)} library paths (direct reference)")
+            #if library_paths:
+                #self.env.Append(LIBS=library_paths)
+                #print(f" ✅ Added {len(library_paths)} library paths (direct reference)")
 
             # Apply object files using direct paths
             object_paths = validated_artifacts.get('object_paths', [])
