@@ -69,6 +69,7 @@ class LDFCacheOptimizer:
         # Compile commands
         self.compiledb_dir = os.path.join(self.project_dir, ".pio", "compiledb")
         self.compile_commands_file = os.path.join(self.compiledb_dir, f"compile_commands_{self.env_name}.json")
+        self.compile_commands_log_file = os.path.join(self.compiledb_dir, f"compile_commands_{self.env_name}.log")
 
         # Artifacts cache
         self.artifacts_cache_dir = os.path.join(self.project_dir, ".pio", "ldf_cache", "artifacts", self.env_name)
@@ -119,17 +120,16 @@ class LDFCacheOptimizer:
             print("❌ log2compdb not available and installation failed")
             return False
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as log_file:
-            log_path = log_file.name
-
+        # Create target directory if it doesn't exist
+        os.makedirs(self.compiledb_dir, exist_ok=True)
         try:
             print(f"🔨 Building project and capturing verbose output...")
             build_cmd = ["pio", "run", "-e", self.env_name, "-v"]
-            
-            with open(log_path, 'w') as log_file:
+
+            with open(self.compile_commands_log_file, 'w') as self.compile_commands_log_file:
                 process = subprocess.run(
                     build_cmd,
-                    stdout=log_file,
+                    stdout=self.compile_commands_log_file,
                     stderr=subprocess.STDOUT,
                     text=True,
                     cwd=self.project_dir
@@ -140,13 +140,10 @@ class LDFCacheOptimizer:
                 return False
 
             print(f"🔧 Generating compile_commands.json with log2compdb...")
-            
-            # Create target directory if it doesn't exist
-            os.makedirs(self.compiledb_dir, exist_ok=True)
-
+        
             log2compdb_cmd = [
                 "log2compdb",
-                "-i", log_path,
+                "-i", self.compiledb_dir,
                 "-o", self.compile_commands_file,
                 "-c", "xtensa-esp32-elf-gcc",
                 "-c", "xtensa-esp32-elf-g++",
@@ -172,9 +169,6 @@ class LDFCacheOptimizer:
         except Exception as e:
             print(f"❌ Error during build or compiledb generation: {e}")
             return False
-        finally:
-            if os.path.exists(log_path):
-                os.unlink(log_path)
 
     def environment_specific_compiledb_restart(self):
         """
@@ -201,17 +195,16 @@ class LDFCacheOptimizer:
 
         # Reconstruct correct PlatformIO arguments
         pio_args = ["-e", self.env_name]
-        if current_targets:
-            for target in current_targets:
-                if target not in ["compiledb"]:
-                    pio_args.extend(["-t", target])
+#        if current_targets:
+#            for target in current_targets:
+#                if target not in ["compiledb"]:
+#                    pio_args.extend(["-t", target])
 
         try:
             print(f"Environment: {self.env_name}")
             print("1. Aborting current build...")
             print("2. Creating compile_commands.json with log2compdb...")
 
-            # Use log2compdb instead of traditional compiledb
             if not self.create_compiledb_with_log2compdb():
                 print(f"✗ Error creating compile_commands.json with log2compdb")
                 sys.exit(1)
