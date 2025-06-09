@@ -876,7 +876,7 @@ class LDFCacheOptimizer:
         for root, dirs, files in os.walk(self.lib_build_dir):
             root_path = Path(root)
             
-            # Filter ignored directories BEFORE os.walk enters them
+            # Filter ignored directories BEFORE os.walk descends into them (EFFICIENT)
             dirs[:] = [d for d in dirs if not self._is_ignored_directory(root_path / d)]
             
             for file in files:
