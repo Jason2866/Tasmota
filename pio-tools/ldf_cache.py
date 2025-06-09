@@ -69,6 +69,7 @@ class LDFCacheOptimizer:
         # Compile commands
         self.compiledb_dir = os.path.join(self.project_dir, ".pio", "compiledb")
         self.compile_commands_file = os.path.join(self.compiledb_dir, f"compile_commands_{self.env_name}.json")
+        self.compile_commands_log_file = os.path.join(self.compiledb_dir, f"compile_commands_{self.env_name}.log")
 
         # Artifacts cache
         self.artifacts_cache_dir = os.path.join(self.project_dir, ".pio", "ldf_cache", "artifacts", self.env_name)
@@ -119,17 +120,16 @@ class LDFCacheOptimizer:
             print("❌ log2compdb not available and installation failed")
             return False
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as log_file:
-            log_path = log_file.name
-
+        # Create target directory if it doesn't exist
+        os.makedirs(self.compiledb_dir, exist_ok=True)
         try:
             print(f"🔨 Building project and capturing verbose output...")
             build_cmd = ["pio", "run", "-e", self.env_name, "-v"]
-            
-            with open(log_path, 'w') as log_file:
+
+            with open(self.compile_commands_log_file, 'w') as self.compile_commands_log_file:
                 process = subprocess.run(
                     build_cmd,
-                    stdout=log_file,
+                    stdout=self.compile_commands_log_file,
                     stderr=subprocess.STDOUT,
                     text=True,
                     cwd=self.project_dir
@@ -140,13 +140,10 @@ class LDFCacheOptimizer:
                 return False
 
             print(f"🔧 Generating compile_commands.json with log2compdb...")
-            
-            # Create target directory if it doesn't exist
-            os.makedirs(self.compiledb_dir, exist_ok=True)
-
+        
             log2compdb_cmd = [
                 "log2compdb",
-                "-i", log_path,
+                "-i", self.compiledb_dir,
                 "-o", self.compile_commands_file,
                 "-c", "xtensa-esp32-elf-gcc",
                 "-c", "xtensa-esp32-elf-g++",
@@ -172,15 +169,12 @@ class LDFCacheOptimizer:
         except Exception as e:
             print(f"❌ Error during build or compiledb generation: {e}")
             return False
-        finally:
-            if os.path.exists(log_path):
-                os.unlink(log_path)
 
     def environment_specific_compiledb_restart(self):
         """
         Environment-specific compiledb creation using log2compdb.
         Ensures compile_commands_{env}.json exists for build order analysis.
-        If missing, creates it and exits cleanly for user-initiated restart.
+        After compiledb creation, automatically restarts the normal build process.
         """
         current_targets = COMMAND_LINE_TARGETS[:]
         is_build_target = (
@@ -199,20 +193,29 @@ class LDFCacheOptimizer:
         print(f"COMPILE_COMMANDS_{self.env_name.upper()}.JSON MISSING")
         print("=" * 60)
 
+        # Reconstruct correct PlatformIO arguments
+        pio_args = ["-e", self.env_name]
+#        if current_targets:
+#            for target in current_targets:
+#                if target not in ["compiledb"]:
+#                    pio_args.extend(["-t", target])
+
         try:
             print(f"Environment: {self.env_name}")
             print("1. Aborting current build...")
             print("2. Creating compile_commands.json with log2compdb...")
 
-            # Use log2compdb instead of traditional compiledb
             if not self.create_compiledb_with_log2compdb():
                 print(f"✗ Error creating compile_commands.json with log2compdb")
                 sys.exit(1)
 
+            # Restart original build - THIS IS THE NORMAL FIRST BUILD RUN
+            print("3. Restarting original build...")
+            restart_cmd = ["pio", "run"] + pio_args
+            print(f" Executing: {' '.join(restart_cmd)}")
             print("=" * 60)
-            print("Please rerun 'pio run' to use the new compile_commands.json.")
-            print("=" * 60)
-            sys.exit(0)
+            restart_result = subprocess.run(restart_cmd, cwd=self.project_dir)
+            sys.exit(restart_result.returncode)
 
         except Exception as e:
             print(f"✗ Unexpected error: {e}")
@@ -1017,96 +1020,224 @@ class LDFCacheOptimizer:
         Returns:
             bool: True if path is within PlatformIO directories
         """
-        return self.real_packages_dir and path.startswith(self.real_packages_dir)
+        platformio_paths = set()
 
-    def compute_signature(self, data):
+        if 'PLATFORMIO_CORE_DIR' in os.environ:
+            platformio_paths.add(os.path.normpath(os.environ['PLATFORMIO_CORE_DIR']))
+
+        pio_home = os.path.join(ProjectConfig.get_instance().get("platformio", "platforms_dir"))
+        platformio_paths.add(os.path.normpath(pio_home))
+
+        platformio_paths.add(os.path.normpath(os.path.join(self.project_dir, ".pio")))
+
+        norm_path = os.path.normpath(path)
+        return any(norm_path.startswith(pio_path) for pio_path in platformio_paths)
+
+    def _get_file_hash(self, file_path):
         """
-        Compute a signature for the cache data.
+        Return a truncated SHA256 hash of a file's contents.
         
         Args:
-            data (dict): Cache data
+            file_path (str): Path to the file
             
         Returns:
-            str: Signature string
+            str: Truncated SHA256 hash or "unreadable" if file cannot be read
         """
         try:
-            # Remove signature field for computation
-            data_copy = dict(data)
-            data_copy.pop('signature', None)
-            return hashlib.md5(json.dumps(data_copy, sort_keys=True).encode()).hexdigest()
-        except Exception:
-            return "unknown"
+            with open(file_path, 'rb') as f:
+                return hashlib.sha256(f.read()).hexdigest()[:16]
+        except (IOError, OSError, PermissionError):
+            return "unreadable"
+
+    def get_include_relevant_hash(self, file_path):
+        """
+        Calculate a hash based on relevant #include and #define lines in a source file.
+        This is optimized for chain mode which only follows #include directives.
+        Chain mode ignores #ifdef, #if, #elif preprocessor directives.
+        Only invalidates cache when #include directives actually change.
+        
+        Args:
+            file_path (str): Path to the source file
+            
+        Returns:
+            str: Hash based on include-relevant content for chain mode
+        """
+        include_lines = []
+
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                for line in f:
+                    stripped = line.strip()
+
+                    if stripped.startswith('//'):
+                        continue
+
+                    # For chain mode: only #include and relevant #define directives matter
+                    # Chain mode ignores #ifdef, #if, #elif, #else preprocessor evaluation
+                    if (stripped.startswith('#include') or
+                        (stripped.startswith('#define') and
+                         any(keyword in stripped.upper() for keyword in ['INCLUDE', 'PATH', 'CONFIG']))):
+                        include_lines.append(stripped)
+
+            content = '\n'.join(include_lines)
+            return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+        except (IOError, OSError, PermissionError, UnicodeDecodeError):
+            return self._get_file_hash(file_path)
 
     def get_project_hash_with_details(self):
         """
-        Compute a hash of all relevant project files for cache invalidation.
-        Only considers #include directive changes in source files.
+        Scan project files and produce a hash based only on LDF-relevant changes.
+        Optimized for chain mode - only invalidates cache when #include directives change.
+        Excludes lib_ldf_mode changes from platformio.ini to support two-run strategy.
         
         Returns:
-            dict: {'final_hash': str, 'file_hashes': dict}
+            dict: Hash details and scan metadata
         """
-        def extract_includes_from_file(file_path):
-            """Extract #include directives from a source file."""
-            includes = set()
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith('#include'):
-                            includes.add(line)
-            except Exception:
-                pass
-            return includes
-
-        def hash_file_content(file_path):
-            """Hash file content or just includes for source files."""
-            if any(file_path.endswith(ext) for ext in self.SOURCE_EXTENSIONS):
-                # For source files, only hash #include directives
-                includes = extract_includes_from_file(file_path)
-                content = '\n'.join(sorted(includes))
-                return hashlib.md5(content.encode()).hexdigest()
-            else:
-                # For other files, hash complete content
-                try:
-                    with open(file_path, 'rb') as f:
-                        return hashlib.md5(f.read()).hexdigest()
-                except Exception:
-                    return "error"
-
+        start_time = time.time()
         file_hashes = {}
-        final_hash = hashlib.md5()
+        hash_data = []  # Only for LDF-relevant hashes
 
-        # Walk through project directory
-        for root, dirs, files in os.walk(self.project_dir):
-            # Skip ignored directories
-            dirs[:] = [d for d in dirs if d not in self.IGNORE_DIRS]
+        generated_cpp = os.path.basename(self.project_dir).lower() + ".ino.cpp"
 
-            for file in files:
-                if any(file.endswith(ext) for ext in self.ALL_RELEVANT_EXTENSIONS):
-                    file_path = os.path.join(root, file)
-                    
-                    # Skip PlatformIO's own files
-                    if self.is_platformio_path(file_path):
+        # platformio.ini is always relevant for LDF, but exclude lib_ldf_mode changes
+        if os.path.exists(self.platformio_ini):
+            try:
+                with open(self.platformio_ini, 'r', encoding='utf-8') as f:
+                    ini_content = f.read()
+
+                # CRITICAL: Remove lib_ldf_mode before hashing to support two-run strategy
+                filtered_content = re.sub(r'lib_ldf_mode\s*=\s*\w+\n?', '', ini_content)
+                ini_hash = hashlib.sha256(filtered_content.encode()).hexdigest()[:16]
+                hash_data.append(ini_hash)  # Relevant for LDF
+                file_hashes['platformio.ini'] = ini_hash
+
+            except Exception as e:
+                print(f"⚠ Error reading platformio.ini: {e}")
+
+        # Define scan directories
+        scan_dirs = []
+
+        if os.path.exists(self.src_dir):
+            scan_dirs.append(('source', self.src_dir))
+
+        lib_dir = os.path.join(self.project_dir, "lib")
+        if os.path.exists(lib_dir) and not self.is_platformio_path(lib_dir):
+            scan_dirs.append(('library', lib_dir))
+
+        include_dir = os.path.join(self.project_dir, "include")
+        if os.path.exists(include_dir) and not self.is_platformio_path(include_dir):
+            scan_dirs.append(('include', include_dir))
+
+        for inc_path in self.env.get('CPPPATH', []):
+            inc_dir = str(inc_path)
+            if self.is_platformio_path(inc_dir):
+                continue
+            if any(skip_dir in inc_dir for skip_dir in ['variants', '.platformio', '.pio']):
+                continue
+            if os.path.exists(inc_dir) and inc_dir != self.src_dir:
+                scan_dirs.append(('include', inc_dir))
+
+        total_scanned = 0
+        total_relevant = 0
+        scan_start_time = time.time()
+
+        for dir_type, scan_dir in scan_dirs:
+            print(f"🔍 Scanning {dir_type} directory: {scan_dir}")
+
+            try:
+                for root, dirs, files in os.walk(scan_dir):
+                    if self.is_platformio_path(root):
                         continue
 
-                    file_hash = hash_file_content(file_path)
-                    file_hashes[file_path] = file_hash
-                    final_hash.update(file_hash.encode())
+                    dirs[:] = [d for d in dirs if d not in self.IGNORE_DIRS]
+
+                    relevant_files = []
+                    for file in files:
+                        total_scanned += 1
+                        file_ext = os.path.splitext(file)[1].lower()
+                        if file_ext in self.ALL_RELEVANT_EXTENSIONS:
+                            relevant_files.append(file)
+
+                    if relevant_files:
+                        for file in relevant_files:
+                            file_path = os.path.join(root, file)
+                            file_ext = os.path.splitext(file)[1].lower()
+
+                            if file_ext in self.SOURCE_EXTENSIONS or file_ext in self.HEADER_EXTENSIONS:
+                                file_hash = self.get_include_relevant_hash(file_path)
+                            else:
+                                file_hash = self._get_file_hash(file_path)
+
+                            if file_hash != "unreadable":
+                                hash_data.append(file_hash)
+                                total_relevant += 1
+
+                            relative_path = os.path.relpath(file_path, self.project_dir)
+                            file_hashes[relative_path] = file_hash
+
+            except Exception as e:
+                print(f"⚠ Error scanning {scan_dir}: {e}")
+
+        # Calculate final hash
+        combined_content = ''.join(sorted(hash_data))
+        final_hash = hashlib.sha256(combined_content.encode()).hexdigest()[:32]
+
+        scan_duration = time.time() - scan_start_time
+        total_duration = time.time() - start_time
+
+        print(f"📊 Scan completed: {total_scanned} files scanned, {total_relevant} relevant for LDF")
+        print(f"⏱ Scan time: {scan_duration:.2f}s, Total time: {total_duration:.2f}s")
+        print(f"🔑 Project hash: {final_hash}")
 
         return {
-            'final_hash': final_hash.hexdigest(),
-            'file_hashes': file_hashes
+            'final_hash': final_hash,
+            'file_hashes': file_hashes,
+            'scan_stats': {
+                'total_scanned': total_scanned,
+                'total_relevant': total_relevant,
+                'scan_duration': scan_duration,
+                'total_duration': total_duration
+            }
         }
+
+    def compute_signature(self, cache_data):
+        """
+        Compute a simplified signature for cache validation.
+        Simplified to avoid constant cache invalidation.
+        
+        Args:
+            cache_data (dict): Cache data to sign
+            
+        Returns:
+            str: Computed signature based on environment and project hash
+        """
+        try:
+            env_name = cache_data.get('env_name', '')
+            project_hash = cache_data.get('project_hash', '')
+            return hashlib.sha256(f"{env_name}_{project_hash}".encode()).hexdigest()[:16]
+        except Exception:
+            return "invalid"
+
 
 # Initialize the LDF cache optimizer
 ldf_optimizer = LDFCacheOptimizer(env)
 
-# Validate LDF mode compatibility
+# Check LDF mode compatibility
 if not ldf_optimizer.validate_ldf_mode_compatibility():
-    print("❌ Incompatible LDF mode - LDF cache optimizer disabled")
-else:
-    # Implement the two-run strategy
-    ldf_optimizer.implement_two_run_strategy()
+    print("❌ Incompatible LDF mode - script disabled")
+    exit()
 
-    # Add post-build action to save cache after successful build
-    env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", ldf_optimizer.save_ldf_cache_with_build_order)
+# Implement the two-run strategy
+try:
+    success = ldf_optimizer.implement_two_run_strategy()
+    if success:
+        print("✅ Two-run LDF cache strategy completed successfully")
+    else:
+        print("⚠ Two-run strategy failed, using standard LDF")
+except Exception as e:
+    print(f"❌ Critical error in two-run strategy: {e}")
+    ldf_optimizer.fallback_to_standard_ldf()
+
+# Add post-build hook to save cache after successful build
+env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", ldf_optimizer.save_ldf_cache_with_build_order)
