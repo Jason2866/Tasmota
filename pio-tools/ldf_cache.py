@@ -632,7 +632,8 @@ class LDFCacheOptimizer:
 
         for i, entry in enumerate(compile_db, 1):
             source_file = entry.get('file', '')
-            command = entry.get('command', '')
+            arguments = entry.get('arguments', [])
+            command = ' '.join(arguments)
 
             # Extract object file from command
             obj_match = re.search(r'-o\s+(\S+\.o)', command)
