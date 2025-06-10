@@ -35,7 +35,7 @@ from pathlib import Path
 project_dir = env.subst("$PROJECT_DIR")
 env_name = env.subst("$PIOENV")
 compiledb_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.json"
-compile_commands_log_file = Path(project_dir) / ".pio" / "compiledb / f"compile_commands_{env_name}.log"
+compile_commands_log_file = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.log"
 
 if (
     os.environ.get('_PIO_RECURSIVE_CALL') != 'true'
