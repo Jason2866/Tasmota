@@ -36,6 +36,8 @@ project_dir = env.subst("$PROJECT_DIR")
 env_name = env.subst("$PIOENV")
 compiledb_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.json"
 logfile_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.log"
+logfile_path.parent.mkdir(parents=True, exist_ok=True)
+
 
 if (
     os.environ.get('_PIO_RECURSIVE_CALL') != 'true'
