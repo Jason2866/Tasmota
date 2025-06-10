@@ -51,10 +51,13 @@ if (
         env_vars = os.environ.copy()
         env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
         env_vars['_PIO_RECURSIVE_CALL'] = 'true'
-        result = subprocess.run(
-            ['pio', 'run', '-e', env_name],
-            env=env_vars
-        )
+        with open(logfile_path, "w") as logfile:
+            result = subprocess.run(
+                ['pio', 'run', '-e', env_name],
+                env=env_vars,
+                stdout=logfile,
+                stderr=subprocess.STDOUT
+            )
         sys.exit(result.returncode)
 
 # Integrated log2compdb components
