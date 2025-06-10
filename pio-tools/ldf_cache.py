@@ -369,12 +369,14 @@ class LDFCacheOptimizer:
 
         print(f"🔧 Generating compile_commands.json from {build_log}")
 
-        # ESP32/ARM compiler names to look for
+        # ESP8266/ESP32/ARM compiler names to look for
         compiler_names = [
             "xtensa-esp32-elf-gcc",
             "xtensa-esp32-elf-g++", 
             "riscv32-esp-elf-gcc",
             "riscv32-esp-elf-g++",
+            "xtensa-lx106-elf-gcc",
+            "xtensa-lx106-elf-g++",
             "arm-none-eabi-gcc",
             "arm-none-eabi-g++"
         ]
