@@ -938,19 +938,9 @@ class LDFCacheOptimizer:
 
         for root, dirs, files in os.walk(self.lib_build_dir):
             root_path = Path(root)
-            
-            # Filter ignored directories BEFORE os.walk descends into them (EFFICIENT)
-            dirs[:] = [d for d in dirs if not self._is_ignored_directory(root_path / d)]
-            
             for file in files:
                 if file.endswith(('.a', '.o')):
-                    file_path = root_path / file
-                    
-                    # Use improved object file filtering
-                    if self._should_skip_object_file(file_path, root_path):
-                        continue
-
-                    # Collect paths directly without copying
+                    file_path = root_path / file          
                     if file.endswith('.a'):
                         library_paths.append(str(file_path))
                     elif file.endswith('.o'):
@@ -1175,13 +1165,13 @@ class LDFCacheOptimizer:
                 print("🚀 Future builds will use cached dependencies with direct path references")
 
                 # CRITICAL: Modify platformio.ini for second run strategy
-                if self.modify_platformio_ini_for_second_run('off'):
-                    print("🔧 platformio.ini modified: lib_ldf_mode = off for next build")
-                    print("🚀 Two-run strategy activated - next build will use cache")
-                else:
-                    print("⚠ Failed to modify platformio.ini - manual intervention required")
-            else:
-                print("⚠ Failed to save LDF cache")
+#                if self.modify_platformio_ini_for_second_run('off'):
+#                    print("🔧 platformio.ini modified: lib_ldf_mode = off for next build")
+#                    print("🚀 Two-run strategy activated - next build will use cache")
+#                else:
+#                    print("⚠ Failed to modify platformio.ini - manual intervention required")
+#            else:
+#                print("⚠ Failed to save LDF cache")
 
         except Exception as e:
             print(f"❌ Error in post-build cache creation: {e}")
@@ -1351,7 +1341,7 @@ class LDFCacheOptimizer:
             }
 
             # Save cache
-            self.save_combined_cache(combined_data)
+            #self.save_combined_cache(combined_data)
 
             # Apply everything with linker optimization
             success = self.apply_ldf_cache_with_build_order(combined_data)
