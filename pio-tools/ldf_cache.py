@@ -52,7 +52,7 @@ if (
         env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
         env_vars['_PIO_RECURSIVE_CALL'] = 'true'
         result = subprocess.run(
-            ['pio', 'run'] + sys.argv[1:],
+            ['pio', 'run', '-e', env_name],
             env=env_vars
         )
         sys.exit(result.returncode)
