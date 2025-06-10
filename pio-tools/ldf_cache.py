@@ -1,9 +1,7 @@
 """
-
 PlatformIO Advanced Script for intelligent LDF caching with build order management.
 
 Copyright: Jason2866
-
 """
 
 Import("env")
@@ -39,8 +37,18 @@ class CompileCommand:
 
     @classmethod
     def from_cmdline(cls, cc_cmd: Path, cmd_args: list[str], directory=None) -> Optional["CompileCommand"]:
-        """cmd_args should already be split with shlex.split or similar."""
+        """
+        Create a CompileCommand from a command line.
+        cmd_args should already be split with shlex.split or similar.
         
+        Args:
+            cc_cmd: Path to the compiler executable
+            cmd_args: List of command line arguments
+            directory: Optional working directory
+        
+        Returns:
+            CompileCommand or None if no valid input file
+        """
         # If the user-supplied compiler isn't in this supposed argument list, skip
         if cc_cmd.name not in cmd_args[0]:
             return None
@@ -113,12 +121,25 @@ class Compiler:
 
     @classmethod
     def from_name(cls, compiler_name: str) -> "Compiler":
-        """Create compiler from name string."""
+        """
+        Create Compiler from name string.
+        
+        Args:
+            compiler_name: Name of the compiler
+        """
         path = Path(compiler_name)
         return cls(name=compiler_name, path=path)
 
     def find_invocation_start(self, cmd_args: list[str]) -> int:
-        """Find compiler invocation in argument list."""
+        """
+        Find compiler invocation in argument list.
+        
+        Args:
+            cmd_args: List of command line arguments
+        
+        Returns:
+            int: Index of compiler invocation
+        """
         for index, arg in enumerate(cmd_args):
             if self.name in arg or Path(arg).stem == self.name:
                 return index
@@ -237,7 +258,7 @@ class LDFCacheOptimizer:
         self.platformio_ini = Path(self.project_dir) / "platformio.ini"
         self.platformio_ini_backup = Path(self.project_dir) / ".pio" / f"platformio_backup_{self.env_name}.ini"
 
-        # Build order files
+        # Build order files (not used anymore, kept for backwards compatibility)
         self.build_order_file = Path(self.project_dir) / f"correct_build_order_{self.env_name}.txt"
         self.link_order_file = Path(self.project_dir) / f"correct_link_order_{self.env_name}.txt"
 
@@ -607,10 +628,19 @@ class LDFCacheOptimizer:
     def get_correct_build_order(self):
         """
         Combines compile_commands.json (order) with build artifacts (paths).
-        Creates correct build and link order files for proper compilation.
+        Returns build order data directly as Python data structure.
+        No intermediate files are written.
         
         Returns:
-            dict: Build order data with ordered objects and file paths
+            dict: {
+                'ordered_objects': list of dicts with 'order', 'source', 'object',
+                'ordered_sources': list of source file paths,
+                'ordered_object_files': list of object file paths,
+                'include_paths': list of include paths,
+                'defines': list of defines,
+                'build_flags': list of build flags
+            }
+            or None if the file is missing or invalid.
         """
         # Load compile_commands.json for correct order
         if not self.compile_commands_file.exists():
@@ -618,76 +648,72 @@ class LDFCacheOptimizer:
             return None
 
         try:
-            with self.compile_commands_file.open("r") as f:
+            with self.compile_commands_file.open("r", encoding='utf-8') as f:
                 compile_db = json.load(f)
         except Exception as e:
             print(f"✗ Error reading compile_commands.json: {e}")
             return None
 
-        # Map source files to object files and extract build information
         ordered_objects = []
+        ordered_sources = []
+        ordered_object_files = []
         include_paths = set()
         defines = set()
         build_flags = set()
 
         for i, entry in enumerate(compile_db, 1):
             source_file = entry.get('file', '')
-            arguments = entry.get('arguments', [])
-            command = ' '.join(arguments)
+            
+            # Handle both 'arguments' and 'command' formats
+            if 'arguments' in entry:
+                command = ' '.join(entry['arguments'])
+            elif 'command' in entry:
+                command = entry['command']
+            else:
+                print(f"⚠ Unsupported entry format in compile_commands.json (index {i})")
+                continue
 
             # Extract object file from command
             obj_match = re.search(r'-o\s+(\S+\.o)', command)
             if obj_match:
                 obj_file = obj_match.group(1)
+                ordered_object_files.append(obj_file)
                 ordered_objects.append({
                     'order': i,
                     'source': source_file,
                     'object': obj_file,
                 })
 
-            # Extract include paths from compile commands
+            # Build order sources
+            ordered_sources.append(source_file)
+
+            # Extract include paths
             include_matches = re.findall(r'-I\s*([^\s]+)', command)
             for inc_path in include_matches:
                 inc_path = inc_path.strip('"\'')
                 if Path(inc_path).exists():
                     include_paths.add(str(Path(inc_path)))
 
-            # Extract defines from compile commands
+            # Extract defines
             define_matches = re.findall(r'-D\s*([^\s]+)', command)
             for define in define_matches:
                 defines.add(define)
 
-            # Extract other build flags
+            # Extract build flags
             flag_matches = re.findall(r'(-[fmWO][^\s]*)', command)
             for flag in flag_matches:
                 build_flags.add(flag)
 
-        # Save build order
-        try:
-            with self.build_order_file.open("w") as f:
-                for obj_info in ordered_objects:
-                    f.write(f"{obj_info['source']}\n")
+        print(f"✓ Build order extracted directly from {self.compile_commands_file}")
 
-            # Create correct linker order
-            with self.link_order_file.open("w") as f:
-                for obj_info in ordered_objects:
-                    f.write(f"{obj_info['object']}\n")
-
-            print(f"✓ Created: correct_build_order_{self.env_name}.txt")
-            print(f"✓ Created: correct_link_order_{self.env_name}.txt")
-
-            return {
-                'ordered_objects': ordered_objects,
-                'build_order_file': str(self.build_order_file),
-                'link_order_file': str(self.link_order_file),
-                'include_paths': list(include_paths),
-                'defines': list(defines),
-                'build_flags': list(build_flags)
-            }
-
-        except Exception as e:
-            print(f"✗ Error writing build order files: {e}")
-            return None
+        return {
+            'ordered_objects': ordered_objects,
+            'ordered_sources': ordered_sources,
+            'ordered_object_files': ordered_object_files,
+            'include_paths': sorted(include_paths),
+            'defines': sorted(defines),
+            'build_flags': sorted(build_flags)
+        }
 
     def apply_build_order_to_environment(self, build_order_data):
         """
@@ -704,14 +730,13 @@ class LDFCacheOptimizer:
             return False
 
         try:
-            ordered_objects = build_order_data.get('ordered_objects', [])
+            ordered_object_files = build_order_data.get('ordered_object_files', [])
 
             # Collect all object files in correct order
             object_files = []
-            for obj_info in ordered_objects:
-                obj_path = obj_info['object']
-                if Path(obj_path).exists():
-                    object_files.append(obj_path)
+            for obj_file in ordered_object_files:
+                if Path(obj_file).exists():
+                    object_files.append(obj_file)
 
             if not object_files:
                 print("⚠ No valid object files found")
@@ -1082,24 +1107,19 @@ class LDFCacheOptimizer:
 
     def save_ldf_cache_with_build_order(self, target, source, env):
         """
-        Post-build action to save LDF cache with build order.
-        This is called after successful build completion.
-        
-        Args:
-            target: SCons target
-            source: SCons source
-            env: SCons environment
+        Post-build action to save LDF cache with build order integration.
+        Collects all build order and artifact information and saves it.
         """
         try:
-            print("\n🔧 Creating LDF cache with build order after successful build...")
+            print("🔧 Collecting build order and artifacts for cache...")
 
-            # Create build order data
+            # Collect build order data
             build_order_data = self.get_correct_build_order()
             if not build_order_data:
-                print("⚠ Could not create build order data")
+                print("⚠ No build order data available, skipping cache save")
                 return
 
-            # Collect build artifacts paths (no copying)
+            # Collect build artifacts
             artifacts_data = self.collect_build_artifacts_paths()
 
             # Create combined cache data
@@ -1117,7 +1137,7 @@ class LDFCacheOptimizer:
             if self.save_combined_cache(combined_data):
                 print("✅ LDF cache with build order saved successfully")
                 print("🚀 Future builds will use cached dependencies with direct path references")
-                
+
                 # CRITICAL: Modify platformio.ini for second run strategy
                 if self.modify_platformio_ini_for_second_run('off'):
                     print("🔧 platformio.ini modified: lib_ldf_mode = off for next build")
@@ -1220,6 +1240,7 @@ class LDFCacheOptimizer:
             return False
 
     def implement_two_run_strategy(self):
+            # Get project hash
         """
         Implements the complete two-run strategy:
         1. Check for existing cache first
@@ -1236,11 +1257,11 @@ class LDFCacheOptimizer:
         existing_cache = self.load_combined_cache()
         if existing_cache:
             print("✅ Valid cache found - applying cached dependencies")
-            
+
             # Restore original platformio.ini if backup exists
             if self.platformio_ini_backup.exists():
                 self.restore_ini_from_backup()
-                
+
             success = self.apply_ldf_cache_with_build_order(existing_cache)
             if success:
                 print("🚀 Second run: Using cached dependencies, LDF bypassed")
@@ -1293,7 +1314,7 @@ class LDFCacheOptimizer:
                 'direct_paths': True  # Flag indicating no file copying
             }
 
-            # Save cache for future runs
+            # Save cache
             self.save_combined_cache(combined_data)
 
             # Apply everything with linker optimization
@@ -1344,18 +1365,19 @@ class LDFCacheOptimizer:
 
         except Exception as e:
             print(f"❌ Critical error in LDF optimization: {e}")
+            print(f"✗ Error saving LDF cache: {e}")
             return self.fallback_to_standard_ldf()
 
 
 # Initialize and execute the LDF cache optimizer
 try:
     ldf_optimizer = LDFCacheOptimizer(env)
-    
+
     # Validate LDF mode compatibility
     if ldf_optimizer.validate_ldf_mode_compatibility():
         # Execute the two-run strategy
         success = ldf_optimizer.implement_two_run_strategy()
-        
+
         if success:
             # Register post-build action for cache creation
             env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", ldf_optimizer.save_ldf_cache_with_build_order)
@@ -1363,7 +1385,7 @@ try:
             print("⚠ LDF Cache strategy initialization failed, using standard LDF")
     else:
         print("⚠ LDF mode not compatible, using standard LDF")
-        
+
 except Exception as e:
     print(f"❌ LDF Cache Optimizer initialization failed: {e}")
     print("⚠ Falling back to standard LDF behavior")
