@@ -46,16 +46,16 @@ if (
         not current_targets or
         any(target in ["build", "buildprog"] for target in current_targets)
     )
-        if is_build_target:
-            print(f"🔄 compile_commands.json not found, start verbose build for {env_name}...")
-            env_vars = os.environ.copy()
-            env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
-            env_vars['_PIO_RECURSIVE_CALL'] = 'true'
-            result = subprocess.run(
-                ['pio', 'run'] + sys.argv[1:],
-                env=env_vars
-            )
-           sys.exit(result.returncode)
+    if is_build_target:
+        print(f"🔄 compile_commands.json not found, start verbose build for {env_name}...")
+        env_vars = os.environ.copy()
+        env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
+        env_vars['_PIO_RECURSIVE_CALL'] = 'true'
+        result = subprocess.run(
+            ['pio', 'run'] + sys.argv[1:],
+            env=env_vars
+        )
+        sys.exit(result.returncode)
 
 # Integrated log2compdb components
 DIRCHANGE_PATTERN = re.compile(r"(?P<action>\w+) directory '(?P<path>.+)'")
