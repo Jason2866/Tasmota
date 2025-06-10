@@ -35,7 +35,7 @@ from pathlib import Path
 project_dir = env.subst("$PROJECT_DIR")
 env_name = env.subst("$PIOENV")
 compiledb_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.json"
-compile_commands_log_file = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.log"
+logfile_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.log"
 
 if (
     os.environ.get('_PIO_RECURSIVE_CALL') != 'true'
@@ -52,7 +52,7 @@ if (
         env_vars = os.environ.copy()
         env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
         env_vars['_PIO_RECURSIVE_CALL'] = 'true'
-        with open(compile_commands_log_file, "w") as logfile:
+        with open(logfile_path, "w") as logfile:
             result = subprocess.run(
                 ['pio', 'run', '-e', env_name],
                 env=env_vars,
@@ -351,7 +351,7 @@ class LDFCacheOptimizer:
         # Look for build log
         build_log = None
         possible_logs = [
-            self.build_log_file,
+            self.compile_commands_log_file,
             Path(self.project_dir) / f"build_{self.env_name}.log",
             Path(self.build_dir) / "build.log"
         ]
