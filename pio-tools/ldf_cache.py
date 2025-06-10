@@ -24,6 +24,39 @@ from SCons.Script import COMMAND_LINE_TARGETS
 from dataclasses import dataclass
 from typing import Optional
 
+Import("env")
+
+import os
+import sys
+import subprocess
+from pathlib import Path
+
+# generate 1st build in full verbose mode - Platformio and toolchain
+project_dir = env.subst("$PROJECT_DIR")
+env_name = env.subst("$PIOENV")
+compiledb_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.json"
+
+if (
+    os.environ.get('_PIO_RECURSIVE_CALL') != 'true'
+    and os.environ.get('PLATFORMIO_SETTING_FORCE_VERBOSE') != 'true'
+    and not (compiledb_path.exists() and compiledb_path.stat().st_size > 0)
+):
+    current_targets = COMMAND_LINE_TARGETS[:]
+    is_build_target = (
+        not current_targets or
+        any(target in ["build", "buildprog"] for target in current_targets)
+    )
+        if is_build_target:
+            print(f"🔄 compile_commands.json not found, start verbose build for {env_name}...")
+            env_vars = os.environ.copy()
+            env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
+            env_vars['_PIO_RECURSIVE_CALL'] = 'true'
+            result = subprocess.run(
+                ['pio', 'run'] + sys.argv[1:],
+                env=env_vars
+            )
+           sys.exit(result.returncode)
+
 # Integrated log2compdb components
 DIRCHANGE_PATTERN = re.compile(r"(?P<action>\w+) directory '(?P<path>.+)'")
 INFILE_PATTERN = re.compile(r"(?P<path>.+\.(cpp|cxx|cc|c|hpp|hxx|h))", re.IGNORECASE)
@@ -392,13 +425,8 @@ class LDFCacheOptimizer:
             print(f"✅ {self.compile_commands_file} exists, using existing file")
             return
 
-        print("=" * 60)
         print(f"COMPILE_COMMANDS_{self.env_name.upper()}.JSON MISSING")
         print("Creating during current build with integrated parser...")
-        print("=" * 60)
-
-        # Enable verbose mode for current build
-        os.environ["PLATFORMIO_SETTING_FORCE_VERBOSE"] = "true"
 
         # Register post-build action to create compile_commands.json
         def create_compiledb_post_build(target, source, env):
@@ -1243,9 +1271,9 @@ class LDFCacheOptimizer:
             # Get project hash
         """
         Implements the complete two-run strategy:
-        1. Check for existing cache first
-        2. If no cache: ensure compiledb exists (by adding verbose to build)
-        3. Cache gets created during/after the normal first build
+        1. Compile first run in verbose mode (smart check)
+        2. Check for existing cache
+        3. Cache gets created during/after the first (verbose) build
         4. lib_ldf_mode gets set to 'off' after successful build
         
         Returns:
