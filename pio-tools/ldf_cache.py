@@ -310,6 +310,17 @@ class LDFCacheOptimizer:
         self.real_packages_dir = Path(ProjectConfig.get_instance().get("platformio", "packages_dir"))
         self.build_log_file = Path(self.project_dir) / f"build_{self.env_name}.log"
 
+    def is_first_run(self):
+        """Prüft ob dies der erste Run ist"""
+        return (
+            os.environ.get('_PIO_RECURSIVE_CALL') != 'true' and
+            os.environ.get('PLATFORMIO_SETTING_FORCE_VERBOSE') != 'true'
+        )
+
+    def is_second_run(self):
+        """Prüft ob dies der zweite Run ist"""
+        return os.environ.get('_PIO_RECURSIVE_CALL') == 'true'
+
     def validate_ldf_mode_compatibility(self):
         """
         Validate that the current LDF mode is compatible with caching.
@@ -446,11 +457,11 @@ class LDFCacheOptimizer:
             except Exception as e:
                 print(f"⚠ Error in post-build compile_commands generation: {e}")
 
-        # Register the post-build action
-        self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_compiledb_post_build)
-
-        print("✅ Verbose mode activated for current build")
-        print("✅ Integrated compile_commands.json generation configured")
+        # Register the post-build action only for first run
+        if is_first_run():
+            self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_compiledb_post_build)
+            print("✅ Verbose mode activated for current build")
+            print("✅ Integrated compile_commands.json generation configured")
 
     def _normalize_path(self, path):
         """
@@ -647,6 +658,9 @@ class LDFCacheOptimizer:
             dict: Hash details including file hashes and final combined hash
         """
         file_hashes = {}
+
+        if self.is_second_run():
+            return {}
         
         # Walk through source directories using pathlib
         src_path = Path(self.src_dir)
@@ -974,8 +988,8 @@ class LDFCacheOptimizer:
         Returns:
             dict: Artifact paths organized by type
         """
-        if not self.lib_build_dir.exists():
-            print(f"⚠ Build directory not found: {self.lib_build_dir}")
+        if not self.lib_build_dir.exists() or self.is_second_run():
+            print(f"⚠ Build directory not found: {self.lib_build_dir} or not 1st verbose build run")
             return {}
 
         library_paths = []
@@ -1186,7 +1200,7 @@ class LDFCacheOptimizer:
         Post-build action to save LDF cache with build order integration.
         Collects all build order and artifact information and saves it.
         """
-        if os.environ.get('_PIO_RECURSIVE_CALL') == 'true':
+        if self.is_first_run():
             # We need to be in the first recusive run with --disable-auto-clean
             print("🔧 Collecting build order and artifacts for cache...")
 
@@ -1245,7 +1259,7 @@ class LDFCacheOptimizer:
 
     def restore_ini_from_backup(self):
         """
-        Restore platformio.ini from backup after cache creation is complete.
+        Restore platformio.ini from backup.
         This ensures the original configuration is preserved.
         
         Returns:
@@ -1277,6 +1291,9 @@ class LDFCacheOptimizer:
         """
         if not self.create_ini_backup():
             print("❌ Cannot proceed without backup")
+            return False
+
+        if self.is_second_run():
             return False
 
         try:
@@ -1450,7 +1467,7 @@ try:
         # Execute the two-run strategy
         success = ldf_optimizer.implement_two_run_strategy()
 
-        if success:
+        if success and self.is_first_run():
             # Register post-build action for cache creation
             env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", ldf_optimizer.save_ldf_cache_with_build_order)
         else:
