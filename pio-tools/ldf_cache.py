@@ -756,7 +756,7 @@ class LDFCacheOptimizer:
         ordered_object_files = []
         include_paths = set()
         defines = set()
-        build_flags = set()
+#        build_flags = set()
 
         for i, entry in enumerate(compile_db, 1):
             source_file = entry.get('file', '')
@@ -797,9 +797,9 @@ class LDFCacheOptimizer:
                 defines.add(define)
 
             # Extract build flags
-            flag_matches = re.findall(r'(-[fmWO][^\s]*)', command)
-            for flag in flag_matches:
-                build_flags.add(flag)
+#            flag_matches = re.findall(r'(-[fmWO][^\s]*)', command)
+#            for flag in flag_matches:
+#                build_flags.add(flag)
 
         print(f"✓ Build order extracted directly from {self.compile_commands_file}")
 
@@ -809,7 +809,7 @@ class LDFCacheOptimizer:
             'ordered_object_files': ordered_object_files,
             'include_paths': sorted(include_paths),
             'defines': sorted(defines),
-            'build_flags': sorted(build_flags)
+#            'build_flags': sorted(build_flags)
         }
 
     def apply_build_order_to_environment(self, build_order_data):
