@@ -588,6 +588,50 @@ class LDFCacheOptimizer:
             
         return includes
 
+    def _hash_platformio_ini_selective(self):
+        """
+        Hash platformio.ini but exclude LDF-related lines that are modified by the script.
+    
+        Returns:
+            str: MD5 hash of relevant platformio.ini content
+        """
+        if not self.platformio_ini.exists():
+            return ""
+    
+        # Lines to exclude from hashing (case-insensitive)
+        excluded_patterns = [
+            'lib_ldf_mode',
+            # Weitere LDF-relevante Optionen falls nötig:
+            # 'lib_compat_mode',
+            # 'lib_ignore'
+        ]
+    
+        try:
+            relevant_lines = []
+            with self.platformio_ini.open('r', encoding='utf-8') as f:
+                for line in f:
+                    line_stripped = line.strip()
+                    # Skip empty lines and comments
+                    if not line_stripped or line_stripped.startswith(';') or line_stripped.startswith('#'):
+                        continue
+                
+                    # Check if line contains excluded patterns
+                    should_exclude = any(
+                        pattern.lower() in line_stripped.lower() 
+                        for pattern in excluded_patterns
+                    )
+                
+                    if not should_exclude:
+                        relevant_lines.append(line_stripped)
+        
+            # Hash only relevant content
+            relevant_content = '\n'.join(sorted(relevant_lines))
+            return hashlib.md5(relevant_content.encode()).hexdigest()
+        
+        except (IOError, OSError) as e:
+            print(f"⚠ Could not read platformio.ini: {e}")
+            return ""
+
     def get_project_hash_with_details(self):
         """
         Calculate project hash with improved path handling using pathlib.
