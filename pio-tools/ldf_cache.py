@@ -841,7 +841,7 @@ class LDFCacheOptimizer:
                     self.env.Replace(OBJECTS=valid_objects)
                     print(f"✅ Set OBJECTS: {len(valid_objects)} files (exact reproduction)")
 
-            if not valid_sources or not object_files:
+            if not valid_sources or not valid_objects:
                 print("⚠ No sources/object files found")
                 return False
 
