@@ -848,7 +848,7 @@ class LDFCacheOptimizer:
             # Apply include paths and defines from compile commands
             self._apply_compile_data_to_environment(build_order_data)
             # CRITICAL: Implement correct linker order
-            self._apply_correct_linker_order(object_files)
+            self._apply_correct_linker_order(valid_objects)
             print(f"✅ Linker order configured for correct symbol resolution")
 
             return True
