@@ -611,11 +611,16 @@ class LDFCacheOptimizer:
                 try:
                     # Calculate relative path from project
                     rel_path = self._get_relative_path_from_project(file_path)
-                    
-                    # Calculate file hash
-                    file_content = file_path.read_bytes()
-                    file_hash = hashlib.md5(file_content).hexdigest()
-                    file_hashes[rel_path] = file_hash
+                    if file_path.suffix in self.SOURCE_EXTENSIONS:
+                    # Nur Include-Direktiven hashen
+                        includes = self._extract_includes(file_path)
+                        include_hash = hashlib.md5(str(sorted(includes)).encode()).hexdigest()
+                        file_hashes[rel_path] = include_hash
+                    elif file_path.suffix in self.HEADER_EXTENSIONS:
+                        # Header komplett hashen (da sie die Abhängigkeiten definieren)
+                        file_content = file_path.read_bytes()
+                        file_hash = hashlib.md5(file_content).hexdigest()
+                        file_hashes[rel_path] = file_hash
                     
                 except (IOError, OSError) as e:
                     print(f"⚠ Could not hash {file_path}: {e}")
