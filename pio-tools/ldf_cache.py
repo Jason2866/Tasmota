@@ -297,10 +297,6 @@ class LDFCacheOptimizer:
         self.platformio_ini = Path(self.project_dir) / "platformio.ini"
         self.platformio_ini_backup = Path(self.project_dir) / ".pio" / f"platformio_backup_{self.env_name}.ini"
 
-        # Build order files (not used anymore, kept for backwards compatibility)
-        self.build_order_file = Path(self.project_dir) / f"correct_build_order_{self.env_name}.txt"
-        self.link_order_file = Path(self.project_dir) / f"correct_link_order_{self.env_name}.txt"
-
         # Compile commands
         compiledb_base = Path(self.project_dir) / ".pio" / "compiledb"
         self.compiledb_dir = compiledb_base
@@ -355,6 +351,7 @@ class LDFCacheOptimizer:
         possible_logs = [
             self.compile_commands_log_file,
             Path(self.project_dir) / f"build_{self.env_name}.log",
+            Path(self.build_dir) / f"build_{self.env_name}.log",
             Path(self.build_dir) / "build.log"
         ]
 
@@ -434,7 +431,7 @@ class LDFCacheOptimizer:
             return
 
         print(f"COMPILE_COMMANDS_{self.env_name.upper()}.JSON MISSING")
-        print("Creating during current build with integrated parser...")
+        print("Creating after current build with integrated parser...")
 
         # Register post-build action to create compile_commands.json
         def create_compiledb_post_build(target, source, env):
@@ -1266,7 +1263,7 @@ class LDFCacheOptimizer:
             return False
 
     def implement_two_run_strategy(self):
-            # Get project hash
+        # Get project hash
         """
         Implements the complete two-run strategy:
         1. Compile first run in verbose mode (smart check)
