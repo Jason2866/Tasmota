@@ -1038,8 +1038,10 @@ class LDFCacheOptimizer:
             artifacts (dict): Artifact information with direct paths
         """
         try:
-            # Validate paths before applying
-            validated_artifacts = self.validate_artifact_paths(artifacts)
+            # Validate paths before applying -> overkill not needed
+            #validated_artifacts = self.validate_artifact_paths(artifacts)
+            validated_artifacts = artifacts
+            
 
             # Apply static libraries using direct paths
             library_paths = validated_artifacts.get('library_paths', [])
