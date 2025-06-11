@@ -665,19 +665,21 @@ class LDFCacheOptimizer:
                         file_content = file_path.read_bytes()
                         file_hash = hashlib.md5(file_content).hexdigest()
                         file_hashes[rel_path] = file_hash
-                    
+                    elif file_path.suffix in self.CONFIG_EXTENSIONS:
+                        # Konfigurationsdateien komplett hashen
+                        file_content = file_path.read_bytes()
+                        file_hash = hashlib.md5(file_content).hexdigest()
+                        file_hashes[rel_path] = file_hash
+
                 except (IOError, OSError) as e:
                     print(f"⚠ Could not hash {file_path}: {e}")
                     continue
 
         # Add platformio.ini hash
-        if self.platformio_ini.exists():
-            try:
-                rel_ini_path = self._get_relative_path_from_project(self.platformio_ini)
-                ini_content = self.platformio_ini.read_bytes()
-                file_hashes[rel_ini_path] = hashlib.md5(ini_content).hexdigest()
-            except (IOError, OSError) as e:
-                print(f"⚠ Could not hash platformio.ini: {e}")
+        platformio_hash = self._hash_platformio_ini_selective()
+        if platformio_hash:
+            rel_ini_path = self._get_relative_path_from_project(self.platformio_ini)
+            file_hashes[rel_ini_path] = platformio_hash
 
         # Create final hash
         combined_content = json.dumps(file_hashes, sort_keys=True)
