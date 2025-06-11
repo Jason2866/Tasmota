@@ -827,8 +827,14 @@ class LDFCacheOptimizer:
             return False
 
         try:
+            # 1. SOURCES
+            ordered_sources = build_order_data.get('ordered_sources', [])
+            if ordered_sources:
+                valid_sources = [s for s in ordered_sources if Path(s).exists()]
+                if valid_sources:
+                    self.env.Replace(SOURCES=valid_sources)
+            
             ordered_object_files = build_order_data.get('ordered_object_files', [])
-
             # Collect all object files in correct order
             object_files = []
             for obj_file in ordered_object_files:
