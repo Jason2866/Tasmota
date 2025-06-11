@@ -827,6 +827,8 @@ class LDFCacheOptimizer:
             return False
 
         try:
+            valid_sources = []
+            valid_objects = []
             ordered_sources = build_order_data.get('ordered_sources', [])
             if ordered_sources:
                 valid_sources = [s for s in ordered_sources if Path(s).exists()]
