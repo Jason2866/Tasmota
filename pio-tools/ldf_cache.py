@@ -734,8 +734,7 @@ class LDFCacheOptimizer:
                 'ordered_sources': list of source file paths,
                 'ordered_object_files': list of object file paths,
                 'include_paths': list of include paths,
-                'defines': list of defines,
-                'build_flags': list of build flags
+                'defines': list of defines
             }
             or None if the file is missing or invalid.
         """
@@ -756,7 +755,6 @@ class LDFCacheOptimizer:
         ordered_object_files = []
         include_paths = set()
         defines = set()
-#        build_flags = set()
 
         for i, entry in enumerate(compile_db, 1):
             source_file = entry.get('file', '')
@@ -796,11 +794,6 @@ class LDFCacheOptimizer:
             for define in define_matches:
                 defines.add(define)
 
-            # Extract build flags
-#            flag_matches = re.findall(r'(-[fmWO][^\s]*)', command)
-#            for flag in flag_matches:
-#                build_flags.add(flag)
-
         print(f"✓ Build order extracted directly from {self.compile_commands_file}")
 
         return {
@@ -808,8 +801,7 @@ class LDFCacheOptimizer:
             'ordered_sources': ordered_sources,
             'ordered_object_files': ordered_object_files,
             'include_paths': sorted(include_paths),
-            'defines': sorted(defines),
-#            'build_flags': sorted(build_flags)
+            'defines': sorted(defines)
         }
 
     def apply_build_order_to_environment(self, build_order_data):
@@ -884,13 +876,6 @@ class LDFCacheOptimizer:
                 if new_defines:
                     self.env.Append(CPPDEFINES=new_defines)
                     print(f" ✅ Added {len(new_defines)} defines from compile commands")
-
-            # No action for build flags needed, valid in current env
-#            build_flags = build_order_data.get('build_flags', [])
-#            if build_flags:
-#                self.env.Append(CCFLAGS=list(build_flags))
-#                self.env.Append(CXXFLAGS=list(build_flags))
-#                print(f" ✅ Added {len(build_flags)} build flags from compile commands")
 
         except Exception as e:
             print(f"⚠ Warning applying compile data: {e}")
@@ -1230,13 +1215,13 @@ class LDFCacheOptimizer:
                 print("🚀 Future builds will use cached dependencies with direct path references")
 
                 # CRITICAL: Modify platformio.ini for second run strategy
-#                if self.modify_platformio_ini_for_second_run('off'):
-#                    print("🔧 platformio.ini modified: lib_ldf_mode = off for next build")
-#                    print("🚀 Two-run strategy activated - next build will use cache")
-#                else:
-#                    print("⚠ Failed to modify platformio.ini - manual intervention required")
-#            else:
-#                print("⚠ Failed to save LDF cache")
+                if self.modify_platformio_ini_for_second_run('off'):
+                    print("🔧 platformio.ini modified: lib_ldf_mode = off for next build")
+                    print("🚀 Two-run strategy activated - next build will use cache")
+                else:
+                    print("⚠ Failed to modify platformio.ini - manual intervention required")
+            else:
+                print("⚠ Failed to save LDF cache")
 
         except Exception as e:
             print(f"❌ Error in post-build cache creation: {e}")
