@@ -56,12 +56,55 @@ if (
         env_vars['_PIO_RECURSIVE_CALL'] = 'true'
         with open(logfile_path, "w") as logfile:
             result = subprocess.run(
-                ['pio', 'run', '-e', env_name],
+                ['pio', 'run', '-e', env_name, '--disable-auto-clean'],  # --disable-auto-clean hinzugefügt
                 env=env_vars,
                 stdout=logfile,
                 stderr=subprocess.STDOUT
             )
         sys.exit(result.returncode)
+
+elif (
+    os.environ.get('_PIO_RECURSIVE_CALL') != 'true'
+    and os.environ.get('_PIO_SECOND_RUN') != 'true'
+    and compiledb_path.exists() 
+    and compiledb_path.stat().st_size > 0
+):
+
+    config = ProjectConfig()
+    try:
+        ldf_mode = config.get("platformio", "lib_ldf_mode", fallback="chain")
+        if ldf_mode.lower() == "off":
+            current_targets = COMMAND_LINE_TARGETS[:]
+            is_build_target = (
+                not current_targets or
+                any(target in ["build", "buildprog"] for target in current_targets)
+            )
+            if is_build_target:
+                print(f"🚀 Second run detected: lib_ldf_mode=off, using cache with --disable-auto-clean")
+                env_vars = os.environ.copy()
+                env_vars['_PIO_SECOND_RUN'] = 'true'
+                env_vars['_PIO_RECURSIVE_CALL'] = 'true'
+                
+                result = subprocess.run(
+                    ['pio', 'run', '-e', env_name, '--disable-auto-clean'],
+                    env=env_vars,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+                
+                # Ausgabe des 2. Runs anzeigen
+                if result.stdout:
+                    print(result.stdout)
+                
+                if result.returncode == 0:
+                    print("✅ Second run completed successfully with cached dependencies")
+                else:
+                    print(f"⚠ Second run failed with return code {result.returncode}")
+                
+                sys.exit(result.returncode)
+    except Exception as e:
+        print(f"⚠ Could not check lib_ldf_mode: {e}")
 
 # Integrated log2compdb components
 DIRCHANGE_PATTERN = re.compile(r"(?P<action>\w+) directory '(?P<path>.+)'")
@@ -1215,13 +1258,13 @@ class LDFCacheOptimizer:
                 print("🚀 Future builds will use cached dependencies with direct path references")
 
                 # CRITICAL: Modify platformio.ini for second run strategy
-                if self.modify_platformio_ini_for_second_run('off'):
-                    print("🔧 platformio.ini modified: lib_ldf_mode = off for next build")
-                    print("🚀 Two-run strategy activated - next build will use cache")
-                else:
-                    print("⚠ Failed to modify platformio.ini - manual intervention required")
-            else:
-                print("⚠ Failed to save LDF cache")
+#                if self.modify_platformio_ini_for_second_run('off'):
+#                    print("🔧 platformio.ini modified: lib_ldf_mode = off for next build")
+#                    print("🚀 Two-run strategy activated - next build will use cache")
+#                else:
+#                    print("⚠ Failed to modify platformio.ini - manual intervention required")
+#            else:
+#                print("⚠ Failed to save LDF cache")
 
         except Exception as e:
             print(f"❌ Error in post-build cache creation: {e}")
