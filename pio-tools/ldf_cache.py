@@ -1263,7 +1263,6 @@ class LDFCacheOptimizer:
             return False
 
     def implement_two_run_strategy(self):
-        # Get project hash
         """
         Implements the complete two-run strategy:
         1. Compile first run in verbose mode (smart check)
@@ -1274,7 +1273,7 @@ class LDFCacheOptimizer:
         Returns:
             bool: True if strategy was successful
         """
-        print("\n=== Two-Run LDF Cache Strategy (No File Copying) ===")
+        print("\n=== Two-Run LDF Cache Strategy ===")
 
         # Check if we already have a valid cache
         existing_cache = self.load_combined_cache()
@@ -1292,14 +1291,13 @@ class LDFCacheOptimizer:
             else:
                 print("⚠ Cache application failed, falling back to first run")
 
-        # First run preparation: This will trigger the normal first build automatically
+        # First run preparation: This will trigger the first build verbose automatically
         print("🔄 Preparing first run: Checking compile_commands...")
 
-        # This call will:
-        # Create compiledb if missing using log2compdb in first compile run
+        # Create compiledb if missing using log2compdb at the end of the first compile run
         self.environment_specific_compiledb()
 
-        # If we reach this point, compiledb already exists
+        # At this point, compiledb already exists
         print("✅ compile_commands available - proceeding with cache strategy")
         return True
 
@@ -1311,7 +1309,7 @@ class LDFCacheOptimizer:
         Returns:
             bool: True if successful
         """
-        print("\n=== Complete LDF Replacement Solution with Direct Path References ===")
+        print("\n=== Complete LDF Replacement Solution using existing cached build files ===")
 
         try:
             # Ensure compile_commands.json exists using log2compdb
@@ -1323,7 +1321,7 @@ class LDFCacheOptimizer:
                 print("❌ Could not create build order")
                 return self.fallback_to_standard_ldf()
 
-            # Collect build artifacts paths (no copying)
+            # Collect build artifacts paths
             artifacts_data = self.collect_build_artifacts_paths()
 
             # Combine with optimized linker logic
@@ -1337,7 +1335,7 @@ class LDFCacheOptimizer:
                 'direct_paths': True  # Flag indicating no file copying
             }
 
-            # Save cache
+            # Save cache todo check if duplicate?
             #self.save_combined_cache(combined_data)
 
             # Apply everything with linker optimization
