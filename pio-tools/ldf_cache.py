@@ -827,7 +827,6 @@ class LDFCacheOptimizer:
             return False
 
         try:
-            # 1. SOURCES
             ordered_sources = build_order_data.get('ordered_sources', [])
             if ordered_sources:
                 valid_sources = [s for s in ordered_sources if Path(s).exists()]
@@ -842,22 +841,20 @@ class LDFCacheOptimizer:
                     self.env.Replace(OBJECTS=valid_objects)
                     print(f"✅ Set OBJECTS: {len(valid_objects)} files (exact reproduction)")
 
-            if not object_files:
-                print("⚠ No valid object files found")
+            if not valid_sources or not object_files:
+                print("⚠ No sources/object files found")
                 return False
 
             # Apply include paths and defines from compile commands
             self._apply_compile_data_to_environment(build_order_data)
             # CRITICAL: Implement correct linker order
             self._apply_correct_linker_order(object_files)
-
-            print(f"✅ Build order applied: {len(object_files)} object files")
             print(f"✅ Linker order configured for correct symbol resolution")
 
             return True
 
         except Exception as e:
-            print(f"✗ Error applying build order: {e}")
+            print(f"✗ Error applying build vars: {e}")
             return False
 
     def _apply_compile_data_to_environment(self, build_order_data):
