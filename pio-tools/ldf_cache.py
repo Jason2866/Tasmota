@@ -1186,7 +1186,8 @@ class LDFCacheOptimizer:
         Post-build action to save LDF cache with build order integration.
         Collects all build order and artifact information and saves it.
         """
-        try:
+        if os.environ.get('_PIO_RECURSIVE_CALL') == 'true':
+            # We need to be in the first recusive run with --disable-auto-clean
             print("🔧 Collecting build order and artifacts for cache...")
 
             # Collect build order data
@@ -1214,18 +1215,11 @@ class LDFCacheOptimizer:
                 print("✅ LDF cache with build order saved successfully")
                 print("🚀 Future builds will use cached dependencies with direct path references")
 
-                # CRITICAL: Modify platformio.ini ONLY!!! at the END of first run
-                # The folder .pio/build will not be cleaned up
-                # This ensures the change is available for the NEXT pio run invocation
-                if os.environ.get('_PIO_RECURSIVE_CALL') == 'true':
-                    # We are in the first run with --disable-auto-clean
-                    if self.modify_platformio_ini_for_second_run('off'):
-                        print("🔧 platformio.ini modified: lib_ldf_mode = off for NEXT build invocation")
-                        print("🚀 Two-run strategy activated - next 'pio run' will use cache")
-                    else:
-                        print("⚠ Failed to modify platformio.ini - manual intervention required")
+                if self.modify_platformio_ini_for_second_run('off'):
+                    print("🔧 platformio.ini modified: lib_ldf_mode = off for NEXT build invocation")
+                    print("🚀 Two-run strategy activated - next 'pio run' will use cache")
                 else:
-                    print("💡 Not in recursive call - platformio.ini modification skipped")
+                    print("⚠ Failed to modify platformio.ini - No LDF cache use possible")
             else:
                 print("⚠ Failed to save LDF cache")
 
@@ -1324,7 +1318,7 @@ class LDFCacheOptimizer:
     def implement_two_run_strategy(self):
         """
         Implements the complete two-run strategy:
-        1. Compile first run in verbose mode (smart check)
+        1. Compile first run in verbose mode (smart check) with --disable-auto-clean 
         2. Check for existing cache
         3. Cache gets created during/after the first (verbose) build
         4. lib_ldf_mode gets set to 'off' after successful build
@@ -1338,16 +1332,14 @@ class LDFCacheOptimizer:
         existing_cache = self.load_combined_cache()
         if existing_cache:
             print("✅ Valid cache found - applying cached dependencies")
-
-            # Restore original platformio.ini if backup exists
-            if self.platformio_ini_backup.exists():
-                self.restore_ini_from_backup()
-
             success = self.apply_ldf_cache_with_build_order(existing_cache)
             if success:
                 print("🚀 Second run: Using cached dependencies, LDF bypassed")
                 return True
             else:
+                # Restore original platformio.ini if backup exists
+                if self.platformio_ini_backup.exists():
+                    self.restore_ini_from_backup()
                 print("⚠ Cache application failed, falling back to first run")
 
         # First run preparation: This will trigger the first build verbose automatically
