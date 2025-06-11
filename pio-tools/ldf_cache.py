@@ -885,12 +885,12 @@ class LDFCacheOptimizer:
                     self.env.Append(CPPDEFINES=new_defines)
                     print(f" ✅ Added {len(new_defines)} defines from compile commands")
 
-            # Apply build flags
-            build_flags = build_order_data.get('build_flags', [])
-            if build_flags:
-                self.env.Append(CCFLAGS=list(build_flags))
-                self.env.Append(CXXFLAGS=list(build_flags))
-                print(f" ✅ Added {len(build_flags)} build flags from compile commands")
+            # No action for build flags needed, valid in current env
+#            build_flags = build_order_data.get('build_flags', [])
+#            if build_flags:
+#                self.env.Append(CCFLAGS=list(build_flags))
+#                self.env.Append(CXXFLAGS=list(build_flags))
+#                print(f" ✅ Added {len(build_flags)} build flags from compile commands")
 
         except Exception as e:
             print(f"⚠ Warning applying compile data: {e}")
