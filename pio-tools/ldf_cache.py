@@ -588,16 +588,22 @@ class LDFCacheOptimizer:
             
         return includes
 
-    def _hash_platformio_ini_selective(self):
+    def _hash_platformio_ini_selective(self, ini_path=None):
         """
-        Hash platformio.ini but exclude LDF-related lines that are modified by the script.
+        Hash platformio*.ini but exclude LDF-related lines that are modified by the script.
+    
+        Args:
+            ini_path (Path, optional): Path to specific ini file. Defaults to self.platformio_ini.
     
         Returns:
-            str: MD5 hash of relevant platformio.ini content
+            str: MD5 hash of relevant platformio*.ini content
         """
-        if not self.platformio_ini.exists():
+        if ini_path is None:
+            ini_path = self.platformio_ini
+        
+        if not ini_path.exists():
             return ""
-    
+
         # Lines to exclude from hashing (case-insensitive)
         excluded_patterns = [
             'lib_ldf_mode',
@@ -605,31 +611,31 @@ class LDFCacheOptimizer:
             # 'lib_compat_mode',
             # 'lib_ignore'
         ]
-    
+
         try:
             relevant_lines = []
-            with self.platformio_ini.open('r', encoding='utf-8') as f:
+            with ini_path.open('r', encoding='utf-8') as f:
                 for line in f:
                     line_stripped = line.strip()
                     # Skip empty lines and comments
                     if not line_stripped or line_stripped.startswith(';') or line_stripped.startswith('#'):
                         continue
-                
+            
                     # Check if line contains excluded patterns
                     should_exclude = any(
                         pattern.lower() in line_stripped.lower() 
                         for pattern in excluded_patterns
                     )
-                
+            
                     if not should_exclude:
                         relevant_lines.append(line_stripped)
-        
+    
             # Hash only relevant content
             relevant_content = '\n'.join(sorted(relevant_lines))
             return hashlib.md5(relevant_content.encode()).hexdigest()
-        
+    
         except (IOError, OSError) as e:
-            print(f"⚠ Could not read platformio.ini: {e}")
+            print(f"⚠ Could not read {ini_path}: {e}")
             return ""
 
     def get_project_hash_with_details(self):
@@ -656,7 +662,7 @@ class LDFCacheOptimizer:
                     # Calculate relative path from project
                     rel_path = self._get_relative_path_from_project(file_path)
                     if file_path.suffix in self.SOURCE_EXTENSIONS:
-                    # Nur Include-Direktiven hashen
+                        # Nur Include-Direktiven hashen
                         includes = self._extract_includes(file_path)
                         include_hash = hashlib.md5(str(sorted(includes)).encode()).hexdigest()
                         file_hashes[rel_path] = include_hash
