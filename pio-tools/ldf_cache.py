@@ -675,11 +675,18 @@ class LDFCacheOptimizer:
                     print(f"⚠ Could not hash {file_path}: {e}")
                     continue
 
-        # Add platformio.ini hash
-        platformio_hash = self._hash_platformio_ini_selective()
-        if platformio_hash:
-            rel_ini_path = self._get_relative_path_from_project(self.platformio_ini)
-            file_hashes[rel_ini_path] = platformio_hash
+        # Add platformio*.ini hash
+        project_path = Path(self.project_dir)
+        for ini_path in project_path.glob('platformio*.ini'):
+            if ini_path.exists() and ini_path.is_file():
+                try:
+                    platformio_hash = self._hash_platformio_ini_selective(ini_path)
+                    if platformio_hash:
+                        rel_ini_path = self._get_relative_path_from_project(ini_path)
+                        file_hashes[rel_ini_path] = platformio_hash
+                        print(f"✅ Hashed {ini_path.name} (selective)")
+                except (IOError, OSError) as e:
+                    print(f"⚠ Could not hash {ini_path}: {e}")
 
         # Create final hash
         combined_content = json.dumps(file_hashes, sort_keys=True)
