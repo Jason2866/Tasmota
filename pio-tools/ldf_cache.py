@@ -852,13 +852,6 @@ class LDFCacheOptimizer:
         """Apply cache data directly to SCons variables using PlatformIO Core methods"""
         try:
             build_order = cache_data.get('build_order', {})
-# No need to do here, PlatformIO does generate at every run            
-#            # Use PlatformIO's ProcessFlags for robust flag handling
-#            if 'defines' in build_order:
-#                defines_flags = [f"-D{define}" for define in build_order['defines']]
-#                self.env.ProcessFlags(defines_flags)
-#                print(f"✅ Applied {len(build_order['defines'])} defines via ProcessFlags")
-            
             # Apply include paths
             if 'include_paths' in build_order:
                 include_flags = [f"-I{path}" for path in build_order['include_paths']]
