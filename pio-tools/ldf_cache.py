@@ -23,17 +23,18 @@ import fnmatch
 import atexit
 from pathlib import Path
 from platformio.project.config import ProjectConfig
+from platformio.project.helpers import SRC_HEADER_EXT, SRC_C_EXT, SRC_CXX_EXT, SRC_ASM_EXT, SRC_BUILD_EXT
 from SCons.Script import COMMAND_LINE_TARGETS, DefaultEnvironment
 from SCons.Node import FS
 from dataclasses import dataclass
 from typing import Optional
 
-# Import PlatformIO Core constants
-SRC_HEADER_EXT = ["h", "hpp", "hxx", "h++", "hh", "inc", "tpp", "tcc"]
-SRC_ASM_EXT = ["S", "spp", "SPP", "sx", "s", "asm", "ASM"]
-SRC_C_EXT = ["c"]
-SRC_CXX_EXT = ["cc", "cpp", "cxx", "c++"]
-SRC_BUILD_EXT = SRC_C_EXT + SRC_CXX_EXT + SRC_ASM_EXT
+# INFO PlatformIO Core constants
+# SRC_HEADER_EXT = ["h", "hpp", "hxx", "h++", "hh", "inc", "tpp", "tcc"]
+# SRC_ASM_EXT = ["S", "spp", "SPP", "sx", "s", "asm", "ASM"]
+# SRC_C_EXT = ["c"]
+# SRC_CXX_EXT = ["cc", "cpp", "cxx", "c++"]
+# SRC_BUILD_EXT = SRC_C_EXT + SRC_CXX_EXT + SRC_ASM_EXT
 
 # Global run state management
 project_dir = env.subst("$PROJECT_DIR")
@@ -225,9 +226,10 @@ class LDFCacheOptimizer:
     Uses PlatformIO's native functions for maximum efficiency and compatibility.
     """
 
-    HEADER_EXTENSIONS = frozenset(['.h', '.hpp', '.hxx', '.h++', '.hh', '.inc', '.tpp', '.tcc'])
-    SOURCE_EXTENSIONS = frozenset(['.c', '.cpp', '.cxx', '.c++', '.cc', '.ino'])
-    CONFIG_EXTENSIONS = frozenset(['.json', '.properties', '.txt', '.ini'])
+    HEADER_EXTENSIONS = set(SRC_HEADER_EXT)
+    SOURCE_EXTENSIONS = set(SRC_BUILD_EXT) | {'.ino'}
+    CONFIG_EXTENSIONS = {'.json', '.properties', '.txt', '.ini'}
+
     IGNORE_DIRS = frozenset([
         '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
         'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants',
