@@ -823,9 +823,9 @@ class LDFCacheOptimizer:
             ordered_sources = build_order_data.get('ordered_sources', [])
             if ordered_sources:
                 valid_sources = [s for s in ordered_sources if Path(s).exists()]
-                if valid_sources:
-                    self.env.Replace(SOURCES=valid_sources)
-                    print(f"✅ Set SOURCES: {len(valid_sources)} files (exact reproduction)")
+                #if valid_sources:
+                    #self.env.AppendUnique(SOURCES=valid_sources)
+                    #print(f"✅ Set SOURCES: {len(valid_sources)} files (exact reproduction)")
             
             ordered_object_files = build_order_data.get('ordered_object_files', [])
             if ordered_object_files:
@@ -860,21 +860,10 @@ class LDFCacheOptimizer:
         try:
             # Apply include paths
             include_paths = build_order_data.get('include_paths', [])
+            print(f"Include paths from compile commands: {include_paths}")
             if include_paths:
-                existing_paths = [str(p) for p in self.env.get('CPPPATH', [])]
-                new_paths = [p for p in include_paths if p not in existing_paths]
-                if new_paths:
-                    self.env.Append(CPPPATH=new_paths)
-                    print(f" ✅ Added {len(new_paths)} include paths from compile commands")
-
-            # Apply defines
-            defines = build_order_data.get('defines', [])
-            if defines:
-                existing_defines = [str(d) for d in self.env.get('CPPDEFINES', [])]
-                new_defines = [d for d in defines if d not in existing_defines]
-                if new_defines:
-                    self.env.Append(CPPDEFINES=new_defines)
-                    print(f" ✅ Added {len(new_defines)} defines from compile commands")
+                self.env.AppendUnique(CPPPATH=include_paths)
+                print(f" ✅ Added {len(include_paths)} include paths from compile commands")
 
         except Exception as e:
             print(f"⚠ Warning applying compile data: {e}")
@@ -1153,6 +1142,10 @@ class LDFCacheOptimizer:
         try:
             with self.cache_file.open('r') as f:
                 cache_data = json.load(f)
+                
+            
+            print("✅ Valid cache found and loaded")
+            return cache_data
 
             # Verify signature
             stored_signature = cache_data.get('signature')
