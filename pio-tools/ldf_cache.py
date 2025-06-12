@@ -20,6 +20,7 @@ import sys
 import tempfile
 import shlex
 import fnmatch
+import atexit
 from pathlib import Path
 from platformio.project.config import ProjectConfig
 from SCons.Script import COMMAND_LINE_TARGETS, DefaultEnvironment
@@ -255,6 +256,9 @@ class LDFCacheOptimizer:
         self.lib_build_dir = Path(self.project_dir) / ".pio" / "build" / self.env_name
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
 
+        # Register exit handler for cleanup
+        self.register_exit_handler()
+
         # Execute based on run state
         if is_first_run():
             print("🔄 First run: Cache creation mode")
@@ -266,17 +270,110 @@ class LDFCacheOptimizer:
     def execute_first_run(self):
         """First run: Create comprehensive cache with LDF active"""
         self.validate_ldf_mode_compatibility()
+        
+        # platformio.ini für zweiten Run vorbereiten
+        self.backup_and_modify_platformio_ini()
+        
         self.register_post_build_cache_creation()
         self.integrate_with_core_functions()
 
     def execute_second_run(self):
         """Second run: Apply cached dependencies with LDF disabled"""
-        cache_data = self.load_cache()
-        if cache_data and self.validate_cache(cache_data):
-            self.apply_ldf_cache_with_build_order(cache_data)
-            self.disable_ldf_for_second_run()
-        else:
-            print("⚠ No valid cache found, falling back to normal build")
+        try:
+            cache_data = self.load_cache()
+            if cache_data and self.validate_cache(cache_data):
+                self.apply_ldf_cache_with_build_order(cache_data)
+                print("✅ Cache applied successfully")
+            else:
+                print("⚠ No valid cache found, falling back to normal build")
+        finally:
+            # platformio.ini immer wiederherstellen
+            self.restore_platformio_ini()
+            self.cleanup_backup_files()
+
+    def register_exit_handler(self):
+        """Register exit handler to ensure platformio.ini is always restored"""
+        def cleanup_on_exit():
+            try:
+                self.restore_platformio_ini()
+                self.cleanup_backup_files()
+            except:
+                pass  # Ignore errors during cleanup
+        
+        atexit.register(cleanup_on_exit)
+
+    def backup_and_modify_platformio_ini(self):
+        """Backup original platformio.ini and modify for second run"""
+        try:
+            # Backup erstellen
+            if not self.platformio_ini_backup.exists():
+                shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
+                print(f"✅ Backup created: {self.platformio_ini_backup}")
+
+            # platformio.ini für zweiten Run modifizieren
+            modified_lines = []
+            ldf_mode_found = False
+            
+            with self.platformio_ini.open('r', encoding='utf-8') as f:
+                for line in f:
+                    line_stripped = line.strip()
+                    
+                    # LDF Mode auf 'off' setzen
+                    if line_stripped.startswith('lib_ldf_mode'):
+                        modified_lines.append('lib_ldf_mode = off  ; Modified by LDF Cache Optimizer\n')
+                        ldf_mode_found = True
+                        print("🔄 Modified lib_ldf_mode to 'off'")
+                    else:
+                        modified_lines.append(line)
+            
+            # Falls lib_ldf_mode nicht existiert, hinzufügen
+            if not ldf_mode_found:
+                # Suche nach [env:xxx] Sektion für aktuelles Environment
+                env_section_found = False
+                final_lines = []
+                
+                for line in modified_lines:
+                    final_lines.append(line)
+                    if line.strip() == f'[env:{self.env_name}]':
+                        env_section_found = True
+                        final_lines.append('lib_ldf_mode = off  ; Added by LDF Cache Optimizer\n')
+                        print(f"✅ Added lib_ldf_mode = off to [env:{self.env_name}]")
+                
+                modified_lines = final_lines
+
+            # Modifizierte platformio.ini schreiben
+            with self.platformio_ini.open('w', encoding='utf-8') as f:
+                f.writelines(modified_lines)
+                
+            print(f"✅ platformio.ini modified for second run")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error modifying platformio.ini: {e}")
+            return False
+
+    def restore_platformio_ini(self):
+        """Restore original platformio.ini after second run"""
+        try:
+            if self.platformio_ini_backup.exists():
+                shutil.copy2(self.platformio_ini_backup, self.platformio_ini)
+                print(f"✅ platformio.ini restored from backup")
+                return True
+            else:
+                print("⚠ No backup found to restore")
+                return False
+        except Exception as e:
+            print(f"❌ Error restoring platformio.ini: {e}")
+            return False
+
+    def cleanup_backup_files(self):
+        """Clean up backup files after successful build"""
+        try:
+            if self.platformio_ini_backup.exists():
+                self.platformio_ini_backup.unlink()
+                print("🧹 Backup files cleaned up")
+        except Exception as e:
+            print(f"⚠ Warning cleaning backup files: {e}")
 
     def validate_ldf_mode_compatibility(self):
         try:
@@ -302,7 +399,7 @@ class LDFCacheOptimizer:
                 print("🔧 Creating comprehensive cache after build...")
                 self.create_compiledb_integrated()
                 cache_data = self.create_comprehensive_cache()
-                if cache_
+                if cache_data:
                     self.save_cache(cache_data)
                     print("✅ Cache created successfully")
             except Exception as e:
@@ -342,11 +439,6 @@ class LDFCacheOptimizer:
                 return original_process_deps()
 
         self.env.AddMethod(cached_process_deps, 'ProcessProjectDeps')
-
-    def disable_ldf_for_second_run(self):
-        """Disable LDF for second run to use cache exclusively"""
-        self.env.Replace(LIB_LDF_MODE="off")
-        print("🔄 LDF disabled for second run - using cache exclusively")
 
     def create_compiledb_integrated(self):
         """Create compile_commands.json using integrated log parsing"""
@@ -631,7 +723,7 @@ class LDFCacheOptimizer:
                 exec(f.read(), cache_globals)
             
             cache_data = cache_globals.get('cache_data')
-            if cache_
+            if cache_data:
                 print(f"✅ Cache loaded from {self.cache_file}")
                 return cache_data
             else:
@@ -644,7 +736,7 @@ class LDFCacheOptimizer:
 
     def validate_cache(self, cache_data):
         """Validate cache integrity and freshness"""
-        if not cache_
+        if not cache_data:
             return False
 
         try:
@@ -693,7 +785,7 @@ class LDFCacheOptimizer:
 
     def apply_build_order_to_environment(self, build_order_data):
         """Apply correct build order to SCons environment"""
-        if not build_order_
+        if not build_order_data:
             return False
 
         try:
@@ -774,7 +866,7 @@ class LDFCacheOptimizer:
                     print(f"✅ Added {len(new_defines)} defines")
 
         except Exception as e:
-            print(f"⚠ Warning applying compile  {e}")
+            print(f"⚠ Warning applying compile data: {e}")
 
     def _apply_correct_linker_order(self, object_files):
         """Apply correct linker order for symbol resolution"""
@@ -811,7 +903,7 @@ class LDFCacheOptimizer:
     def is_file_cached(self, file_path):
         """Check if file is in cache"""
         cache_data = self.load_cache()
-        if not cache_
+        if not cache_data:
             return False
         
         rel_path = self._get_relative_path_from_project(file_path)
@@ -905,11 +997,10 @@ class LDFCacheOptimizer:
             return ""
 
 # Initialize the LDF Cache Optimizer
-if __name__ == "__main__" or "env" in globals():
-    try:
-        optimizer = LDFCacheOptimizer(env)
-        print("✅ LDF Cache Optimizer initialized successfully")
-    except Exception as e:
-        print(f"❌ Error initializing LDF Cache Optimizer: {e}")
-        import traceback
-        traceback.print_exc()
+try:
+    optimizer = LDFCacheOptimizer(env)
+    print("✅ LDF Cache Optimizer initialized successfully")
+except Exception as e:
+    print(f"❌ Error initializing LDF Cache Optimizer: {e}")
+    import traceback
+    traceback.print_exc()
