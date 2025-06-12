@@ -222,8 +222,8 @@ def parse_build_log_to_compile_commands(logfile_path: Path, compiler_names: list
 
 class LDFCacheOptimizer:
     """
-    PlatformIO LDF cache optimizer integrated with Core functions.
-    Uses PlatformIO's native functions for maximum efficiency and compatibility.
+    PlatformIO LDF cache optimizer to avoid not needed LDF runs.
+    Uses PlatformIO's native functions for integration.
     """
 
     HEADER_EXTENSIONS = set(SRC_HEADER_EXT)
@@ -276,8 +276,7 @@ class LDFCacheOptimizer:
     def execute_first_run(self):
         """First run: Create comprehensive cache with LDF active"""
         self.validate_ldf_mode_compatibility()
-        
-        # platformio.ini für zweiten Run vorbereiten
+
         self.backup_and_modify_platformio_ini()
         
         self.register_post_build_cache_creation()
@@ -293,7 +292,7 @@ class LDFCacheOptimizer:
                 success = self.apply_ldf_cache_with_build_order(cache_data)
                 if success:
                     self._cache_applied_successfully = True
-                    print("✅ Cache applied successfully - keeping lib_ldf_mode=off")
+                    print("✅ Cache applied successfully - lib_ldf_mode=off")
                 else:
                     print("❌ Cache application failed")
             else:
@@ -304,7 +303,6 @@ class LDFCacheOptimizer:
             self._cache_applied_successfully = False
         
         finally:
-            # Nur wiederherstellen wenn Cache NICHT erfolgreich angewendet wurde
             if not self._cache_applied_successfully:
                 print("🔄 Restoring original platformio.ini due to cache failure")
                 self.restore_platformio_ini()
@@ -374,7 +372,7 @@ class LDFCacheOptimizer:
             with self.platformio_ini.open('w', encoding='utf-8') as f:
                 f.writelines(modified_lines)
                 
-            print(f"✅ platformio.ini modified for second run")
+            print(f"✅ platformio.ini modified for next run")
             return True
             
         except Exception as e:
@@ -382,7 +380,7 @@ class LDFCacheOptimizer:
             return False
 
     def restore_platformio_ini(self):
-        """Restore original platformio.ini after second run"""
+        """Restore original platformio.ini """
         try:
             if self.platformio_ini_backup.exists():
                 shutil.copy2(self.platformio_ini_backup, self.platformio_ini)
@@ -532,7 +530,7 @@ class LDFCacheOptimizer:
             return False
 
     def collect_sources_via_core(self, src_filter=None):
-        """Use PlatformIO's MatchSourceFiles instead of custom implementation"""
+        """Use PlatformIO's MatchSourceFiles """
         try:
             sources = self.env.MatchSourceFiles(
                 self.src_dir, 
@@ -607,7 +605,7 @@ class LDFCacheOptimizer:
         }
 
     def collect_build_artifacts_paths(self):
-        """Collect paths to build artifacts without copying"""
+        """Collect paths to build artifacts """
         if not self.lib_build_dir.exists():
             print(f"⚠ Build directory not found: {self.lib_build_dir}")
             return {}
@@ -729,7 +727,7 @@ class LDFCacheOptimizer:
             
             with self.cache_file.open('w') as f:
                 f.write("# LDF Cache Data - Auto-generated\n")
-                f.write("# Do not edit manually\n\n")
+                f.write("# Do not edit manually, this will break the Hash checksum\n\n")
                 f.write("cache_data = ")
                 f.write(pprint.pformat(cache_data, width=120, depth=None))
                 f.write("\n")
@@ -857,12 +855,12 @@ class LDFCacheOptimizer:
         """Apply cache data directly to SCons variables using PlatformIO Core methods"""
         try:
             build_order = cache_data.get('build_order', {})
-            
-            # Use PlatformIO's ProcessFlags for robust flag handling
-            if 'defines' in build_order:
-                defines_flags = [f"-D{define}" for define in build_order['defines']]
-                self.env.ProcessFlags(defines_flags)
-                print(f"✅ Applied {len(build_order['defines'])} defines via ProcessFlags")
+# No need to do here, PlatformIO does generate at every run            
+#            # Use PlatformIO's ProcessFlags for robust flag handling
+#            if 'defines' in build_order:
+#                defines_flags = [f"-D{define}" for define in build_order['defines']]
+#                self.env.ProcessFlags(defines_flags)
+#                print(f"✅ Applied {len(build_order['defines'])} defines via ProcessFlags")
             
             # Apply include paths
             if 'include_paths' in build_order:
@@ -895,13 +893,13 @@ class LDFCacheOptimizer:
                     self.env.Append(CPPPATH=new_paths)
                     print(f"✅ Added {len(new_paths)} include paths")
 
-            defines = build_order_data.get('defines', [])
-            if defines:
-                existing_defines = [str(d) for d in self.env.get('CPPDEFINES', [])]
-                new_defines = [d for d in defines if d not in existing_defines]
-                if new_defines:
-                    self.env.Append(CPPDEFINES=new_defines)
-                    print(f"✅ Added {len(new_defines)} defines")
+#            defines = build_order_data.get('defines', [])
+#            if defines:
+#                existing_defines = [str(d) for d in self.env.get('CPPDEFINES', [])]
+#                new_defines = [d for d in defines if d not in existing_defines]
+#                if new_defines:
+#                    self.env.Append(CPPDEFINES=new_defines)
+#                    print(f"✅ Added {len(new_defines)} defines")
 
         except Exception as e:
             print(f"⚠ Warning applying compile data: {e}")
