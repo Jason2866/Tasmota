@@ -23,7 +23,7 @@ import fnmatch
 import atexit
 from pathlib import Path
 from platformio.project.config import ProjectConfig
-from platformio.project.helpers import SRC_HEADER_EXT, SRC_C_EXT, SRC_CXX_EXT, SRC_ASM_EXT, SRC_BUILD_EXT
+from platformio.builder.tools.piobuild import SRC_HEADER_EXT, SRC_C_EXT, SRC_CXX_EXT, SRC_ASM_EXT, SRC_BUILD_EXT
 from SCons.Script import COMMAND_LINE_TARGETS, DefaultEnvironment
 from SCons.Node import FS
 from dataclasses import dataclass
@@ -45,9 +45,13 @@ logfile_path.parent.mkdir(parents=True, exist_ok=True)
 
 # Run state detection
 def is_first_run():
-    return not (
-        compiledb_path.exists()
-    )
+    if (
+        os.environ.get('_PIO_RECURSIVE_CALL') != 'true'
+        and os.environ.get('PLATFORMIO_SETTING_FORCE_VERBOSE') != 'true'
+        and not (compiledb_path.exists() and compiledb_path.stat().st_size > 0)
+    ):
+        return True
+    return False
 
 def is_second_run():
     return (
