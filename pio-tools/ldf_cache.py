@@ -880,14 +880,6 @@ class LDFCacheOptimizer:
                     self.env.Append(CPPPATH=new_paths)
                     print(f"✅ Added {len(new_paths)} include paths")
 
-#            defines = build_order_data.get('defines', [])
-#            if defines:
-#                existing_defines = [str(d) for d in self.env.get('CPPDEFINES', [])]
-#                new_defines = [d for d in defines if d not in existing_defines]
-#                if new_defines:
-#                    self.env.Append(CPPDEFINES=new_defines)
-#                    print(f"✅ Added {len(new_defines)} defines")
-
         except Exception as e:
             print(f"⚠ Warning applying compile data: {e}")
 
