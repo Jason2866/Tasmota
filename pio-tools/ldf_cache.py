@@ -256,6 +256,9 @@ class LDFCacheOptimizer:
         self.lib_build_dir = Path(self.project_dir) / ".pio" / "build" / self.env_name
         self.ALL_RELEVANT_EXTENSIONS = self.HEADER_EXTENSIONS | self.SOURCE_EXTENSIONS | self.CONFIG_EXTENSIONS
 
+        # Cache application status tracking
+        self._cache_applied_successfully = False
+
         # Register exit handler for cleanup
         self.register_exit_handler()
 
@@ -279,24 +282,47 @@ class LDFCacheOptimizer:
 
     def execute_second_run(self):
         """Second run: Apply cached dependencies with LDF disabled"""
+        self._cache_applied_successfully = False
+        
         try:
             cache_data = self.load_cache()
             if cache_data and self.validate_cache(cache_data):
-                self.apply_ldf_cache_with_build_order(cache_data)
-                print("✅ Cache applied successfully")
+                success = self.apply_ldf_cache_with_build_order(cache_data)
+                if success:
+                    self._cache_applied_successfully = True
+                    print("✅ Cache applied successfully - keeping lib_ldf_mode=off")
+                else:
+                    print("❌ Cache application failed")
             else:
                 print("⚠ No valid cache found, falling back to normal build")
+        
+        except Exception as e:
+            print(f"❌ Error in second run: {e}")
+            self._cache_applied_successfully = False
+        
         finally:
-            # platformio.ini immer wiederherstellen
-            self.restore_platformio_ini()
-            self.cleanup_backup_files()
+            # Nur wiederherstellen wenn Cache NICHT erfolgreich angewendet wurde
+            if not self._cache_applied_successfully:
+                print("🔄 Restoring original platformio.ini due to cache failure")
+                self.restore_platformio_ini()
+            else:
+                print("✅ Keeping modified platformio.ini for optimal performance")
+            
+            # Backup-Dateien nur löschen wenn Cache erfolgreich war
+            if self._cache_applied_successfully:
+                self.cleanup_backup_files()
 
     def register_exit_handler(self):
-        """Register exit handler to ensure platformio.ini is always restored"""
+        """Register exit handler with conditional restore"""
         def cleanup_on_exit():
             try:
-                self.restore_platformio_ini()
-                self.cleanup_backup_files()
+                # Prüfe ob Script-Instanz noch existiert und Cache-Status
+                if hasattr(self, '_cache_applied_successfully'):
+                    if not self._cache_applied_successfully:
+                        self.restore_platformio_ini()
+                else:
+                    # Fallback: Wiederherstellen wenn Status unbekannt
+                    self.restore_platformio_ini()
             except:
                 pass  # Ignore errors during cleanup
         
@@ -769,15 +795,21 @@ class LDFCacheOptimizer:
             artifacts = cache_data.get('artifacts', {})
 
             if not build_order:
+                print("❌ No build order data in cache")
                 return False
 
             print("🔧 Applying build order with artifact integration...")
 
-            self.apply_build_order_to_environment(build_order)
-            self.apply_cache_to_scons_vars(cache_data)
-
-            print("✅ LDF cache applied successfully")
-            return True
+            # Alle Cache-Anwendungen müssen erfolgreich sein
+            build_order_success = self.apply_build_order_to_environment(build_order)
+            scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
+            
+            if build_order_success and scons_vars_success:
+                print("✅ LDF cache applied successfully")
+                return True
+            else:
+                print("❌ Partial cache application failure")
+                return False
 
         except Exception as e:
             print(f"✗ Error applying LDF cache: {e}")
@@ -843,8 +875,11 @@ class LDFCacheOptimizer:
                     self.env.Prepend(LIBS=valid_libs)
                     print(f"✅ Applied {len(valid_libs)} library paths")
 
+            return True
+
         except Exception as e:
             print(f"⚠ Warning applying cache to SCons vars: {e}")
+            return False
 
     def _apply_compile_data_to_environment(self, build_order_data):
         """Apply compile data to environment"""
