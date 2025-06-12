@@ -68,13 +68,20 @@ if is_first_run():
         env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
         env_vars['_PIO_RECURSIVE_CALL'] = 'true'
         with open(logfile_path, "w") as logfile:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 ['pio', 'run', '-e', env_name, '--disable-auto-clean'],
                 env=env_vars,
-                stdout=logfile,
-                stderr=subprocess.STDOUT
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1
             )
-        sys.exit(result.returncode)
+            for line in process.stdout:
+                print(line, end='')
+                logfile.write(line)
+                logfile.flush()
+            process.wait()
+        sys.exit(process.returncode)
 
 # Integrated log2compdb components
 DIRCHANGE_PATTERN = re.compile(r"(?P<action>\w+) directory '(?P<path>.+)'")
