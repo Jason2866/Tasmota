@@ -227,8 +227,9 @@ class LDFCacheOptimizer:
     """
 
     HEADER_EXTENSIONS = set(SRC_HEADER_EXT)
-    SOURCE_EXTENSIONS = set(SRC_BUILD_EXT) | {'.ino'}
+    SOURCE_EXTENSIONS = set(SRC_BUILD_EXT)# | {'.ino'}
     CONFIG_EXTENSIONS = {'.json', '.properties', '.txt', '.ini'}
+    ALL_RELEVANT_EXTENSIONS = HEADER_EXTENSIONS | SOURCE_EXTENSIONS | CONFIG_EXTENSIONS
 
     IGNORE_DIRS = frozenset([
         '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
