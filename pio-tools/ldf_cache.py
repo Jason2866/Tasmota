@@ -732,8 +732,7 @@ class LDFCacheOptimizer:
                 'ordered_objects': list of dicts with 'order', 'source', 'object',
                 'ordered_sources': list of source file paths,
                 'ordered_object_files': list of object file paths,
-                'include_paths': list of include paths,
-                'defines': list of defines
+                'include_paths': list of include paths
             }
             or None if the file is missing or invalid.
         """
@@ -753,7 +752,6 @@ class LDFCacheOptimizer:
         ordered_sources = []
         ordered_object_files = []
         include_paths = set()
-        defines = set()
 
         for i, entry in enumerate(compile_db, 1):
             source_file = entry.get('file', '')
@@ -788,19 +786,13 @@ class LDFCacheOptimizer:
                 if Path(inc_path).exists():
                     include_paths.add(str(Path(inc_path)))
 
-            # Extract defines
-            define_matches = re.findall(r'-D\s*([^\s]+)', command)
-            for define in define_matches:
-                defines.add(define)
-
         print(f"✓ Build order extracted directly from {self.compile_commands_file}")
 
         return {
             'ordered_objects': ordered_objects,
             'ordered_sources': ordered_sources,
             'ordered_object_files': ordered_object_files,
-            'include_paths': sorted(include_paths),
-            'defines': sorted(defines)
+            'include_paths': sorted(include_paths)
         }
 
     def apply_build_order_to_environment(self, build_order_data):
@@ -838,7 +830,7 @@ class LDFCacheOptimizer:
                 print("⚠ No sources/object files found")
                 return False
 
-            # Apply include paths and defines from compile commands
+            # Apply include paths from compile commands
             self._apply_compile_data_to_environment(build_order_data)
             # CRITICAL: Implement correct linker order
             self._apply_correct_linker_order(valid_objects)
@@ -852,7 +844,7 @@ class LDFCacheOptimizer:
 
     def _apply_compile_data_to_environment(self, build_order_data):
         """
-        Apply include paths, defines and build flags extracted from compile commands.
+        Apply include paths and build flags extracted from compile commands.
         
         Args:
             build_order_data (dict): Build order data containing compile information
