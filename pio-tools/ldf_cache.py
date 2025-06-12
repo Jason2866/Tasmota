@@ -1069,25 +1069,26 @@ class LDFCacheOptimizer:
             artifacts (dict): Artifact information with direct paths
         """
         try:
-            # Validate paths before applying -> overkill not needed
-            #validated_artifacts = self.validate_artifact_paths(artifacts)
-            validated_artifacts = artifacts
-            
-
-            # Apply static libraries using direct paths
+             # Validate paths before applying
+            validated_artifacts = self.validate_artifact_paths(artifacts)
+            # Apply static libraries using DIRECT PATHS (nicht LIBS!)
             library_paths = validated_artifacts.get('library_paths', [])
             if library_paths:
-                self.env.Append(LIBS=library_paths)
-                print(f" ✅ Added {len(library_paths)} library paths (direct reference)")
+                # KORREKTUR: Verwende LINKFLAGS für direkte Pfade
+                for lib_path in library_paths:
+                    self.env.AppendUnique(LINKFLAGS=[lib_path])
+                print(f" ✅ Added {len(library_paths)} library paths to LINKFLAGS (direct reference)")
 
             # Apply object files using direct paths
             object_paths = validated_artifacts.get('object_paths', [])
             if object_paths:
-                self.env.Append(OBJECTS=object_paths)
-                print(f" ✅ Added {len(object_paths)} object paths (direct reference)")
+                # Object-Dateien können direkt zu LINKFLAGS hinzugefügt werden
+                for obj_path in object_paths:
+                    self.env.AppendUnique(LINKFLAGS=[obj_path])
+                print(f" ✅ Added {len(object_paths)} object paths to LINKFLAGS (direct reference)")
 
             total_artifacts = len(library_paths) + len(object_paths)
-            print(f" 🚀 Total: {total_artifacts} artifacts applied via direct paths")
+            print(f" 🚀 Total: {total_artifacts} artifacts applied via direct paths to linker")
 
         except Exception as e:
             print(f"⚠ Warning applying cached artifacts: {e}")
