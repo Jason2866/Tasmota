@@ -334,44 +334,41 @@ class LDFCacheOptimizer:
                 shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
                 print(f"✅ Backup created: {self.platformio_ini_backup}")
 
-            # platformio.ini für zweiten Run modifizieren
-            modified_lines = []
-            ldf_mode_found = False
+            # Prüfe aktuellen lib_ldf_mode aus Environment
+            current_ldf_mode = self.env.GetProjectOption("lib_ldf_mode", None)
+        
+            # Nur modifizieren wenn lib_ldf_mode bereits existiert
+            if current_ldf_mode is not None:
+                print(f"📋 Current lib_ldf_mode: {current_ldf_mode}")
             
-            with self.platformio_ini.open('r', encoding='utf-8') as f:
-                for line in f:
-                    line_stripped = line.strip()
+                # platformio.ini für zweiten Run modifizieren
+                modified_lines = []
+                ldf_mode_modified = False
+            
+                with self.platformio_ini.open('r', encoding='utf-8') as f:
+                    for line in f:
+                        line_stripped = line.strip()
                     
-                    # LDF Mode auf 'off' setzen
-                    if line_stripped.startswith('lib_ldf_mode'):
-                        modified_lines.append('lib_ldf_mode = off  ; Modified by LDF Cache Optimizer\n')
-                        ldf_mode_found = True
-                        print("🔄 Modified lib_ldf_mode to 'off'")
-                    else:
-                        modified_lines.append(line)
+                        # LDF Mode auf 'off' setzen wenn gefunden
+                        if line_stripped.startswith('lib_ldf_mode'):
+                            modified_lines.append('lib_ldf_mode = off  ; Modified by LDF Cache Optimizer\n')
+                            ldf_mode_modified = True
+                            print("🔄 Modified existing lib_ldf_mode to 'off'")
+                        else:
+                            modified_lines.append(line)
             
-            # Falls lib_ldf_mode nicht existiert, hinzufügen
-            if not ldf_mode_found:
-                # Suche nach [env:xxx] Sektion für aktuelles Environment
-                env_section_found = False
-                final_lines = []
-                
-                for line in modified_lines:
-                    final_lines.append(line)
-                    if line.strip() == f'[env:{self.env_name}]':
-                        env_section_found = True
-                        final_lines.append('lib_ldf_mode = off  ; Added by LDF Cache Optimizer\n')
-                        print(f"✅ Added lib_ldf_mode = off to [env:{self.env_name}]")
-                
-                modified_lines = final_lines
-
-            # Modifizierte platformio.ini schreiben
-            with self.platformio_ini.open('w', encoding='utf-8') as f:
-                f.writelines(modified_lines)
-                
-            print(f"✅ platformio.ini modified for next run")
+                if ldf_mode_modified:
+                    # Modifizierte platformio.ini schreiben
+                    with self.platformio_ini.open('w', encoding='utf-8') as f:
+                        f.writelines(modified_lines)
+                    print(f"✅ platformio.ini modified for next run")
+                else:
+                    print("⚠ lib_ldf_mode found in environment but not in platformio.ini")
+            else:
+                print("ℹ No lib_ldf_mode found - keeping original configuration")
+            
             return True
-            
+        
         except Exception as e:
             print(f"❌ Error modifying platformio.ini: {e}")
             return False
