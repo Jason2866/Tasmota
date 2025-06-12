@@ -309,10 +309,6 @@ class LDFCacheOptimizer:
                 self.restore_platformio_ini()
             else:
                 print("✅ Keeping modified platformio.ini for optimal performance")
-            
-            # Backup-Dateien nur löschen wenn Cache erfolgreich war
-            if self._cache_applied_successfully:
-                self.cleanup_backup_files()
 
     def register_exit_handler(self):
         """Register exit handler with conditional restore"""
