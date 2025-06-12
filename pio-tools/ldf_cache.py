@@ -44,14 +44,15 @@ logfile_path.parent.mkdir(parents=True, exist_ok=True)
 
 # Run state detection
 def is_first_run():
-    return (
-        os.environ.get('_PIO_RECURSIVE_CALL') != 'true'
-        and os.environ.get('PLATFORMIO_SETTING_FORCE_VERBOSE') != 'true'
-        and not (compiledb_path.exists() and compiledb_path.stat().st_size > 0)
+    return not (
+        compiledb_path.exists()
     )
 
 def is_second_run():
-    return os.environ.get('_PIO_RECURSIVE_CALL') == 'true'
+    return (
+        compiledb_path.exists() and 
+        compiledb_path.stat().st_size > 0
+    )
 
 # First run: Generate compile commands with verbose output
 if is_first_run():
