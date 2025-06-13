@@ -417,13 +417,14 @@ class LDFCacheOptimizer:
         # Register exit handler for cleanup
         self.register_exit_handler()
 
-        # Execute based on run state
-        if should_trigger_verbose_build():
-            print("🔄 First run: Cache creation mode")
-            self.execute_first_run()
-        elif is_build_environment_ready() and not is_first_run_needed():
+        # Only execute second run logic - first run already exited with sys.exit()
+        # Post-build callback handles cache creation separately
+        if is_build_environment_ready() and not is_first_run_needed():
             print("🔄 Second run: Cache application mode")
-            self.execute_second_run()
+           self.execute_second_run()
+        else:
+           print("🔄 Cache optimizer initialized (no action needed)")
+
 
     def execute_first_run(self):
         """First run: Create comprehensive cache with LDF active"""
