@@ -421,9 +421,9 @@ class LDFCacheOptimizer:
         # Post-build callback handles cache creation separately
         if is_build_environment_ready() and not is_first_run_needed():
             print("🔄 Second run: Cache application mode")
-           self.execute_second_run()
+            self.execute_second_run()
         else:
-           print("🔄 Cache optimizer initialized (no action needed)")
+            print("🔄 Cache optimizer initialized (no action needed)")
 
 
     def execute_first_run(self):
@@ -1161,10 +1161,14 @@ class LDFCacheOptimizer:
 
 # Initialize the LDF Cache Optimizer only for second run
 try:
-    if is_build_environment_ready() and not is_first_run_needed():
+    if (not should_trigger_verbose_build() and  # prevent run 1
+        not os.environ.get('_PIO_RECURSIVE_CALL') and  # avoid Post-Build
+        is_build_environment_ready() and 
+        not is_first_run_needed()):
         optimizer = LDFCacheOptimizer(env)
         print("✅ LDF Cache Optimizer initialized successfully")
 except Exception as e:
     print(f"❌ Error initializing LDF Cache Optimizer: {e}")
     import traceback
     traceback.print_exc()
+    
