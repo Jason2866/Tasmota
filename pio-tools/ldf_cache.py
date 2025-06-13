@@ -641,7 +641,6 @@ class LDFCacheOptimizer:
         ordered_sources = []
         ordered_object_files = []
         include_paths = set()
-        defines = set()
 
         for i, entry in enumerate(compile_db, 1):
             source_file = entry.get('file', '')
@@ -668,9 +667,6 @@ class LDFCacheOptimizer:
                 inc_path = inc_path.strip('"\'')
                 if Path(inc_path).exists():
                     include_paths.add(str(Path(inc_path)))
-            define_matches = re.findall(r'-D\s*([^\s]+)', command)
-            for define in define_matches:
-                defines.add(define)
 
         print(f"✓ Build order extracted directly from {self.compile_commands_file}")
 
@@ -678,8 +674,7 @@ class LDFCacheOptimizer:
             'ordered_objects': ordered_objects,
             'ordered_sources': ordered_sources,
             'ordered_object_files': ordered_object_files,
-            'include_paths': sorted(include_paths),
-            'defines': sorted(defines)
+            'include_paths': sorted(include_paths)
         }
 
     def collect_build_artifacts_paths(self):
