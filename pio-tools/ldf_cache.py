@@ -41,6 +41,8 @@ project_dir = env.subst("$PROJECT_DIR")
 env_name = env.subst("$PIOENV")
 compiledb_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.json"
 logfile_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.log"
+cache_base = Path(project_dir) / ".pio" / "ldf_cache"
+cache_file = cache_base / f"ldf_cache_{env_name}.py"
 build_dir = Path(env.subst("$BUILD_DIR"))
 src_dir = Path(env.subst("$PROJECT_SRC_DIR"))
 
@@ -71,20 +73,15 @@ def is_build_environment_ready():
     Returns:
         bool: True if build environment is ready
     """
-    required_files = [
-        compiledb_path
-    ]
-    for required_file in required_files:
-        if not required_file.exists():
-            return False
+    if not compiledb_path.exists():
+        return False
 
-    required_dirs = [
-        build_dir / "src",
-        build_dir / "lib"
-    ]
-    for required_dir in required_dirs:
-        if not required_dir.exists():
-            return False
+    if not (build_dir / "src").exists():
+        return False
+
+    lib_dirs = list(build_dir.glob("lib*"))
+    if not lib_dirs:
+        return False
 
     return True
 
@@ -97,6 +94,12 @@ def should_trigger_verbose_build():
     if os.environ.get('_PIO_RECURSIVE_CALL') == 'true':
         return False
     if os.environ.get('PLATFORMIO_SETTING_FORCE_VERBOSE') == 'true':
+        return False
+    
+    if os.environ.get('_PIO_REC_CALL_RETURN_CODE') is not None:
+        return False
+
+    if cache_file.exists():
         return False
 
     current_targets = COMMAND_LINE_TARGETS[:]
@@ -113,7 +116,7 @@ def setup_first_run_post_actions():
     """
     Registers post-build actions to be executed after the first verbose build.
     """
-    def first_run_post_build_callback(source, target, env_scons):
+    def first_run_post_build_callback(target, source, env):
         """
         Callback executed after a successful first build.
         """
@@ -122,13 +125,11 @@ def setup_first_run_post_actions():
         try:
             optimizer = LDFCacheOptimizer(env)
 
-            print("🔧 Creating compile_commands.json from build log...")
             success_compiledb = optimizer.create_compiledb_integrated()
             if not success_compiledb:
                 print("❌ Failed to create compile_commands.json")
                 return
 
-            print("💾 Creating comprehensive LDF cache...")
             cache_data = optimizer.create_comprehensive_cache()
             
             if not cache_data:
@@ -153,6 +154,7 @@ def setup_first_run_post_actions():
                 print("🎉 First run post-build actions completed successfully!")
                 print("🔄 platformio.ini configured for cached build (lib_ldf_mode = off)")
                 print("🚀 Next build will be significantly faster using cached dependencies")
+                #sys.exit(process.returncode)
             else:
                 print("⚠ Cache created but platformio.ini modification failed")
                 print("💡 Manual setting: lib_ldf_mode = off recommended for next build")
@@ -183,6 +185,9 @@ if should_trigger_verbose_build():
     env_vars = os.environ.copy()
     env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
     env_vars['_PIO_RECURSIVE_CALL'] = 'true'
+    if os.environ.get('_PIO_REC_CALL_RETURN_CODE') is not None:
+        sys.exit(os.environ.get('_PIO_REC_CALL_RETURN_CODE'))
+
 
     with open(logfile_path, "w") as logfile:
         process = subprocess.Popen(
@@ -198,7 +203,8 @@ if should_trigger_verbose_build():
             logfile.write(line)
             logfile.flush()
         process.wait()
-    sys.exit(process.returncode)
+    env_vars['_PIO_REC_CALL_RETURN_CODE'] = process.returncode
+    print(f"🔄 First run completed with return code: {process.returncode}")
 
 # Integrated log2compdb components
 DIRCHANGE_PATTERN = re.compile(r"(?P<action>\w+) directory '(?P<path>.+)'")
@@ -415,7 +421,7 @@ class LDFCacheOptimizer:
         self._cache_applied_successfully = False
 
         # Register exit handler for cleanup
-        self.register_exit_handler()
+        #self.register_exit_handler()
 
         # Only execute second run logic - first run already exited with sys.exit()
         # Post-build callback handles cache creation separately
@@ -501,7 +507,6 @@ class LDFCacheOptimizer:
                 if stripped_line.startswith('lib_ldf_mode'):
                     lines[i] = 'lib_ldf_mode = off\n'
                     modified = True
-                    print(f"✅ platformio.ini modified for cached build: {stripped_line} → lib_ldf_mode = off")
             if modified:
                 with self.platformio_ini.open('w', encoding='utf-8') as f:
                     f.writelines(lines)
@@ -745,6 +750,7 @@ class LDFCacheOptimizer:
                     print(f"⚠ Could not hash {file_path}: {e}")
                     continue
         project_path = Path(self.project_dir)
+        print("✅ Hashed platfomio.ini file(s)")
         for ini_path in project_path.glob('platformio*.ini'):
             if ini_path.exists() and ini_path.is_file():
                 try:
@@ -752,7 +758,6 @@ class LDFCacheOptimizer:
                     if platformio_hash:
                         rel_ini_path = self._get_relative_path_from_project(ini_path)
                         file_hashes[rel_ini_path] = platformio_hash
-                        print(f"✅ Hashed {ini_path.name} (selective)")
                 except (IOError, OSError) as e:
                     print(f"⚠ Could not hash {ini_path}: {e}")
         combined_content = json.dumps(file_hashes, sort_keys=True)
