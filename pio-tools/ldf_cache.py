@@ -494,20 +494,21 @@ class LDFCacheOptimizer:
                 shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
                 print(f"✅ Configuration backup created: {self.platformio_ini_backup.name}")
             with self.platformio_ini.open('r', encoding='utf-8') as f:
-                content = f.read()
-            original_content = content
-            content = content.replace('lib_ldf_mode = chain', 'lib_ldf_mode = off')
-            content = content.replace('lib_ldf_mode=chain', 'lib_ldf_mode=off')
-            content = content.replace('lib_ldf_mode = Chain', 'lib_ldf_mode = off')
-            content = content.replace('lib_ldf_mode=Chain', 'lib_ldf_mode=off')
-            if content != original_content:
+                lines = f.readlines()
+        
+            modified = False
+            for i, line in enumerate(lines):
+                stripped_line = line.strip()
+                if stripped_line.startswith('lib_ldf_mode'):
+                    lines[i] = 'lib_ldf_mode = off\n'
+                    modified = True
+                    print(f"✅ platformio.ini modified for cached build: {stripped_line} → lib_ldf_mode = off")
+            if modified:
                 with self.platformio_ini.open('w', encoding='utf-8') as f:
-                    f.write(content)
-                print(f"✅ platformio.ini modified: lib_ldf_mode = off")
-                print("🔄 Next build will use cached dependencies with LDF disabled")
+                    f.writelines(lines)
                 return True
             else:
-                print(f"ℹ No lib_ldf_mode = chain found to replace")
+                print("ℹ No lib_ldf_mode = chain found to replace")
                 return True
         except Exception as e:
             print(f"❌ Error modifying platformio.ini: {e}")
