@@ -41,51 +41,178 @@ project_dir = env.subst("$PROJECT_DIR")
 env_name = env.subst("$PIOENV")
 compiledb_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.json"
 logfile_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.log"
+build_dir = Path(env.subst("$BUILD_DIR"))
+src_dir = Path(env.subst("$PROJECT_SRC_DIR"))
+
 logfile_path.parent.mkdir(parents=True, exist_ok=True)
 
-# Run state detection
-def is_first_run():
-    if (
-        os.environ.get('_PIO_RECURSIVE_CALL') != 'true'
-        and os.environ.get('PLATFORMIO_SETTING_FORCE_VERBOSE') != 'true'
-        and not (compiledb_path.exists() and compiledb_path.stat().st_size > 0)
-    ):
+def is_first_run_needed():
+    """
+    Determines if the first run (full verbose build) is needed based on file dependencies.
+    Returns:
+        bool: True if first run is needed
+    """
+    if not compiledb_path.exists() or compiledb_path.stat().st_size == 0:
         return True
+
+    essential_artifacts = [
+        build_dir / "src",
+        build_dir / "lib",
+        build_dir / "project.checksum"
+    ]
+    for artifact in essential_artifacts:
+        if not artifact.exists():
+            return True
+
+    if compiledb_path.exists():
+        compiledb_mtime = compiledb_path.stat().st_mtime
+        for src_file in src_dir.rglob("*"):
+            if src_file.is_file() and src_file.suffix in ['.c', '.cpp', '.h', '.hpp', '.ino']:
+                if src_file.stat().st_mtime > compiledb_mtime:
+                    print(f"🔄 Source file {src_file.name} is newer than compile_commands.json")
+                    return True
+        platformio_ini = Path(project_dir) / "platformio.ini"
+        if platformio_ini.exists() and platformio_ini.stat().st_mtime > compiledb_mtime:
+            print("🔄 platformio.ini is newer than compile_commands.json")
+            return True
+
     return False
 
-def is_second_run():
-    return (
-        compiledb_path.exists() and 
-        compiledb_path.stat().st_size > 0
-    )
+def is_build_environment_ready():
+    """
+    Checks if the build environment is complete.
+    Returns:
+        bool: True if build environment is ready
+    """
+    required_files = [
+        compiledb_path,
+        build_dir / "project.checksum"
+    ]
+    for required_file in required_files:
+        if not required_file.exists():
+            return False
 
-# First run: Generate compile commands with verbose output
-if is_first_run():
+    required_dirs = [
+        build_dir / "src",
+        build_dir / "lib"
+    ]
+    for required_dir in required_dirs:
+        if not required_dir.exists():
+            return False
+
+    return True
+
+def should_trigger_verbose_build():
+    """
+    Determines if a verbose build should be triggered.
+    Returns:
+        bool: True if verbose build is needed
+    """
+    if os.environ.get('_PIO_RECURSIVE_CALL') == 'true':
+        return False
+    if os.environ.get('PLATFORMIO_SETTING_FORCE_VERBOSE') == 'true':
+        return False
+
     current_targets = COMMAND_LINE_TARGETS[:]
     is_build_target = (
         not current_targets or
         any(target in ["build", "buildprog"] for target in current_targets)
     )
-    if is_build_target:
-        print(f"🔄 First run: Creating comprehensive cache for {env_name}...")
-        env_vars = os.environ.copy()
-        env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
-        env_vars['_PIO_RECURSIVE_CALL'] = 'true'
-        with open(logfile_path, "w") as logfile:
-            process = subprocess.Popen(
-                ['pio', 'run', '-e', env_name, '--disable-auto-clean'],
-                env=env_vars,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                bufsize=1
-            )
-            for line in process.stdout:
-                print(line, end='')
-                logfile.write(line)
-                logfile.flush()
-            process.wait()
-        sys.exit(process.returncode)
+    if not is_build_target:
+        return False
+
+    return is_first_run_needed()
+
+def setup_first_run_post_actions():
+    """
+    Registers post-build actions to be executed after the first verbose build.
+    """
+    def first_run_post_build_callback(source, target, env_scons):
+        """
+        Callback executed after a successful first build.
+        """
+        print("🎯 First run completed successfully - executing post-build actions...")
+
+        try:
+            optimizer = LDFCacheOptimizer(env)
+
+            print("🔧 Creating compile_commands.json from build log...")
+            success_compiledb = optimizer.create_compiledb_integrated()
+            if not success_compiledb:
+                print("❌ Failed to create compile_commands.json")
+                return
+
+            print("💾 Creating comprehensive LDF cache...")
+            cache_data = optimizer.create_comprehensive_cache()
+            
+            if not cache_data:
+                print("❌ Failed to create cache data")
+                return
+
+            # Save cache
+            success_save = optimizer.save_cache(cache_data)
+            if not success_save:
+                print("❌ Failed to save cache")
+                return
+
+            print(f"✅ LDF cache created: {optimizer.cache_file}")
+            print(f"✅ Build order: {len(cache_data.get('build_order', {}).get('ordered_sources', []))} sources")
+            print(f"✅ Artifacts: {cache_data.get('artifacts', {}).get('total_count', 0)} files")
+
+            optimizer.validate_ldf_mode_compatibility()
+
+            print("🔧 Modifying platformio.ini for second run...")
+            success_ini_mod = optimizer.modify_platformio_ini_for_second_run()
+            if success_ini_mod:
+                print("🎉 First run post-build actions completed successfully!")
+                print("🔄 platformio.ini configured for cached build (lib_ldf_mode = off)")
+                print("🚀 Next build will be significantly faster using cached dependencies")
+            else:
+                print("⚠ Cache created but platformio.ini modification failed")
+                print("💡 Manual setting: lib_ldf_mode = off recommended for next build")
+
+        except Exception as e:
+            print(f"❌ Error in first run post-build actions: {e}")
+            import traceback
+            traceback.print_exc()
+
+    env.AddPostAction("buildprog", first_run_post_build_callback)
+    print("✅ First run post-build actions registered")
+
+# First run: Generate compile commands with verbose output
+if should_trigger_verbose_build():
+    print(f"🔄 First run needed - starting verbose build for {env_name}...")
+    print("📋 Reasons:")
+
+    if not compiledb_path.exists():
+        print("  - compile_commands.json missing")
+    elif compiledb_path.stat().st_size == 0:
+        print("  - compile_commands.json is empty")
+
+    if not is_build_environment_ready():
+        print("  - Build environment incomplete")
+
+    setup_first_run_post_actions()
+
+    env_vars = os.environ.copy()
+    env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
+    env_vars['_PIO_RECURSIVE_CALL'] = 'true'
+
+    with open(logfile_path, "w") as logfile:
+        process = subprocess.Popen(
+            ['pio', 'run', '-e', env_name, '--disable-auto-clean'],
+            env=env_vars,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1
+        )
+        for line in process.stdout:
+            print(line, end='')
+            logfile.write(line)
+            logfile.flush()
+        process.wait()
+    sys.exit(process.returncode)
 
 # Integrated log2compdb components
 DIRCHANGE_PATTERN = re.compile(r"(?P<action>\w+) directory '(?P<path>.+)'")
@@ -100,6 +227,15 @@ class CompileCommand:
 
     @classmethod
     def from_cmdline(cls, cc_cmd: Path, cmd_args: list[str], directory=None) -> Optional["CompileCommand"]:
+        """
+        Create a CompileCommand from a command line.
+        Args:
+            cc_cmd: Path to the compiler executable
+            cmd_args: List of command line arguments
+            directory: Optional working directory
+        Returns:
+            CompileCommand or None if no valid input file
+        """
         if cc_cmd.name not in cmd_args[0]:
             return None
 
@@ -116,12 +252,10 @@ class CompileCommand:
         try:
             output_index = cmd_args.index("-o")
             output_arg = cmd_args[output_index + 1]
-
             if output_arg == "/dev/null":
                 output_path = None
             else:
                 output_path = directory / Path(output_arg)
-
         except (ValueError, IndexError):
             output_index = None
             output_path = None
@@ -132,13 +266,10 @@ class CompileCommand:
                 if input_file_match := INFILE_PATTERN.search(item):
                     input_path = input_file_match.group("path")
                     break
-
             if not input_path and stem_matches:
                 input_path = stem_matches[0]
-
             if not input_path:
                 return None
-
             input_path = directory / Path(input_path)
         else:
             match = None
@@ -146,10 +277,8 @@ class CompileCommand:
                 match = INFILE_PATTERN.search(item)
                 if match:
                     break
-
             if not match:
                 return None
-
             input_path = Path(match.group("path"))
             output_path = None
 
@@ -167,16 +296,36 @@ class Compiler:
 
     @classmethod
     def from_name(cls, compiler_name: str) -> "Compiler":
+        """
+        Create Compiler from name string.
+        Args:
+            compiler_name: Name of the compiler
+        """
         path = Path(compiler_name)
         return cls(name=compiler_name, path=path)
 
     def find_invocation_start(self, cmd_args: list[str]) -> int:
+        """
+        Find compiler invocation in argument list.
+        Args:
+            cmd_args: List of command line arguments
+        Returns:
+            int: Index of compiler invocation
+        """
         for index, arg in enumerate(cmd_args):
             if self.name in arg or Path(arg).stem == self.name:
                 return index
         raise ValueError(f"compiler invocation for {self.name} not found")
 
 def parse_build_log_to_compile_commands(logfile_path: Path, compiler_names: list[str]) -> list[CompileCommand]:
+    """
+    Parse build log to compile commands.
+    Args:
+        logfile_path: Path to build log file
+        compiler_names: List of compiler names to look for
+    Returns:
+        List of CompileCommand objects
+    """
     if not logfile_path.exists():
         return []
 
@@ -251,6 +400,11 @@ class LDFCacheOptimizer:
     ])
 
     def __init__(self, environment):
+        """
+        Initialize the LDF cache optimizer with build order management.
+        Args:
+            environment: PlatformIO SCons environment
+        """
         self.env = environment
         self.env_name = self.env.get("PIOENV")
         self.project_dir = self.env.subst("$PROJECT_DIR")
@@ -278,19 +432,16 @@ class LDFCacheOptimizer:
         self.register_exit_handler()
 
         # Execute based on run state
-        if is_first_run():
+        if should_trigger_verbose_build():
             print("🔄 First run: Cache creation mode")
             self.execute_first_run()
-        elif is_second_run():
+        elif is_build_environment_ready() and not is_first_run_needed():
             print("🔄 Second run: Cache application mode")
             self.execute_second_run()
 
     def execute_first_run(self):
         """First run: Create comprehensive cache with LDF active"""
         self.validate_ldf_mode_compatibility()
-
-        self.backup_and_modify_platformio_ini()
-        
         self.register_post_build_cache_creation()
         self.integrate_with_core_functions()
 
@@ -325,67 +476,58 @@ class LDFCacheOptimizer:
         """Register exit handler with conditional restore"""
         def cleanup_on_exit():
             try:
-                # Prüfe ob Script-Instanz noch existiert und Cache-Status
                 if hasattr(self, '_cache_applied_successfully'):
                     if not self._cache_applied_successfully:
                         self.restore_platformio_ini()
                 else:
-                    # Fallback: Wiederherstellen wenn Status unbekannt
                     self.restore_platformio_ini()
             except:
-                pass  # Ignore errors during cleanup
+                pass
         
         atexit.register(cleanup_on_exit)
 
-    def backup_and_modify_platformio_ini(self):
-        """Backup original platformio.ini and modify for second run"""
+    def modify_platformio_ini_for_second_run(self):
+        """
+        Modifies platformio.ini at the end of the first run:
+        - Checks lib_ldf_mode in the PlatformIO environment variable
+        - Only if mode is 'chain', replaces all occurrences with 'off'
+        - Simple search and replace, no intelligent section parsing
+        Returns:
+            bool: True if modification was successful or not needed
+        """
         try:
-            # Backup erstellen
+            current_ldf_mode = self.env.GetProjectOption("lib_ldf_mode", "chain")
+            if current_ldf_mode.lower() != "chain":
+                print(f"ℹ lib_ldf_mode is '{current_ldf_mode}', not modifying (only 'chain' supported)")
+                return True
+            if not self.platformio_ini.exists():
+                print("❌ platformio.ini not found")
+                return False
             if not self.platformio_ini_backup.exists():
                 shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
-                print(f"✅ Backup created: {self.platformio_ini_backup}")
-
-            # Prüfe aktuellen lib_ldf_mode aus Environment
-            current_ldf_mode = self.env.GetProjectOption("lib_ldf_mode", None)
-        
-            # Nur modifizieren wenn lib_ldf_mode bereits existiert
-            if current_ldf_mode is not None:
-                print(f"📋 Current lib_ldf_mode: {current_ldf_mode}")
-            
-                # platformio.ini für zweiten Run modifizieren
-                modified_lines = []
-                ldf_mode_modified = False
-            
-                with self.platformio_ini.open('r', encoding='utf-8') as f:
-                    for line in f:
-                        line_stripped = line.strip()
-                    
-                        # LDF Mode auf 'off' setzen wenn gefunden
-                        if line_stripped.startswith('lib_ldf_mode'):
-                            modified_lines.append('lib_ldf_mode = off  ; Modified by LDF Cache Optimizer\n')
-                            ldf_mode_modified = True
-                            print("🔄 Modified existing lib_ldf_mode to 'off'")
-                        else:
-                            modified_lines.append(line)
-            
-                if ldf_mode_modified:
-                    # Modifizierte platformio.ini schreiben
-                    with self.platformio_ini.open('w', encoding='utf-8') as f:
-                        f.writelines(modified_lines)
-                    print(f"✅ platformio.ini modified for next run")
-                else:
-                    print("⚠ lib_ldf_mode found in environment but not in platformio.ini")
+                print(f"✅ Configuration backup created: {self.platformio_ini_backup.name}")
+            with self.platformio_ini.open('r', encoding='utf-8') as f:
+                content = f.read()
+            original_content = content
+            content = content.replace('lib_ldf_mode = chain', 'lib_ldf_mode = off')
+            content = content.replace('lib_ldf_mode=chain', 'lib_ldf_mode=off')
+            content = content.replace('lib_ldf_mode = Chain', 'lib_ldf_mode = off')
+            content = content.replace('lib_ldf_mode=Chain', 'lib_ldf_mode=off')
+            if content != original_content:
+                with self.platformio_ini.open('w', encoding='utf-8') as f:
+                    f.write(content)
+                print(f"✅ platformio.ini modified: lib_ldf_mode = off")
+                print("🔄 Next build will use cached dependencies with LDF disabled")
+                return True
             else:
-                print("ℹ No lib_ldf_mode found - keeping original configuration")
-            
-            return True
-        
+                print(f"ℹ No lib_ldf_mode = chain found to replace")
+                return True
         except Exception as e:
             print(f"❌ Error modifying platformio.ini: {e}")
             return False
 
     def restore_platformio_ini(self):
-        """Restore original platformio.ini """
+        """Restore original platformio.ini"""
         try:
             if self.platformio_ini_backup.exists():
                 shutil.copy2(self.platformio_ini_backup, self.platformio_ini)
@@ -398,20 +540,15 @@ class LDFCacheOptimizer:
             print(f"❌ Error restoring platformio.ini: {e}")
             return False
 
-    def cleanup_backup_files(self):
-        """Clean up backup files after successful build"""
-        try:
-            if self.platformio_ini_backup.exists():
-                self.platformio_ini_backup.unlink()
-                print("🧹 Backup files cleaned up")
-        except Exception as e:
-            print(f"⚠ Warning cleaning backup files: {e}")
-
     def validate_ldf_mode_compatibility(self):
+        """
+        Validate that the current LDF mode is compatible with caching.
+        Returns:
+            bool: True if LDF mode is compatible
+        """
         try:
             ldf_mode = self.env.GetProjectOption("lib_ldf_mode", "chain")
             compatible_modes = ["chain", "off"]
-            
             if ldf_mode.lower() in compatible_modes:
                 print(f"✅ LDF mode '{ldf_mode}' is compatible with caching")
                 return True
@@ -419,61 +556,15 @@ class LDFCacheOptimizer:
                 print(f"⚠ LDF mode '{ldf_mode}' not optimal for caching")
                 print(f"💡 Recommended modes: {', '.join(compatible_modes)}")
                 return False
-                
         except Exception as e:
             print(f"⚠ Could not determine LDF mode: {e}")
+            print("🔄 Assuming 'chain' mode for compatibility")
             return True
 
-    def register_post_build_cache_creation(self):
-        """Register post-build action for cache creation (first run only)"""
-        def create_cache_post_build(target, source, env):
-            try:
-                print("🔧 Creating comprehensive cache after build...")
-                self.create_compiledb_integrated()
-                cache_data = self.create_comprehensive_cache()
-                if cache_data:
-                    self.save_cache(cache_data)
-                    print("✅ Cache created successfully")
-            except Exception as e:
-                print(f"⚠ Error in post-build cache creation: {e}")
-
-        self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_cache_post_build)
-
-    def integrate_with_core_functions(self):
-        """Integrate with PlatformIO Core functions"""
-        self.register_cache_middleware()
-        self.integrate_with_project_deps()
-
-    def register_cache_middleware(self):
-        """Register cache middleware in PlatformIO's build pipeline"""
-        def cache_middleware(env, node):
-            if isinstance(node, FS.File):
-                file_path = node.srcnode().get_path()
-                if self.is_file_cached(file_path):
-                    print(f"📦 Using cached analysis for {Path(file_path).name}")
-            return node
-
-        self.env.AddBuildMiddleware(cache_middleware, "*.cpp")
-        self.env.AddBuildMiddleware(cache_middleware, "*.c")
-
-    def integrate_with_project_deps(self):
-        """Integrate cache application before ProcessProjectDeps"""
-        original_process_deps = getattr(self.env, 'ProcessProjectDeps', None)
-        
-        def cached_process_deps():
-            if is_second_run():
-                cache_data = self.load_cache()
-                if cache_data and self.validate_cache(cache_data):
-                    self.apply_cache_to_scons_vars(cache_data)
-                    print("✅ Applied LDF cache before ProcessProjectDeps")
-            
-            if original_process_deps:
-                return original_process_deps()
-
-        self.env.AddMethod(cached_process_deps, 'ProcessProjectDeps')
-
     def create_compiledb_integrated(self):
-        """Create compile_commands.json using integrated log parsing"""
+        """
+        Create compile_commands.json using integrated log parsing functionality.
+        """
         if self.compile_commands_file.exists():
             print(f"✅ {self.compile_commands_file} exists")
             return True
@@ -506,13 +597,11 @@ class LDFCacheOptimizer:
 
         try:
             compile_commands = parse_build_log_to_compile_commands(build_log, compiler_names)
-
             if not compile_commands:
                 print("❌ No compiler commands found in build log")
                 return False
 
             self.compiledb_dir.mkdir(parents=True, exist_ok=True)
-
             json_entries = []
             for cmd in compile_commands:
                 json_entries.append({
@@ -521,10 +610,8 @@ class LDFCacheOptimizer:
                     'directory': cmd.directory,
                     'arguments': cmd.arguments
                 })
-
             with self.compile_commands_file.open('w') as f:
                 json.dump(json_entries, f, indent=2)
-
             file_size = self.compile_commands_file.stat().st_size
             print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
             print(f"✅ Found {len(compile_commands)} compiler invocations")
@@ -535,7 +622,7 @@ class LDFCacheOptimizer:
             return False
 
     def collect_sources_via_core(self, src_filter=None):
-        """Use PlatformIO's MatchSourceFiles """
+        """Use PlatformIO's MatchSourceFiles to collect sources"""
         try:
             sources = self.env.MatchSourceFiles(
                 self.src_dir, 
@@ -549,7 +636,10 @@ class LDFCacheOptimizer:
             return []
 
     def get_correct_build_order(self):
-        """Extract build order from compile_commands.json"""
+        """
+        Combines compile_commands.json (order) with build artifacts (paths).
+        Returns build order data directly as Python data structure.
+        """
         if not self.compile_commands_file.exists():
             print(f"⚠ compile_commands_{self.env_name}.json not found")
             return None
@@ -569,12 +659,12 @@ class LDFCacheOptimizer:
 
         for i, entry in enumerate(compile_db, 1):
             source_file = entry.get('file', '')
-            
             if 'arguments' in entry:
                 command = ' '.join(entry['arguments'])
             elif 'command' in entry:
                 command = entry['command']
             else:
+                print(f"⚠ Unsupported entry format in compile_commands.json (index {i})")
                 continue
 
             obj_match = re.search(r'-o\s+(\S+\.o)', command)
@@ -586,20 +676,17 @@ class LDFCacheOptimizer:
                     'source': source_file,
                     'object': obj_file,
                 })
-
             ordered_sources.append(source_file)
-
             include_matches = re.findall(r'-I\s*([^\s]+)', command)
             for inc_path in include_matches:
                 inc_path = inc_path.strip('"\'')
                 if Path(inc_path).exists():
                     include_paths.add(str(Path(inc_path)))
-
             define_matches = re.findall(r'-D\s*([^\s]+)', command)
             for define in define_matches:
                 defines.add(define)
 
-        print(f"✓ Build order extracted from {self.compile_commands_file}")
+        print(f"✓ Build order extracted directly from {self.compile_commands_file}")
 
         return {
             'ordered_objects': ordered_objects,
@@ -610,7 +697,11 @@ class LDFCacheOptimizer:
         }
 
     def collect_build_artifacts_paths(self):
-        """Collect paths to build artifacts """
+        """
+        Collect paths to build artifacts without copying them.
+        Returns:
+            dict: Artifact paths organized by type
+        """
         if not self.lib_build_dir.exists():
             print(f"⚠ Build directory not found: {self.lib_build_dir}")
             return {}
@@ -630,11 +721,11 @@ class LDFCacheOptimizer:
                         library_paths.append(str(file_path))
                     elif file.endswith('.o'):
                         object_paths.append(str(file_path))
-                    
                     collected_count += 1
 
         print(f"📦 Collected {len(library_paths)} library paths (*.a)")
         print(f"📦 Collected {len(object_paths)} object paths (*.o)")
+        print(f"📦 Total: {collected_count} artifact paths collected")
 
         return {
             'library_paths': library_paths,
@@ -643,15 +734,17 @@ class LDFCacheOptimizer:
         }
 
     def get_project_hash_with_details(self):
-        """Calculate project hash for cache validation"""
+        """
+        Calculate project hash with improved path handling using pathlib.
+        Only includes LDF-relevant files for precise cache invalidation.
+        Returns:
+            dict: Hash details including file hashes and final combined hash
+        """
         file_hashes = {}
-        
         src_path = Path(self.src_dir)
-        
         for file_path in src_path.rglob('*'):
             if file_path.is_dir() or self._is_ignored_directory(file_path.parent):
                 continue
-                
             if file_path.suffix in self.ALL_RELEVANT_EXTENSIONS:
                 try:
                     rel_path = self._get_relative_path_from_project(file_path)
@@ -667,11 +760,9 @@ class LDFCacheOptimizer:
                         file_content = file_path.read_bytes()
                         file_hash = hashlib.md5(file_content).hexdigest()
                         file_hashes[rel_path] = file_hash
-
                 except (IOError, OSError) as e:
                     print(f"⚠ Could not hash {file_path}: {e}")
                     continue
-
         project_path = Path(self.project_dir)
         for ini_path in project_path.glob('platformio*.ini'):
             if ini_path.exists() and ini_path.is_file():
@@ -680,12 +771,11 @@ class LDFCacheOptimizer:
                     if platformio_hash:
                         rel_ini_path = self._get_relative_path_from_project(ini_path)
                         file_hashes[rel_ini_path] = platformio_hash
+                        print(f"✅ Hashed {ini_path.name} (selective)")
                 except (IOError, OSError) as e:
                     print(f"⚠ Could not hash {ini_path}: {e}")
-
         combined_content = json.dumps(file_hashes, sort_keys=True)
         final_hash = hashlib.sha256(combined_content.encode()).hexdigest()
-
         return {
             'file_hashes': file_hashes,
             'final_hash': final_hash,
@@ -743,6 +833,67 @@ class LDFCacheOptimizer:
         except Exception as e:
             print(f"❌ Error saving cache: {e}")
             return False
+
+    def register_post_build_cache_creation(self):
+        """Register post-build action for cache creation (first run only)"""
+        def create_cache_post_build(target, source, env):
+            try:
+                print("🔧 Creating comprehensive cache after build...")
+                self.create_compiledb_integrated()
+                cache_data = self.create_comprehensive_cache()
+                if cache_data:
+                    self.save_cache(cache_data)
+                    print("✅ Cache created successfully")
+            except Exception as e:
+                print(f"⚠ Error in post-build cache creation: {e}")
+
+        self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_cache_post_build)
+
+    def integrate_with_core_functions(self):
+        """Integrate with PlatformIO Core functions"""
+        self.register_cache_middleware()
+        self.integrate_with_project_deps()
+
+    def register_cache_middleware(self):
+        """Register cache middleware in PlatformIO's build pipeline"""
+        def cache_middleware(env, node):
+            if isinstance(node, FS.File):
+                file_path = node.srcnode().get_path()
+                if self.is_file_cached(file_path):
+                    print(f"📦 Using cached analysis for {Path(file_path).name}")
+            return node
+
+        self.env.AddBuildMiddleware(cache_middleware, "*.cpp")
+        self.env.AddBuildMiddleware(cache_middleware, "*.c")
+
+    def integrate_with_project_deps(self):
+        """Integrate cache application before ProcessProjectDeps"""
+        original_process_deps = getattr(self.env, 'ProcessProjectDeps', None)
+        
+        def cached_process_deps():
+            if is_build_environment_ready() and not is_first_run_needed():
+                cache_data = self.load_cache()
+                if cache_data and self.validate_cache(cache_data):
+                    self.apply_cache_to_scons_vars(cache_data)
+                    print("✅ Applied LDF cache before ProcessProjectDeps")
+            
+            if original_process_deps:
+                return original_process_deps()
+
+        self.env.AddMethod(cached_process_deps, 'ProcessProjectDeps')
+
+    def compute_signature(self, data):
+        """
+        Compute signature for cache data validation.
+        Args:
+            data (dict): Data to sign
+        Returns:
+            str: SHA256 signature
+        """
+        data_copy = data.copy()
+        data_copy.pop('signature', None)
+        data_str = json.dumps(data_copy, sort_keys=True)
+        return hashlib.sha256(data_str.encode()).hexdigest()
 
     def load_cache(self):
         """Load cache data from file"""
@@ -806,7 +957,6 @@ class LDFCacheOptimizer:
 
             print("🔧 Applying build order with artifact integration...")
 
-            # Alle Cache-Anwendungen müssen erfolgreich sein
             build_order_success = self.apply_build_order_to_environment(build_order)
             scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
             
@@ -860,13 +1010,11 @@ class LDFCacheOptimizer:
         """Apply cache data directly to SCons variables using PlatformIO Core methods"""
         try:
             build_order = cache_data.get('build_order', {})
-            # Apply include paths
             if 'include_paths' in build_order:
                 include_flags = [f"-I{path}" for path in build_order['include_paths']]
                 self.env.ProcessFlags(include_flags)
                 print(f"✅ Applied {len(build_order['include_paths'])} include paths via ProcessFlags")
 
-            # Apply artifacts to SCons variables
             artifacts = cache_data.get('artifacts', {})
             if 'library_paths' in artifacts:
                 valid_libs = [lib for lib in artifacts['library_paths'] if Path(lib).exists()]
@@ -935,34 +1083,14 @@ class LDFCacheOptimizer:
         rel_path = self._get_relative_path_from_project(file_path)
         return rel_path in cache_data.get('file_hashes', {})
 
-    def compute_signature(self, data):
-        """Compute signature for cache validation"""
-        data_copy = data.copy()
-        data_copy.pop('signature', None)
-        data_str = json.dumps(data_copy, sort_keys=True)
-        return hashlib.sha256(data_str.encode()).hexdigest()
-
-    def _normalize_path(self, path):
-        """Platform-independent path normalization"""
-        if not path:
-            return ""
-        normalized = Path(path).resolve()
-        return str(normalized).replace(os.sep, '/')
-
-    def _is_ignored_directory(self, dir_path):
-        """Check if directory should be ignored"""
-        if not dir_path:
-            return False
-        path_obj = Path(dir_path)
-        if path_obj.name in self.IGNORE_DIRS:
-            return True
-        for part in path_obj.parts:
-            if part in self.IGNORE_DIRS:
-                return True
-        return False
-
     def _get_relative_path_from_project(self, file_path):
-        """Get relative path from project root"""
+        """
+        Calculate relative path from project root with consistent path handling.
+        Args:
+            file_path (str or Path): File path to make relative
+        Returns:
+            str: Relative path from project root with forward slashes
+        """
         try:
             file_path = Path(file_path).resolve()
             project_dir = Path(self.project_dir).resolve()
@@ -972,12 +1100,18 @@ class LDFCacheOptimizer:
             return str(Path(file_path)).replace(os.sep, '/')
 
     def _extract_includes(self, file_path):
-        """Extract #include directives from source file"""
+        """
+        Extract #include directives with improved path handling.
+        Args:
+            file_path (str or Path): Source file to analyze
+        Returns:
+            set: Set of normalized include paths
+        """
         includes = set()
         try:
             file_path = Path(file_path)
             with file_path.open('r', encoding='utf-8', errors='ignore') as f:
-                for line in f:
+                for line_num, line in enumerate(f, 1):
                     line = line.strip()
                     if line.startswith('#include'):
                         include_match = re.search(r'#include\s*[<"]([^>"]+)[>"]', line)
@@ -990,15 +1124,18 @@ class LDFCacheOptimizer:
         return includes
 
     def _hash_platformio_ini_selective(self, ini_path=None):
-        """Hash platformio.ini excluding LDF-related lines"""
+        """
+        Hash platformio*.ini but exclude LDF-related lines that are modified by the script.
+        Args:
+            ini_path (Path, optional): Path to specific ini file. Defaults to self.platformio_ini.
+        Returns:
+            str: MD5 hash of relevant platformio*.ini content
+        """
         if ini_path is None:
             ini_path = self.platformio_ini
-        
         if not ini_path.exists():
             return ""
-
         excluded_patterns = ['lib_ldf_mode']
-
         try:
             relevant_lines = []
             with ini_path.open('r', encoding='utf-8') as f:
@@ -1006,26 +1143,41 @@ class LDFCacheOptimizer:
                     line_stripped = line.strip()
                     if not line_stripped or line_stripped.startswith(';') or line_stripped.startswith('#'):
                         continue
-            
                     should_exclude = any(
                         pattern.lower() in line_stripped.lower() 
                         for pattern in excluded_patterns
                     )
-            
                     if not should_exclude:
                         relevant_lines.append(line_stripped)
-    
             relevant_content = '\n'.join(sorted(relevant_lines))
             return hashlib.md5(relevant_content.encode()).hexdigest()
-    
         except (IOError, OSError) as e:
             print(f"⚠ Could not read {ini_path}: {e}")
             return ""
 
-# Initialize the LDF Cache Optimizer
+    def _is_ignored_directory(self, dir_path):
+        """
+        Check if a directory is in the ignore list.
+        Args:
+            dir_path (str or Path): Directory path to check
+        Returns:
+            bool: True if directory should be ignored
+        """
+        if not dir_path:
+            return False
+        path_obj = Path(dir_path)
+        if path_obj.name in self.IGNORE_DIRS:
+            return True
+        for part in path_obj.parts:
+            if part in self.IGNORE_DIRS:
+                return True
+        return False
+
+# Initialize the LDF Cache Optimizer only for second run
 try:
-    optimizer = LDFCacheOptimizer(env)
-    print("✅ LDF Cache Optimizer initialized successfully")
+    if is_build_environment_ready() and not is_first_run_needed():
+        optimizer = LDFCacheOptimizer(env)
+        print("✅ LDF Cache Optimizer initialized successfully")
 except Exception as e:
     print(f"❌ Error initializing LDF Cache Optimizer: {e}")
     import traceback
