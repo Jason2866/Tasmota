@@ -57,23 +57,10 @@ def is_first_run_needed():
 
     essential_artifacts = [
         build_dir / "src",
-        build_dir / "lib",
-        build_dir / "project.checksum"
+        build_dir / "lib"
     ]
     for artifact in essential_artifacts:
         if not artifact.exists():
-            return True
-
-    if compiledb_path.exists():
-        compiledb_mtime = compiledb_path.stat().st_mtime
-        for src_file in src_dir.rglob("*"):
-            if src_file.is_file() and src_file.suffix in ['.c', '.cpp', '.h', '.hpp', '.ino']:
-                if src_file.stat().st_mtime > compiledb_mtime:
-                    print(f"🔄 Source file {src_file.name} is newer than compile_commands.json")
-                    return True
-        platformio_ini = Path(project_dir) / "platformio.ini"
-        if platformio_ini.exists() and platformio_ini.stat().st_mtime > compiledb_mtime:
-            print("🔄 platformio.ini is newer than compile_commands.json")
             return True
 
     return False
@@ -85,8 +72,7 @@ def is_build_environment_ready():
         bool: True if build environment is ready
     """
     required_files = [
-        compiledb_path,
-        build_dir / "project.checksum"
+        compiledb_path
     ]
     for required_file in required_files:
         if not required_file.exists():
@@ -558,7 +544,6 @@ class LDFCacheOptimizer:
                 return False
         except Exception as e:
             print(f"⚠ Could not determine LDF mode: {e}")
-            print("🔄 Assuming 'chain' mode for compatibility")
             return True
 
     def create_compiledb_integrated(self):
