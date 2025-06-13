@@ -477,8 +477,7 @@ class LDFCacheOptimizer:
         """
         Modifies platformio.ini at the end of the first run:
         - Checks lib_ldf_mode in the PlatformIO environment variable
-        - Only if mode is 'chain', replaces all occurrences with 'off'
-        - Simple search and replace, no intelligent section parsing
+        - Only if mode is 'chain', replaces with 'off'
         Returns:
             bool: True if modification was successful or not needed
         """
