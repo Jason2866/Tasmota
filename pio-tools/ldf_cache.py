@@ -326,9 +326,6 @@ class LDFCacheOptimizer:
         # Cache application status tracking
         self._cache_applied_successfully = False
 
-        # Register exit handler for cleanup
-        self.register_exit_handler()
-
     def is_file_in_cache(self, file_path):
         """Prüfe ob Datei in Cache-Daten vorhanden ist"""
         if not hasattr(self, '_current_cache_data') or not self._current_cache_data:
@@ -360,6 +357,8 @@ class LDFCacheOptimizer:
     def execute_second_run(self):
         """Second run: Apply cached dependencies with LDF disabled"""
         self._cache_applied_successfully = False
+
+        self.register_exit_handler()
 
         try:
             cache_data = self.load_cache()
