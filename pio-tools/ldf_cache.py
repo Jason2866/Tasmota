@@ -370,7 +370,6 @@ class LDFCacheOptimizer:
         try:
             cache_data = self.load_cache()
             if cache_data and self.validate_cache(cache_data):
-                # WICHTIG: Middleware MUSS vor der Cache-Anwendung registriert werden
                 self.integrate_with_core_functions()
             
                 success = self.apply_ldf_cache_with_build_order(cache_data)
@@ -421,7 +420,6 @@ class LDFCacheOptimizer:
         original_process_deps = getattr(self.env, 'ProcessProjectDeps', None)
     
         def cached_process_deps():
-            # Stelle Cache-Daten für Dependency-Processing zur Verfügung
             if hasattr(self, '_current_cache_data') and self._current_cache_data:
                 self.provide_cached_dependencies_to_scons(self._current_cache_data)
                 print("✅ Applied cached dependencies before ProcessProjectDeps")
@@ -457,7 +455,6 @@ class LDFCacheOptimizer:
     def apply_ldf_cache_with_build_order(self, cache_data):
         """Apply cached dependencies with correct build order"""
         try:
-            # Speichere Cache-Daten für Middleware-Zugriff
             self._current_cache_data = cache_data
         
             build_order = cache_data.get('build_order', {})
@@ -1113,8 +1110,7 @@ def modify_platformio_ini_for_second_run(self):
         if not self.platformio_ini.exists():
             print("❌ platformio.ini not found")
             return False
-            
-        # Backup erstellen
+
         if not self.platformio_ini_backup.exists():
             shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
             print(f"✅ Configuration backup created: {self.platformio_ini_backup.name}")
@@ -1137,7 +1133,7 @@ def modify_platformio_ini_for_second_run(self):
             return True
         else:
             print("ℹ No lib_ldf_mode entry found, no changes made")
-            return True  # Kein Fehler, nur nichts zu ändern
+            return True
             
     except Exception as e:
         print(f"❌ Error modifying platformio.ini: {e}")
@@ -1152,7 +1148,6 @@ def execute_first_run_post_actions():
     try:
         optimizer = LDFCacheOptimizer(env)
 
-        # Prüfe ob compile_commands.json erstellt werden muss
         if not compiledb_path.exists() or compiledb_path.stat().st_size == 0:
             success_compiledb = optimizer.create_compiledb_integrated()
             if not success_compiledb:
@@ -1161,7 +1156,6 @@ def execute_first_run_post_actions():
         else:
             print(f"✅ compile_commands.json already exists: {compiledb_path}")
 
-        # Prüfe ob Cache erstellt werden muss
         if not cache_file.exists():
             cache_data = optimizer.create_comprehensive_cache()
             
@@ -1169,7 +1163,6 @@ def execute_first_run_post_actions():
                 print("❌ Failed to create cache data")
                 return False
 
-            # Save cache
             success_save = optimizer.save_cache(cache_data)
             if not success_save:
                 print("❌ Failed to save cache")
@@ -1181,11 +1174,9 @@ def execute_first_run_post_actions():
         else:
             print(f"✅ LDF cache already exists: {cache_file}")
 
-        # Prüfe LDF-Kompatibilität
         current_ldf_mode = optimizer.env.GetProjectOption("lib_ldf_mode", "chain")
         print(f"🔍 Current lib_ldf_mode: {current_ldf_mode}")
-        
-        # KORREKTE LOGIK: Teste auf chain ODER off
+
         if current_ldf_mode.lower() in ["chain", "off"]:
             print("🔧 Modifying platformio.ini for second run...")
             success_ini_mod = optimizer.modify_platformio_ini_for_second_run()
@@ -1211,7 +1202,7 @@ def execute_first_run_post_actions():
         return False
 
 
-# FIRST RUN LOGIC (wird sofort ausgeführt)
+# FIRST RUN LOGIC
 if should_trigger_verbose_build():
     print(f"🔄 First run needed - starting verbose build for {env_name}...")
     print("📋 Reasons:")
@@ -1259,7 +1250,7 @@ if should_trigger_verbose_build():
 
     sys.exit(process.returncode)
 
-# SECOND RUN LOGIC (wird nur erreicht wenn First Run nicht stattfand)
+# SECOND RUN LOGIC
 try:
     if (not should_trigger_verbose_build() and
         not os.environ.get('_PIO_RECURSIVE_CALL') and
