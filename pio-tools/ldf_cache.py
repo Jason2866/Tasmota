@@ -1161,7 +1161,7 @@ def execute_first_run_post_actions():
         if not cache_file.exists():
             cache_data = optimizer.create_comprehensive_cache()
             
-            if not cache_
+            if not cache_data:
                 print("❌ Failed to create cache data")
                 return False
 
