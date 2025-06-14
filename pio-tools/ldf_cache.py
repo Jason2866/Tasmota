@@ -1010,32 +1010,6 @@ class LDFCacheOptimizer:
             print(f"⚠ Cache validation error: {e}")
             return False
 
-    def apply_ldf_cache_with_build_order(self, cache_data):
-        """Apply cached dependencies with correct build order"""
-        try:
-            build_order = cache_data.get('build_order', {})
-            artifacts = cache_data.get('artifacts', {})
-
-            if not build_order:
-                print("❌ No build order data in cache")
-                return False
-
-            print("🔧 Applying build order with artifact integration...")
-
-            build_order_success = self.apply_build_order_to_environment(build_order)
-            scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
-
-            if build_order_success and scons_vars_success:
-                print("✅ LDF cache applied successfully")
-                return True
-            else:
-                print("❌ Partial cache application failure")
-                return False
-
-        except Exception as e:
-            print(f"✗ Error applying LDF cache: {e}")
-            return False
-
     def apply_build_order_to_environment(self, build_order_data):
         """Apply correct build order to SCons environment"""
         if not build_order_data:
