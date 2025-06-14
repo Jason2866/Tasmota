@@ -112,126 +112,6 @@ def should_trigger_verbose_build():
 
     return is_first_run_needed()
 
-def execute_first_run_post_actions():
-    """
-    Führt die Post-Build-Aktionen nach dem ersten erfolgreichen Build aus.
-    """
-    print("🎯 First run completed successfully - executing post-build actions...")
-
-    try:
-        optimizer = LDFCacheOptimizer(env)
-
-        # Prüfe ob compile_commands.json erstellt werden muss
-        if not compiledb_path.exists() or compiledb_path.stat().st_size == 0:
-            success_compiledb = optimizer.create_compiledb_integrated()
-            if not success_compiledb:
-                print("❌ Failed to create compile_commands.json")
-                return False
-        else:
-            print(f"✅ compile_commands.json already exists: {compiledb_path}")
-
-        # Prüfe ob Cache erstellt werden muss
-        if not cache_file.exists():
-            cache_data = optimizer.create_comprehensive_cache()
-            
-            if not cache_data:
-                print("❌ Failed to create cache data")
-                return False
-
-            # Save cache
-            success_save = optimizer.save_cache(cache_data)
-            if not success_save:
-                print("❌ Failed to save cache")
-                return False
-
-            print(f"✅ LDF cache created: {cache_file}")
-            print(f"✅ Build order: {len(cache_data.get('build_order', {}).get('ordered_sources', []))} sources")
-            print(f"✅ Artifacts: {cache_data.get('artifacts', {}).get('total_count', 0)} files")
-        else:
-            print(f"✅ LDF cache already exists: {cache_file}")
-
-        optimizer.validate_ldf_mode_compatibility()
-
-        # Prüfe ob platformio.ini modifiziert werden muss
-        platformio_ini = Path(project_dir) / "platformio.ini"
-        needs_modification = False
-        
-        if platformio_ini.exists():
-            with platformio_ini.open('r', encoding='utf-8') as f:
-                content = f.read()
-                if 'lib_ldf_mode = chain' in content and 'lib_ldf_mode = off' not in content:
-                    needs_modification = True
-
-        if needs_modification:
-            print("🔧 Modifying platformio.ini for second run...")
-            success_ini_mod = optimizer.modify_platformio_ini_for_second_run()
-            if success_ini_mod:
-                print("🎉 First run post-build actions completed successfully!")
-                print("🔄 platformio.ini configured for cached build (lib_ldf_mode = off)")
-                print("🚀 Next build will be significantly faster using cached dependencies")
-            else:
-                print("⚠ Cache created but platformio.ini modification failed")
-                print("💡 Manual setting: lib_ldf_mode = off recommended for next build")
-                return False
-        else:
-            print("ℹ platformio.ini modification not needed")
-
-        return True
-
-    except Exception as e:
-        print(f"❌ Error in first run post-build actions: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-# First run: Generate compile commands with verbose output
-if should_trigger_verbose_build():
-    print(f"🔄 First run needed - starting verbose build for {env_name}...")
-    print("📋 Reasons:")
-
-    if not compiledb_path.exists():
-        print("  - compile_commands.json missing")
-    elif compiledb_path.stat().st_size == 0:
-        print("  - compile_commands.json is empty")
-
-    if not is_build_environment_ready():
-        print("  - Build environment incomplete")
-
-    env_vars = os.environ.copy()
-    env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
-    env_vars['_PIO_RECURSIVE_CALL'] = 'true'
-    
-    if os.environ.get('_PIO_REC_CALL_RETURN_CODE') is not None:
-        sys.exit(int(os.environ.get('_PIO_REC_CALL_RETURN_CODE')))
-
-    with open(logfile_path, "w") as logfile:
-        process = subprocess.Popen(
-            ['pio', 'run', '-e', env_name, '--disable-auto-clean'],
-            env=env_vars,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-            bufsize=1
-        )
-        for line in process.stdout:
-            print(line, end='')
-            logfile.write(line)
-            logfile.flush()
-        process.wait()
-    
-    print(f"🔄 First run completed with return code: {process.returncode}")
-
-    if process.returncode == 0:
-        post_actions_success = execute_first_run_post_actions()
-        if post_actions_success:
-            print("✅ All first run actions completed successfully")
-        else:
-            print("⚠ Some first run actions failed")
-    else:
-        print(f"❌ First run failed with return code: {process.returncode}")
-
-    sys.exit(process.returncode)
-
 # Integrated log2compdb components
 DIRCHANGE_PATTERN = re.compile(r"(?P<action>\w+) directory '(?P<path>.+)'")
 INFILE_PATTERN = re.compile(r"(?P<path>.+\.(cpp|cxx|cc|c|hpp|hxx|h))", re.IGNORECASE)
@@ -419,7 +299,7 @@ class LDFCacheOptimizer:
 
     def __init__(self, environment):
         """
-        Initialize the LDF cache optimizer with build order management.
+        Initialize the LDF cache optimizer - Lazy initialization, no automatic execution.
         Args:
             environment: PlatformIO SCons environment
         """
@@ -448,13 +328,6 @@ class LDFCacheOptimizer:
 
         # Register exit handler for cleanup
         self.register_exit_handler()
-
-        # Only execute second run logic - first run already exited with sys.exit()
-        if is_build_environment_ready() and not is_first_run_needed():
-            print("🔄 Second run: Cache application mode")
-            self.execute_second_run()
-        else:
-            print("🔄 Cache optimizer initialized (no action needed)")
 
     def is_file_in_cache(self, file_path):
         """Prüfe ob Datei in Cache-Daten vorhanden ist"""
@@ -960,21 +833,6 @@ class LDFCacheOptimizer:
             print(f"❌ Error saving cache: {e}")
             return False
 
-    def register_post_build_cache_creation(self):
-        """Register post-build action for cache creation (first run only)"""
-        def create_cache_post_build(target, source, env):
-            try:
-                print("🔧 Creating comprehensive cache after build...")
-                self.create_compiledb_integrated()
-                cache_data = self.create_comprehensive_cache()
-                if cache_data:
-                    self.save_cache(cache_data)
-                    print("✅ Cache created successfully")
-            except Exception as e:
-                print(f"⚠ Error in post-build cache creation: {e}")
-
-        self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_cache_post_build)
-
     def compute_signature(self, data):
         """
         Compute signature for cache data validation.
@@ -1240,13 +1098,136 @@ class LDFCacheOptimizer:
                 return True
         return False
 
-# Initialize the LDF Cache Optimizer only for second run
+def execute_first_run_post_actions():
+    """
+    Führt die Post-Build-Aktionen nach dem ersten erfolgreichen Build aus.
+    """
+    print("🎯 First run completed successfully - executing post-build actions...")
+
+    try:
+        optimizer = LDFCacheOptimizer(env)
+
+        # Prüfe ob compile_commands.json erstellt werden muss
+        if not compiledb_path.exists() or compiledb_path.stat().st_size == 0:
+            success_compiledb = optimizer.create_compiledb_integrated()
+            if not success_compiledb:
+                print("❌ Failed to create compile_commands.json")
+                return False
+        else:
+            print(f"✅ compile_commands.json already exists: {compiledb_path}")
+
+        # Prüfe ob Cache erstellt werden muss
+        if not cache_file.exists():
+            cache_data = optimizer.create_comprehensive_cache()
+            
+            if not cache_data:
+                print("❌ Failed to create cache data")
+                return False
+
+            # Save cache
+            success_save = optimizer.save_cache(cache_data)
+            if not success_save:
+                print("❌ Failed to save cache")
+                return False
+
+            print(f"✅ LDF cache created: {cache_file}")
+            print(f"✅ Build order: {len(cache_data.get('build_order', {}).get('ordered_sources', []))} sources")
+            print(f"✅ Artifacts: {cache_data.get('artifacts', {}).get('total_count', 0)} files")
+        else:
+            print(f"✅ LDF cache already exists: {cache_file}")
+
+        optimizer.validate_ldf_mode_compatibility()
+
+        # Prüfe ob platformio.ini modifiziert werden muss
+        platformio_ini = Path(project_dir) / "platformio.ini"
+        needs_modification = False
+        
+        if platformio_ini.exists():
+            with platformio_ini.open('r', encoding='utf-8') as f:
+                content = f.read()
+                if 'lib_ldf_mode = chain' in content and 'lib_ldf_mode = off' not in content:
+                    needs_modification = True
+
+        if needs_modification:
+            print("🔧 Modifying platformio.ini for second run...")
+            success_ini_mod = optimizer.modify_platformio_ini_for_second_run()
+            if success_ini_mod:
+                print("🎉 First run post-build actions completed successfully!")
+                print("🔄 platformio.ini configured for cached build (lib_ldf_mode = off)")
+                print("🚀 Next build will be significantly faster using cached dependencies")
+            else:
+                print("⚠ Cache created but platformio.ini modification failed")
+                print("💡 Manual setting: lib_ldf_mode = off recommended for next build")
+                return False
+        else:
+            print("ℹ platformio.ini modification not needed")
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Error in first run post-build actions: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+# FIRST RUN LOGIC (wird sofort ausgeführt)
+if should_trigger_verbose_build():
+    print(f"🔄 First run needed - starting verbose build for {env_name}...")
+    print("📋 Reasons:")
+
+    if not compiledb_path.exists():
+        print("  - compile_commands.json missing")
+    elif compiledb_path.stat().st_size == 0:
+        print("  - compile_commands.json is empty")
+
+    if not is_build_environment_ready():
+        print("  - Build environment incomplete")
+
+    env_vars = os.environ.copy()
+    env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
+    env_vars['_PIO_RECURSIVE_CALL'] = 'true'
+    
+    if os.environ.get('_PIO_REC_CALL_RETURN_CODE') is not None:
+        sys.exit(int(os.environ.get('_PIO_REC_CALL_RETURN_CODE')))
+
+    with open(logfile_path, "w") as logfile:
+        process = subprocess.Popen(
+            ['pio', 'run', '-e', env_name, '--disable-auto-clean'],
+            env=env_vars,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1
+        )
+        for line in process.stdout:
+            print(line, end='')
+            logfile.write(line)
+            logfile.flush()
+        process.wait()
+    
+    print(f"🔄 First run completed with return code: {process.returncode}")
+
+    if process.returncode == 0:
+        post_actions_success = execute_first_run_post_actions()
+        if post_actions_success:
+            print("✅ All first run actions completed successfully")
+        else:
+            print("⚠ Some first run actions failed")
+    else:
+        print(f"❌ First run failed with return code: {process.returncode}")
+
+    sys.exit(process.returncode)
+
+# SECOND RUN LOGIC (wird nur erreicht wenn First Run nicht stattfand)
 try:
-    if (not should_trigger_verbose_build() and  # prevent run 1
-        not os.environ.get('_PIO_RECURSIVE_CALL') and  # avoid Post-Build
+    if (not should_trigger_verbose_build() and
+        not os.environ.get('_PIO_RECURSIVE_CALL') and
         is_build_environment_ready() and 
         not is_first_run_needed()):
+        
+        print("🔄 Second run: Cache application mode")
         optimizer = LDFCacheOptimizer(env)
+        optimizer.execute_second_run()
         print("✅ LDF Cache Optimizer initialized successfully")
 except Exception as e:
     print(f"❌ Error initializing LDF Cache Optimizer: {e}")
