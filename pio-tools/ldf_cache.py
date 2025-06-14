@@ -529,7 +529,7 @@ class LDFCacheOptimizer:
                     print(f"  CPPPATH: {len(self.env.get('CPPPATH', []))} entries")
                     print(f"  LIBS: {len(self.env.get('LIBS', []))} entries") 
                     print(f"  SOURCES: {len(self.env.get('SOURCES', []))} entries")
-                    print(f"  OBJECTS: {len(self.env.get('OBJECTS', []))}
+                    print(f"  OBJECTS: {len(self.env.get('OBJECTS', []))} objects")
                 else:
                     print("❌ Cache application failed")
             else:
@@ -1727,7 +1727,6 @@ if should_trigger_verbose_build():
     # Execute verbose build with output capture
     with open(logfile_path, "w") as logfile:
         process = subprocess.Popen(
-    with open(logfile
             ['pio', 'run', '-e', env_name, '--disable-auto-clean'],
             env=env_vars,
             stdout=subprocess.PIPE,
