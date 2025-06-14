@@ -29,6 +29,14 @@ from SCons.Node import FS
 from dataclasses import dataclass
 from typing import Optional
 
+# Import PlatformIO Core piolib functions
+from platformio.builder.tools.piolib import (
+    LibBuilderBase, 
+    ProjectAsLibBuilder, 
+    LibBuilderFactory,
+    GetLibBuilders
+)
+
 # INFO PlatformIO Core constants
 # SRC_HEADER_EXT = ["h", "hpp", "hxx", "h++", "hh", "inc", "tpp", "tcc"]
 # SRC_ASM_EXT = ["S", "spp", "SPP", "sx", "s", "asm", "ASM"]
@@ -326,11 +334,24 @@ class LDFCacheOptimizer:
         # Cache application status tracking
         self._cache_applied_successfully = False
 
+        # Initialize PlatformIO Core ProjectAsLibBuilder for native functionality
+        self._project_builder = None
+
         if is_build_environment_ready() and not is_first_run_needed():
             print("🔄 Second run: Cache application mode")
             self.execute_second_run()
         else:
             print("🔄 Cache optimizer initialized (no action needed)")
+
+    def _get_project_builder(self):
+        """Get or create ProjectAsLibBuilder instance"""
+        if not self._project_builder:
+            self._project_builder = ProjectAsLibBuilder(
+                self.env, 
+                self.project_dir, 
+                export_projenv=False
+            )
+        return self._project_builder
 
     def is_file_in_cache(self, file_path):
         """Prüfe ob Datei in Cache-Daten vorhanden ist"""
@@ -368,7 +389,7 @@ class LDFCacheOptimizer:
         try:
             cache_data = self.load_cache()
             if cache_data and self.validate_cache(cache_data):
-                #self.integrate_with_core_functions() # for debuuging when uncomment comment next line!
+                #self.integrate_with_core_functions() # for debugging when uncomment comment next line!
                 self.integrate_with_project_deps()
                 success = self.apply_ldf_cache_with_build_order(cache_data)
                 if success:
@@ -411,7 +432,6 @@ class LDFCacheOptimizer:
             return node
 
         self.env.AddBuildMiddleware(cache_debug_middleware)
-
 
     def integrate_with_project_deps(self):
         """Integrate cache application before ProcessProjectDeps"""
@@ -501,10 +521,6 @@ class LDFCacheOptimizer:
             bool: True if modification was successful or not needed
         """
         try:
-            current_ldf_mode = self.env.GetProjectOption("lib_ldf_mode", "chain")
-            if current_ldf_mode.lower() != "chain":
-                print(f"ℹ lib_ldf_mode is '{current_ldf_mode}', not modifying (only 'chain' supported)")
-                return True
             if not self.platformio_ini.exists():
                 print("❌ platformio.ini not found")
                 return False
@@ -520,12 +536,16 @@ class LDFCacheOptimizer:
                 if stripped_line.startswith('lib_ldf_mode'):
                     lines[i] = 'lib_ldf_mode = off\n'
                     modified = True
+                    print(f"✅ Changed line: {stripped_line} -> lib_ldf_mode = off")
+                    break
+
             if modified:
                 with self.platformio_ini.open('w', encoding='utf-8') as f:
                     f.writelines(lines)
+                print("✅ platformio.ini successfully modified")
                 return True
             else:
-                print("ℹ No lib_ldf_mode = chain found to replace")
+                print("ℹ No lib_ldf_mode entry found, no changes made")
                 return True
         except Exception as e:
             print(f"❌ Error modifying platformio.ini: {e}")
@@ -547,18 +567,21 @@ class LDFCacheOptimizer:
 
     def validate_ldf_mode_compatibility(self):
         """
-        Validate that the current LDF mode is compatible with caching.
+        Validate that the current LDF mode is compatible with caching using PlatformIO Core.
         Returns:
             bool: True if LDF mode is compatible
         """
         try:
-            ldf_mode = self.env.GetProjectOption("lib_ldf_mode", "chain")
+            # Use PlatformIO Core LDF mode validation
+            current_mode = self.env.GetProjectOption("lib_ldf_mode", "chain")
+            validated_mode = LibBuilderBase.validate_ldf_mode(current_mode)
+            
             compatible_modes = ["chain", "off"]
-            if ldf_mode.lower() in compatible_modes:
-                print(f"✅ LDF mode '{ldf_mode}' is compatible with caching")
+            if validated_mode.lower() in compatible_modes:
+                print(f"✅ LDF mode '{validated_mode}' is compatible with caching")
                 return True
             else:
-                print(f"⚠ LDF mode '{ldf_mode}' not optimal for caching")
+                print(f"⚠ LDF mode '{validated_mode}' not optimal for caching")
                 print(f"💡 Recommended modes: {', '.join(compatible_modes)}")
                 return False
         except Exception as e:
@@ -625,18 +648,49 @@ class LDFCacheOptimizer:
             print(f"❌ Error creating compile_commands.json: {e}")
             return False
 
-    def collect_sources_via_core(self, src_filter=None):
-        """Use PlatformIO's MatchSourceFiles to collect sources"""
+    def collect_sources_via_piolib(self):
+        """Use PlatformIO's native LibBuilder functionality to collect sources"""
         try:
-            sources = self.env.MatchSourceFiles(
-                self.src_dir, 
-                src_filter or self.env.get("SRC_FILTER"),
-                SRC_BUILD_EXT
-            )
-            print(f"✅ Collected {len(sources)} source files via PlatformIO Core")
-            return sources
+            project_builder = self._get_project_builder()
+            search_files = project_builder.get_search_files()
+            print(f"✅ Collected {len(search_files)} source files via PlatformIO LibBuilder")
+            return search_files
         except Exception as e:
-            print(f"⚠ Error collecting sources via Core: {e}")
+            print(f"⚠ Error collecting sources via PlatformIO LibBuilder: {e}")
+            return []
+
+    def get_include_dirs_via_piolib(self):
+        """Use PlatformIO's native LibBuilder functionality to get include directories"""
+        try:
+            project_builder = self._get_project_builder()
+            include_dirs = project_builder.get_include_dirs()
+            print(f"✅ Found {len(include_dirs)} include directories via LibBuilder")
+            return include_dirs
+        except Exception as e:
+            print(f"⚠ Error getting include dirs via PlatformIO LibBuilder: {e}")
+            return []
+
+    def process_library_dependencies_via_piolib(self):
+        """Use PlatformIO's native Library-Dependency-Processing"""
+        try:
+            lib_builders = self.env.GetLibBuilders()
+            
+            library_info = []
+            for lb in lib_builders:
+                if lb.is_built:  # Only built libraries
+                    lib_info = {
+                        'name': lb.name,
+                        'path': lb.path,
+                        'include_dirs': lb.get_include_dirs(),
+                        'build_dir': lb.build_dir,
+                        'src_dir': lb.src_dir
+                    }
+                    library_info.append(lib_info)
+            
+            print(f"✅ Processed {len(library_info)} library dependencies via PlatformIO Core")
+            return library_info
+        except Exception as e:
+            print(f"⚠ Error processing library dependencies: {e}")
             return []
 
     def get_correct_build_order(self):
@@ -931,13 +985,16 @@ class LDFCacheOptimizer:
             return False
 
     def apply_cache_to_scons_vars(self, cache_data):
-        """Apply cache data directly to SCons variables using PlatformIO Core methods"""
+        """Apply cache data to SCons variables using PlatformIO Core methods"""
         try:
             build_order = cache_data.get('build_order', {})
+            
+            # Use PlatformIO's ParseFlagsExtended for better flag processing
             if 'include_paths' in build_order:
                 include_flags = [f"-I{path}" for path in build_order['include_paths']]
-                self.env.ProcessFlags(include_flags)
-                print(f"✅ Applied {len(build_order['include_paths'])} include paths via ProcessFlags")
+                parsed_flags = self.env.ParseFlagsExtended(include_flags)
+                self.env.Append(**parsed_flags)
+                print(f"✅ Applied {len(include_flags)} include flags via ParseFlagsExtended")
 
             artifacts = cache_data.get('artifacts', {})
             if 'library_paths' in artifacts:
@@ -951,20 +1008,6 @@ class LDFCacheOptimizer:
         except Exception as e:
             print(f"⚠ Warning applying cache to SCons vars: {e}")
             return False
-
-    def _apply_compile_data_to_environment(self, build_order_data):
-        """Apply compile data to environment"""
-        try:
-            include_paths = build_order_data.get('include_paths', [])
-            if include_paths:
-                existing_paths = [str(p) for p in self.env.get('CPPPATH', [])]
-                new_paths = [p for p in include_paths if p not in existing_paths]
-                if new_paths:
-                    self.env.Append(CPPPATH=new_paths)
-                    print(f"✅ Added {len(new_paths)} include paths")
-
-        except Exception as e:
-            print(f"⚠ Warning applying compile data: {e}")
 
     def _apply_correct_linker_order(self, object_files):
         """Apply correct linker order for symbol resolution"""
@@ -1112,7 +1155,7 @@ def modify_platformio_ini_for_second_run(self):
         if not self.platformio_ini_backup.exists():
             shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
             print(f"✅ Configuration backup created: {self.platformio_ini_backup.name}")
-            
+
         with self.platformio_ini.open('r', encoding='utf-8') as f:
             lines = f.readlines()
 
@@ -1132,7 +1175,7 @@ def modify_platformio_ini_for_second_run(self):
         else:
             print("ℹ No lib_ldf_mode entry found, no changes made")
             return True
-            
+
     except Exception as e:
         print(f"❌ Error modifying platformio.ini: {e}")
         return False
@@ -1146,6 +1189,7 @@ def execute_first_run_post_actions():
     try:
         optimizer = LDFCacheOptimizer(env)
 
+        # Prüfe ob compile_commands.json erstellt werden muss
         if not compiledb_path.exists() or compiledb_path.stat().st_size == 0:
             success_compiledb = optimizer.create_compiledb_integrated()
             if not success_compiledb:
@@ -1154,6 +1198,7 @@ def execute_first_run_post_actions():
         else:
             print(f"✅ compile_commands.json already exists: {compiledb_path}")
 
+        # Prüfe ob Cache erstellt werden muss
         if not cache_file.exists():
             cache_data = optimizer.create_comprehensive_cache()
             
@@ -1161,6 +1206,7 @@ def execute_first_run_post_actions():
                 print("❌ Failed to create cache data")
                 return False
 
+            # Save cache
             success_save = optimizer.save_cache(cache_data)
             if not success_save:
                 print("❌ Failed to save cache")
@@ -1172,9 +1218,12 @@ def execute_first_run_post_actions():
         else:
             print(f"✅ LDF cache already exists: {cache_file}")
 
+        optimizer.validate_ldf_mode_compatibility()
+
+        # Prüfe aktuellen LDF-Modus über PlatformIO
         current_ldf_mode = optimizer.env.GetProjectOption("lib_ldf_mode", "chain")
         print(f"🔍 Current lib_ldf_mode: {current_ldf_mode}")
-
+        
         if current_ldf_mode.lower() in ["chain", "off"]:
             print("🔧 Modifying platformio.ini for second run...")
             success_ini_mod = optimizer.modify_platformio_ini_for_second_run()
@@ -1199,8 +1248,7 @@ def execute_first_run_post_actions():
         traceback.print_exc()
         return False
 
-
-# FIRST RUN LOGIC
+# FIRST RUN LOGIC (wird sofort ausgeführt)
 if should_trigger_verbose_build():
     print(f"🔄 First run needed - starting verbose build for {env_name}...")
     print("📋 Reasons:")
@@ -1248,12 +1296,13 @@ if should_trigger_verbose_build():
 
     sys.exit(process.returncode)
 
-# SECOND RUN LOGIC
+# SECOND RUN LOGIC (wird nur erreicht wenn First Run nicht stattfand)
 try:
     if (not should_trigger_verbose_build() and
         not os.environ.get('_PIO_RECURSIVE_CALL') and
         is_build_environment_ready() and 
-        not is_first_run_needed()):
+        not is_first_run_needed()):      
+        print("🔄 Second run: Cache application mode")
         optimizer = LDFCacheOptimizer(env)
         print("✅ LDF Cache Optimizer initialized successfully")
 except Exception as e:
