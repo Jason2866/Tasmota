@@ -1267,10 +1267,7 @@ try:
         not os.environ.get('_PIO_RECURSIVE_CALL') and
         is_build_environment_ready() and 
         not is_first_run_needed()):
-        
-        print("🔄 Second run: Cache application mode")
         optimizer = LDFCacheOptimizer(env)
-        optimizer.execute_second_run()
         print("✅ LDF Cache Optimizer initialized successfully")
 except Exception as e:
     print(f"❌ Error initializing LDF Cache Optimizer: {e}")
