@@ -459,10 +459,13 @@ class LDFCacheOptimizer:
     def execute_second_run(self):
         """Second run: Apply cached dependencies with LDF disabled"""
         self._cache_applied_successfully = False
-        
+
         try:
             cache_data = self.load_cache()
             if cache_data and self.validate_cache(cache_data):
+                # WICHTIG: Middleware MUSS vor der Cache-Anwendung registriert werden
+                self.integrate_with_core_functions()
+            
                 success = self.apply_ldf_cache_with_build_order(cache_data)
                 if success:
                     self._cache_applied_successfully = True
@@ -471,17 +474,108 @@ class LDFCacheOptimizer:
                     print("❌ Cache application failed")
             else:
                 print("⚠ No valid cache found, falling back to normal build")
-        
+    
         except Exception as e:
             print(f"❌ Error in second run: {e}")
             self._cache_applied_successfully = False
-        
+    
         finally:
             if not self._cache_applied_successfully:
                 print("🔄 Restoring original platformio.ini due to cache failure")
                 self.restore_platformio_ini()
             else:
                 print("✅ Keeping modified platformio.ini for optimal performance")
+
+    def integrate_with_core_functions(self):
+        """Integrate with PlatformIO Core functions - KRITISCH für zweiten Lauf"""
+        self.register_cache_middleware()
+        self.integrate_with_project_deps()
+
+    def register_cache_middleware(self):
+        """Register cache middleware in PlatformIO's build pipeline"""
+        def cache_middleware(env, node):
+            if isinstance(node, FS.File):
+                file_path = node.srcnode().get_path()
+                # Stelle sicher, dass gecachte Dateien dem Build-System zur Verfügung stehen
+                if self.is_file_in_cache(file_path):
+                    print(f"📦 Providing cached file to SCons: {Path(file_path).name}")
+                    return node
+                # Prüfe ob Datei aus Cache-Daten stammt
+                if self.should_include_from_cache(file_path):
+                    return node
+            return node
+
+        self.env.AddBuildMiddleware(cache_middleware, "*.cpp")
+        self.env.AddBuildMiddleware(cache_middleware, "*.c")
+        self.env.AddBuildMiddleware(cache_middleware, "*.h")
+        self.env.AddBuildMiddleware(cache_middleware, "*.hpp")
+
+    def integrate_with_project_deps(self):
+        """Integrate cache application before ProcessProjectDeps"""
+        original_process_deps = getattr(self.env, 'ProcessProjectDeps', None)
+    
+        def cached_process_deps():
+            # Stelle Cache-Daten für Dependency-Processing zur Verfügung
+            if hasattr(self, '_current_cache_data') and self._current_cache_
+                self.provide_cached_dependencies_to_scons(self._current_cache_data)
+                print("✅ Applied cached dependencies before ProcessProjectDeps")
+        
+            if original_process_deps:
+                return original_process_deps()
+
+        self.env.AddMethod(cached_process_deps, 'ProcessProjectDeps')
+
+    def provide_cached_dependencies_to_scons(self, cache_data):
+        """Stelle alle gecachten Abhängigkeiten dem SCons Build System zur Verfügung"""
+        build_order = cache_data.get('build_order', {})
+    
+        # Registriere alle Source-Dateien
+        if 'ordered_sources' in build_order:
+            for source_file in build_order['ordered_sources']:
+                if Path(source_file).exists():
+                    self.env.File(source_file)
+    
+        # Registriere alle Object-Dateien
+        if 'ordered_object_files' in build_order:
+            for obj_file in build_order['ordered_object_files']:
+                if Path(obj_file).exists():
+                    self.env.File(obj_file)
+    
+        # Registriere Library-Pfade
+        artifacts = cache_data.get('artifacts', {})
+        if 'library_paths' in artifacts:
+            for lib_path in artifacts['library_paths']:
+                if Path(lib_path).exists():
+                    self.env.File(lib_path)
+
+    def apply_ldf_cache_with_build_order(self, cache_data):
+        """Apply cached dependencies with correct build order"""
+        try:
+            # Speichere Cache-Daten für Middleware-Zugriff
+            self._current_cache_data = cache_data
+        
+            build_order = cache_data.get('build_order', {})
+            artifacts = cache_data.get('artifacts', {})
+
+            if not build_order:
+                print("❌ No build order data in cache")
+                return False
+
+            print("🔧 Applying build order with artifact integration...")
+
+            build_order_success = self.apply_build_order_to_environment(build_order)
+            scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
+        
+            if build_order_success and scons_vars_success:
+                print("✅ LDF cache applied successfully")
+                return True
+            else:
+                print("❌ Partial cache application failure")
+                return False
+
+        except Exception as e:
+            print(f"✗ Error applying LDF cache: {e}")
+            return False
 
     def register_exit_handler(self):
         """Register exit handler with conditional restore"""
@@ -852,39 +946,6 @@ class LDFCacheOptimizer:
                 print(f"⚠ Error in post-build cache creation: {e}")
 
         self.env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", create_cache_post_build)
-
-    def integrate_with_core_functions(self):
-        """Integrate with PlatformIO Core functions"""
-        self.register_cache_middleware()
-        self.integrate_with_project_deps()
-
-    def register_cache_middleware(self):
-        """Register cache middleware in PlatformIO's build pipeline"""
-        def cache_middleware(env, node):
-            if isinstance(node, FS.File):
-                file_path = node.srcnode().get_path()
-                if self.is_file_cached(file_path):
-                    print(f"📦 Using cached analysis for {Path(file_path).name}")
-            return node
-
-        self.env.AddBuildMiddleware(cache_middleware, "*.cpp")
-        self.env.AddBuildMiddleware(cache_middleware, "*.c")
-
-    def integrate_with_project_deps(self):
-        """Integrate cache application before ProcessProjectDeps"""
-        original_process_deps = getattr(self.env, 'ProcessProjectDeps', None)
-
-        def cached_process_deps():
-            if is_build_environment_ready() and not is_first_run_needed():
-                cache_data = self.load_cache()
-                if cache_data and self.validate_cache(cache_data):
-                    self.apply_cache_to_scons_vars(cache_data)
-                    print("✅ Applied LDF cache before ProcessProjectDeps")
-
-            if original_process_deps:
-                return original_process_deps()
-
-        self.env.AddMethod(cached_process_deps, 'ProcessProjectDeps')
 
     def compute_signature(self, data):
         """
