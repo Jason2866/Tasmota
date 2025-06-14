@@ -326,7 +326,6 @@ class LDFCacheOptimizer:
         # Cache application status tracking
         self._cache_applied_successfully = False
 
-        # SOFORTIGE Cache-Anwendung im zweiten Lauf
         if is_build_environment_ready() and not is_first_run_needed():
             print("🔄 Second run: Cache application mode")
             self.execute_second_run()
@@ -347,8 +346,7 @@ class LDFCacheOptimizer:
         """Bestimme ob Datei aus Cache inkludiert werden soll"""
         if not hasattr(self, '_current_cache_data'):
             return False
-    
-        # Prüfe gegen alle gecachten Pfade
+
         cache_data = self._current_cache_data
         build_order = cache_data.get('build_order', {})
     
@@ -370,8 +368,8 @@ class LDFCacheOptimizer:
         try:
             cache_data = self.load_cache()
             if cache_data and self.validate_cache(cache_data):
-                self.integrate_with_core_functions()
-            
+                #self.integrate_with_core_functions() # for debuuging when uncomment comment next line!
+                self.integrate_with_project_deps()
                 success = self.apply_ldf_cache_with_build_order(cache_data)
                 if success:
                     self._cache_applied_successfully = True
