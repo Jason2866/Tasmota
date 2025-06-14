@@ -928,7 +928,6 @@ class LDFCacheOptimizer:
                 print("⚠ No sources/object files found")
                 return False
 
-            self._apply_compile_data_to_environment(build_order_data)
             self._apply_correct_linker_order(valid_objects)
 
             return True
