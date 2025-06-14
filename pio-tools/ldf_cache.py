@@ -112,60 +112,77 @@ def should_trigger_verbose_build():
 
     return is_first_run_needed()
 
-def setup_first_run_post_actions():
+def execute_first_run_post_actions():
     """
-    Registers post-build actions to be executed after the first verbose build.
+    Führt die Post-Build-Aktionen nach dem ersten erfolgreichen Build aus.
     """
-    def first_run_post_build_callback(target, source, env):
-        """
-        Callback executed after a successful first build.
-        """
-        print("🎯 First run completed successfully - executing post-build actions...")
+    print("🎯 First run completed successfully - executing post-build actions...")
 
-        try:
-            optimizer = LDFCacheOptimizer(env)
+    try:
+        optimizer = LDFCacheOptimizer(env)
 
+        # Prüfe ob compile_commands.json erstellt werden muss
+        if not compiledb_path.exists() or compiledb_path.stat().st_size == 0:
             success_compiledb = optimizer.create_compiledb_integrated()
             if not success_compiledb:
                 print("❌ Failed to create compile_commands.json")
-                return
+                return False
+        else:
+            print(f"✅ compile_commands.json already exists: {compiledb_path}")
 
+        # Prüfe ob Cache erstellt werden muss
+        if not cache_file.exists():
             cache_data = optimizer.create_comprehensive_cache()
             
             if not cache_data:
                 print("❌ Failed to create cache data")
-                return
+                return False
 
             # Save cache
             success_save = optimizer.save_cache(cache_data)
             if not success_save:
                 print("❌ Failed to save cache")
-                return
+                return False
 
-            print(f"✅ LDF cache created: {optimizer.cache_file}")
+            print(f"✅ LDF cache created: {cache_file}")
             print(f"✅ Build order: {len(cache_data.get('build_order', {}).get('ordered_sources', []))} sources")
             print(f"✅ Artifacts: {cache_data.get('artifacts', {}).get('total_count', 0)} files")
+        else:
+            print(f"✅ LDF cache already exists: {cache_file}")
 
-            optimizer.validate_ldf_mode_compatibility()
+        optimizer.validate_ldf_mode_compatibility()
 
+        # Prüfe ob platformio.ini modifiziert werden muss
+        platformio_ini = Path(project_dir) / "platformio.ini"
+        needs_modification = False
+        
+        if platformio_ini.exists():
+            with platformio_ini.open('r', encoding='utf-8') as f:
+                content = f.read()
+                if 'lib_ldf_mode = chain' in content and 'lib_ldf_mode = off' not in content:
+                    needs_modification = True
+
+        if needs_modification:
             print("🔧 Modifying platformio.ini for second run...")
             success_ini_mod = optimizer.modify_platformio_ini_for_second_run()
             if success_ini_mod:
                 print("🎉 First run post-build actions completed successfully!")
                 print("🔄 platformio.ini configured for cached build (lib_ldf_mode = off)")
                 print("🚀 Next build will be significantly faster using cached dependencies")
-                #sys.exit(process.returncode)
             else:
                 print("⚠ Cache created but platformio.ini modification failed")
                 print("💡 Manual setting: lib_ldf_mode = off recommended for next build")
+                return False
+        else:
+            print("ℹ platformio.ini modification not needed")
 
-        except Exception as e:
-            print(f"❌ Error in first run post-build actions: {e}")
-            import traceback
-            traceback.print_exc()
+        return True
 
-    env.AddPostAction("buildprog", first_run_post_build_callback)
-    print("✅ First run post-build actions registered")
+    except Exception as e:
+        print(f"❌ Error in first run post-build actions: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 # First run: Generate compile commands with verbose output
 if should_trigger_verbose_build():
@@ -180,14 +197,12 @@ if should_trigger_verbose_build():
     if not is_build_environment_ready():
         print("  - Build environment incomplete")
 
-    setup_first_run_post_actions()
-
     env_vars = os.environ.copy()
     env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
     env_vars['_PIO_RECURSIVE_CALL'] = 'true'
+    
     if os.environ.get('_PIO_REC_CALL_RETURN_CODE') is not None:
-        sys.exit(os.environ.get('_PIO_REC_CALL_RETURN_CODE'))
-
+        sys.exit(int(os.environ.get('_PIO_REC_CALL_RETURN_CODE')))
 
     with open(logfile_path, "w") as logfile:
         process = subprocess.Popen(
@@ -203,8 +218,19 @@ if should_trigger_verbose_build():
             logfile.write(line)
             logfile.flush()
         process.wait()
-    env_vars['_PIO_REC_CALL_RETURN_CODE'] = process.returncode
+    
     print(f"🔄 First run completed with return code: {process.returncode}")
+
+    if process.returncode == 0:
+        post_actions_success = execute_first_run_post_actions()
+        if post_actions_success:
+            print("✅ All first run actions completed successfully")
+        else:
+            print("⚠ Some first run actions failed")
+    else:
+        print(f"❌ First run failed with return code: {process.returncode}")
+
+    sys.exit(process.returncode)
 
 # Integrated log2compdb components
 DIRCHANGE_PATTERN = re.compile(r"(?P<action>\w+) directory '(?P<path>.+)'")
@@ -379,7 +405,7 @@ class LDFCacheOptimizer:
     """
 
     HEADER_EXTENSIONS = set(SRC_HEADER_EXT)
-    SOURCE_EXTENSIONS = set(SRC_BUILD_EXT)# | {'.ino'}
+    SOURCE_EXTENSIONS = set(SRC_BUILD_EXT)
     CONFIG_EXTENSIONS = {'.json', '.properties', '.txt', '.ini'}
     ALL_RELEVANT_EXTENSIONS = HEADER_EXTENSIONS | SOURCE_EXTENSIONS | CONFIG_EXTENSIONS
 
@@ -421,22 +447,14 @@ class LDFCacheOptimizer:
         self._cache_applied_successfully = False
 
         # Register exit handler for cleanup
-        #self.register_exit_handler()
+        self.register_exit_handler()
 
         # Only execute second run logic - first run already exited with sys.exit()
-        # Post-build callback handles cache creation separately
         if is_build_environment_ready() and not is_first_run_needed():
             print("🔄 Second run: Cache application mode")
             self.execute_second_run()
         else:
             print("🔄 Cache optimizer initialized (no action needed)")
-
-
-    def execute_first_run(self):
-        """First run: Create comprehensive cache with LDF active"""
-        self.validate_ldf_mode_compatibility()
-        self.register_post_build_cache_creation()
-        self.integrate_with_core_functions()
 
     def execute_second_run(self):
         """Second run: Apply cached dependencies with LDF disabled"""
@@ -772,11 +790,11 @@ class LDFCacheOptimizer:
         """Create comprehensive cache data"""
         try:
             print("🔧 Creating comprehensive cache...")
-            
+
             project_hash = self.get_project_hash_with_details()
             build_order = self.get_correct_build_order()
             artifacts = self.collect_build_artifacts_paths()
-            
+
             if not build_order:
                 print("⚠ No build order data available")
                 return None
@@ -793,7 +811,7 @@ class LDFCacheOptimizer:
             }
 
             cache_data['signature'] = self.compute_signature(cache_data)
-            
+
             print(f"✅ Cache created with {project_hash['file_count']} files")
             return cache_data
 
@@ -805,17 +823,17 @@ class LDFCacheOptimizer:
         """Save cache data to file"""
         try:
             self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             with self.cache_file.open('w') as f:
                 f.write("# LDF Cache Data - Auto-generated\n")
                 f.write("# Do not edit manually, this will break the Hash checksum\n\n")
                 f.write("cache_data = ")
                 f.write(pprint.pformat(cache_data, width=120, depth=None))
                 f.write("\n")
-            
+
             print(f"✅ Cache saved to {self.cache_file}")
             return True
-            
+
         except Exception as e:
             print(f"❌ Error saving cache: {e}")
             return False
@@ -855,14 +873,14 @@ class LDFCacheOptimizer:
     def integrate_with_project_deps(self):
         """Integrate cache application before ProcessProjectDeps"""
         original_process_deps = getattr(self.env, 'ProcessProjectDeps', None)
-        
+
         def cached_process_deps():
             if is_build_environment_ready() and not is_first_run_needed():
                 cache_data = self.load_cache()
                 if cache_data and self.validate_cache(cache_data):
                     self.apply_cache_to_scons_vars(cache_data)
                     print("✅ Applied LDF cache before ProcessProjectDeps")
-            
+
             if original_process_deps:
                 return original_process_deps()
 
@@ -890,7 +908,7 @@ class LDFCacheOptimizer:
             cache_globals = {}
             with self.cache_file.open('r') as f:
                 exec(f.read(), cache_globals)
-            
+
             cache_data = cache_globals.get('cache_data')
             if cache_data:
                 print(f"✅ Cache loaded from {self.cache_file}")
@@ -898,7 +916,7 @@ class LDFCacheOptimizer:
             else:
                 print("⚠ No cache_data found in cache file")
                 return None
-                
+
         except Exception as e:
             print(f"❌ Error loading cache: {e}")
             return None
@@ -945,7 +963,7 @@ class LDFCacheOptimizer:
 
             build_order_success = self.apply_build_order_to_environment(build_order)
             scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
-            
+
             if build_order_success and scons_vars_success:
                 print("✅ LDF cache applied successfully")
                 return True
@@ -971,7 +989,7 @@ class LDFCacheOptimizer:
                 if valid_sources:
                     self.env.Replace(SOURCES=valid_sources)
                     print(f"✅ Set SOURCES: {len(valid_sources)} files")
-            
+
             ordered_object_files = build_order_data.get('ordered_object_files', [])
             if ordered_object_files:
                 valid_objects = [obj for obj in ordered_object_files if Path(obj).exists()]
@@ -1065,7 +1083,7 @@ class LDFCacheOptimizer:
         cache_data = self.load_cache()
         if not cache_data:
             return False
-        
+
         rel_path = self._get_relative_path_from_project(file_path)
         return rel_path in cache_data.get('file_hashes', {})
 
@@ -1171,4 +1189,3 @@ except Exception as e:
     print(f"❌ Error initializing LDF Cache Optimizer: {e}")
     import traceback
     traceback.print_exc()
-    
