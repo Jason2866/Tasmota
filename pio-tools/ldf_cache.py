@@ -456,6 +456,34 @@ class LDFCacheOptimizer:
         else:
             print("🔄 Cache optimizer initialized (no action needed)")
 
+    def is_file_in_cache(self, file_path):
+        """Prüfe ob Datei in Cache-Daten vorhanden ist"""
+        if not hasattr(self, '_current_cache_data') or not self._current_cache_data:
+            return False
+    
+        build_order = self._current_cache_data.get('build_order', {})
+        ordered_sources = build_order.get('ordered_sources', [])
+    
+        return file_path in ordered_sources
+
+    def should_include_from_cache(self, file_path):
+        """Bestimme ob Datei aus Cache inkludiert werden soll"""
+        if not hasattr(self, '_current_cache_data'):
+            return False
+    
+        # Prüfe gegen alle gecachten Pfade
+        cache_data = self._current_cache_data
+        build_order = cache_data.get('build_order', {})
+    
+        all_cached_files = (
+            build_order.get('ordered_sources', []) +
+            build_order.get('ordered_object_files', [])
+        )
+    
+        return any(Path(file_path).samefile(Path(cached_file)) 
+                  for cached_file in all_cached_files 
+                  if Path(cached_file).exists())
+
     def execute_second_run(self):
         """Second run: Apply cached dependencies with LDF disabled"""
         self._cache_applied_successfully = False
