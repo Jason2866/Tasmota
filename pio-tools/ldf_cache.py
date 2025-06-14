@@ -524,6 +524,12 @@ class LDFCacheOptimizer:
                 if success:
                     self._cache_applied_successfully = True
                     print("✅ Cache applied successfully - lib_ldf_mode=off")
+                    # ✅ DEBUG: Finale SCons-Umgebung nach Cache-Anwendung
+                    print("🔍 DEBUG: Final SCons environment state:")
+                    print(f"  CPPPATH: {len(self.env.get('CPPPATH', []))} entries")
+                    print(f"  LIBS: {len(self.env.get('LIBS', []))} entries") 
+                    print(f"  SOURCES: {len(self.env.get('SOURCES', []))} entries")
+                    print(f"  OBJECTS: {len(self.env.get('OBJECTS', []))}
                 else:
                     print("❌ Cache application failed")
             else:
