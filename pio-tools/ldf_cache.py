@@ -1098,6 +1098,47 @@ class LDFCacheOptimizer:
                 return True
         return False
 
+def modify_platformio_ini_for_second_run(self):
+    """
+    Einfache Modifikation: Suche lib_ldf_mode und ersetze durch lib_ldf_mode = off
+    Wenn kein Eintrag vorhanden, nichts ändern.
+    Returns:
+        bool: True if modification was successful or not needed
+    """
+    try:
+        if not self.platformio_ini.exists():
+            print("❌ platformio.ini not found")
+            return False
+            
+        # Backup erstellen
+        if not self.platformio_ini_backup.exists():
+            shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
+            print(f"✅ Configuration backup created: {self.platformio_ini_backup.name}")
+            
+        with self.platformio_ini.open('r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        modified = False
+        for i, line in enumerate(lines):
+            if line.strip().startswith('lib_ldf_mode'):
+                lines[i] = 'lib_ldf_mode = off\n'
+                modified = True
+                print(f"✅ Changed line: {line.strip()} -> lib_ldf_mode = off")
+                break
+
+        if modified:
+            with self.platformio_ini.open('w', encoding='utf-8') as f:
+                f.writelines(lines)
+            print("✅ platformio.ini successfully modified")
+            return True
+        else:
+            print("ℹ No lib_ldf_mode entry found, no changes made")
+            return True  # Kein Fehler, nur nichts zu ändern
+            
+    except Exception as e:
+        print(f"❌ Error modifying platformio.ini: {e}")
+        return False
+
 def execute_first_run_post_actions():
     """
     Führt die Post-Build-Aktionen nach dem ersten erfolgreichen Build aus.
@@ -1120,7 +1161,7 @@ def execute_first_run_post_actions():
         if not cache_file.exists():
             cache_data = optimizer.create_comprehensive_cache()
             
-            if not cache_data:
+            if not cache_
                 print("❌ Failed to create cache data")
                 return False
 
@@ -1136,19 +1177,12 @@ def execute_first_run_post_actions():
         else:
             print(f"✅ LDF cache already exists: {cache_file}")
 
-        optimizer.validate_ldf_mode_compatibility()
-
-        # Prüfe ob platformio.ini modifiziert werden muss
-        platformio_ini = Path(project_dir) / "platformio.ini"
-        needs_modification = False
+        # Prüfe LDF-Kompatibilität
+        current_ldf_mode = optimizer.env.GetProjectOption("lib_ldf_mode", "chain")
+        print(f"🔍 Current lib_ldf_mode: {current_ldf_mode}")
         
-        if platformio_ini.exists():
-            with platformio_ini.open('r', encoding='utf-8') as f:
-                content = f.read()
-                if 'lib_ldf_mode = chain' in content and 'lib_ldf_mode = off' not in content:
-                    needs_modification = True
-
-        if needs_modification:
+        # KORREKTE LOGIK: Teste auf chain ODER off
+        if current_ldf_mode.lower() in ["chain", "off"]:
             print("🔧 Modifying platformio.ini for second run...")
             success_ini_mod = optimizer.modify_platformio_ini_for_second_run()
             if success_ini_mod:
@@ -1160,7 +1194,9 @@ def execute_first_run_post_actions():
                 print("💡 Manual setting: lib_ldf_mode = off recommended for next build")
                 return False
         else:
-            print("ℹ platformio.ini modification not needed")
+            print(f"⚠ lib_ldf_mode '{current_ldf_mode}' not supported for caching")
+            print("💡 Supported modes: chain, off")
+            return False
 
         return True
 
@@ -1169,6 +1205,7 @@ def execute_first_run_post_actions():
         import traceback
         traceback.print_exc()
         return False
+
 
 # FIRST RUN LOGIC (wird sofort ausgeführt)
 if should_trigger_verbose_build():
