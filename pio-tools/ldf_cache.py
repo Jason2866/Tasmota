@@ -399,23 +399,22 @@ class LDFCacheOptimizer:
         self.integrate_with_project_deps()
 
     def register_cache_middleware(self):
-        """Register cache middleware in PlatformIO's build pipeline"""
-        def cache_middleware(env, node):
+        """ Debug-Middleware with PlatformIO"""
+        def cache_debug_middleware(env, node):
+            """Debug-Middleware for File-Discovery-Logging"""
             if isinstance(node, FS.File):
                 file_path = node.srcnode().get_path()
-                # Stelle sicher, dass gecachte Dateien dem Build-System zur Verfügung stehen
-                if self.is_file_in_cache(file_path):
-                    print(f"📦 Providing cached file to SCons: {Path(file_path).name}")
-                    return node
-                # Prüfe ob Datei aus Cache-Daten stammt
-                if self.should_include_from_cache(file_path):
-                    return node
+                file_name = Path(file_path).name
+
+                if file_path.startswith(env.subst("$PROJECT_SRC_DIR")):
+                    print(f"📦 Source file: {file_name}")
+                elif file_path.startswith(env.subst("$PROJECT_LIBDEPS_DIR")):
+                    print(f"📦 Library file: {file_name}")
+            
             return node
 
-        self.env.AddBuildMiddleware(cache_middleware, "*.cpp")
-        self.env.AddBuildMiddleware(cache_middleware, "*.c")
-        self.env.AddBuildMiddleware(cache_middleware, "*.h")
-        self.env.AddBuildMiddleware(cache_middleware, "*.hpp")
+        self.env.AddBuildMiddleware(cache_debug_middleware)
+
 
     def integrate_with_project_deps(self):
         """Integrate cache application before ProcessProjectDeps"""
