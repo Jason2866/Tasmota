@@ -544,7 +544,7 @@ class LDFCacheOptimizer:
     
         def cached_process_deps():
             # Stelle Cache-Daten für Dependency-Processing zur Verfügung
-            if hasattr(self, '_current_cache_data') and self._current_cache_
+            if hasattr(self, '_current_cache_data') and self._current_cache_data:
                 self.provide_cached_dependencies_to_scons(self._current_cache_data)
                 print("✅ Applied cached dependencies before ProcessProjectDeps")
         
