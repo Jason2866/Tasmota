@@ -1700,7 +1700,7 @@ def execute_first_run_post_actions():
         import traceback
         traceback.print_exc()
         return False
-
+print("🔄 Starting LDF Cache Optimizer...")
 # FIRST RUN LOGIC - Execute verbose build and create cache
 if should_trigger_verbose_build():
     print(f"🔄 First run needed - starting verbose build for {env_name}...")
@@ -1756,9 +1756,7 @@ if should_trigger_verbose_build():
 # SECOND RUN LOGIC (wird nur erreicht wenn First Run nicht stattfand)
 try:
     if (not should_trigger_verbose_build() and
-        not os.environ.get('_PIO_RECURSIVE_CALL') and
-        is_build_environment_ready() and 
-        not is_first_run_needed()):      
+        is_build_environment_ready()):
         print("🔄 Second run: Cache application mode")
         optimizer = LDFCacheOptimizer(env)
         print("✅ LDF Cache Optimizer initialized successfully")
