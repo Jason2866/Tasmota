@@ -326,6 +326,13 @@ class LDFCacheOptimizer:
         # Cache application status tracking
         self._cache_applied_successfully = False
 
+        # SOFORTIGE Cache-Anwendung im zweiten Lauf
+        if is_build_environment_ready() and not is_first_run_needed():
+            print("🔄 Second run: Cache application mode")
+            self.execute_second_run()
+        else:
+            print("🔄 Cache optimizer initialized (no action needed)")
+
     def is_file_in_cache(self, file_path):
         """Prüfe ob Datei in Cache-Daten vorhanden ist"""
         if not hasattr(self, '_current_cache_data') or not self._current_cache_data:
