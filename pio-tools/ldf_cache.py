@@ -401,9 +401,9 @@ class LDFCacheOptimizer:
         """
         self.env = environment
         self.env_name = self.env.get("PIOENV")
-        self.project_dir = self.env.subst("$PROJECT_DIR")
-        self.src_dir = self.env.subst("$PROJECT_SRC_DIR")
-        self.build_dir = self.env.subst("$BUILD_DIR")
+        self.project_dir = Path(self.env.subst("$PROJECT_DIR")).resolve()
+        self.src_dir = Path(self.env.subst("$PROJECT_SRC_DIR")).resolve()
+        self.build_dir = Path(self.env.subst("$BUILD_DIR")).resolve()
 
         # Setup cache and backup file paths
         cache_base = Path(self.project_dir) / ".pio" / "ldf_cache"
