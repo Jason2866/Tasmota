@@ -1431,10 +1431,10 @@ class LDFCacheOptimizer:
             # Apply library paths
             artifacts = cache_data.get('artifacts', {})
             if 'library_paths' in artifacts:
-                libs = lib for lib in artifacts['library_paths']
-                if libs:
-                    self.env.Prepend(LIBS=libs)
-                    print(f"✅ Applied {len(valid_libs)} library paths")
+                library_paths = artifacts['library_paths']
+                if library_paths:
+                    self.env.Prepend(LIBS=library_paths)
+                    print(f"✅ Applied {len(library_paths)} library paths")
 
             return True
 
