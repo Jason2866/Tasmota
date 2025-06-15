@@ -1377,27 +1377,15 @@ class LDFCacheOptimizer:
             # Apply source file order
             ordered_sources = build_order_data.get('ordered_sources', [])
             if ordered_sources:
-                sources = s for s in ordered_sources
-                if sources:
-                    source_nodes = [self.env.File(s) for s in sources]
-                    self.env.Replace(PIOBUILDFILES=source_nodes)
-                    print(f"✅ Set SOURCES: {len(sources)} files")
+                # Use ALL cached sources
+                print(f"✅ Found {len(ordered_sources)} source files")
 
             # Apply object file order
             ordered_object_files = build_order_data.get('ordered_object_files', [])
             if ordered_object_files:
-                objects = obj for obj in ordered_object_files
-                if objects:
-                    self.env.Replace(OBJECTS=objects)
-                    print(f"✅ Set OBJECTS: {len(objects)} files")
-
-            # Validate that we have necessary files
-            if not objects:
-                print("⚠ No object files found")
-                return False
-
-            # Apply optimized linker configuration
-            self._apply_correct_linker_order(objects)
+                # Use ALL cached object files
+                print(f"✅ Found {len(ordered_object_files)} object files")
+                self._apply_correct_linker_order(ordered_object_files)
 
             return True
 
