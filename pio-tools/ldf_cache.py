@@ -1374,33 +1374,30 @@ class LDFCacheOptimizer:
             return False
 
         try:
-            valid_sources = []
-            valid_objects = []
-            
             # Apply source file order
             ordered_sources = build_order_data.get('ordered_sources', [])
             if ordered_sources:
-                valid_sources = [s for s in ordered_sources if Path(s).exists()]
-                if valid_sources:
-                    source_nodes = [self.env.File(s) for s in valid_sources]
+                sources = s for s in ordered_sources
+                if sources:
+                    source_nodes = [self.env.File(s) for s in sources]
                     self.env.Replace(PIOBUILDFILES=source_nodes)
-                    print(f"✅ Set SOURCES: {len(valid_sources)} files")
+                    print(f"✅ Set SOURCES: {len(sources)} files")
 
             # Apply object file order
             ordered_object_files = build_order_data.get('ordered_object_files', [])
             if ordered_object_files:
-                valid_objects = [obj for obj in ordered_object_files if Path(obj).exists()]
-                if valid_objects:
-                    self.env.Replace(OBJECTS=valid_objects)
-                    print(f"✅ Set OBJECTS: {len(valid_objects)} files")
+                objects = obj for obj in ordered_object_files
+                if objects:
+                    self.env.Replace(OBJECTS=objects)
+                    print(f"✅ Set OBJECTS: {len(objects)} files")
 
             # Validate that we have necessary files
-            if not valid_objects:
+            if not objects:
                 print("⚠ No object files found")
                 return False
 
             # Apply optimized linker configuration
-            self._apply_correct_linker_order(valid_objects)
+            self._apply_correct_linker_order(objects)
 
             return True
 
@@ -1434,9 +1431,9 @@ class LDFCacheOptimizer:
             # Apply library paths
             artifacts = cache_data.get('artifacts', {})
             if 'library_paths' in artifacts:
-                valid_libs = [lib for lib in artifacts['library_paths'] if Path(lib).exists()]
-                if valid_libs:
-                    self.env.Prepend(LIBS=valid_libs)
+                libs = lib for lib in artifacts['library_paths']
+                if libs:
+                    self.env.Prepend(LIBS=libs)
                     print(f"✅ Applied {len(valid_libs)} library paths")
 
             return True
