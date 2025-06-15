@@ -1061,7 +1061,6 @@ class LDFCacheOptimizer:
 
         library_paths = []
         object_paths = []
-        collected_count = 0
 
         print(f"📦 Collecting artifact paths from {self.lib_build_dir}")
 
@@ -1069,23 +1068,25 @@ class LDFCacheOptimizer:
         for root, dirs, files in os.walk(self.lib_build_dir):
             root_path = Path(root)
             for file in files:
-                if file.endswith(('.a', '.o')):
-                    file_path = root_path / file          
-                    if file.endswith('.a'):
-                        library_paths.append(str(file_path))
-                    elif file.endswith('.o'):
-                        object_paths.append(str(file_path))
-                        collected_count += 1
+                if file.endswith('.a'):
+                    file_path = root_path / file
+                    library_paths.append(str(file_path))
+                elif file.endswith('.o'):
+                    file_path = root_path / file
+                    object_paths.append(str(file_path))
 
+        total_count = len(library_paths) + len(object_paths)
+    
         print(f"📦 Collected {len(library_paths)} library paths (*.a)")
         print(f"📦 Collected {len(object_paths)} object paths (*.o)")
-        print(f"📦 Total: {collected_count} artifact paths collected")
+        print(f"📦 Total: {total_count} artifact paths collected")
 
         return {
             'library_paths': library_paths,
             'object_paths': object_paths,
-            'total_count': collected_count
+            'total_count': total_count
         }
+
 
     def get_project_hash_with_details(self):
         """
