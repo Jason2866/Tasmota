@@ -1029,6 +1029,14 @@ class LDFCacheOptimizer:
         for i, entry in enumerate(compile_db, 1):
             source_file = entry.get('file', '')
             
+            if source_file.endswith(('.elf', '.bin', '.hex', '.map')):
+                # not a source file, skip
+                continue
+
+            if not source_file.endswith(tuple(self.SOURCE_EXTENSIONS + self.HEADER_EXTENSIONS)):
+                # not a recognized source file, skip
+                continue
+
             # Handle both 'arguments' and 'command' formats
             if 'arguments' in entry:
                 command = ' '.join(entry['arguments'])
