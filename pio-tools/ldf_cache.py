@@ -501,6 +501,29 @@ class LDFCacheOptimizer:
                   for cached_file in all_cached_files 
                   if Path(cached_file).exists())
 
+    def cleanup_final_build_targets(self):
+        """Delete final build targets using wildcards"""
+        try:
+            build_dir = Path(self.build_dir)
+            patterns = ['*.elf', '*.bin', '*.hex', '*.map']
+        
+            deleted_count = 0
+            for pattern in patterns:
+                targets = list(build_dir.glob(pattern))
+                for target in targets:
+                    if target.exists():
+                        target.unlink()
+                        deleted_count += 1
+                        print(f"🗑️ Deleted: {target.name}")
+        
+            if deleted_count > 0:
+                print(f"✅ Cleaned up {deleted_count} final build targets")
+            else:
+                print("ℹ No final build targets found to clean up")
+            
+        except Exception as e:
+            print(f"⚠ Warning during cleanup: {e}")
+
     def execute_second_run(self):
         """
         Execute second run logic: Apply cached dependencies with LDF disabled.
@@ -514,6 +537,7 @@ class LDFCacheOptimizer:
         self.register_exit_handler()
 
         try:
+            self.cleanup_final_build_targets()
             # Load and validate cache data
             cache_data = self.load_cache()
             if cache_data and self.validate_cache(cache_data):
