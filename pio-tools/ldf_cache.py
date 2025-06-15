@@ -1395,8 +1395,8 @@ class LDFCacheOptimizer:
                     print(f"✅ Set OBJECTS: {len(valid_objects)} files")
 
             # Validate that we have necessary files
-            if not valid_sources or not valid_objects:
-                print("⚠ No sources/object files found")
+            if not valid_objects:
+                print("⚠ No object files found")
                 return False
 
             # Apply optimized linker configuration
