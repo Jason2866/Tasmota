@@ -1349,14 +1349,22 @@ class LDFCacheOptimizer:
             print(f"🔍 DEBUG: Object files: {object_paths}")
             if object_paths:
                 # Use ALL cached object files
-                try:
-                    self.env.Replace(OBJECTS=object_paths)
-                    print(f"✅ Set OBJECTS: {len(object_paths)} files")
-                except Exception as e:
-                    print(f"⚠ Could not set OBJECTS: {e}")
-                    print(f"✅ Found {len(object_paths)} object files")
+                object_file_paths = []
+                for obj_entry in object_paths:
+                    if isinstance(obj_entry, dict):
+                        obj_path = obj_entry.get('object', obj_entry.get('path', ''))
+                    else:
+                        obj_path = str(obj_entry)
+                    
+                    if obj_path and Path(obj_path).exists():
+                        object_file_paths.append(obj_path)
             
-                self._apply_correct_linker_order(object_paths)
+                if object_file_paths:
+                    self.env.Replace(OBJECTS=object_file_paths)
+                    print(f"✅ Set OBJECTS: {len(object_file_paths)} files")
+                    self._apply_correct_linker_order(object_file_paths)
+                else:
+                    print("⚠ No valid object files found")
 
             return True
 
