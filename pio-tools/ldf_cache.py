@@ -1033,7 +1033,7 @@ class LDFCacheOptimizer:
                 # not a source file, skip
                 continue
 
-            if not source_file.endswith(tuple(self.SOURCE_EXTENSIONS + self.HEADER_EXTENSIONS)):
+            if not source_file.endswith(tuple(SRC_BUILD_EXT + SRC_HEADER_EXT)):
                 # not a recognized source file, skip
                 continue
 
