@@ -1378,13 +1378,25 @@ class LDFCacheOptimizer:
             ordered_sources = build_order_data.get('ordered_sources', [])
             if ordered_sources:
                 # Use ALL cached sources
-                print(f"✅ Found {len(ordered_sources)} source files")
+                source_nodes = [self.env.File(s) for s in ordered_sources]
+                try:
+                    self.env.Replace(PIOBUILDFILES=source_nodes)
+                    print(f"✅ Set PIOBUILDFILES: {len(ordered_sources)} files")
+                except Exception as e:
+                    print(f"⚠ Could not set PIOBUILDFILES: {e}")
+                    print(f"✅ Found {len(ordered_sources)} source files")
 
             # Apply object file order
             ordered_object_files = build_order_data.get('ordered_object_files', [])
             if ordered_object_files:
                 # Use ALL cached object files
-                print(f"✅ Found {len(ordered_object_files)} object files")
+                try:
+                    self.env.Replace(OBJECTS=ordered_object_files)
+                    print(f"✅ Set OBJECTS: {len(ordered_object_files)} files")
+                except Exception as e:
+                    print(f"⚠ Could not set OBJECTS: {e}")
+                    print(f"✅ Found {len(ordered_object_files)} object files")
+            
                 self._apply_correct_linker_order(ordered_object_files)
 
             return True
@@ -1408,7 +1420,7 @@ class LDFCacheOptimizer:
         """
         try:
             build_order = cache_data.get('build_order', {})
-            
+
             # Apply include paths using PlatformIO's native flag processing
             if 'include_paths' in build_order:
                 include_flags = [f"-I{path}" for path in build_order['include_paths']]
