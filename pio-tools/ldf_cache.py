@@ -81,14 +81,9 @@ def is_first_run_needed():
     if not compiledb_path.exists() or compiledb_path.stat().st_size == 0:
         return True
 
-    # Check for essential build artifacts that indicate successful build
-    essential_artifacts = [
-        build_dir / "src",
-        build_dir / "lib"
-    ]
-    for artifact in essential_artifacts:
-        if not artifact.exists():
-            return True
+    lib_dirs = list(build_dir.glob("lib*"))
+    if not lib_dirs:
+        return False
 
     return False
 
@@ -431,6 +426,13 @@ class LDFCacheOptimizer:
 
         # Initialize PlatformIO Core ProjectAsLibBuilder for native functionality
         self._project_builder = None
+        
+        build_ready = is_build_environment_ready()
+        first_needed = is_first_run_needed()
+        
+        print(f"DEBUG: is _build_environment_ready() = {build_ready}")
+        print(f"DEBUG: is _first_run_needed() = {first_needed}")
+        print(f"DEBUG: Codndition for second run: {build_ready and not first_needed}")
 
         # Determine if second run should be executed (lazy initialization)
         if is_build_environment_ready() and not is_first_run_needed():
@@ -599,7 +601,7 @@ class LDFCacheOptimizer:
         """
         original_process_deps = getattr(self.env, 'ProcessProjectDeps', None)
     
-        def cached_process_deps():
+        def cached_process_deps(orig_self):
             """
             Cached version of ProcessProjectDeps that applies cache first.
             
@@ -1072,10 +1074,15 @@ class LDFCacheOptimizer:
                         library_paths.append(str(file_path))
                     elif file.endswith('.o'):
                         object_paths.append(str(file_path))
-                    collected_count += 1
+                        collected_count += 1
+                    elif file.endswith(('.elf', '.bin', '.hex', '.map')):
+                        excluded_count += 1
+                        print(f"⚠ Excluded final target: {file}")
+                        continue
 
         print(f"📦 Collected {len(library_paths)} library paths (*.a)")
         print(f"📦 Collected {len(object_paths)} object paths (*.o)")
+        print(f"📦 Excluded {excluded_count} final target files")
         print(f"📦 Total: {collected_count} artifact paths collected")
 
         return {
@@ -1348,7 +1355,8 @@ class LDFCacheOptimizer:
             if ordered_sources:
                 valid_sources = [s for s in ordered_sources if Path(s).exists()]
                 if valid_sources:
-                    self.env.Replace(SOURCES=valid_sources)
+                    source_nodes = [self.env.File(s) for s in valid_sources]
+                    self.env.Replace(PIOBUILDFILES=source_nodes)
                     print(f"✅ Set SOURCES: {len(valid_sources)} files")
 
             # Apply object file order
