@@ -652,7 +652,7 @@ class LDFCacheOptimizer:
     def apply_ldf_cache_with_build_order(self, cache_data):
         """
         Apply cached dependencies with correct build order preservation.
-        
+
         Coordinates application of build order and SCons variables to ensure
         correct dependency resolution and linking order.
         
@@ -662,12 +662,15 @@ class LDFCacheOptimizer:
         Returns:
             bool: True if cache application succeeded
         """
+        print("🔍 DEBUG: apply_ldf_cache_with_build_order() started")
         try:
             # Store cache data for middleware access
             self._current_cache_data = cache_data
         
             build_order = cache_data.get('build_order', {})
             artifacts = cache_data.get('artifacts', {})
+            print(f"🔍 DEBUG: Build order data: {bool(build_order)}")
+            print(f"🔍 DEBUG: Artifacts data: {bool(artifacts)}")
 
             if not build_order:
                 print("❌ No build order data in cache")
@@ -675,11 +678,15 @@ class LDFCacheOptimizer:
 
             print("🔧 Applying build order with artifact integration...")
 
+            print("🔍 DEBUG: Calling apply_build_order_to_environment...")
             # Apply build order (SOURCES, OBJECTS, linker configuration)
             build_order_success = self.apply_build_order_to_environment(build_order)
-            
+            print(f"🔍 DEBUG: Build order success: {build_order_success}")
+        
+            print("🔍 DEBUG: Calling apply_cache_to_scons_vars...")
             # Apply SCons variables (include paths, libraries)
             scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
+            print(f"🔍 DEBUG: SCons vars success: {scons_vars_success}")
         
             if build_order_success and scons_vars_success:
                 print("✅ LDF cache applied successfully")
@@ -690,6 +697,8 @@ class LDFCacheOptimizer:
 
         except Exception as e:
             print(f"✗ Error applying LDF cache: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def register_exit_handler(self):
