@@ -1099,14 +1099,9 @@ class LDFCacheOptimizer:
                     elif file.endswith('.o'):
                         object_paths.append(str(file_path))
                         collected_count += 1
-                    elif file.endswith(('.elf', '.bin', '.hex', '.map')):
-                        excluded_count += 1
-                        print(f"⚠ Excluded final target: {file}")
-                        continue
 
         print(f"📦 Collected {len(library_paths)} library paths (*.a)")
         print(f"📦 Collected {len(object_paths)} object paths (*.o)")
-        print(f"📦 Excluded {excluded_count} final target files")
         print(f"📦 Total: {collected_count} artifact paths collected")
 
         return {
