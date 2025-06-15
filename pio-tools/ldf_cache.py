@@ -456,51 +456,6 @@ class LDFCacheOptimizer:
             )
         return self._project_builder
 
-    def is_file_in_cache(self, file_path):
-        """
-        Check if file is present in cached build order data.
-        
-        Args:
-            file_path: Path to file to check
-            
-        Returns:
-            bool: True if file is in cache
-        """
-        if not hasattr(self, '_current_cache_data') or not self._current_cache_data:
-            return False
-    
-        build_order = self._current_cache_data.get('build_order', {})
-        ordered_sources = build_order.get('ordered_sources', [])
-    
-        return file_path in ordered_sources
-
-    def should_include_from_cache(self, file_path):
-        """
-        Determine if file should be included based on cache data.
-        
-        Performs path comparison to determine if file is part of cached build.
-        
-        Args:
-            file_path: Path to file to check
-            
-        Returns:
-            bool: True if file should be included from cache
-        """
-        if not hasattr(self, '_current_cache_data'):
-            return False
-
-        cache_data = self._current_cache_data
-        build_order = cache_data.get('build_order', {})
-    
-        all_cached_files = (
-            build_order.get('ordered_sources', []) +
-            build_order.get('ordered_object_files', [])
-        )
-    
-        return any(Path(file_path).samefile(Path(cached_file)) 
-                  for cached_file in all_cached_files 
-                  if Path(cached_file).exists())
-
     def cleanup_final_build_targets(self):
         """Delete final build targets using wildcards"""
         try:
@@ -646,34 +601,56 @@ class LDFCacheOptimizer:
 
     def provide_cached_dependencies_to_scons(self, cache_data):
         """
-        Provide all cached dependencies to SCons build system.
-        
-        Registers cached source files, object files, and library paths
-        with SCons for build system awareness.
-        
+        Provide cached dependency information to SCons.
+    
         Args:
-            cache_data: Dictionary containing cached build data
+        cache_data (dict): Cached dependency information
         """
-        build_order = cache_data.get('build_order', {})
-    
-        # Register all source files with SCons
-        if 'ordered_sources' in build_order:
-            for source_file in build_order['ordered_sources']:
-                if Path(source_file).exists():
-                    self.env.File(source_file)
-    
-        # Register all object files with SCons
-        if 'ordered_object_files' in build_order:
-            for obj_file in build_order['ordered_object_files']:
-                if Path(obj_file).exists():
-                    self.env.File(obj_file)
-    
-        # Register library paths with SCons
-        artifacts = cache_data.get('artifacts', {})
-        if 'library_paths' in artifacts:
-            for lib_path in artifacts['library_paths']:
-                if Path(lib_path).exists():
-                    self.env.File(lib_path)
+        try:
+            build_order = cache_data.get('artifacts', {})
+        
+            # Versuche verschiedene mögliche Schlüsselnamen
+            object_files = []
+            for key in ['artifacts', 'object_paths', 'object_paths_files']:
+                if key in build_order:
+                    object_files = build_order[key]
+                    print(f"✓ Objekt-Dateien unter Schlüssel '{key}' gefunden")
+                    break
+                
+            if not object_files:
+                print(f"⚠ Keine Objekt-Dateien im Cache gefunden. Verfügbare Schlüssel: {list(build_order.keys())}")
+                return
+            
+            valid_objects = 0
+            for obj_entry in object_files:
+                # KRITISCHE ÄNDERUNG: Extrahiere Pfad aus Dictionary oder String
+                if isinstance(obj_entry, dict):
+                    # Versuche Pfad aus Dictionary zu extrahieren
+                    for path_key in ['path', 'file', 'filepath', 'location', 'source']:
+                        if path_key in obj_entry:
+                            obj_path = obj_entry[path_key]
+                            break
+                    else:
+                        print(f"⚠ Kann Pfad nicht aus Objekt extrahieren: {obj_entry}")
+                        continue
+                else:
+                    # Nimm an, es ist ein String-Pfad
+                    obj_path = str(obj_entry)
+                
+                # Jetzt können wir sicher prüfen, ob der Pfad existiert
+                if Path(obj_path).exists():
+                    # Füge Objekt zum Build hinzu
+                    self.env.Append(LINKFLAGS=[obj_path])
+                    valid_objects += 1
+                else:
+                    print(f"⚠ Objekt-Datei nicht gefunden: {obj_path}")
+                
+            print(f"✅ {valid_objects} Objekt-Dateien aus Cache zum Build hinzugefügt")
+            
+        except Exception as e:
+            print(f"❌ Error providing dependencies: {e}")
+            import traceback
+            traceback.print_exc()
 
     def apply_ldf_cache_with_build_order(self, cache_data):
         """
@@ -1020,9 +997,7 @@ class LDFCacheOptimizer:
             return None
 
         # Initialize data structures for build order extraction
-        ordered_objects = []
-        ordered_sources = []
-        ordered_object_files = []
+        object_paths = []
         include_paths = set()
 
         # Process each compile command entry
@@ -1050,15 +1025,11 @@ class LDFCacheOptimizer:
             obj_match = re.search(r'-o\s+(\S+\.o)', command)
             if obj_match:
                 obj_file = obj_match.group(1)
-                ordered_object_files.append(obj_file)
-                ordered_objects.append({
+                object_paths.append({
                     'order': i,
                     'source': source_file,
                     'object': obj_file,
                 })
-                
-            # Add source file to ordered list
-            ordered_sources.append(source_file)
             
             # Extract include paths from -I flags
             include_matches = re.findall(r'-I\s*([^\s]+)', command)
@@ -1070,9 +1041,7 @@ class LDFCacheOptimizer:
         print(f"✓ Build order extracted directly from {self.compile_commands_file}")
 
         return {
-            'ordered_objects': ordered_objects,
-            'ordered_sources': ordered_sources,
-            'ordered_object_files': ordered_object_files,
+            'object_paths': object_paths,
             'include_paths': sorted(include_paths)
         }
 
@@ -1374,30 +1343,19 @@ class LDFCacheOptimizer:
             return False
 
         try:
-            # Apply source file order
-            ordered_sources = build_order_data.get('ordered_sources', [])
-            if ordered_sources:
-                # Use ALL cached sources
-                source_nodes = [self.env.File(s) for s in ordered_sources]
-                try:
-                    self.env.Replace(PIOBUILDFILES=source_nodes)
-                    print(f"✅ Set PIOBUILDFILES: {len(ordered_sources)} files")
-                except Exception as e:
-                    print(f"⚠ Could not set PIOBUILDFILES: {e}")
-                    print(f"✅ Found {len(ordered_sources)} source files")
-
             # Apply object file order
-            ordered_object_files = build_order_data.get('ordered_object_files', [])
-            if ordered_object_files:
+            object_paths = build_order_data.get('object_paths', [])
+            print(f"🔍 DEBUG: Object files: {object_paths}")
+            if object_paths:
                 # Use ALL cached object files
                 try:
-                    self.env.Replace(OBJECTS=ordered_object_files)
-                    print(f"✅ Set OBJECTS: {len(ordered_object_files)} files")
+                    self.env.Replace(OBJECTS=object_paths)
+                    print(f"✅ Set OBJECTS: {len(object_paths)} files")
                 except Exception as e:
                     print(f"⚠ Could not set OBJECTS: {e}")
-                    print(f"✅ Found {len(ordered_object_files)} object files")
+                    print(f"✅ Found {len(object_paths)} object files")
             
-                self._apply_correct_linker_order(ordered_object_files)
+                self._apply_correct_linker_order(object_paths)
 
             return True
 
@@ -1706,7 +1664,6 @@ def execute_first_run_post_actions():
                 return False
 
             print(f"✅ LDF cache created: {cache_file}")
-            print(f"✅ Build order: {len(cache_data.get('build_order', {}).get('ordered_sources', []))} sources")
             print(f"✅ Artifacts: {cache_data.get('artifacts', {}).get('total_count', 0)} files")
         else:
             print(f"✅ LDF cache already exists: {cache_file}")
