@@ -567,7 +567,6 @@ class LDFCacheOptimizer:
                 if stripped_line.startswith('lib_ldf_mode'):
                     lines[i] = 'lib_ldf_mode = off\n'
                     modified = True
-                    print(f"✅ Changed line: {stripped_line} -> lib_ldf_mode = off")
                     break
 
             # Write modified content or report no changes needed
@@ -667,7 +666,7 @@ class LDFCacheOptimizer:
             print("⚠ No build log found for compile_commands.json generation")
             return False
 
-        print(f"🔧 Generating compile_commands.json from {build_log}")
+        #print(f"🔧 Generating compile_commands.json from {build_log}")
 
         # Define supported compiler toolchains
         compiler_names = [
@@ -702,7 +701,7 @@ class LDFCacheOptimizer:
                 json.dump(json_entries, f, indent=2)
                 
             file_size = self.compile_commands_file.stat().st_size
-            print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
+            #print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
             #print(f"✅ Found {len(compile_commands)} compiler invocations")
             return True
 
@@ -806,7 +805,7 @@ class LDFCacheOptimizer:
                 if Path(inc_path).exists():
                     include_paths.add(str(Path(inc_path)))
 
-        print(f"✓ Build order extracted directly from {self.compile_commands_file}")
+        #print(f"✓ Build order extracted directly from {self.compile_commands_file}")
 
         return {
             'object_paths': object_paths,
@@ -961,7 +960,7 @@ class LDFCacheOptimizer:
             # Add signature for integrity verification
             cache_data['signature'] = self.compute_signature(cache_data)
 
-            print(f"✅ Cache created with {project_hash['file_count']} files")
+            #print(f"✅ Cache created with {project_hash['file_count']} files")
             return cache_data
 
         except Exception as e:
@@ -993,7 +992,7 @@ class LDFCacheOptimizer:
                 f.write(pprint.pformat(cache_data, width=120, depth=None))
                 f.write("\n")
 
-            print(f"✅ Cache saved to {self.cache_file}")
+            #print(f"✅ Cache saved to {self.cache_file}")
             return True
 
         except Exception as e:
@@ -1510,8 +1509,6 @@ if should_trigger_verbose_build():
             logfile.write(line)
             logfile.flush()
         process.wait()
-
-    print(f"🔄 First run completed with return code: {process.returncode}")
 
     if process.returncode == 0:
         post_actions_success = execute_first_run_post_actions()
