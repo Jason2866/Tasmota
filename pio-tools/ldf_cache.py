@@ -83,7 +83,7 @@ def is_first_run_needed():
 
     lib_dirs = list(build_dir.glob("lib*"))
     if not lib_dirs:
-        return False
+        return True
 
     return False
 
@@ -98,10 +98,6 @@ def is_build_environment_ready():
     """
     # Compile database must exist
     if not compiledb_path.exists():
-        return False
-
-    # Source build directory must exist
-    if not (build_dir / "src").exists():
         return False
 
     # At least one library directory must exist
