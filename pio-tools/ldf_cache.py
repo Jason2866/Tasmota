@@ -1136,6 +1136,73 @@ class LDFCacheOptimizer:
             print(f"✗ Error applying build order: {e}")
             return False
 
+    def modify_libs_and_libpath(self):
+        """
+        Modifiziert LIBS und LIBPATH Variablen für korrekte Linker-Konfiguration.
+    
+        Trennt vollständige Bibliothekspfade in Dateinamen (LIBS) und Verzeichnisse (LIBPATH).
+        Dies ist notwendig für die korrekte Funktionsweise des Linkers.
+        """
+        try:
+            # Aktuelle LIBS Einträge abrufen
+            current_libs = self.env.get('LIBS', [])
+        
+            if not current_libs:
+                print("ℹ Keine LIBS Einträge zum Verarbeiten gefunden")
+                return
+        
+            # Datenstrukturen für getrennte Werte initialisieren
+            lib_filenames = []
+            lib_paths = set()
+        
+            print(f"🔧 Verarbeite {len(current_libs)} LIBS Einträge...")
+        
+            for lib in current_libs:
+                lib_path = Path(lib)
+            
+                # Dateiname ohne Pfad extrahieren
+                filename = lib_path.name
+                lib_filenames.append(filename)
+            
+                # Verzeichnispfad extrahieren (ohne Dateiname)
+                directory = str(lib_path.parent)
+                if directory and directory != '.':
+                    lib_paths.add(directory)
+        
+            # Modifizierte Werte zurück in die Umgebung setzen
+            self.env['LIBS'] = lib_filenames
+        
+            # LIBPATH erweitern (nicht überschreiben, falls bereits Einträge vorhanden)
+            current_libpath = self.env.get('LIBPATH', [])
+            if isinstance(current_libpath, str):
+                current_libpath = [current_libpath]
+        
+            # Neue Pfade zu bestehenden hinzufügen
+            updated_libpath = list(current_libpath) + list(lib_paths)
+            # Duplikate entfernen, aber Reihenfolge beibehalten
+            seen = set()
+            unique_libpath = []
+            for path in updated_libpath:
+                if path not in seen:
+                    seen.add(path)
+                    unique_libpath.append(path)
+        
+            self.env['LIBPATH'] = unique_libpath
+        
+            print(f"✅ LIBS modifiziert: {len(lib_filenames)} Dateinamen")
+            print(f"✅ LIBPATH erweitert: {len(unique_libpath)} Pfade")
+        
+            # Debug-Ausgabe für Verifikation
+            if len(lib_filenames) <= 10:  # Nur bei wenigen Einträgen alle anzeigen
+                print(f"  LIBS: {lib_filenames}")
+            if len(unique_libpath) <= 10:
+                print(f"  LIBPATH: {unique_libpath}")
+            
+        except Exception as e:
+            print(f"❌ Fehler beim Modifizieren von LIBS/LIBPATH: {e}")
+            import traceback
+            traceback.print_exc()
+
     def apply_cache_to_scons_vars(self, cache_data):
         """
         Apply cache data to SCons variables using PlatformIO Core methods.
