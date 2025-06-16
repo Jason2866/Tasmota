@@ -20,7 +20,6 @@ Import("env")
 
 import os
 import hashlib
-import time
 import datetime
 import re
 import pprint
@@ -28,25 +27,14 @@ import json
 import shutil
 import subprocess
 import sys
-import tempfile
 import shlex
-import fnmatch
 import atexit
 from pathlib import Path
-from platformio.project.config import ProjectConfig
+from platformio.builder.tools.piolib import LibBuilderBase
 from platformio.builder.tools.piobuild import SRC_HEADER_EXT, SRC_C_EXT, SRC_CXX_EXT, SRC_ASM_EXT, SRC_BUILD_EXT
-from SCons.Script import COMMAND_LINE_TARGETS, DefaultEnvironment
-from SCons.Node import FS
+from SCons.Script import COMMAND_LINE_TARGETS
 from dataclasses import dataclass
 from typing import Optional
-
-# Import PlatformIO Core piolib functions for native functionality
-from platformio.builder.tools.piolib import (
-    LibBuilderBase, 
-    ProjectAsLibBuilder, 
-    LibBuilderFactory,
-    GetLibBuilders
-)
 
 # INFO PlatformIO Core constants
 # SRC_HEADER_EXT = ["h", "hpp", "hxx", "h++", "hh", "inc", "tpp", "tcc"]
@@ -372,7 +360,7 @@ class LDFCacheOptimizer:
 
     # File extensions relevant for LDF processing
     HEADER_EXTENSIONS = set(SRC_HEADER_EXT)
-    SOURCE_EXTENSIONS = set(SRC_BUILD_EXT)
+    SOURCE_EXTENSIONS = set(SRC_BUILD_EXT + SRC_C_EXT + SRC_CXX_EXT + SRC_ASM_EXT)
     CONFIG_EXTENSIONS = {'.json', '.properties', '.txt', '.ini'}
     ALL_RELEVANT_EXTENSIONS = HEADER_EXTENSIONS | SOURCE_EXTENSIONS | CONFIG_EXTENSIONS
 
@@ -419,36 +407,11 @@ class LDFCacheOptimizer:
 
         # Cache application status tracking
         self._cache_applied_successfully = False
-
-        # Initialize PlatformIO Core ProjectAsLibBuilder for native functionality
-        self._project_builder = None
         
-        build_ready = is_build_environment_ready()
-        first_needed = is_first_run_needed()
-        
-        print(f"DEBUG: is _build_environment_ready() = {build_ready}")
-        print(f"DEBUG: is _first_run_needed() = {first_needed}")
-        print(f"DEBUG: Codndition for second run: {build_ready and not first_needed}")
-
         # Determine if second run should be executed (lazy initialization)
         if is_build_environment_ready() and not is_first_run_needed():
             print("🔄 Second run: Cache application mode")
             self.execute_second_run()
-
-    def _get_project_builder(self):
-        """
-        Get or create ProjectAsLibBuilder instance for PlatformIO Core integration.
-        
-        Returns:
-            ProjectAsLibBuilder: Instance for native PlatformIO functionality
-        """
-        if not self._project_builder:
-            self._project_builder = ProjectAsLibBuilder(
-                self.env, 
-                self.project_dir, 
-                export_projenv=False
-            )
-        return self._project_builder
 
     def cleanup_final_build_targets(self):
         """Delete final build targets using wildcards"""
@@ -485,17 +448,11 @@ class LDFCacheOptimizer:
             # Load and validate cache data
             cache_data = self.load_cache()
             if cache_data and self.validate_cache(cache_data):
-                # Integrate with PlatformIO Core functions
-                # self.integrate_with_core_functions() # for debugging when uncomment comment next line!
-                self.integrate_with_project_deps()
-                
                 # Apply cached dependencies to build environment
                 success = self.apply_ldf_cache_with_build_order(cache_data)
                 if success:
                     self._cache_applied_successfully = True
                     print("✅ Cache applied successfully - lib_ldf_mode=off")
-                    # ✅ DEBUG: Finale SCons-Umgebung nach Cache-Anwendung
-                    print("🔍 DEBUG: Final SCons environment state:")
                     print(f"  CPPPATH: {len(self.env.get('CPPPATH', []))} entries")
                     print(f"  LIBS: {len(self.env.get('LIBS', []))} entries") 
                     print(f"  SOURCES: {len(self.env.get('SOURCES', []))} entries")
@@ -515,122 +472,6 @@ class LDFCacheOptimizer:
                 print("🔄 Restoring original platformio.ini due to cache failure")
                 self.restore_platformio_ini()
 
-    def integrate_with_core_functions(self):
-        """
-        Integrate with PlatformIO Core functions for build pipeline integration.
-        
-        Registers middleware and integrates with ProcessProjectDeps for
-        comprehensive build system integration.
-        """
-        self.register_cache_middleware()
-        self.integrate_with_project_deps()
-
-    def register_cache_middleware(self):
-        """
-        Register debug middleware with PlatformIO build pipeline.
-        
-        Provides file discovery logging for debugging purposes.
-        The middleware does not modify build behavior, only provides visibility.
-        """
-        def cache_debug_middleware(env, node):
-            """
-            Debug middleware for file discovery logging.
-            
-            Args:
-                env: SCons environment
-                node: File node being processed
-                
-            Returns:
-                node: Unmodified node (pass-through)
-            """
-            if isinstance(node, FS.File):
-                file_path = node.srcnode().get_path()
-                file_name = Path(file_path).name
-
-                # Log file categorization for debugging
-                if file_path.startswith(env.subst("$PROJECT_SRC_DIR")):
-                    print(f"📦 Source file: {file_name}")
-                elif file_path.startswith(env.subst("$PROJECT_LIBDEPS_DIR")):
-                    print(f"📦 Library file: {file_name}")
-            
-            return node
-
-        # Register middleware with PlatformIO's native system
-        self.env.AddBuildMiddleware(cache_debug_middleware)
-
-    def integrate_with_project_deps(self):
-        """
-        Integrate cache application before ProcessProjectDeps.
-        
-        Overrides PlatformIO's ProcessProjectDeps method to inject cached
-        dependencies before normal dependency processing.
-        """
-        original_process_deps = getattr(self.env, 'ProcessProjectDeps', None)
-    
-        def cached_process_deps(orig_self):
-            """
-            Cached version of ProcessProjectDeps that applies cache first.
-            
-            Returns:
-                Result of original ProcessProjectDeps if available
-            """
-            # Apply cached dependencies if available
-            if hasattr(self, '_current_cache_data') and self._current_cache_data:
-                self.provide_cached_dependencies_to_scons(self._current_cache_data)
-                print("✅ Applied cached dependencies before ProcessProjectDeps")
-        
-            # Call original ProcessProjectDeps if it exists
-            if original_process_deps:
-                return original_process_deps()
-
-        # Replace ProcessProjectDeps with cached version
-        self.env.AddMethod(cached_process_deps, 'ProcessProjectDeps')
-
-    def provide_cached_dependencies_to_scons(self, cache_data):
-        """
-        Provide cached dependency information to SCons.
-    
-        Args:
-        cache_data (dict): Cached dependency information
-        """
-        try:
-            build_order = cache_data.get('artifacts', {})
-        
-            # Versuche verschiedene mögliche Schlüsselnamen
-            object_files = []
-            for key in ['artifacts', 'object_paths', 'object_paths_files']:
-                if key in build_order:
-                    object_files = build_order[key]
-                    break
-                
-            if not object_files:
-                return
-            
-            valid_objects = 0
-            for obj_entry in object_files:
-                if isinstance(obj_entry, dict):
-                    for path_key in ['path', 'file', 'filepath', 'location', 'source']:
-                        if path_key in obj_entry:
-                            obj_path = obj_entry[path_key]
-                            break
-                    else:
-                        continue
-                else:
-                    # String-path
-                    obj_path = str(obj_entry)
-                
-                if Path(obj_path).exists():
-                    # Füge Objekt zum Build hinzu
-                    self.env.Append(LINKFLAGS=[obj_path])
-                    valid_objects += 1
-                
-            print(f"✅ {valid_objects} Objekt-Dateien aus Cache zum Build hinzugefügt")
-            
-        except Exception as e:
-            print(f"❌ Error providing dependencies: {e}")
-            import traceback
-            traceback.print_exc()
-
     def apply_ldf_cache_with_build_order(self, cache_data):
         """
         Apply cached dependencies with correct build order preservation.
@@ -645,26 +486,19 @@ class LDFCacheOptimizer:
             bool: True if cache application succeeded
         """
         try:
-            # Store cache data for middleware access
             self._current_cache_data = cache_data
-        
-            build_order = cache_data.get('build_order', {})
+
             artifacts = cache_data.get('artifacts', {})
-            print(f"🔍 DEBUG: Build order data: {bool(build_order)}")
-            print(f"🔍 DEBUG: Artifacts data: {bool(artifacts)}")
+            build_order = artifacts
 
             if not build_order:
                 print("❌ No build order data in cache")
                 return False
             # Apply build order (SOURCES, OBJECTS, linker configuration)
             build_order_success = self.apply_build_order_to_environment(build_order)
-            print(f"🔍 DEBUG: Build order success: {build_order_success}")
             # Apply SCons variables (include paths, libraries)
             scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
-            print(f"🔍 DEBUG: SCons vars success: {scons_vars_success}")
-        
             if build_order_success and scons_vars_success:
-                print("✅ LDF cache applied successfully")
                 return True
             else:
                 print("❌ Partial cache application failure")
@@ -875,44 +709,6 @@ class LDFCacheOptimizer:
         except Exception as e:
             print(f"❌ Error creating compile_commands.json: {e}")
             return False
-
-    def collect_sources_via_piolib(self):
-        """
-        Use PlatformIO's native LibBuilder functionality to collect source files.
-        
-        Leverages PlatformIO Core's ProjectAsLibBuilder for consistent
-        source file collection that matches PlatformIO's internal logic.
-        
-        Returns:
-            list: List of source file paths
-        """
-        try:
-            project_builder = self._get_project_builder()
-            search_files = project_builder.get_search_files()
-            print(f"✅ Collected {len(search_files)} source files via PlatformIO LibBuilder")
-            return search_files
-        except Exception as e:
-            print(f"⚠ Error collecting sources via PlatformIO LibBuilder: {e}")
-            return []
-
-    def get_include_dirs_via_piolib(self):
-        """
-        Use PlatformIO's native LibBuilder functionality to get include directories.
-        
-        Leverages PlatformIO Core's include directory resolution for
-        consistency with PlatformIO's internal dependency handling.
-        
-        Returns:
-            list: List of include directory paths
-        """
-        try:
-            project_builder = self._get_project_builder()
-            include_dirs = project_builder.get_include_dirs()
-            print(f"✅ Found {len(include_dirs)} include directories via LibBuilder")
-            return include_dirs
-        except Exception as e:
-            print(f"⚠ Error getting include dirs via PlatformIO LibBuilder: {e}")
-            return []
 
     def process_library_dependencies_via_piolib(self):
         """
@@ -1248,7 +1044,6 @@ class LDFCacheOptimizer:
             # Extract cache data from executed namespace
             cache_data = cache_globals.get('cache_data')
             if cache_data:
-                print(f"✅ Cache loaded from {self.cache_file}")
                 return cache_data
             else:
                 print("⚠ No cache_data found in cache file")
@@ -1332,7 +1127,6 @@ class LDFCacheOptimizer:
             
                 if object_file_paths:
                     self.env.Replace(OBJECTS=object_file_paths)
-                    print(f"✅ Set OBJECTS: {len(object_file_paths)} files")
                     self._apply_correct_linker_order(object_file_paths)
                 else:
                     print("⚠ No valid object files found")
@@ -1364,7 +1158,7 @@ class LDFCacheOptimizer:
                 include_flags = [f"-I{path}" for path in build_order['include_paths']]
                 parsed_flags = self.env.ParseFlagsExtended(include_flags)
                 self.env.Append(**parsed_flags)
-                print(f"✅ Applied {len(include_flags)} include flags via ParseFlagsExtended")
+                print(f"✅ Applied {len(include_flags)} include flags")
 
             # Apply library paths
             artifacts = cache_data.get('artifacts', {})
@@ -1419,7 +1213,7 @@ class LDFCacheOptimizer:
             ])
 
             self.env.Replace(LINKFLAGS=optimized_linkflags)
-            print(f"🔗 Linker optimized with {len(optimized_linkflags)} flags")
+            print(f"✅ Linker flags optimized: {optimized_linkflags}")
 
         except Exception as e:
             print(f"⚠ Warning during linker optimization: {e}")
@@ -1735,7 +1529,6 @@ try:
     if (not should_trigger_verbose_build() and
         is_build_environment_ready()):
         optimizer = LDFCacheOptimizer(env)
-        print("✅ LDF Cache Optimizer initialized successfully")
 except Exception as e:
     print(f"❌ Error initializing LDF Cache Optimizer: {e}")
     import traceback
