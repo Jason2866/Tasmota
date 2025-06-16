@@ -1371,7 +1371,6 @@ def modify_platformio_ini_for_second_run(self):
 
         if not self.platformio_ini_backup.exists():
             shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
-            #print(f"✅ Configuration backup created: {self.platformio_ini_backup.name}")
 
         with self.platformio_ini.open('r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -1386,7 +1385,6 @@ def modify_platformio_ini_for_second_run(self):
         if modified:
             with self.platformio_ini.open('w', encoding='utf-8') as f:
                 f.writelines(lines)
-            #print("✅ platformio.ini successfully modified")
             return True
         else:
             print("ℹ No lib_ldf_mode entry found, no changes made")
@@ -1436,7 +1434,6 @@ def execute_first_run_post_actions():
                 return False
 
             print(f"✅ LDF cache created: {cache_file}")
-            print(f"✅ Artifacts: {cache_data.get('artifacts', {}).get('total_count', 0)} files")
         else:
             print(f"✅ LDF cache already exists: {cache_file}")
 
