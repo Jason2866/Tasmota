@@ -1475,7 +1475,7 @@ if should_trigger_verbose_build():
             bufsize=1
         )
         for line in process.stdout:
-            print(line, end='')
+            print(line[:80], end='')  # Shown only first 80 characters in console
             logfile.write(line)
             logfile.flush()
         process.wait()
