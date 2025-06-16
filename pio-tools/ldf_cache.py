@@ -1140,46 +1140,62 @@ class LDFCacheOptimizer:
         """
         Modifiziert LIBS und LIBPATH Variablen für korrekte Linker-Konfiguration.
     
-        Trennt vollständige Bibliothekspfade in Dateinamen (LIBS) und Verzeichnisse (LIBPATH).
-        Dies ist notwendig für die korrekte Funktionsweise des Linkers.
+        Konvertiert vollständige Bibliothekspfade zu -l Flags und separaten LIBPATH Einträgen,
+        entsprechend der PlatformIO/SCons Konvention.
         """
         try:
-            # Aktuelle LIBS Einträge abrufen
             current_libs = self.env.get('LIBS', [])
         
             if not current_libs:
                 print("ℹ Keine LIBS Einträge zum Verarbeiten gefunden")
                 return
         
-            # Datenstrukturen für getrennte Werte initialisieren
-            lib_filenames = []
+            lib_flags = []
             lib_paths = set()
         
             print(f"🔧 Verarbeite {len(current_libs)} LIBS Einträge...")
         
             for lib in current_libs:
+                # Prüfen ob bereits -l Flag Format
+                if isinstance(lib, str) and lib.startswith('-l'):
+                    lib_flags.append(lib)
+                    continue
+                
                 lib_path = Path(lib)
             
-                # Dateiname ohne Pfad extrahieren
+                # Bibliotheksname aus Dateiname extrahieren
                 filename = lib_path.name
-                lib_filenames.append(filename)
             
-                # Verzeichnispfad extrahieren (ohne Dateiname)
+                # Entferne 'lib' Prefix und '.a' Suffix für -l Flag
+                if filename.startswith('lib') and filename.endswith('.a'):
+                    lib_name = filename[3:-2]  # Entferne 'lib' und '.a'
+                    lib_flag = f"-l{lib_name}"
+                    lib_flags.append(lib_flag)
+                elif filename.endswith('.a'):
+                    # Falls kein 'lib' Prefix vorhanden
+                    lib_name = filename[:-2]  # Entferne nur '.a'
+                    lib_flag = f"-l{lib_name}"
+                    lib_flags.append(lib_flag)
+                else:
+                    # Fallback: verwende Dateiname direkt
+                    lib_flag = f"-l{filename}"
+                    lib_flags.append(lib_flag)
+            
+                # Verzeichnispfad für LIBPATH sammeln
                 directory = str(lib_path.parent)
                 if directory and directory != '.':
                     lib_paths.add(directory)
         
-            # Modifizierte Werte zurück in die Umgebung setzen
-            self.env['LIBS'] = lib_filenames
+            # LIBS mit -l Flags setzen
+            self.env['LIBS'] = lib_flags
         
-            # LIBPATH erweitern (nicht überschreiben, falls bereits Einträge vorhanden)
+            # LIBPATH erweitern
             current_libpath = self.env.get('LIBPATH', [])
             if isinstance(current_libpath, str):
                 current_libpath = [current_libpath]
         
-            # Neue Pfade zu bestehenden hinzufügen
             updated_libpath = list(current_libpath) + list(lib_paths)
-            # Duplikate entfernen, aber Reihenfolge beibehalten
+            # Duplikate entfernen, Reihenfolge beibehalten
             seen = set()
             unique_libpath = []
             for path in updated_libpath:
@@ -1189,17 +1205,17 @@ class LDFCacheOptimizer:
         
             self.env['LIBPATH'] = unique_libpath
         
-            print(f"✅ LIBS modifiziert: {len(lib_filenames)} Dateinamen")
+            print(f"✅ LIBS modifiziert: {len(lib_flags)} -l Flags")
             print(f"✅ LIBPATH erweitert: {len(unique_libpath)} Pfade")
         
-            # Debug-Ausgabe für Verifikation
-            if len(lib_filenames) <= 10:  # Nur bei wenigen Einträgen alle anzeigen
-                print(f"  LIBS: {lib_filenames}")
+            # Debug-Ausgabe
+            if len(lib_flags) <= 10:
+                print(f"  LIBS: {lib_flags}")
             if len(unique_libpath) <= 10:
                 print(f"  LIBPATH: {unique_libpath}")
             
         except Exception as e:
-            print(f"❌ Fehler beim Modifizieren von LIBS/LIBPATH: {e}")
+            print(f"❌ Error creating LIBS/LIBPATH: {e}")
             import traceback
             traceback.print_exc()
 
