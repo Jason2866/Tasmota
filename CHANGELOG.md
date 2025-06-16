@@ -3,7 +3,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [14.6.0.2]
+## [15.0.1.1]
+### Added
+
+### Breaking Changed
+
+### Changed
+
+### Fixed
+
+### Removed
+
+
+## [Released]
+
+## [15.0.1] 20250614
+- Release Sharon
+
+## [15.0.0.1] 20250614
+### Fixed
+- LVGL regression missing `lv.ANIM_OFF` and `lv.ANIM_ON` (#23544)
+- Berry fix `realline` (#23546)
+- LVGL HASPmota fix regression introduced with LVGL 9.3.0 (#23547)
+
+## [15.0.0] 20250613
+- Release Sharon
+
+## [14.6.0.2] 20250613
 ### Added
 - Allow temporary change of DisplayDimmer (#23406)
 - Support for LoRaWan Rx1 and Rx2 profiles (#23394)
@@ -14,8 +40,8 @@ All notable changes to this project will be documented in this file.
 - Berry `webserver.remove_route` to revert `webserver.on` (#23452)
 - Berry `compile` and `tasmota.compile` option to compile in local context (#23457)
 - Support for AP33772S USB PD Sink Controller as used in CentyLab RotoPD
-
-### Breaking Changed
+- Berry mqtt publish rule processing
+- Berry `tasmota.is_network_up()` (#23532)
 
 ### Changed
 - ESP32 Platform from 2025.04.30 to 2025.05.40, Framework (Arduino Core) from v3.1.3.250411 to v3.2.0.250504 and IDF from v5.3.2.250403 to v5.4.1.250501 (#23397)
@@ -24,6 +50,9 @@ All notable changes to this project will be documented in this file.
 - Increase number of supported LoRaWan nodes from 4 to 16
 - Berry change number parser for json to reuse same parser as lexer (#23505)
 - Berry increase web hooks from 16 to 32 (#23507)
+- ESP32 LVGL library from v9.2.2 to v9.3.0 (#23518)
+- Zigbee improved message when coordinator failed to start (#23525)
+- Format syslog messages according to RFC5424 adding local log time (#23509)
 
 ### Fixed
 - Haspmota `haspmota.parse()` page parsing (#23403)
@@ -32,8 +61,8 @@ All notable changes to this project will be documented in this file.
 - Berry avoid json parsing for unmatched commands (#23494)
 - Berry integer and real parser to handle overflows (#23495)
 - Berry potential pointer underflow with `string.endswith` (#23496)
-
-### Removed
+- Autoconf failing when last line has no trailing LF (#23537)
+- LVGL Tasmota logo splash screen (#23538)
 
 ## [14.6.0.1] 20250510
 ### Added
@@ -47,8 +76,6 @@ All notable changes to this project will be documented in this file.
 - Support for multi channel AU915-928 LoRaWanBridge by Rob Clark (#23372)
 - HASPmota `antiburn()` (#23400)
 
-### Breaking Changed
-
 ### Changed
 - Allow command `WebRefresh` minimum from 1000 to 400 mSec
 - GPIOViewer from v1.6.2 to v1.6.3 (No functional change)
@@ -60,8 +87,6 @@ All notable changes to this project will be documented in this file.
 - NimBLE log_level definition conflict (#23366)
 - Matter and mDNS can be enabled at the same time (#23373)
 - Berry `introspect.module()` failed to load modules in files (#23376)
-
-## [Released]
 
 ## [14.6.0] 20250416
 - Release Ryan
