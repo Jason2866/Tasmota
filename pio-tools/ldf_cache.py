@@ -39,6 +39,7 @@ from typing import Optional
 # SRC_CXX_EXT = ["cc", "cpp", "cxx", "c++"]
 # SRC_BUILD_EXT = SRC_C_EXT + SRC_CXX_EXT + SRC_ASM_EXT
 
+github_actions = os.getenv('GITHUB_ACTIONS')
 project_dir = env.subst("$PROJECT_DIR")
 env_name = env.subst("$PIOENV")
 compiledb_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.json"
@@ -47,6 +48,10 @@ cache_base = Path(project_dir) / ".pio" / "ldf_cache"
 cache_file = cache_base / f"ldf_cache_{env_name}.py"
 build_dir = Path(env.subst("$BUILD_DIR"))
 src_dir = Path(env.subst("$PROJECT_SRC_DIR"))
+config = env.GetProjectConfig()
+flag_custom_sdkconfig = False
+if config.has_option("env:"+env["PIOENV"], "custom_sdkconfig") or env.BoardConfig().get("espidf.custom_sdkconfig", ""):
+    flag_custom_sdkconfig = True
 
 # Ensure log directory exists
 logfile_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1440,9 +1445,10 @@ def execute_first_run_post_actions():
         import traceback
         traceback.print_exc()
         return False
-print("🔄 Starting LDF Cache Optimizer...")
+
 # FIRST RUN LOGIC - Execute verbose build and create cache
-if should_trigger_verbose_build():
+if should_trigger_verbose_build() and not github_actions and not flag_custom_sdkconfig:
+    print("🔄 Starting LDF Cache Optimizer...")
     print(f"🔄 First run needed - starting verbose build for {env_name}...")
     print("📋 Reasons:")
 
