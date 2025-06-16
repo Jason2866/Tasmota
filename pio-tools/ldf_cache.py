@@ -387,7 +387,7 @@ class LDFCacheOptimizer:
         self.cache_file = cache_base / f"ldf_cache_{self.env_name}.py"
         self.ldf_cache_ini = Path(self.project_dir) / "ldf_cache.ini"
         self.platformio_ini = Path(self.project_dir) / "platformio.ini"
-        self.platformio_ini_backup = Path(self.project_dir) / ".pio" / f"platformio_backup_{self.env_name}.ini"
+        self.platformio_ini_backup = Path(self.project_dir) / ".pio" / "platformio_backup.ini"
 
         # Setup compile database paths
         compiledb_base = Path(self.project_dir) / ".pio" / "compiledb"
@@ -406,24 +406,6 @@ class LDFCacheOptimizer:
             print("🔄 Second run: Cache application mode")
             self.execute_second_run()
 
-    def cleanup_final_build_targets(self):
-        """Delete final build targets using wildcards"""
-        try:
-            build_dir = Path(self.build_dir)
-            patterns = ['*.elf', '*.bin', '*.hex', '*.map']
-        
-            deleted_count = 0
-            for pattern in patterns:
-                targets = list(build_dir.glob(pattern))
-                for target in targets:
-                    if target.exists():
-                        target.unlink()
-                        deleted_count += 1
-                        print(f"🗑️ Deleted: {target.name}")
-        
-        except Exception as e:
-            print(f"⚠ Warning during cleanup: {e}")
-
     def execute_second_run(self):
         """
         Execute second run logic: Apply cached dependencies with LDF disabled.
@@ -437,7 +419,6 @@ class LDFCacheOptimizer:
         self.register_exit_handler()
 
         try:
-            self.cleanup_final_build_targets()
             # Load and validate cache data
             cache_data = self.load_cache()
             if cache_data and self.validate_cache(cache_data):
@@ -575,7 +556,8 @@ class LDFCacheOptimizer:
             print(f"❌ Error modifying platformio.ini: {e}")
             return False
 
-    def restore_platformio_ini(self):
+    @staticmethod
+    def restore_platformio_ini(project_dir=None):
         """
         Restore original platformio.ini from backup.
         
@@ -585,17 +567,20 @@ class LDFCacheOptimizer:
         Returns:
             bool: True if restoration was successful
         """
+        if project_dir is None:
+            project_dir = env.subst("$PROJECT_DIR") if 'env' in globals() else "."
+    
+        platformio_ini = Path(project_dir) / "platformio.ini"
+        platformio_ini_backup = Path(project_dir) / ".pio" / "platformio_backup.ini"
+    
         try:
-            if self.platformio_ini_backup.exists():
-                shutil.copy2(self.platformio_ini_backup, self.platformio_ini)
-                print(f"✅ platformio.ini restored from backup")
-                return True
+            if platformio_ini_backup.exists():
+                platformio_ini_backup.rename(platformio_ini)
+                print("✅ platformio.ini restored from backup")
             else:
-                print("⚠ No backup found to restore")
-                return False
+                print("💡 No backup found - platformio.ini not modified")
         except Exception as e:
-            print(f"❌ Error restoring platformio.ini: {e}")
-            return False
+            print(f"⚠ Error restoring platformio.ini: {e}")
 
     def validate_ldf_mode_compatibility(self):
         """
@@ -659,7 +644,9 @@ class LDFCacheOptimizer:
 
         # Define supported compiler toolchains
         compiler_names = [
-            "xtensa-esp32-elf-gcc", "xtensa-esp32-elf-g++", 
+            "xtensa-esp32-elf-gcc", "xtensa-esp32-elf-g++",
+            "xtensa-esp32s2-elf-gcc", "xtensa-esp32s2-elf-g++",
+            "xtensa-esp32s3-elf-gcc", "xtensa-esp32s3-elf-g++",
             "riscv32-esp-elf-gcc", "riscv32-esp-elf-g++",
             "xtensa-lx106-elf-gcc", "xtensa-lx106-elf-g++",
             "arm-none-eabi-gcc", "arm-none-eabi-g++"
@@ -904,8 +891,7 @@ class LDFCacheOptimizer:
                 'project_hash': project_hash['final_hash'],
                 'file_hashes': project_hash['file_hashes'],
                 'build_order': build_order,
-                'artifacts': artifacts,
-                'platformio_version': self.env.get('PLATFORMIO_VERSION', 'unknown')
+                'artifacts': artifacts
             }
 
             # Add signature for integrity verification
@@ -1502,6 +1488,7 @@ if should_trigger_verbose_build():
             print("⚠ Some first run actions failed")
     else:
         print(f"❌ First run failed with return code: {process.returncode}")
+        LDFCacheOptimizer.restore_platformio_ini()
 
     sys.exit(process.returncode)
 
