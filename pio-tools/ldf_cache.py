@@ -1222,13 +1222,13 @@ class LDFCacheOptimizer:
     def apply_cache_to_scons_vars(self, cache_data):
         """
         Apply cache data to SCons variables using PlatformIO Core methods.
-        
+    
         Uses PlatformIO's ParseFlagsExtended for robust flag processing
         and applies cached include paths and library paths to build environment.
-        
+    
         Args:
-            cache_data: Dictionary containing cached build data
-            
+            cache_ Dictionary containing cached build data
+        
         Returns:
             bool: True if cache variables were applied successfully
         """
@@ -1242,18 +1242,67 @@ class LDFCacheOptimizer:
                 self.env.Append(**parsed_flags)
                 print(f"✅ Applied {len(include_flags)} include flags")
 
-            # Apply library paths
+            # Apply library paths and convert to proper LIBS/LIBPATH format
             artifacts = cache_data.get('artifacts', {})
             if 'library_paths' in artifacts:
                 library_paths = artifacts['library_paths']
                 if library_paths:
-                    self.env.Prepend(LIBS=library_paths)
-                    print(f"✅ Applied {len(library_paths)} library paths")
+                    # Sammle alle Bibliothekspfade und konvertiere sie
+                    lib_flags = []
+                    lib_directories = set()
+                
+                    for lib_path in library_paths:
+                        lib_path_obj = Path(lib_path)
+                        filename = lib_path_obj.name
+                    
+                        # Extrahiere Verzeichnis für LIBPATH
+                        directory = str(lib_path_obj.parent)
+                        if directory and directory != '.':
+                            lib_directories.add(directory)
+                    
+                        # Konvertiere zu -l Flag für LIBS
+                        if filename.startswith('lib') and filename.endswith('.a'):
+                            lib_name = filename[3:-2]  # Entferne 'lib' und '.a'
+                            lib_flags.append(f"-l{lib_name}")
+                        elif filename.endswith('.a'):
+                            lib_name = filename[:-2]  # Entferne nur '.a'
+                            lib_flags.append(f"-l{lib_name}")
+                        else:
+                            lib_flags.append(f"-l{filename}")
+                
+                    # Direkte Zuweisung zu SCons Variablen
+                    if lib_directories:
+                        # LIBPATH erweitern (bestehende Pfade beibehalten)
+                        current_libpath = self.env.get('LIBPATH', [])
+                        if isinstance(current_libpath, str):
+                            current_libpath = [current_libpath]
+                    
+                        # Neue Pfade hinzufügen, Duplikate vermeiden
+                        updated_libpath = list(current_libpath)
+                        for path in lib_directories:
+                            if path not in updated_libpath:
+                                updated_libpath.append(path)
+                    
+                        self.env['LIBPATH'] = updated_libpath
+                        print(f"✅ Applied {len(updated_libpath)} library directories to LIBPATH")
+                
+                    if lib_flags:
+                        # LIBS erweitern (bestehende Flags beibehalten)
+                        current_libs = self.env.get('LIBS', [])
+                        if isinstance(current_libs, str):
+                            current_libs = [current_libs]
+                    
+                        # Neue -l Flags hinzufügen
+                        updated_libs = list(current_libs) + lib_flags
+                        self.env['LIBS'] = updated_libs
+                        print(f"✅ Applied {len(lib_flags)} -l flags to LIBS")
 
             return True
 
         except Exception as e:
-            print(f"⚠ Warning applying cache to SCons vars: {e}")
+            print(f"❌ Error applying cache to SCons vars: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def _apply_correct_linker_order(self, object_files):
