@@ -438,8 +438,6 @@ class LDFCacheOptimizer:
         if is_build_environment_ready() and not is_first_run_needed():
             print("🔄 Second run: Cache application mode")
             self.execute_second_run()
-        else:
-            print("🔄 Cache optimizer initialized (no action needed)")
 
     def _get_project_builder(self):
         """
@@ -471,11 +469,6 @@ class LDFCacheOptimizer:
                         deleted_count += 1
                         print(f"🗑️ Deleted: {target.name}")
         
-            if deleted_count > 0:
-                print(f"✅ Cleaned up {deleted_count} final build targets")
-            else:
-                print("ℹ No final build targets found to clean up")
-            
         except Exception as e:
             print(f"⚠ Warning during cleanup: {e}")
 
@@ -525,8 +518,6 @@ class LDFCacheOptimizer:
             if not self._cache_applied_successfully:
                 print("🔄 Restoring original platformio.ini due to cache failure")
                 self.restore_platformio_ini()
-            else:
-                print("✅ Keeping modified platformio.ini for optimal performance")
 
     def integrate_with_core_functions(self):
         """
@@ -614,36 +605,28 @@ class LDFCacheOptimizer:
             for key in ['artifacts', 'object_paths', 'object_paths_files']:
                 if key in build_order:
                     object_files = build_order[key]
-                    print(f"✓ Objekt-Dateien unter Schlüssel '{key}' gefunden")
                     break
                 
             if not object_files:
-                print(f"⚠ Keine Objekt-Dateien im Cache gefunden. Verfügbare Schlüssel: {list(build_order.keys())}")
                 return
             
             valid_objects = 0
             for obj_entry in object_files:
-                # KRITISCHE ÄNDERUNG: Extrahiere Pfad aus Dictionary oder String
                 if isinstance(obj_entry, dict):
-                    # Versuche Pfad aus Dictionary zu extrahieren
                     for path_key in ['path', 'file', 'filepath', 'location', 'source']:
                         if path_key in obj_entry:
                             obj_path = obj_entry[path_key]
                             break
                     else:
-                        print(f"⚠ Kann Pfad nicht aus Objekt extrahieren: {obj_entry}")
                         continue
                 else:
-                    # Nimm an, es ist ein String-Pfad
+                    # String-path
                     obj_path = str(obj_entry)
                 
-                # Jetzt können wir sicher prüfen, ob der Pfad existiert
                 if Path(obj_path).exists():
                     # Füge Objekt zum Build hinzu
                     self.env.Append(LINKFLAGS=[obj_path])
                     valid_objects += 1
-                else:
-                    print(f"⚠ Objekt-Datei nicht gefunden: {obj_path}")
                 
             print(f"✅ {valid_objects} Objekt-Dateien aus Cache zum Build hinzugefügt")
             
@@ -665,7 +648,6 @@ class LDFCacheOptimizer:
         Returns:
             bool: True if cache application succeeded
         """
-        print("🔍 DEBUG: apply_ldf_cache_with_build_order() started")
         try:
             # Store cache data for middleware access
             self._current_cache_data = cache_data
@@ -678,15 +660,9 @@ class LDFCacheOptimizer:
             if not build_order:
                 print("❌ No build order data in cache")
                 return False
-
-            print("🔧 Applying build order with artifact integration...")
-
-            print("🔍 DEBUG: Calling apply_build_order_to_environment...")
             # Apply build order (SOURCES, OBJECTS, linker configuration)
             build_order_success = self.apply_build_order_to_environment(build_order)
             print(f"🔍 DEBUG: Build order success: {build_order_success}")
-        
-            print("🔍 DEBUG: Calling apply_cache_to_scons_vars...")
             # Apply SCons variables (include paths, libraries)
             scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
             print(f"🔍 DEBUG: SCons vars success: {scons_vars_success}")
@@ -897,7 +873,7 @@ class LDFCacheOptimizer:
                 
             file_size = self.compile_commands_file.stat().st_size
             print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
-            print(f"✅ Found {len(compile_commands)} compiler invocations")
+            #print(f"✅ Found {len(compile_commands)} compiler invocations")
             return True
 
         except Exception as e:
@@ -1062,7 +1038,7 @@ class LDFCacheOptimizer:
         library_paths = []
         object_paths = []
 
-        print(f"📦 Collecting artifact paths from {self.lib_build_dir}")
+        #print(f"📦 Collecting artifact paths from {self.lib_build_dir}")
 
         # Walk through build directory to find artifacts
         for root, dirs, files in os.walk(self.lib_build_dir):
@@ -1134,7 +1110,7 @@ class LDFCacheOptimizer:
                     
         # Process platformio.ini files
         project_path = Path(self.project_dir)
-        print("✅ Hashed platfomio.ini file(s)")
+        #print("✅ Hashed platfomio.ini file(s)")
         for ini_path in project_path.glob('platformio*.ini'):
             if ini_path.exists() and ini_path.is_file():
                 try:
@@ -1346,7 +1322,6 @@ class LDFCacheOptimizer:
         try:
             # Apply object file order
             object_paths = build_order_data.get('object_paths', [])
-            print(f"🔍 DEBUG: Object files: {object_paths}")
             if object_paths:
                 # Use ALL cached object files
                 object_file_paths = []
@@ -1607,7 +1582,7 @@ def modify_platformio_ini_for_second_run(self):
 
         if not self.platformio_ini_backup.exists():
             shutil.copy2(self.platformio_ini, self.platformio_ini_backup)
-            print(f"✅ Configuration backup created: {self.platformio_ini_backup.name}")
+            #print(f"✅ Configuration backup created: {self.platformio_ini_backup.name}")
 
         with self.platformio_ini.open('r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -1617,13 +1592,12 @@ def modify_platformio_ini_for_second_run(self):
             if line.strip().startswith('lib_ldf_mode'):
                 lines[i] = 'lib_ldf_mode = off\n'
                 modified = True
-                print(f"✅ Changed line: {line.strip()} -> lib_ldf_mode = off")
                 break
 
         if modified:
             with self.platformio_ini.open('w', encoding='utf-8') as f:
                 f.writelines(lines)
-            print("✅ platformio.ini successfully modified")
+            #print("✅ platformio.ini successfully modified")
             return True
         else:
             print("ℹ No lib_ldf_mode entry found, no changes made")
@@ -1690,7 +1664,7 @@ def execute_first_run_post_actions():
             if success_ini_mod:
                 print("🎉 First run post-build actions completed successfully!")
                 print("🔄 platformio.ini configured for cached build (lib_ldf_mode = off)")
-                print("🚀 Next build will be significantly faster using cached dependencies")
+                print("🚀 Next build will be using cached dependencies")
             else:
                 print("⚠ Cache created but platformio.ini modification failed")
                 print("💡 Manual setting: lib_ldf_mode = off recommended for next build")
@@ -1764,7 +1738,6 @@ if should_trigger_verbose_build():
 try:
     if (not should_trigger_verbose_build() and
         is_build_environment_ready()):
-        print("🔄 Second run: Cache application mode")
         optimizer = LDFCacheOptimizer(env)
         print("✅ LDF Cache Optimizer initialized successfully")
 except Exception as e:
