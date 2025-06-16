@@ -910,8 +910,6 @@ class LDFCacheOptimizer:
 
             # Add signature for integrity verification
             cache_data['signature'] = self.compute_signature(cache_data)
-
-            #print(f"✅ Cache created with {project_hash['file_count']} files")
             return cache_data
 
         except Exception as e:
@@ -1107,7 +1105,6 @@ class LDFCacheOptimizer:
                 include_flags = [f"-I{path}" for path in build_order['include_paths']]
                 parsed_flags = self.env.ParseFlagsExtended(include_flags)
                 self.env.Append(**parsed_flags)
-                print(f"✅ Applied {len(include_flags)} include flags")
 
             # Apply library paths and convert to proper LIBS/LIBPATH format
             artifacts = cache_data.get('artifacts', {})
@@ -1203,7 +1200,6 @@ class LDFCacheOptimizer:
             ])
 
             self.env.Replace(LINKFLAGS=optimized_linkflags)
-            #print(f"✅ Linker flags optimized: {optimized_linkflags}")
 
         except Exception as e:
             print(f"⚠ Warning during linker optimization: {e}")
