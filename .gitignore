@@ -57,3 +57,4 @@ lib/libesp32/berry/berry
 ## Python virtual environments for Platformio ##
 venv
 .venv
+ldf_cache.ini
