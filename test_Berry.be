@@ -256,14 +256,14 @@ class ES8311
         self.write_reg(self.ES8311_ADC_REG15, 0x00)
         self.write_reg(self.ES8311_GP_REG45, 0x01)
     end
-
+    
     # PA Power Control
     def pa_power(enable)
         var pa_gpio = self.get_pa_enable_gpio()
         if pa_gpio == -1
             return true
         end
-
+        
         import gpio
         if enable
             gpio.digital_write(pa_gpio, 1)
@@ -272,73 +272,123 @@ class ES8311
         end
         return true
     end
-
-    # Codec Initialisierung
+    
+    def get_pa_enable_gpio()
+        # Board-spezifische GPIO-Konfiguration
+        # Muss für spezifisches Board angepasst werden
+        return -1  # Kein PA GPIO definiert
+    end
+    
+    # Vollständige Codec-Initialisierung
     def codec_init(codec_cfg)
+        var ret = true
+        
         if !self.i2c_init()
+            print(f"{self.tag}: I2C initialization failed")
             return false
         end
-
+        
         # I2C noise immunity enhancement
-        self.write_reg(self.ES8311_GPIO_REG44, 0x08)
-        self.write_reg(self.ES8311_GPIO_REG44, 0x08)  # Doppelter Write für Zuverlässigkeit
-
-        # Clock manager setup
-        self.write_reg(self.ES8311_CLK_MANAGER_REG01, 0x30)
-        self.write_reg(self.ES8311_CLK_MANAGER_REG02, 0x00)
-        self.write_reg(0x03, 0x10)  # ES8311_CLK_MANAGER_REG03
-        self.write_reg(0x16, 0x24)  # ES8311_ADC_REG16
-
-        # Reset und Mode-Konfiguration
-        self.write_reg(self.ES8311_RESET_REG00, 0x80)
-
-        # Master/Slave Mode
+        ret &= self.write_reg(self.ES8311_GPIO_REG44, 0x08)
+        ret &= self.write_reg(self.ES8311_GPIO_REG44, 0x08)  # Doppelter Write
+        
+        # Initial register setup
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG01, 0x30)
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG02, 0x00)
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG03, 0x10)
+        ret &= self.write_reg(self.ES8311_ADC_REG16, 0x24)
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG04, 0x10)
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG05, 0x00)
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG0B, 0x00)
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG0C, 0x00)
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG10, 0x1F)
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG11, 0x7F)
+        ret &= self.write_reg(self.ES8311_RESET_REG00, 0x80)
+        
+        # Master/Slave Mode konfigurieren
         var regv = self.read_reg(self.ES8311_RESET_REG00)
-        if codec_cfg.contains("mode") && codec_cfg["mode"] == "master"
-            print("ES8311 in Master mode")
+        var mode = codec_cfg.find("mode", self.AUDIO_HAL_MODE_SLAVE)
+        
+        if mode == self.AUDIO_HAL_MODE_MASTER
+            print(f"{self.tag}: ES8311 in Master mode")
             regv |= 0x40
         else
-            print("ES8311 in Slave mode")
+            print(f"{self.tag}: ES8311 in Slave mode")
             regv &= 0xBF
         end
-        self.write_reg(self.ES8311_RESET_REG00, regv)
-
-        # Sample rate configuration
-        var sample_rate = codec_cfg.find("sample_rate", 48000)
+        ret &= self.write_reg(self.ES8311_RESET_REG00, regv)
+        
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG01, 0x3F)
+        
+        # Clock source selection
+        var mclk_src = self.get_es8311_mclk_src()
+        regv = self.read_reg(self.ES8311_CLK_MANAGER_REG01)
+        if mclk_src == self.FROM_MCLK_PIN
+            regv &= 0x7F
+        else
+            regv |= 0x80
+        end
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG01, regv)
+        
+        # Sample rate konfigurieren
+        var sample_rate = codec_cfg.find("sample_rate", self.AUDIO_HAL_48K_SAMPLES)
         var mclk_freq = sample_rate * self.MCLK_DIV_FRE
         var coeff = self.get_coeff(mclk_freq, sample_rate)
-
+        
         if coeff < 0
-            print(f"ES8311: Unable to configure sample rate {sample_rate}Hz")
+            print(f"{self.tag}: Unable to configure sample rate {sample_rate}Hz with {mclk_freq}Hz MCLK")
             return false
         end
-
-        # Clock parameter setup basierend auf coeff_div
-        self.setup_clock_parameters(coeff)
-
-        # System register setup
-        self.write_reg(0x13, 0x10)  # ES8311_SYSTEM_REG13
-        self.write_reg(0x1B, 0x0A)  # ES8311_ADC_REG1B
-        self.write_reg(0x1C, 0x6A)  # ES8311_ADC_REG1C
-
+        
+        # Clock parameter setup
+        ret &= self.setup_clock_parameters(coeff)
+        
+        # MCLK/SCLK inversion
+        regv = self.read_reg(self.ES8311_CLK_MANAGER_REG01)
+        if self.INVERT_MCLK
+            regv |= 0x40
+        else
+            regv &= ~0x40
+        end
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG01, regv)
+        
+        regv = self.read_reg(self.ES8311_CLK_MANAGER_REG06)
+        if self.INVERT_SCLK
+            regv |= 0x20
+        else
+            regv &= ~0x20
+        end
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG06, regv)
+        
+        # Final system setup
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG13, 0x10)
+        ret &= self.write_reg(self.ES8311_ADC_REG1B, 0x0A)
+        ret &= self.write_reg(self.ES8311_ADC_REG1C, 0x6A)
+        
+        if !ret
+            print(f"{self.tag}: ES8311 initialize failed")
+            return false
+        end
+        
         # PA GPIO setup
         self.setup_pa_gpio()
-
+        
         # Volume control initialization
         self.init_volume_control()
-
+        
+        print(f"{self.tag}: ES8311 initialized successfully")
         return true
     end
-
-    # Clock parameter setup
+    
+    # Vollständige Clock parameter setup
     def setup_clock_parameters(coeff)
         var coeff_data = self.coeff_div[coeff]
-
-        # Pre-divider setup
+        var ret = true
+        
+        # Pre-divider und multiplier setup
         var regv = self.read_reg(self.ES8311_CLK_MANAGER_REG02) & 0x07
         regv |= (coeff_data[2] - 1) << 5  # pre_div
-
-        # Pre-multiplier
+        
         var datmp = 0
         var pre_multi = coeff_data[3]
         if pre_multi == 1
@@ -350,81 +400,256 @@ class ES8311
         elif pre_multi == 8
             datmp = 3
         end
-
+        
+        if self.get_es8311_mclk_src() == self.FROM_SCLK_PIN
+            datmp = 3  # DIG_MCLK = LRCK * 256 = BCLK * 8
+        end
+        
         regv |= datmp << 3
-        self.write_reg(self.ES8311_CLK_MANAGER_REG02, regv)
-
-        # Weitere Clock-Parameter würden hier konfiguriert...
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG02, regv)
+        
+        # ADC/DAC divider
+        regv = self.read_reg(self.ES8311_CLK_MANAGER_REG05) & 0x00
+        regv |= (coeff_data[4] - 1) << 4  # adc_div
+        regv |= (coeff_data[5] - 1) << 0  # dac_div
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG05, regv)
+        
+        # FS mode und ADC OSR
+        regv = self.read_reg(self.ES8311_CLK_MANAGER_REG03) & 0x80
+        regv |= coeff_data[6] << 6  # fs_mode
+        regv |= coeff_data[10] << 0  # adc_osr
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG03, regv)
+        
+        # DAC OSR
+        regv = self.read_reg(self.ES8311_CLK_MANAGER_REG04) & 0x80
+        regv |= coeff_data[11] << 0  # dac_osr
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG04, regv)
+        
+        # LRCK divider high
+        regv = self.read_reg(self.ES8311_CLK_MANAGER_REG07) & 0xC0
+        regv |= coeff_data[7] << 0  # lrck_h
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG07, regv)
+        
+        # LRCK divider low
+        regv = self.read_reg(self.ES8311_CLK_MANAGER_REG08) & 0x00
+        regv |= coeff_data[8] << 0  # lrck_l
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG08, regv)
+        
+        # BCLK divider
+        regv = self.read_reg(self.ES8311_CLK_MANAGER_REG06) & 0xE0
+        if coeff_data[9] < 19  # bclk_div
+            regv |= (coeff_data[9] - 1) << 0
+        else
+            regv |= coeff_data[9] << 0
+        end
+        ret &= self.write_reg(self.ES8311_CLK_MANAGER_REG06, regv)
+        
+        return ret
     end
-
-    # Volume control
-    def set_voice_volume(volume)
-        if volume < 0 || volume > 100
+    
+    # Format-Konfiguration
+    def config_fmt(fmt)
+        var ret = true
+        var adc_iface = self.read_reg(self.ES8311_SDPOUT_REG0A)
+        var dac_iface = self.read_reg(self.ES8311_SDPIN_REG09)
+        
+        if fmt == self.AUDIO_HAL_I2S_NORMAL
+            print(f"{self.tag}: ES8311 in I2S Format")
+            dac_iface &= 0xFC
+            adc_iface &= 0xFC
+        elif fmt == self.AUDIO_HAL_I2S_LEFT || fmt == self.AUDIO_HAL_I2S_RIGHT
+            print(f"{self.tag}: ES8311 in LJ Format")
+            adc_iface &= 0xFC
+            dac_iface &= 0xFC
+            adc_iface |= 0x01
+            dac_iface |= 0x01
+        elif fmt == self.AUDIO_HAL_I2S_DSP
+            print(f"{self.tag}: ES8311 in DSP-A Format")
+            adc_iface &= 0xDC
+            dac_iface &= 0xDC
+            adc_iface |= 0x03
+            dac_iface |= 0x03
+        else
+            dac_iface &= 0xFC
+            adc_iface &= 0xFC
+        end
+        
+        ret &= self.write_reg(self.ES8311_SDPIN_REG09, dac_iface)
+        ret &= self.write_reg(self.ES8311_SDPOUT_REG0A, adc_iface)
+        
+        return ret
+    end
+    
+    # Bit length konfiguration
+    def set_bits_per_sample(bits)
+        var ret = true
+        var adc_iface = self.read_reg(self.ES8311_SDPOUT_REG0A)
+        var dac_iface = self.read_reg(self.ES8311_SDPIN_REG09)
+        
+        if bits == self.AUDIO_HAL_BIT_LENGTH_16BITS
+            dac_iface |= 0x0c
+            adc_iface |= 0x0c
+        elif bits == self.AUDIO_HAL_BIT_LENGTH_24BITS
+            # 24-bit default
+        elif bits == self.AUDIO_HAL_BIT_LENGTH_32BITS
+            dac_iface |= 0x10
+            adc_iface |= 0x10
+        else
+            dac_iface |= 0x0c
+            adc_iface |= 0x0c
+        end
+        
+        ret &= self.write_reg(self.ES8311_SDPIN_REG09, dac_iface)
+        ret &= self.write_reg(self.ES8311_SDPOUT_REG0A, adc_iface)
+        
+        return ret
+    end
+    
+    # I2S Interface konfiguration
+    def codec_config_i2s(mode, iface)
+        var ret = true
+        ret &= self.set_bits_per_sample(iface.find("bits", self.AUDIO_HAL_BIT_LENGTH_16BITS))
+        ret &= self.config_fmt(iface.find("fmt", self.AUDIO_HAL_I2S_NORMAL))
+        return ret
+    end
+    
+    # Codec control state
+    def codec_ctrl_state(mode, ctrl_state)
+        var ret = true
+        var es_mode = self.ES_MODULE_DAC
+        
+        if mode == "encode"
+            es_mode = self.ES_MODULE_ADC
+        elif mode == "line_in"
+            es_mode = self.ES_MODULE_LINE
+        elif mode == "decode"
+            es_mode = self.ES_MODULE_DAC
+        elif mode == "both"
+            es_mode = self.ES_MODULE_ADC_DAC
+        else
+            es_mode = self.ES_MODULE_DAC
+            print(f"{self.tag}: Codec mode not support, default is decode mode")
+        end
+        
+        if ctrl_state == "start"
+            ret = self.start(es_mode)
+        else
+            print(f"{self.tag}: The codec is about to stop")
+            ret = self.stop(es_mode)
+        end
+        
+        return ret
+    end
+    
+    # Start function
+    def start(mode)
+        var ret = true
+        
+        var adc_iface = self.read_reg(self.ES8311_SDPOUT_REG0A) & 0xBF
+        var dac_iface = self.read_reg(self.ES8311_SDPIN_REG09) & 0xBF
+        
+        adc_iface |= 0x40  # BIT(6)
+        dac_iface |= 0x40
+        
+        if mode == self.ES_MODULE_LINE
+            print(f"{self.tag}: The codec es8311 doesn't support ES_MODULE_LINE mode")
             return false
         end
-
-        # Volume mapping (vereinfacht)
-        var reg_value = int((volume * 191) / 100)  # 0-191 Register range
-        return self.write_reg(self.ES8311_DAC_REG32, reg_value)
-    end
-
-    def get_voice_volume()
-        var reg_value = self.read_reg(self.ES8311_DAC_REG32)
-        if reg_value < 0
-            return 0
-        end
-        return int((reg_value * 100) / 191)
-    end
-
-    # Mute control
-    def set_voice_mute(enable)
-        self.mute(enable)
-        return true
-    end
-
-    # Start/Stop functions
-    def start(mode)
-        print(f"ES8311: Starting in mode {mode}")
-
-        # Interface setup
-        var dac_iface = self.read_reg(0x09) & 0xBF  # ES8311_SDPIN_REG09
-        var adc_iface = self.read_reg(0x0A) & 0xBF  # ES8311_SDPOUT_REG0A
-
-        dac_iface |= 0x40  # BIT(6)
-        adc_iface |= 0x40
-
-        if mode == "adc" || mode == "both"
+        
+        if mode == self.ES_MODULE_ADC || mode == self.ES_MODULE_ADC_DAC
             adc_iface &= ~0x40
         end
-        if mode == "dac" || mode == "both"
+        if mode == self.ES_MODULE_DAC || mode == self.ES_MODULE_ADC_DAC
             dac_iface &= ~0x40
         end
-
-        self.write_reg(0x09, dac_iface)
-        self.write_reg(0x0A, adc_iface)
-
-        # System startup sequence
-        self.write_reg(0x17, 0xBF)  # ES8311_ADC_REG17
-        self.write_reg(0x0E, 0x02)  # ES8311_SYSTEM_REG0E
-        self.write_reg(0x12, 0x00)  # ES8311_SYSTEM_REG12
-        self.write_reg(0x14, 0x1A)  # ES8311_SYSTEM_REG14
-
-        return true
+        
+        ret &= self.write_reg(self.ES8311_SDPIN_REG09, dac_iface)
+        ret &= self.write_reg(self.ES8311_SDPOUT_REG0A, adc_iface)
+        
+        ret &= self.write_reg(self.ES8311_ADC_REG17, 0xBF)
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG0E, 0x02)
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG12, 0x00)
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG14, 0x1A)
+        
+        # PDM DMIC enable/disable
+        var regv = self.read_reg(self.ES8311_SYSTEM_REG14)
+        if self.IS_DMIC
+            regv |= 0x40
+        else
+            regv &= ~0x40
+        end
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG14, regv)
+        
+        ret &= self.write_reg(self.ES8311_SYSTEM_REG0D, 0x01)
+        ret &= self.write_reg(self.ES8311_ADC_REG15, 0x40)
+        ret &= self.write_reg(self.ES8311_DAC_REG37, 0x08)
+        ret &= self.write_reg(self.ES8311_GP_REG45, 0x00)
+        
+        # Set internal reference signal
+        ret &= self.write_reg(self.ES8311_GPIO_REG44, 0x58)
+        
+        return ret
     end
- 
+    
+    # Stop function
     def stop(mode)
-    # PA Power
-        print("ES8311: Stopping")
         self.suspend()
         return true
     end
-
-    # Helper functions
-    def get_pa_enable_gpio()
-        # Diese Funktion müsste board-spezifisch implementiert werden
-        return -1  # Kein PA GPIO definiert
+    
+    # Volume control
+    def codec_set_voice_volume(volume)
+        if volume < 0 || volume > 100
+            return false
+        end
+        
+        var reg = self.audio_codec_get_dac_reg_value(volume)
+        var res = self.write_reg(self.ES8311_DAC_REG32, reg)
+        print(f"{self.tag}: Set volume: {volume} reg_value: 0x{reg:02X}")
+        return res
     end
-
+    
+    def codec_get_voice_volume()
+        var regv = self.read_reg(self.ES8311_DAC_REG32)
+        if regv < 0
+            return 0
+        end
+        
+        if regv == self.dac_vol_handle["reg_value"]
+            return self.dac_vol_handle["user_volume"]
+        else
+            return 0
+        end
+    end
+    
+    # Mute control
+    def set_voice_mute(enable)
+        print(f"{self.tag}: SetVoiceMute: {enable}")
+        self.mute(enable)
+        return true
+    end
+    
+    def get_voice_mute()
+        var res = self.read_reg(self.ES8311_DAC_REG31)
+        if res >= 0
+            return (res & 0x20) >> 5
+        end
+        return 0
+    end
+    
+    # Microphone gain
+    def set_mic_gain(gain_db)
+        return self.write_reg(self.ES8311_ADC_REG16, gain_db)
+    end
+    
+    # Deinitialize
+    def codec_deinit()
+        # I2C cleanup würde hier stehen
+        self.dac_vol_handle = nil
+        return true
+    end
+    
+    # Helper functions
     def setup_pa_gpio()
         var pa_gpio = self.get_pa_enable_gpio()
         if pa_gpio != -1
@@ -433,20 +658,35 @@ class ES8311
             self.pa_power(true)
         end
     end
-
+    
     def init_volume_control()
-        # Volume control initialization
-        # Vereinfachte Implementierung
         self.dac_vol_handle = {
-            "max_volume": 32,
-            "min_volume": -95.5,
-            "current_volume": 0
+            "max_dac_volume": 32,
+            "min_dac_volume": -95.5,
+            "board_pa_gain": 0,
+            "volume_accuracy": 0.5,
+            "dac_vol_symbol": 1,
+            "zero_volume_reg": 0xBF,
+            "reg_value": 0,
+            "user_volume": 0
         }
     end
-
+    
+    def audio_codec_get_dac_reg_value(volume)
+        # Vereinfachte Volume-zu-Register Konvertierung
+        # 0x00: -95.5 dB, 0xBF: 0 dB, 0xFF: 32 dB
+        if volume == 0
+            return 0x00
+        elif volume >= 100
+            return 0xFF
+        else
+            return int((volume * 0xBF) / 100)
+        end
+    end
+    
     # Debug function
-    def read_all_registers()
-        print("ES8311 Register Dump:")
+    def read_all()
+        print(f"{self.tag}: Register Dump:")
         for i: 0..0x4A-1
             var reg_val = self.read_reg(i)
             print(f"REG[0x{i:02X}] = 0x{reg_val:02X}")
@@ -454,9 +694,24 @@ class ES8311
     end
 end
 
+# Default handle structure (als globale Variable)
+var AUDIO_CODEC_ES8311_DEFAULT_HANDLE = {
+    "audio_codec_initialize": nil,
+    "audio_codec_deinitialize": nil,
+    "audio_codec_ctrl": nil,
+    "audio_codec_config_iface": nil,
+    "audio_codec_set_mute": nil,
+    "audio_codec_set_volume": nil,
+    "audio_codec_get_volume": nil,
+    "audio_codec_enable_pa": nil,
+    "audio_hal_lock": nil,
+    "handle": nil
+}
+
 # Usage example:
 # var codec = ES8311()
-# var config = {"mode": "slave", "sample_rate": 48000}
+# var config = {"mode": ES8311.AUDIO_HAL_MODE_SLAVE, "sample_rate": ES8311.AUDIO_HAL_48K_SAMPLES}
 # codec.codec_init(config)
 # codec.set_voice_volume(50)
-# codec.start("both")
+# codec.start(ES8311.ES_MODULE_ADC_DAC)
+
