@@ -1,17 +1,13 @@
 """
-PlatformIO Advanced Script for intelligent LDF caching with build order management.
-Integrated with PlatformIO Core functions for maximum efficiency.
+PlatformIO Advanced Script for intelligent LDF caching.
 
-This script implements a sophisticated two-phase caching system:
+This script implements a two-phase caching system:
 1. First run: Performs verbose build, collects dependencies, creates cache
 2. Second run: Applies cached dependencies with lib_ldf_mode=off for faster builds
 
 Features:
 - Intelligent cache invalidation based on file hashes
 - Build order preservation for correct symbol resolution
-- Native PlatformIO Core integration
-- Automatic compile_commands.json generation
-- Zero-configuration operation
 
 Copyright: Jason2866
 """
@@ -43,7 +39,6 @@ from typing import Optional
 # SRC_CXX_EXT = ["cc", "cpp", "cxx", "c++"]
 # SRC_BUILD_EXT = SRC_C_EXT + SRC_CXX_EXT + SRC_ASM_EXT
 
-# Global run state management - determine paths and cache locations
 project_dir = env.subst("$PROJECT_DIR")
 env_name = env.subst("$PIOENV")
 compiledb_path = Path(project_dir) / ".pio" / "compiledb" / f"compile_commands_{env_name}.json"
@@ -65,7 +60,6 @@ def is_first_run_needed():
     Returns:
         bool: True if first run is needed, False if cache can be used
     """
-    # Check if compile commands database exists and is not empty
     if not compiledb_path.exists() or compiledb_path.stat().st_size == 0:
         return True
 
@@ -341,8 +335,7 @@ class LDFCacheOptimizer:
     PlatformIO LDF cache optimizer to avoid unnecessary LDF runs.
     
     This class implements intelligent caching of Library Dependency Finder (LDF)
-    results to significantly speed up subsequent builds. It uses PlatformIO's
-    native functions for maximum compatibility and integration.
+    results to significantly speed up subsequent builds.
     
     The optimizer works in two phases:
     1. First run: Collects dependencies, creates cache, modifies platformio.ini
@@ -453,10 +446,9 @@ class LDFCacheOptimizer:
                 if success:
                     self._cache_applied_successfully = True
                     print("✅ Cache applied successfully - lib_ldf_mode=off")
-                    print(f"  CPPPATH: {len(self.env.get('CPPPATH', []))} entries")
-                    print(f"  LIBS: {len(self.env.get('LIBS', []))} entries") 
-                    print(f"  SOURCES: {len(self.env.get('SOURCES', []))} entries")
-                    print(f"  OBJECTS: {len(self.env.get('OBJECTS', []))} objects")
+                    #print(f"  CPPPATH: {len(self.env.get('CPPPATH', []))} entries")
+                    #print(f"  LIBS: {len(self.env.get('LIBS', []))} entries") 
+                    #print(f"  OBJECTS: {len(self.env.get('OBJECTS', []))} objects")
                 else:
                     print("❌ Cache application failed")
             else:
@@ -494,7 +486,7 @@ class LDFCacheOptimizer:
             if not build_order:
                 print("❌ No build order data in cache")
                 return False
-            # Apply build order (SOURCES, OBJECTS, linker configuration)
+            # Apply build order (OBJECTS, linker configuration)
             build_order_success = self.apply_build_order_to_environment(build_order)
             # Apply SCons variables (include paths, libraries)
             scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
@@ -616,7 +608,6 @@ class LDFCacheOptimizer:
             bool: True if LDF mode is compatible with caching
         """
         try:
-            # Get current LDF mode and validate using PlatformIO Core
             current_mode = self.env.GetProjectOption("lib_ldf_mode", "chain")
             validated_mode = LibBuilderBase.validate_ldf_mode(current_mode)
             
@@ -666,8 +657,6 @@ class LDFCacheOptimizer:
             print("⚠ No build log found for compile_commands.json generation")
             return False
 
-        #print(f"🔧 Generating compile_commands.json from {build_log}")
-
         # Define supported compiler toolchains
         compiler_names = [
             "xtensa-esp32-elf-gcc", "xtensa-esp32-elf-g++", 
@@ -701,44 +690,11 @@ class LDFCacheOptimizer:
                 json.dump(json_entries, f, indent=2)
                 
             file_size = self.compile_commands_file.stat().st_size
-            #print(f"✅ Generated {self.compile_commands_file} ({file_size} bytes)")
-            #print(f"✅ Found {len(compile_commands)} compiler invocations")
             return True
 
         except Exception as e:
             print(f"❌ Error creating compile_commands.json: {e}")
             return False
-
-    def process_library_dependencies_via_piolib(self):
-        """
-        Use PlatformIO's native Library-Dependency-Processing.
-        
-        Leverages PlatformIO Core's library builders to collect information
-        about built libraries and their dependencies.
-        
-        Returns:
-            list: List of library information dictionaries
-        """
-        try:
-            lib_builders = self.env.GetLibBuilders()
-            
-            library_info = []
-            for lb in lib_builders:
-                if lb.is_built:  # Only include libraries that have been built
-                    lib_info = {
-                        'name': lb.name,
-                        'path': lb.path,
-                        'include_dirs': lb.get_include_dirs(),
-                        'build_dir': lb.build_dir,
-                        'src_dir': lb.src_dir
-                    }
-                    library_info.append(lib_info)
-            
-            print(f"✅ Processed {len(library_info)} library dependencies via PlatformIO Core")
-            return library_info
-        except Exception as e:
-            print(f"⚠ Error processing library dependencies: {e}")
-            return []
 
     def get_correct_build_order(self):
         """
@@ -805,8 +761,6 @@ class LDFCacheOptimizer:
                 if Path(inc_path).exists():
                     include_paths.add(str(Path(inc_path)))
 
-        #print(f"✓ Build order extracted directly from {self.compile_commands_file}")
-
         return {
             'object_paths': object_paths,
             'include_paths': sorted(include_paths)
@@ -829,8 +783,6 @@ class LDFCacheOptimizer:
         library_paths = []
         object_paths = []
 
-        #print(f"📦 Collecting artifact paths from {self.lib_build_dir}")
-
         # Walk through build directory to find artifacts
         for root, dirs, files in os.walk(self.lib_build_dir):
             root_path = Path(root)
@@ -844,9 +796,9 @@ class LDFCacheOptimizer:
 
         total_count = len(library_paths) + len(object_paths)
     
-        print(f"📦 Collected {len(library_paths)} library paths (*.a)")
-        print(f"📦 Collected {len(object_paths)} object paths (*.o)")
-        print(f"📦 Total: {total_count} artifact paths collected")
+        #print(f"📦 Collected {len(library_paths)} library paths (*.a)")
+        #print(f"📦 Collected {len(object_paths)} object paths (*.o)")
+        #print(f"📦 Total: {total_count} artifact paths collected")
 
         return {
             'library_paths': library_paths,
@@ -901,7 +853,6 @@ class LDFCacheOptimizer:
                     
         # Process platformio.ini files
         project_path = Path(self.project_dir)
-        #print("✅ Hashed platfomio.ini file(s)")
         for ini_path in project_path.glob('platformio*.ini'):
             if ini_path.exists() and ini_path.is_file():
                 try:
@@ -947,7 +898,7 @@ class LDFCacheOptimizer:
 
             # Create cache data structure
             cache_data = {
-                'version': '2.0',
+                'version': '1.0',
                 'env_name': self.env_name,
                 'timestamp': datetime.datetime.now().isoformat(),
                 'project_hash': project_hash['final_hash'],
@@ -992,7 +943,6 @@ class LDFCacheOptimizer:
                 f.write(pprint.pformat(cache_data, width=120, depth=None))
                 f.write("\n")
 
-            #print(f"✅ Cache saved to {self.cache_file}")
             return True
 
         except Exception as e:
@@ -1097,7 +1047,7 @@ class LDFCacheOptimizer:
         """
         Apply correct build order to SCons environment.
         
-        Sets SOURCES and OBJECTS variables in correct order and configures
+        Set OBJECTS variable in correct order and configures
         linker for optimal symbol resolution.
         
         Args:
@@ -1253,7 +1203,7 @@ class LDFCacheOptimizer:
             ])
 
             self.env.Replace(LINKFLAGS=optimized_linkflags)
-            print(f"✅ Linker flags optimized: {optimized_linkflags}")
+            #print(f"✅ Linker flags optimized: {optimized_linkflags}")
 
         except Exception as e:
             print(f"⚠ Warning during linker optimization: {e}")
