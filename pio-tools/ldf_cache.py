@@ -364,10 +364,10 @@ class LDFCacheOptimizer:
 
     # Directories to ignore during file scanning (optimized for ESP/Tasmota projects)
     IGNORE_DIRS = frozenset([
-        '.git', '.github', '.cache', '.vscode', '.pio', 'boards',
-        'data', 'build', 'pio-tools', 'tools', '__pycache__', 'variants',
-        'berry', 'berry_tasmota', 'berry_matter', 'berry_custom',
-        'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc',
+        '.git', '.github', '.cache', '.vscode', '.pio', 'api', 'boards', 'info',
+        'data', 'build', 'build_output', 'pio-tools', 'tools', '__pycache__', 'variants',
+        'partitions', 'berry', 'berry_tasmota', 'berry_matter', 'berry_custom', 'zigbee',
+        'berry_animate', 'berry_mapping', 'berry_int64', 'displaydesc', 'language',
         'html_compressed', 'html_uncompressed', 'language', 'energy_modbus_configs'
     ])
 
