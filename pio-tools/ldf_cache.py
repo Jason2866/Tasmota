@@ -1481,7 +1481,10 @@ if should_trigger_verbose_build() and not github_actions and not flag_custom_sdk
             bufsize=1
         )
         for line in process.stdout:
-            print(line[:80], end='')  # Shown only first 80 characters in console
+            if len(line.rstrip()) > 120:
+                print(line[:120] + '\n', end='')  # add LF to cut long lines
+            else:
+                print(line, end='')
             logfile.write(line)
             logfile.flush()
         process.wait()
