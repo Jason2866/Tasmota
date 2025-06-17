@@ -543,7 +543,7 @@ class LDFCacheOptimizer:
             for i, line in enumerate(lines):
                 stripped_line = line.strip()
                 if stripped_line.startswith('lib_ldf_mode'):
-                    lines[i] = 'lib_ldf_mode = off\n'
+                    lines[i] = 'lib_ldf_mode = off ; LDF cache modified. To restore change to: lib_ldf_mode                = chain\n'
                     modified = True
                     break
 
