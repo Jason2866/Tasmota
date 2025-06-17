@@ -1480,13 +1480,13 @@ if should_trigger_verbose_build() and not github_actions and not flag_custom_sdk
             universal_newlines=True,
             bufsize=1
         )
+        print(f"🔄 Running verbose build... full log in {logfile_path}")
         for line in process.stdout:
-            if len(line.rstrip()) > 120:
-                print(line[:120] + '\n', end='')  # add LF to cut long lines
-            else:
-                print(line, end='')
+            print("🔄 " + line[:120].splitlines()[0], end='\r')
+            sys.stdout.write("\033[F")
             logfile.write(line)
             logfile.flush()
+        print("\n✅ Build process completed, waiting for process to finish...")
         process.wait()
 
     if process.returncode == 0:
