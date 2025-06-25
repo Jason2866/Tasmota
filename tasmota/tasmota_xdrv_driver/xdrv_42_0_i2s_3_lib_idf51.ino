@@ -70,7 +70,7 @@ public:
   // Constructor takes no parameter, everything is configured from template and config file
   TasmotaI2S() {
     // set some defaults
-    hertz = 16000;
+    hertz = audio_i2s.Settings->tx.sample_rate; // default 16 kHz, can be changed later
     bps = I2S_DATA_BIT_WIDTH_16BIT;   // bps sent to consumeAudio (this is different from channels of I2S stream)
     channels = 2;     // number of channels sent to consumeAudio (this is different from channels of I2S stream)
     gainF2P6 = 32;    // equivalent of 0.5
@@ -108,7 +108,34 @@ public:
     // _i2s_port = i2s_port;
     _tx_slot_config = tx_slot_config;
   }
-  void setRxFreq(uint16_t freq) { _rx_freq = freq; }
+
+  void setRxFreq(uint16_t freq) {
+    if (freq == _rx_freq) { return; } // no change
+    _rx_freq = freq;
+    // if(_duplex && _last_configured_sample_rate == freq) {
+    //   return;
+    // }
+    // _last_configured_sample_rate = freq;
+    // esp_err_t err = ESP_OK;
+    // if(_rx_running){
+    //   err += i2s_channel_disable(_rx_handle);
+    //   if(_duplex) {
+    //     err += i2s_channel_disable(_tx_handle);
+    //   }
+    // }
+    // i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(audio_i2s.Settings->rx.sample_rate);
+    // err += i2s_channel_reconfig_std_clock(_rx_handle, &clk_cfg);
+    // if(_duplex) {
+    //   err += i2s_channel_reconfig_std_clock(_tx_handle, &clk_cfg);
+    // }
+    // if(_rx_running){
+    //   err += i2s_channel_enable(_rx_handle);
+    //   if(_duplex) {
+    //     err += i2s_channel_enable(_tx_handle);
+    //   }
+    // }
+    // AddLog(LOG_LEVEL_DEBUG, "I2S: setRxFreq: %i, err=%i", freq, err);
+  }
 
   // Settings from superclass
   virtual bool SetBitsPerSample(int bits) {
@@ -130,6 +157,9 @@ public:
     AddLog(LOG_LEVEL_DEBUG,"I2S: SetRate: %i was %i tx_running=%i", hz, this->hertz, _tx_running);
     if (hz == (int) this->hertz) { return true; }
     this->hertz = hz;
+        
+    I2SAudioSampleRate(hz,0); // update sample rate for berry audio events, probably for a codec
+
     return updateClockConfig();
   }
 
@@ -140,7 +170,7 @@ public:
 
   // ------------------------------------------------------------------------------------------
   // Getters
-  inline bool isDuplex(void) const { return _tx_configured && _rx_configured; }
+  inline bool isDuplex(void) const {return _duplex; }
 
   inline bool getExclusive(void) const {return _exclusive; }
   inline uint8_t getTxMode(void) const { return _tx_mode; }
@@ -166,6 +196,7 @@ public:
   // ------------------------------------------------------------------------------------------
   // Setters
   inline void setExclusive(bool exclusive) { _exclusive = exclusive; }
+  inline void setDuplex(bool duplex) { _duplex = duplex; }
   inline void setTxMode(uint8_t mode) {
     _tx_mode = mode;
     if (_tx_mode == I2S_MODE_DAC) {
@@ -231,6 +262,8 @@ protected:
 protected:
 
   bool    _exclusive = false;             // in exclusive mode, stopping this instance needs to uninstall driver, and reinstall for next use
+  bool    _duplex = false;                // true if both Tx and Rx are configured using same clock GPIOs, needs standard I2S mode
+  uint32_t _last_configured_sample_rate = 0; // last configured sample rate, used to detect changes for full duplex reconfiguration
   i2s_port_t  _i2s_port = I2S_NUM_AUTO;   // I2S port, I2S_NUM_0/I2S_NUM_1/I2S_NUM_AUTO
 
   // local copy of useful settings for audio
@@ -416,12 +449,17 @@ bool TasmotaI2S::delRxHandle(void) {
 bool TasmotaI2S::stopRx(void) {
   AddLog(LOG_LEVEL_DEBUG, "I2S: calling stopRx() rx_running:%i rx_handle:%p", _rx_running, _rx_handle);
   if (!_rx_configured) { return false; }    // nothing configured
-  if (!_rx_handle) { return true; }  // bothing to do
+  if (!_rx_handle) { return true; }  // nothing to do
 
   if (_rx_running) {
     esp_err_t err = i2s_channel_disable(_rx_handle);
     AddLog(LOG_LEVEL_DEBUG, "I2S: stopRx i2s_channel_disable err=0x%04X", err);
     _rx_running = false;
+    if(_duplex) {
+      i2s_channel_disable(_tx_handle); // disable Tx channel if duplex
+      _tx_running = false; // set Tx running to false
+      AddLog(LOG_LEVEL_DEBUG, "I2S: stopRx also disabled Tx channel");
+    }
   }
   if (_exclusive) {
     if (_rx_handle) {
@@ -521,7 +559,10 @@ bool TasmotaI2S::startI2SChannel(bool tx, bool rx) {
   if (tx && !isDACMode()) {
     // default dma_desc_num = 6 (DMA buffers), dma_frame_num = 240 (frames per buffer)
     i2s_chan_config_t tx_chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(_i2s_port, I2S_ROLE_MASTER);
-
+    if(_duplex){
+      tx_chan_cfg.dma_desc_num = audio_i2s.Settings->rx.dma_desc_num;
+      tx_chan_cfg.dma_frame_num = audio_i2s.Settings->rx.dma_frame_num;
+    }
     AddLog(LOG_LEVEL_DEBUG, "I2S: tx_chan_cfg id:%i role:%i dma_desc_num:%i dma_frame_num:%i auto_clear:%i",
           tx_chan_cfg.id, tx_chan_cfg.role, tx_chan_cfg.dma_desc_num, tx_chan_cfg.dma_frame_num, tx_chan_cfg.auto_clear);
 
@@ -570,10 +611,11 @@ bool TasmotaI2S::startI2SChannel(bool tx, bool rx) {
       return false;
     }
 
-    if (rx) {   // full duplex mode
+    if (rx && _duplex) {   // full duplex mode
       err = i2s_channel_init_std_mode(_rx_handle, &tx_std_cfg);
       AddLog(LOG_LEVEL_DEBUG, "I2S: i2s_channel_init_std_mode err:%i", err);
       AddLog(LOG_LEVEL_DEBUG, "I2S: RX channel added in full duplex mode");
+      return (err == ESP_OK);
     }
   }   // if (tx)
 
@@ -600,7 +642,7 @@ bool TasmotaI2S::startI2SChannel(bool tx, bool rx) {
   }   // if (tx) && DAC
 #endif // SOC_DAC_SUPPORTED
 
-  // configure Rx Microphone
+  // configure Rx Microphone, if not in duplex mode
   if (rx) {
     gpio_num_t clk_gpio;
 
@@ -710,27 +752,43 @@ bool TasmotaI2S::startI2SChannel(bool tx, bool rx) {
   return true;
 }
 
-// called only if Tx frequency is changed
+// called when TX frequency is changed
 bool TasmotaI2S::updateClockConfig(void) {
-  if (!_tx_handle) { return true; }
+  if (!_tx_handle && !_rx_handle) { return true; }
 
-  // I2S mode
   if (_tx_mode != I2S_MODE_DAC) {
     if (_tx_running) {
       esp_err_t err = i2s_channel_disable(_tx_handle);
-      AddLog(LOG_LEVEL_DEBUG, "I2S: updateClockConfig i2s_channel_disable err=0x%04X", err);
+      AddLog(LOG_LEVEL_DEBUG, "I2S: updateClockConfig TX i2s_channel_disable err=0x%04X", err);
+      if(_duplex && _rx_running){
+        err = i2s_channel_disable(_rx_handle);
+        AddLog(LOG_LEVEL_DEBUG, "I2S: updateClockConfig RX i2s_channel_disable for duplex err=0x%04X", err);
+      }
     }
     i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(hertz);
+    _last_configured_sample_rate = hertz; // remember last configured sample rate
   #ifdef SOC_I2S_SUPPORTS_APLL
     if (_apll) {
       clk_cfg.clk_src = I2S_CLK_SRC_APLL;
     }
   #endif
     esp_err_t result = i2s_channel_reconfig_std_clock(_tx_handle, &clk_cfg);
-    AddLog(LOG_LEVEL_DEBUG, "I2S: updateClockConfig i2s_channel_reconfig_std_clock err=0x%04X", result);
-    if (_tx_running) { 
-      esp_err_t err = i2s_channel_enable(_tx_handle);
-      AddLog(LOG_LEVEL_DEBUG, "I2S: updateClockConfig i2s_channel_enable err=0x%04X", err);
+    AddLog(LOG_LEVEL_DEBUG, "I2S: updateClockConfig TX i2s_channel_reconfig_std_clock err=0x%04X", result);
+    if(_duplex){
+        result = i2s_channel_reconfig_std_clock(_rx_handle, &clk_cfg);
+    }
+    if (_tx_running) {
+      result = i2s_channel_enable(_tx_handle);
+      if(result != ESP_OK){
+        _tx_running = false;
+        return false;
+      }
+      AddLog(LOG_LEVEL_DEBUG, "I2S: updateClockConfig TX i2s_channel_enable err=0x%04X", result);
+    }
+    if(_duplex && _rx_running){
+      result = i2s_channel_enable(_rx_handle);
+      _rx_running = (result == ESP_OK);
+      AddLog(LOG_LEVEL_DEBUG, "I2S: updateClockConfig RX i2s_channel_enable for duplex err=0x%04X", result);
     }
     AddLog(LOG_LEVEL_DEBUG, "I2S: Updating clock config");
     return result == ESP_OK;
@@ -764,6 +822,11 @@ uint32_t TasmotaI2S::startRx(void) {
   AddLog(LOG_LEVEL_DEBUG, "I2S: mic init rx_channels:%i rx_running:%i rx_handle:%p", rx_slot_mode, _rx_running, _rx_handle);
 
   if (!_rx_running) {
+    if(_duplex && !_tx_running){
+      err = i2s_channel_enable(_tx_handle);
+      AddLog(LOG_LEVEL_DEBUG, "I2S: TX channel enable for duplex err:0x%04X", err);
+      _tx_running = (err == ESP_OK);
+    }
     err = i2s_channel_enable(_rx_handle);
     AddLog(LOG_LEVEL_DEBUG, "I2S: RX channel enable err:0x%04X", err);
     _rx_running = true;
