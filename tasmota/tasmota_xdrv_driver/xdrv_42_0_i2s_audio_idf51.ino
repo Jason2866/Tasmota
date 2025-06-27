@@ -385,6 +385,11 @@ void I2SAudioPower(bool power) {
   callBerryEventDispatcher(PSTR("audio"), PSTR("power"), power, nullptr, 0);
 }
 
+// signal to an external Berry driver that we change the output audio sample rate
+void I2SAudioSampleRate(uint32_t rate, uint8_t io) { // io: 0 - output, 1 - input
+  callBerryEventDispatcher(PSTR("audio"), PSTR("rate"), rate, (const char *)&io, 1);
+}
+
 //
 // I2SSettingsLoad(erase:bool)
 //
@@ -462,8 +467,8 @@ void I2sInit(void) {
   I2SSettingsLoad(AUDIO_CONFIG_FILENAME, false);    // load configuration (no-erase)
   if (!audio_i2s.Settings) { return; }     // fatal error, could not allocate memory for configuration
 
-  bool duplex = false;      // the same ports are used for input and output
-  bool exclusive = false;   // signals that in/out have a shared GPIO and need to un/install driver before use
+  // bool duplex = false;      // the same ports are used for input and output
+  // bool exclusive = false;   // signals that in/out have a shared GPIO and need to un/install driver before use
   bool dac_mode = (gpio_dac_0 >= 0);
   if (dac_mode) {
     audio_i2s.Settings->tx.mode = I2S_MODE_DAC;
@@ -491,12 +496,15 @@ void I2sInit(void) {
     // if neither input, nor output, nor DAC/ADC skip (WS could is only needed for DAC but supports only port 0)
     if (din < 0 && dout < 0 && (!(dac_mode && port == 0))) { continue; }
 
-    duplex = (din >= 0) && (dout >= 0);
-    if (duplex) {
+    if ((din >= 0) && (dout >= 0)) { // duplex or exclusive
       if (audio_i2s.Settings->rx.mode == I2S_MODE_PDM || audio_i2s.Settings->tx.mode == I2S_MODE_PDM ){
-        exclusive = true;
+        audio_i2s.Settings->sys.exclusive = true;
+        AddLog(LOG_LEVEL_DEBUG, "I2S: enabling exclusive mode");
+      } else {
+        audio_i2s.Settings->sys.duplex = true;
+        AddLog(LOG_LEVEL_DEBUG, "I2S: enabling full duplex mode");
       }
-      AddLog(LOG_LEVEL_DEBUG, "I2S: enabling duplex mode, exclusive:%i", exclusive);
+      
     }
 
     const char *err_msg = nullptr;   // to save code, we indicate an error with a message configured
@@ -510,7 +518,7 @@ void I2sInit(void) {
         if (ws0 >= 0) {
           ws = ws0;
           AddLog(LOG_LEVEL_DEBUG, "I2S: I2S%i WS is shared, using WS from port 0 (%i)", port, ws);
-          exclusive = true;
+          audio_i2s.Settings->sys.exclusive = true;
         }
         if (ws < 0) {
           err_msg = "no WS pin configured";
@@ -585,26 +593,34 @@ void I2sInit(void) {
       i2s->setRxChannels(audio_i2s.Settings->rx.channels);
       i2s->setRxGain(audio_i2s.Settings->rx.gain);
     }
+    // TODO: prevent duplex for now, needs more investigation 
+    audio_i2s.Settings->sys.exclusive = true;
+    audio_i2s.Settings->sys.duplex = false;
 
     bool init_tx_ok = false;
     bool init_rx_ok = false;
-    if (tx && rx && exclusive) {
+    if (audio_i2s.Settings->sys.exclusive == true) {
       i2s->setExclusive(true);
-      audio_i2s.Settings->sys.exclusive = exclusive;
       // in exclusive mode, we need to intialize in sequence Tx and Rx
       init_tx_ok = i2s->startI2SChannel(true, false);
       init_rx_ok = i2s->startI2SChannel(false, true);
-    } else if (tx && rx) {
+    } else if (audio_i2s.Settings->sys.duplex == true) {
+      i2s->setDuplex(true);
       init_tx_ok = init_rx_ok = i2s->startI2SChannel(true, true);
     } else {
       if (tx) { init_tx_ok = i2s->startI2SChannel(true, false); }
       if (rx) { init_rx_ok = i2s->startI2SChannel(false, true); }
     }
-    if (init_tx_ok) { audio_i2s.out = i2s; }
+    if (init_tx_ok) { 
+      audio_i2s.out = i2s;
+      if(audio_i2s.Settings->sys.duplex){
+        audio_i2s.in = i2s;
+      }
+    }
     if (init_rx_ok) { audio_i2s.in = i2s; }
     audio_i2s.Settings->sys.tx |= init_tx_ok; // Do not set to zero id already configured on another channnel
     audio_i2s.Settings->sys.rx |= init_rx_ok;
-    if (init_tx_ok && init_rx_ok) { audio_i2s.Settings->sys.duplex = true; }
+    // if (init_tx_ok && init_rx_ok) { audio_i2s.Settings->sys.duplex = true; }
 
     // if intput and output are configured, don't proceed with other IS2 ports
     if (audio_i2s.out && audio_i2s.in) {
@@ -614,8 +630,8 @@ void I2sInit(void) {
   }
 
   // do we have exclusive mode?
-  if (audio_i2s.out) { audio_i2s.out->setExclusive(exclusive); }
-  if (audio_i2s.in) { audio_i2s.in->setExclusive(exclusive); }
+  // if (audio_i2s.out) { audio_i2s.out->setExclusive(audio_i2s.Settings->sys.exclusive); }
+  // if (audio_i2s.in) { audio_i2s.in->setExclusive(audio_i2s.Settings->sys.exclusive); }
 
   // if(audio_i2s.out != nullptr){
   //   audio_i2s.out->SetGain(((float)(audio_i2s.Settings->tx.gain + 1)/ 100.0));
@@ -666,7 +682,11 @@ int32_t I2SPrepareRx(void) {
   if (!audio_i2s.in) return I2S_ERR_OUTPUT_NOT_CONFIGURED;
 
   if (audio_i2s.Settings->sys.exclusive) {
+    I2SAudioSampleRate(audio_i2s.in->getRxRate(), 1); // 1 - input
     // TODO - deconfigure input driver
+  }
+  if (audio_i2s.Settings->sys.duplex) {
+    audio_i2s.in->setRate( audio_i2s.in->getRxRate());
   }
   return I2S_OK;
 }
@@ -781,9 +801,9 @@ bool I2SinitDecoder(uint32_t decoder_type){
 //
 // Returns I2S_error_t
 int32_t I2SPlayFile(const char *path, uint32_t decoder_type) {
+  if (audio_i2s_mp3.decoder != nullptr) return I2S_ERR_DECODER_IN_USE;
   int32_t i2s_err = I2SPrepareTx();
   if ((i2s_err) != I2S_OK) { return i2s_err; }
-  if (audio_i2s_mp3.decoder != nullptr) return I2S_ERR_DECODER_IN_USE;
 
   // check if the filename starts with '/', if not add it
   char fname[64];
@@ -819,7 +839,7 @@ int32_t I2SPlayFile(const char *path, uint32_t decoder_type) {
   }
 
   size_t play_tasksize = 8000; // suitable for ACC and MP3
-  if(decoder_type == 2){ // opus needs a ton of stack
+  if(decoder_type == OPUS_DECODER){ // opus needs a ton of stack
     play_tasksize = 26000;
   }
 
@@ -995,6 +1015,7 @@ void I2sEventHandler(){
   if(audio_i2s_mp3.task_has_ended == true){
     audio_i2s_mp3.task_has_ended = false;
     MqttPublishPayloadPrefixTopicRulesProcess_P(RESULT_OR_STAT,PSTR(""),PSTR("{\"Event\":{\"I2SPlay\":\"Ended\"}}"));
+    I2SAudioPower(false); // signal to Berry that we stopped playing
     // Rule1 ON event#i2splay=ended DO <something> ENDON
   }
 }
