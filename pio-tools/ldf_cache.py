@@ -117,13 +117,19 @@ def should_trigger_verbose_build():
     if cache_file.exists():
         return False
 
-    # Only trigger for build-related targets
-    current_targets = COMMAND_LINE_TARGETS[:]
-    is_build_target = (
-        not current_targets or
-        any(target in ["build", "buildprog"] for target in current_targets)
-    )
-    if not is_build_target:
+    # Debug: Print all sys.argv values
+#    print(f"Debug - sys.argv values: {sys.argv}")
+#    for i, arg in enumerate(sys.argv):
+#        print(f"  sys.argv[{i}]: {arg}")
+
+    # Check sys.argv for "clean" target
+    if any("clean" in str(arg).lower() for arg in sys.argv):
+        return False
+
+    if any("nobuild" in str(arg).lower() for arg in sys.argv):
+        return False
+
+    if any("erase" in str(arg).lower() for arg in sys.argv):
         return False
 
     return is_first_run_needed()
@@ -1513,3 +1519,4 @@ except Exception as e:
     print(f"❌ Error initializing LDF Cache Optimizer: {e}")
     import traceback
     traceback.print_exc()
+
