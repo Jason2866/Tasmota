@@ -1452,6 +1452,25 @@ def execute_first_run_post_actions():
         traceback.print_exc()
         return False
 
+def terminal_size():
+    """
+    Get terminal width and lines from stty size command.
+    VSC does not provide an easy way to get terminal width.
+    Returns:
+        tuple: (columns, lines) if available, otherwise (80, 16)
+    """
+    try:
+        result = subprocess.run(['stty', 'size'], capture_output=True, text=True, timeout=2)
+        if result.returncode == 0:
+            parts = result.stdout.strip().split()
+            if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+                lines = int(parts[0])
+                columns = int(parts[1])
+                return columns, lines
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        pass
+    return 80, 16
+
 # FIRST RUN LOGIC - Execute verbose build and create cache
 if should_trigger_verbose_build() and not github_actions and not flag_custom_sdkconfig:
     print("🔄 Starting LDF Cache Optimizer...")
@@ -1471,7 +1490,10 @@ if should_trigger_verbose_build() and not github_actions and not flag_custom_sdk
     env_vars = os.environ.copy()
     env_vars['PLATFORMIO_SETTING_FORCE_VERBOSE'] = 'true'
     env_vars['_PIO_RECURSIVE_CALL'] = 'true'
-    
+
+    terminal_columns, terminal_lines = terminal_size()
+    terminal_width = terminal_columns - 3 # Adjust for emoji and padding
+
     # Handle recursive call return codes
     if os.environ.get('_PIO_REC_CALL_RETURN_CODE') is not None:
         sys.exit(int(os.environ.get('_PIO_REC_CALL_RETURN_CODE')))
@@ -1488,7 +1510,7 @@ if should_trigger_verbose_build() and not github_actions and not flag_custom_sdk
         )
         print(f"🔄 Running verbose build... full log in {logfile_path}")
         for line in process.stdout:
-            print("🔄 " + line[:120].splitlines()[0], end='\r')
+            print("🔄 " + line[:terminal_width].splitlines()[0], end='\r')
             sys.stdout.write("\033[F")
             logfile.write(line)
             logfile.flush()
@@ -1519,4 +1541,3 @@ except Exception as e:
     print(f"❌ Error initializing LDF Cache Optimizer: {e}")
     import traceback
     traceback.print_exc()
-
