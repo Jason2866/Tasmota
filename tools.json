@@ -1,0 +1,84 @@
+{
+  "tools": [
+    {
+      "description": "OpenOCD for ESP32",
+      "export_paths": [
+        [
+          "tool-openocd-esp32",
+          "bin"
+        ]
+      ],
+      "strip_container_dirs": 1,
+      "export_vars": {
+        "OPENOCD_SCRIPTS": "${TOOL_PATH}/tool-openocd-esp32/share/openocd/scripts"
+      },
+      "info_url": "https://github.com/espressif/openocd-esp32",
+      "install": "always",
+      "license": "GPL-2.0-only",
+      "name": "tool-openocd-esp32",
+      "platform_overrides": [
+        {
+          "install": "on_request",
+          "platforms": [
+            "linux-i686"
+          ]
+        }
+      ],
+      "supported_targets": [
+        "all"
+      ],
+      "version_cmd": [
+        "openocd",
+        "--version"
+      ],
+      "version_regex": "Open On-Chip Debugger\\s+([a-z0-9.-]+)\\s+",
+      "versions": [
+        {
+          "linux-amd64": {
+            "sha256": "eb1fa9b21c65b45a2200af6dcc2914e32335d37b6dbbd181778dcc0dc025e70a",
+            "size": 2445546,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20250422/openocd-esp32-linux-amd64-0.12.0-esp32-20250422.tar.gz"
+          },
+          "linux-arm64": {
+            "sha256": "f70334a9b12a75b4d943e09fa5db30973037c39dbb54d6fa9f1a7118228b3d1c",
+            "size": 2330926,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20250422/openocd-esp32-linux-arm64-0.12.0-esp32-20250422.tar.gz"
+          },
+          "linux-armel": {
+            "sha256": "4ac34d6fd1af86aeda87c8318732f8d691c300c285c7fd2f5037c432c63fbbb3",
+            "size": 2470732,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20250422/openocd-esp32-linux-armel-0.12.0-esp32-20250422.tar.gz"
+          },
+          "linux-armhf": {
+            "sha256": "75372bdbcef2df64013dd36c88836e1029c52955941b69ca463397ccbd287c21",
+            "size": 2310816,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20250422/openocd-esp32-linux-armhf-0.12.0-esp32-20250422.tar.gz"
+          },
+          "macos": {
+            "sha256": "9186a7a06304c6d9201cbce4ee3c7099b393bf8d329cda17a68874f92308f6ce",
+            "size": 2548730,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20250422/openocd-esp32-macos-0.12.0-esp32-20250422.tar.gz"
+          },
+          "macos-arm64": {
+            "sha256": "2cc39318d52f393233ff1f777871aebe5b97b3fbad29556a238489263401b774",
+            "size": 2593819,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20250422/openocd-esp32-macos-arm64-0.12.0-esp32-20250422.tar.gz"
+          },
+          "name": "v0.12.0-esp32-20250422",
+          "status": "recommended",
+          "win32": {
+            "sha256": "ecb4f8533fa9098d10000f5f7e8b8eaa8591015b824b481078ddb2b37e7aa6f2",
+            "size": 2988859,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20250422/openocd-esp32-win32-0.12.0-esp32-20250422.zip"
+          },
+          "win64": {
+            "sha256": "e9eae8e1a8d0e030cd81dcb08394a9137cb7338a6211dfabcdbdfb37b58c5a23",
+            "size": 2988858,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20250422/openocd-esp32-win64-0.12.0-esp32-20250422.zip"
+          }
+        }
+      ]
+    }
+  ],
+  "version": 1
+}
