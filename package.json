@@ -1,0 +1,21 @@
+{
+  "name": "tool-openocd-esp32",
+  "version": "2.1200.20250422",
+  "description": "Open On-Chip Debugger for Espressif ESP32",
+  "keywords": [
+    "tools",
+    "debugger",
+    "debug server",
+    "uploader",
+    "esp32"
+  ],
+  "homepage": "http://openocd.org",
+  "license": "GPL-2.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/espressif/openocd-esp32"
+  },
+  "system": [
+    "*"
+  ]
+}
