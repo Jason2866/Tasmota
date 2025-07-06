@@ -1,6 +1,6 @@
 {
   "name": "tool-openocd-esp32",
-  "version": "2.1200.20250422",
+  "version": "2.1200.20250703",
   "description": "Open On-Chip Debugger for Espressif ESP32",
   "keywords": [
     "tools",
