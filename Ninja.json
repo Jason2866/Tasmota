@@ -1,0 +1,62 @@
+{
+  "tools": [
+    {
+      "description": "Ninja build system",
+      "export_paths": [
+        [
+          ""
+        ]
+      ],
+      "export_vars": {},
+      "info_url": "https://github.com/ninja-build/ninja",
+      "install": "always",
+      "license": "Apache-2.0",
+      "name": "tool-ninja",
+      "platform_overrides": [
+        {
+          "install": "always",
+          "platforms": [
+            "win32",
+            "win64"
+          ]
+        }
+      ],
+      "supported_targets": [
+        "all"
+      ],
+      "version_cmd": [
+        "ninja",
+        "--version"
+      ],
+      "version_regex": "([0-9.]+)",
+      "versions": [
+        {
+          "linux-amd64": {
+            "sha256": "32bb769de4d57aa7ee0e292cfcb7553e7cc8ea0961f7aa2b3aee60aa407c4033",
+            "size": 106415,
+            "url": "https://dl.espressif.com/dl/ninja-1.10.2-linux64.tar.gz"
+          },
+          "macos": {
+            "sha256": "847bb1ca4bc16d8dba6aeed3ecb5055498b86bc68c364c37583eb5738bb440f1",
+            "size": 240112,
+            "url": "https://dl.espressif.com/dl/ninja-1.10.2-osx.tar.gz"
+          },
+          "macos-arm64": {
+            "sha256": "847bb1ca4bc16d8dba6aeed3ecb5055498b86bc68c364c37583eb5738bb440f1",
+            "size": 240112,
+            "url": "https://dl.espressif.com/dl/ninja-1.10.2-osx.tar.gz"
+          },
+          "name": "1.10.2",
+          "status": "recommended",
+          "win64": {
+            "sha256": "bbde850d247d2737c5764c927d1071cbb1f1957dcabda4a130fa8547c12c695f",
+            "size": 262670,
+            "url": "https://dl.espressif.com/dl/ninja-1.10.2-win64.zip"
+          }
+        }
+      ]
+    }
+  ],
+  "version": 1
+}
+
