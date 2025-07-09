@@ -35,8 +35,8 @@
             "size": 134141,
             "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.0/ninja-linux.zip"
           },
-          "linux-aarch64": {
-            "rename_dist": "ninja-linux-aarch64-v1.13.0.zip",
+          "linux-arm64": {
+            "rename_dist": "ninja-linux-arm64-v1.13.0.zip",
             "sha256": "b2b2f956963ef6300841c253a7aa81c3e9e5dbd2ed059bee6f8bcd851b5bb096",
             "size": 149063,
             "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.0/ninja-linux-aarch64.zip"
