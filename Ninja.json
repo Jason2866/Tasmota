@@ -3,9 +3,7 @@
     {
       "description": "Ninja build system",
       "export_paths": [
-        [
-          ""
-        ]
+        ""
       ],
       "export_vars": {},
       "info_url": "https://github.com/ninja-build/ninja",
@@ -32,26 +30,30 @@
       "versions": [
         {
           "linux-amd64": {
-            "sha256": "32bb769de4d57aa7ee0e292cfcb7553e7cc8ea0961f7aa2b3aee60aa407c4033",
-            "size": 106415,
-            "url": "https://dl.espressif.com/dl/ninja-1.10.2-linux64.tar.gz"
+            "rename_dist": "ninja-linux-v1.12.1.zip",
+            "sha256": "6f98805688d19672bd699fbbfa2c2cf0fc054ac3df1f0e6a47664d963d530255",
+            "size": 123084,
+            "url": "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-linux.zip"
           },
           "macos": {
-            "sha256": "847bb1ca4bc16d8dba6aeed3ecb5055498b86bc68c364c37583eb5738bb440f1",
-            "size": 240112,
-            "url": "https://dl.espressif.com/dl/ninja-1.10.2-osx.tar.gz"
+            "rename_dist": "ninja-mac-v1.12.1.zip",
+            "sha256": "89a287444b5b3e98f88a945afa50ce937b8ffd1dcc59c555ad9b1baf855298c9",
+            "size": 281130,
+            "url": "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-mac.zip"
           },
           "macos-arm64": {
-            "sha256": "847bb1ca4bc16d8dba6aeed3ecb5055498b86bc68c364c37583eb5738bb440f1",
-            "size": 240112,
-            "url": "https://dl.espressif.com/dl/ninja-1.10.2-osx.tar.gz"
+            "rename_dist": "ninja-mac-v1.12.1.zip",
+            "sha256": "89a287444b5b3e98f88a945afa50ce937b8ffd1dcc59c555ad9b1baf855298c9",
+            "size": 281130,
+            "url": "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-mac.zip"
           },
-          "name": "1.10.2",
+          "name": "1.12.1",
           "status": "recommended",
           "win64": {
-            "sha256": "bbde850d247d2737c5764c927d1071cbb1f1957dcabda4a130fa8547c12c695f",
-            "size": 262670,
-            "url": "https://dl.espressif.com/dl/ninja-1.10.2-win64.zip"
+            "rename_dist": "ninja-win-v1.12.1.zip",
+            "sha256": "f550fec705b6d6ff58f2db3c374c2277a37691678d6aba463adcbb129108467a",
+            "size": 275425,
+            "url": "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip"
           }
         }
       ]
@@ -59,4 +61,3 @@
   ],
   "version": 1
 }
-
