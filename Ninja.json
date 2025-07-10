@@ -62,6 +62,12 @@
             "sha256": "beb3c1bfcd01d352cb46586a4677b0a49a93b7bb668cfa5d0695283e1d8efb61",
             "size": 289425,
             "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.0/ninja-win.zip"
+          },
+          "winarm64": {
+            "rename_dist": "ninja-winarm64-v1.13.0.zip",
+            "sha256": "f089535ab1536d3017628ac60542e731a4fda431417826a442308f0bb128330b",
+            "size": 266139,
+            "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.0/ninja-winarm64.zip"
           }
         }
       ]
