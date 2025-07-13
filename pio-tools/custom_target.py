@@ -22,6 +22,7 @@ import shutil
 import json
 from colorama import Fore, Back, Style
 from platformio.project.config import ProjectConfig
+from SCons.Script import COMMAND_LINE_TARGETS
 
 Import("env")
 platform = env.PioPlatform()
@@ -133,6 +134,30 @@ def esp8266_fetch_fs_size(env):
             _value += 0xE00000  # correction
 
         env[k] = _value
+
+## Filesystem Build Optimization
+def configure_fs_build_isolation():
+    """
+    Configure separate build directory and disable LDF for filesystem targets.
+    This optimization prevents unnecessary library dependency scanning and compilation
+    when only filesystem operations are performed, significantly improving build times
+    for uploadfs, uploadfsota, and buildfs targets.
+    """
+    fs_targets = {"uploadfs", "uploadfsota", "buildfs"}
+    if fs_targets & set(COMMAND_LINE_TARGETS):
+        # Create isolated build directory for filesystem operations
+        fs_build_dir = env.Dir(env.subst("$PROJECT_BUILD_DIR/${PIOENV}_fs"))
+        env.Replace(BUILD_DIR=fs_build_dir)
+        
+        # Disable Library Dependency Finder by modifying project configuration directly
+        projectconfig = env.GetProjectConfig()
+        env_section = "env:" + env["PIOENV"]
+        if not projectconfig.has_section(env_section):
+            projectconfig.add_section(env_section)
+        projectconfig.set(env_section, "lib_ldf_mode", "off")
+
+# Apply filesystem build optimization
+configure_fs_build_isolation()
 
 ## Script interface functions
 def parse_partition_table(content):
@@ -333,7 +358,6 @@ def esp32_use_external_crashreport(*args, **kwargs):
         )
         print(Fore.YELLOW + output[0]+": \n"+output[1]+" in "+output[2])
 
-
 def reset_target(*args, **kwargs):
     upload_port = join(env.get("UPLOAD_PORT", "none"))
     if "none" in upload_port:
@@ -349,7 +373,7 @@ def reset_target(*args, **kwargs):
     print("Try to reset device")
     subprocess.call(esptoolpy_cmd, shell=False)
 
-
+# Custom Target Definitions
 env.AddCustomTarget(
     name="reset_target",
     dependencies=None,
@@ -359,7 +383,6 @@ env.AddCustomTarget(
     title="Reset ESP32 target",
     description="This command resets ESP32x target via esptoolpy",
 )
-
 
 env.AddCustomTarget(
     name="downloadfs",
