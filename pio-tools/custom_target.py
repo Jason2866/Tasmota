@@ -22,7 +22,6 @@ import shutil
 import json
 from colorama import Fore, Back, Style
 from platformio.project.config import ProjectConfig
-from SCons.Script import COMMAND_LINE_TARGETS
 
 Import("env")
 platform = env.PioPlatform()
