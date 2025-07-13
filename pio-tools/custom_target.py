@@ -257,7 +257,6 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
     downloaded_file = join(current_build_dir, filename)
     if not os.path.exists(downloaded_file):
         print(f"ERROR: {downloaded_file} with filesystem not found, maybe download failed due to download_speed setting being too high.")
-        print(f"Current BUILD_DIR: {current_build_dir}")
         assert(0)
     try:
         if os.path.exists(unpack_dir):
