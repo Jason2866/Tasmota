@@ -187,9 +187,9 @@ def get_partition_table():
             "--chip", mcu,
             "--port", upload_port,
             "--baud",  download_speed,
-            "--before", "default_reset",
-            "--after", "hard_reset",
-            "read_flash",
+            "--before", "default-reset",
+            "--after", "hard-reset",
+            "read-flash",
             "0x8000",
             "0x1000",
             fs_file
@@ -240,9 +240,9 @@ def download_fs(fs_info: FSInfo):
             "--chip", mcu,
             "--port", upload_port,
             "--baud",  download_speed,
-            "--before", "default_reset",
-            "--after", "hard_reset",
-            "read_flash",
+            "--before", "default-reset",
+            "--after", "hard-reset",
+            "read-flash",
             hex(fs_info.start),
             hex(fs_info.length),
             fs_file
@@ -305,7 +305,7 @@ def upload_factory(*args, **kwargs):
                 "--chip", mcu,
                 "--port", upload_port,
                 "--baud", env.subst("$UPLOAD_SPEED"),
-                "write_flash",
+                "write-flash",
                 "0x0",
                 target_firm
         ]
@@ -367,7 +367,7 @@ def reset_target(*args, **kwargs):
         "--no-stub",
         "--chip", mcu,
         "--port", upload_port,
-        "flash_id"
+        "flash-id"
     ]
     esptoolpy_cmd = [env["PYTHONEXE"], esptoolpy] + esptoolpy_flags
     print("Try to reset device")
