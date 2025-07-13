@@ -138,42 +138,46 @@ def esp8266_fetch_fs_size(env):
 ## Filesystem Build Optimization
 def configure_fs_build_isolation():
     """
-    Configure separate build directory and disable LDF for filesystem targets.
-    Optimized for post-script execution with robust LDF override.
+    Configure aggressive LDF optimization for pre-script execution.
+    Uses multiple enforcement methods to ensure LDF stays disabled.
     """
-    fs_targets = {"uploadfs", "uploadfsota", "buildfs"}
-    if fs_targets & set(COMMAND_LINE_TARGETS):
-        # Create isolated build directory
-        fs_build_dir = env.Dir(env.subst("$PROJECT_BUILD_DIR/${PIOENV}_fs"))
-        env.Replace(BUILD_DIR=fs_build_dir)
-        
-        # Robust LDF disable - multiple approaches
+    import sys
+    
+    # Only exclude external_crashreport
+    excluded_targets = ["external_crashreport"]
+    
+    argv_string = " ".join(sys.argv)
+    is_excluded_target = any(target in argv_string for target in excluded_targets)
+    
+    if not is_excluded_target:
+        # Method 1: Environment variable (immediate effect)
         env.Replace(LIB_LDF_MODE="off")
+        env.Replace(LIB_DEPS=[])
         
-        # Force project config override (works in post-scripts)
+        # Method 2: System environment variable (backup)
+        os.environ["PLATFORMIO_LIB_LDF_MODE"] = "off"
+        
+        # Method 3: Project config modification (pre-script timing)
         projectconfig = env.GetProjectConfig()
         env_section = "env:" + env["PIOENV"]
-        
-        # Remove existing lib_ldf_mode setting if present
-        if projectconfig.has_option(env_section, "lib_ldf_mode"):
-            projectconfig.remove_option(env_section, "lib_ldf_mode")
-        
-        # Set new value
         if not projectconfig.has_section(env_section):
             projectconfig.add_section(env_section)
         projectconfig.set(env_section, "lib_ldf_mode", "off")
         
-        # Clear library dependencies
-        env.Replace(LIB_DEPS=[])
+        # Method 4: Build directory isolation
+        optimized_build_dir = env.Dir(env.subst("$PROJECT_BUILD_DIR/${PIOENV}_optimized"))
+        env.Replace(BUILD_DIR=optimized_build_dir)
         
-        # Additional enforcement for stubborn cases
-        env.Append(CPPDEFINES=["LDF_MODE_OFF"])
+        # Method 5: Post-processing enforcement (double safety)
+        def enforce_ldf_off(target, source, env):
+            env.Replace(LIB_LDF_MODE="off")
         
-        if env.GetProjectOption("custom_fs_verbose", False):
-            print(f"FS Build Isolation: LDF mode set to 'off' (post-script)")
-            print(f"Build directory: {fs_build_dir}")
-            print(f"Current LIB_LDF_MODE: {env.get('LIB_LDF_MODE', 'undefined')}")
-
+        # Apply to common build actions
+        env.AddPreAction("$BUILD_DIR", enforce_ldf_off)
+        
+        print("✓ Aggressive LDF Optimization ACTIVATED (pre-script)")
+    else:
+        print("ℹ external_crashreport detected - normal build")
 
 def debug_ldf_mode():
     """
@@ -196,7 +200,7 @@ def debug_ldf_mode():
         print("===================")
 
 # Rufe Debug-Funktion auf
-debug_ldf_mode()
+# debug_ldf_mode()
 configure_fs_build_isolation()
 
 ## Script interface functions
