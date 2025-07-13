@@ -139,38 +139,41 @@ def esp8266_fetch_fs_size(env):
 def configure_fs_build_isolation():
     """
     Configure separate build directory and disable LDF for filesystem targets.
-    Uses multiple methods to ensure LDF is properly disabled even if PlatformIO
-    tries to override the configuration later in the build process.
+    Optimized for post-script execution with robust LDF override.
     """
     fs_targets = {"uploadfs", "uploadfsota", "buildfs"}
     if fs_targets & set(COMMAND_LINE_TARGETS):
-        # Create isolated build directory for filesystem operations
+        # Create isolated build directory
         fs_build_dir = env.Dir(env.subst("$PROJECT_BUILD_DIR/${PIOENV}_fs"))
         env.Replace(BUILD_DIR=fs_build_dir)
         
-        # Multi-method approach to disable LDF
+        # Robust LDF disable - multiple approaches
         env.Replace(LIB_LDF_MODE="off")
-        os.environ["PLATFORMIO_LIB_LDF_MODE"] = "off"
-        env.Replace(LIB_DEPS=[])
         
-        # Project configuration override
+        # Force project config override (works in post-scripts)
         projectconfig = env.GetProjectConfig()
         env_section = "env:" + env["PIOENV"]
+        
+        # Remove existing lib_ldf_mode setting if present
+        if projectconfig.has_option(env_section, "lib_ldf_mode"):
+            projectconfig.remove_option(env_section, "lib_ldf_mode")
+        
+        # Set new value
         if not projectconfig.has_section(env_section):
             projectconfig.add_section(env_section)
         projectconfig.set(env_section, "lib_ldf_mode", "off")
         
-        # Post-processing enforcement
-        def force_ldf_off(target, source, env):
-            env.Replace(LIB_LDF_MODE="off")
-            if env.GetProjectOption("custom_fs_verbose", False):
-                print("Post-processing: LDF mode enforced to 'off'")
+        # Clear library dependencies
+        env.Replace(LIB_DEPS=[])
         
-        env.AddPreAction("buildfs", force_ldf_off)
-        env.AddPreAction("uploadfs", force_ldf_off)
-        env.AddPreAction("uploadfsota", force_ldf_off)
+        # Additional enforcement for stubborn cases
+        env.Append(CPPDEFINES=["LDF_MODE_OFF"])
         
-        print(f"FS Build Isolation: Robust LDF disable activated")
+        if env.GetProjectOption("custom_fs_verbose", False):
+            print(f"FS Build Isolation: LDF mode set to 'off' (post-script)")
+            print(f"Build directory: {fs_build_dir}")
+            print(f"Current LIB_LDF_MODE: {env.get('LIB_LDF_MODE', 'undefined')}")
+
 
 # Apply filesystem build optimization
 configure_fs_build_isolation()
