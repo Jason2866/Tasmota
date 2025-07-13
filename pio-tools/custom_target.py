@@ -304,8 +304,12 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
     # by writing custom_unpack_dir = some_dir in the platformio.ini, one can
     # control the unpack directory
     unpack_dir = env.GetProjectOption("custom_unpack_dir", "unpacked_fs")
+    current_build_dir = env.subst("$BUILD_DIR")
+    filename = f"downloaded_fs_{hex(fs_info.start)}_{hex(fs_info.length)}.bin"
+    downloaded_file = join(current_build_dir, filename)
     if not os.path.exists(downloaded_file):
         print(f"ERROR: {downloaded_file} with filesystem not found, maybe download failed due to download_speed setting being too high.")
+        print(f"Current BUILD_DIR: {current_build_dir}")
         assert(0)
     try:
         if os.path.exists(unpack_dir):
