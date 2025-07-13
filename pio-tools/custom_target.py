@@ -58,10 +58,6 @@ class FS_Info(FSInfo):
     def get_extract_cmd(self, input_file, output_dir):
         return f'"{self.tool}" -b {self.block_size} -s {self.length} -p {self.page_size} --unpack "{output_dir}" "{input_file}"'
 
-# SPIFFS helpers copied from ESP32, https://github.com/platformio/platform-espressif32/blob/develop/builder/main.py
-# Copyright 2014-present PlatformIO <contact@platformio.org>
-# Licensed under the Apache License, Version 2.0 (the "License");
-
 def _parse_size(value):
     if isinstance(value, int):
         return value
@@ -73,11 +69,6 @@ def _parse_size(value):
         base = 1024 if value[-1].upper() == "K" else 1024 * 1024
         return int(value[:-1]) * base
     return value
-
-## FS helpers for ESP8266
-# copied from https://github.com/platformio/platform-espressif8266/blob/develop/builder/main.py
-# Copyright 2014-present PlatformIO <contact@platformio.org>
-# Licensed under the Apache License, Version 2.0 (the "License");
 
 def _parse_ld_sizes(ldscript_path):
     assert ldscript_path
@@ -135,26 +126,22 @@ def esp8266_fetch_fs_size(env):
 
         env[k] = _value
 
-## Filesystem Build Optimization
 def configure_fs_build_isolation():
     """
-    Configure aggressive LDF optimization for pre-script execution.
-    Uses multiple enforcement methods to ensure LDF stays disabled.
+    Configure `lib_ldf_mode = off` for pre-script execution.
+    to avoid the time consuming library dependency resolution
+    when building the filesystem image.
     """
     import sys
     
-    # Only exclude external_crashreport
+    # Exclude external_crashreport, which needs a complete build run 
     excluded_targets = ["external_crashreport"]
-    
+
     argv_string = " ".join(sys.argv)
     is_excluded_target = any(target in argv_string for target in excluded_targets)
     
     if not is_excluded_target:
-        # Environment variable
-        env.Replace(LIB_LDF_MODE="off")
-        env.Replace(LIB_DEPS=[])
-        
-        # Project config modification (pre-script timing)
+        # Project config modification
         projectconfig = env.GetProjectConfig()
         env_section = "env:" + env["PIOENV"]
         if not projectconfig.has_section(env_section):
@@ -164,7 +151,6 @@ def configure_fs_build_isolation():
         # Build directory isolation
         fs_build_dir = env.Dir(env.subst("$PROJECT_BUILD_DIR/${PIOENV}_fs"))
         env.Replace(BUILD_DIR=fs_build_dir)
-
 
 configure_fs_build_isolation()
 
