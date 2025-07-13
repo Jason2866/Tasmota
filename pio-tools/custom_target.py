@@ -150,57 +150,22 @@ def configure_fs_build_isolation():
     is_excluded_target = any(target in argv_string for target in excluded_targets)
     
     if not is_excluded_target:
-        # Method 1: Environment variable (immediate effect)
+        # Environment variable
         env.Replace(LIB_LDF_MODE="off")
         env.Replace(LIB_DEPS=[])
         
-        # Method 2: System environment variable (backup)
-        os.environ["PLATFORMIO_LIB_LDF_MODE"] = "off"
-        
-        # Method 3: Project config modification (pre-script timing)
+        # Project config modification (pre-script timing)
         projectconfig = env.GetProjectConfig()
         env_section = "env:" + env["PIOENV"]
         if not projectconfig.has_section(env_section):
             projectconfig.add_section(env_section)
         projectconfig.set(env_section, "lib_ldf_mode", "off")
         
-        # Method 4: Build directory isolation
-        optimized_build_dir = env.Dir(env.subst("$PROJECT_BUILD_DIR/${PIOENV}_optimized"))
-        env.Replace(BUILD_DIR=optimized_build_dir)
-        
-        # Method 5: Post-processing enforcement (double safety)
-        def enforce_ldf_off(target, source, env):
-            env.Replace(LIB_LDF_MODE="off")
-        
-        # Apply to common build actions
-        env.AddPreAction("$BUILD_DIR", enforce_ldf_off)
-        
-        print("✓ Aggressive LDF Optimization ACTIVATED (pre-script)")
-    else:
-        print("ℹ external_crashreport detected - normal build")
+        # Build directory isolation
+        fs_build_dir = env.Dir(env.subst("$PROJECT_BUILD_DIR/${PIOENV}_fs"))
+        env.Replace(BUILD_DIR=fs_build_dir)
 
-def debug_ldf_mode():
-    """
-    Debug function to check LDF mode at different stages
-    """
-    fs_targets = {"uploadfs", "uploadfsota", "buildfs"}
-    if fs_targets & set(COMMAND_LINE_TARGETS):
-        print("=== LDF Mode Debug ===")
-        print(f"Environment LIB_LDF_MODE: {env.get('LIB_LDF_MODE', 'not set')}")
-        
-        projectconfig = env.GetProjectConfig()
-        env_section = "env:" + env["PIOENV"]
-        if projectconfig.has_option(env_section, "lib_ldf_mode"):
-            config_value = projectconfig.get(env_section, "lib_ldf_mode")
-            print(f"Project config lib_ldf_mode: {config_value}")
-        else:
-            print("Project config lib_ldf_mode: not set")
-        
-        print(f"Command line targets: {COMMAND_LINE_TARGETS}")
-        print("===================")
 
-# Rufe Debug-Funktion auf
-# debug_ldf_mode()
 configure_fs_build_isolation()
 
 ## Script interface functions
@@ -226,7 +191,10 @@ def get_partition_table():
     if "none" in upload_port:
         env.AutodetectUploadPort()
         upload_port = join(env.get("UPLOAD_PORT", "none"))
-    fs_file = join(env["PROJECT_DIR"], "partition_table_from_flash.bin")
+        build_dir = env.subst("$BUILD_DIR")
+        if not os.path.exists(build_dir):
+            os.makedirs(build_dir)
+    fs_file = join(env.subst("$BUILD_DIR"), "partition_table_from_flash.bin")
     esptoolpy_flags = [
             "--chip", mcu,
             "--port", upload_port,
