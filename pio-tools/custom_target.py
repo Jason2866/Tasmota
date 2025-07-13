@@ -139,9 +139,8 @@ def esp8266_fetch_fs_size(env):
 def configure_fs_build_isolation():
     """
     Configure separate build directory and disable LDF for filesystem targets.
-    This optimization prevents unnecessary library dependency scanning and compilation
-    when only filesystem operations are performed, significantly improving build times
-    for uploadfs, uploadfsota, and buildfs targets.
+    Uses multiple methods to ensure LDF is properly disabled even if PlatformIO
+    tries to override the configuration later in the build process.
     """
     fs_targets = {"uploadfs", "uploadfsota", "buildfs"}
     if fs_targets & set(COMMAND_LINE_TARGETS):
@@ -149,12 +148,29 @@ def configure_fs_build_isolation():
         fs_build_dir = env.Dir(env.subst("$PROJECT_BUILD_DIR/${PIOENV}_fs"))
         env.Replace(BUILD_DIR=fs_build_dir)
         
-        # Disable Library Dependency Finder by modifying project configuration directly
+        # Multi-method approach to disable LDF
+        env.Replace(LIB_LDF_MODE="off")
+        os.environ["PLATFORMIO_LIB_LDF_MODE"] = "off"
+        env.Replace(LIB_DEPS=[])
+        
+        # Project configuration override
         projectconfig = env.GetProjectConfig()
         env_section = "env:" + env["PIOENV"]
         if not projectconfig.has_section(env_section):
             projectconfig.add_section(env_section)
         projectconfig.set(env_section, "lib_ldf_mode", "off")
+        
+        # Post-processing enforcement
+        def force_ldf_off(target, source, env):
+            env.Replace(LIB_LDF_MODE="off")
+            if env.GetProjectOption("custom_fs_verbose", False):
+                print("Post-processing: LDF mode enforced to 'off'")
+        
+        env.AddPreAction("buildfs", force_ldf_off)
+        env.AddPreAction("uploadfs", force_ldf_off)
+        env.AddPreAction("uploadfsota", force_ldf_off)
+        
+        print(f"FS Build Isolation: Robust LDF disable activated")
 
 # Apply filesystem build optimization
 configure_fs_build_isolation()
