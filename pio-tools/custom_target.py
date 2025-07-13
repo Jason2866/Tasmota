@@ -175,7 +175,28 @@ def configure_fs_build_isolation():
             print(f"Current LIB_LDF_MODE: {env.get('LIB_LDF_MODE', 'undefined')}")
 
 
-# Apply filesystem build optimization
+def debug_ldf_mode():
+    """
+    Debug function to check LDF mode at different stages
+    """
+    fs_targets = {"uploadfs", "uploadfsota", "buildfs"}
+    if fs_targets & set(COMMAND_LINE_TARGETS):
+        print("=== LDF Mode Debug ===")
+        print(f"Environment LIB_LDF_MODE: {env.get('LIB_LDF_MODE', 'not set')}")
+        
+        projectconfig = env.GetProjectConfig()
+        env_section = "env:" + env["PIOENV"]
+        if projectconfig.has_option(env_section, "lib_ldf_mode"):
+            config_value = projectconfig.get(env_section, "lib_ldf_mode")
+            print(f"Project config lib_ldf_mode: {config_value}")
+        else:
+            print("Project config lib_ldf_mode: not set")
+        
+        print(f"Command line targets: {COMMAND_LINE_TARGETS}")
+        print("===================")
+
+# Rufe Debug-Funktion auf
+debug_ldf_mode()
 configure_fs_build_isolation()
 
 ## Script interface functions
