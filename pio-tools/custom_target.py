@@ -134,7 +134,7 @@ def switch_off_ldf():
     import sys
     
     # only do this if one of the optimized targets is requested
-    optimized_targets = ["reset_target", "downloadfs", "factory_flash"]
+    optimized_targets = ["reset_target", "downloadfs", "factory_flash", "metrics-only"]
 
     argv_string = " ".join(sys.argv)
     is_optimized_targets = any(target in argv_string for target in optimized_targets)
