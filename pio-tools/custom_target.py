@@ -126,33 +126,28 @@ def esp8266_fetch_fs_size(env):
 
         env[k] = _value
 
-def configure_fs_build_isolation():
+def switch_off_ldf():
     """
     Configure `lib_ldf_mode = off` for pre-script execution.
     to avoid the time consuming library dependency resolution
-    when building the filesystem image.
     """
     import sys
     
-    # Exclude external_crashreport, which needs a complete build run 
-    excluded_targets = ["external_crashreport"]
+    # only do this if one of the optimized targets is requested
+    optimized_targets = ["reset_target", "downloadfs", "factory_flash"]
 
     argv_string = " ".join(sys.argv)
-    is_excluded_target = any(target in argv_string for target in excluded_targets)
+    is_optimized_targets = any(target in argv_string for target in optimized_targets)
     
-    if not is_excluded_target:
+    if is_optimized_targets:
         # Project config modification
         projectconfig = env.GetProjectConfig()
         env_section = "env:" + env["PIOENV"]
         if not projectconfig.has_section(env_section):
             projectconfig.add_section(env_section)
         projectconfig.set(env_section, "lib_ldf_mode", "off")
-        
-        # Build directory isolation
-        fs_build_dir = env.Dir(env.subst("$PROJECT_BUILD_DIR/${PIOENV}_fs"))
-        env.Replace(BUILD_DIR=fs_build_dir)
 
-configure_fs_build_isolation()
+switch_off_ldf()
 
 ## Script interface functions
 def parse_partition_table(content):
