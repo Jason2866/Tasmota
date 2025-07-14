@@ -17,6 +17,7 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef ESP8266
 #ifdef USE_DOMOTICZ
 /*********************************************************************************************\
  * Domoticz support
@@ -400,7 +401,7 @@ void DomoticzSendSwitch(uint32_t type, uint32_t index, uint32_t state) {
   MqttPublish(domoticz_in_topic);
 }
 
-bool DomoticzSendKey(uint8_t key, uint8_t device, uint8_t state, uint8_t svalflg) {
+bool DomoticzSendKey(uint32_t key, uint32_t device, uint32_t state, uint32_t svalflg) {
   bool result = false;
 
   if (device <= MAX_DOMOTICZ_IDX) {
@@ -770,3 +771,4 @@ bool Xdrv07(uint32_t function) {
 }
 
 #endif  // USE_DOMOTICZ
+#endif  // ESP8266
