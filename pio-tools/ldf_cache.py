@@ -1317,7 +1317,7 @@ if should_trigger_verbose_build() and not github_actions and not flag_custom_sdk
             sys.stdout.write("\033[2K")  # Delete complete line
             logfile.write(line)
             logfile.flush()
-        sys.stdout.write("\x1b[2K")
+        sys.stdout.write("\033[2K\r")
         sys.stdout.write("\033[F")
         logfile.flush()
         print("\n✅ Build process completed, waiting for process to finish...")
