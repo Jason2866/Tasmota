@@ -1313,7 +1313,8 @@ if should_trigger_verbose_build() and not github_actions and not flag_custom_sdk
         print(f"🔄 Running verbose build... full log in {logfile_path}")
         for line in process.stdout:
             print("🔄 " + line[:terminal_width].splitlines()[0], end='\r')
-            sys.stdout.write("\033[F")
+            sys.stdout.write("\033[F")   # Cursor one line up
+            sys.stdout.write("\033[2K")  # Delete complete line
             logfile.write(line)
             logfile.flush()
         sys.stdout.write("\x1b[2K")
