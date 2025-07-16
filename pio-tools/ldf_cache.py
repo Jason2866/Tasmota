@@ -1320,7 +1320,7 @@ if should_trigger_verbose_build() and not github_actions and not flag_custom_sdk
         sys.stdout.write("\033[2K\r")
         sys.stdout.write("\033[F")
         logfile.flush()
-        print("\n✅ Build process completed, waiting for process to finish...")
+        print("✅ Build process completed, waiting for process to finish...")
         process.wait()
 
     if process.returncode == 0:
