@@ -495,7 +495,7 @@ class LDFCacheOptimizer:
         Apply cached dependencies with correct build order preservation.
 
         Coordinates application of build order and SCons variables to ensure
-        correct dependency resolution and linking order.
+        correct dependency resolution.
         
         Args:
             cache_data: Dictionary containing cached build data
@@ -512,7 +512,7 @@ class LDFCacheOptimizer:
             if not build_order:
                 print("❌ No build order data in cache")
                 return False
-            # Apply build order (OBJECTS, linker configuration)
+            # Apply build order (OBJECTS)
             build_order_success = self.apply_build_order_to_environment(build_order)
             # Apply SCons variables (include paths, libraries)
             scons_vars_success = self.apply_cache_to_scons_vars(cache_data)
@@ -531,9 +531,6 @@ class LDFCacheOptimizer:
     def validate_ldf_mode_compatibility(self):
         """
         Validate that the current LDF mode is compatible with caching.
-        
-        Uses PlatformIO Core's native LDF mode validation to ensure
-        compatibility with the caching system.
         
         Returns:
             bool: True if LDF mode is compatible with caching
@@ -559,8 +556,7 @@ class LDFCacheOptimizer:
         """
         Create compile_commands.json using integrated log parsing functionality.
         
-        Generates compile database from verbose build log for IDE integration
-        and IntelliSense support.
+        Generates compile database from verbose build log.
         
         Returns:
             bool: True if compile_commands.json was created successfully
@@ -972,8 +968,7 @@ class LDFCacheOptimizer:
         """
         Apply correct build order to SCons environment.
         
-        Set OBJECTS variable in correct order and configures
-        linker for optimal symbol resolution.
+        Set OBJECTS variable in correct order.
         
         Args:
             build_order_data: Dictionary containing build order information
@@ -1197,7 +1192,7 @@ def execute_first_run_post_actions():
     Execute post-build actions after successful first run.
     
     Creates cache data, generates compile_commands.json, validates LDF mode,
-    and modifies platformio.ini for subsequent cached builds.
+    for subsequent cached builds.
     
     Returns:
         bool: True if all post-actions completed successfully
