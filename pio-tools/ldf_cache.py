@@ -446,49 +446,12 @@ class LDFCacheOptimizer:
                     print("✅ Cache applied successfully - lib_ldf_mode=off")
                 else:
                     print("❌ Cache application failed")
-                    self._cleanup_env_specific_cache()
             else:
                 print("⚠ No valid cache found, falling back to normal build")
-                self._cleanup_env_specific_cache()
 
         except Exception as e:
             print(f"❌ Error in second run: {e}")
             self._cache_applied_successfully = False
-            self._cleanup_env_specific_cache()
-
-    def _cleanup_env_specific_cache(self):
-        """
-        Clean up only environment-specific cache files and folders.
-    
-        Removes only the files and folders specific to the current
-        compile environment, leaving other environments untouched.
-        """
-        try:
-            # Remove environment-specific build folder
-            env_build_dir = Path(self.project_dir) / ".pio" / "build" / self.env_name
-            if env_build_dir.exists():
-                import shutil
-                shutil.rmtree(env_build_dir)
-                print(f"🧹 Cleaned up env build cache: {env_build_dir}")
-            
-            # Remove environment-specific LDF cache
-            if self.cache_file.exists():
-                self.cache_file.unlink()
-                print(f"🧹 Removed LDF cache: {self.cache_file}")
-            
-            # Remove environment-specific compile commands
-            if self.compile_commands_file.exists():
-                self.compile_commands_file.unlink()
-                print(f"🧹 Removed compile commands: {self.compile_commands_file}")
-            
-            # Remove environment-specific compile log
-            if self.compile_commands_log_file.exists():
-                self.compile_commands_log_file.unlink()
-                print(f"🧹 Removed compile log: {self.compile_commands_log_file}")
-            
-        except Exception as e:
-            print(f"⚠ Error cleaning up env-specific cache: {e}")
-
 
     def apply_ldf_cache_with_build_order(self, cache_data):
         """
