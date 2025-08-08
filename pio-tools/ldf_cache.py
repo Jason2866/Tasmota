@@ -5,6 +5,10 @@ This script implements a two-phase caching system:
 1. First run: Performs verbose build, collects dependencies, creates cache
 2. Second run: Applies cached dependencies with lib_ldf_mode=off for faster builds
 
+PYTHON_EXE = env.subst("$PYTHONEXE")
+PIO_EXE = os.path.join(os.path.dirname(PYTHON_EXE), "pio")
+print(f"Debug - PYTHON_EXE: {PYTHON_EXE}")
+print(f"Debug - PIO_EXE: {PIO_EXE}")
 Features:
 - Intelligent cache invalidation based on file hashes
 - Build order preservation for correct symbol resolution
@@ -46,6 +50,7 @@ cache_file = cache_base / f"ldf_cache_{env_name}.py"
 build_dir = Path(env.subst("$BUILD_DIR"))
 src_dir = Path(env.subst("$PROJECT_SRC_DIR"))
 config = env.GetProjectConfig()
+PIO_EXE = Path(env.subst("$PYTHONEXE")).parent / "pio"
 flag_custom_sdkconfig = False
 if config.has_option("env:"+env["PIOENV"], "custom_sdkconfig") or env.BoardConfig().get("espidf.custom_sdkconfig", ""):
     flag_custom_sdkconfig = True
@@ -1261,7 +1266,7 @@ if should_trigger_verbose_build() and not github_actions and not flag_custom_sdk
     # Execute verbose build with output capture
     with open(logfile_path, "w") as logfile:
         process = subprocess.Popen(
-            ['pio', 'run', '-e', env_name, '--disable-auto-clean'],
+                [PIO_EXE, 'run', '-e', env_name, '--disable-auto-clean'],
             env=env_vars,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
