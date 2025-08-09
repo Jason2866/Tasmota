@@ -48,9 +48,6 @@ build_dir = Path(env.subst("$BUILD_DIR"))
 src_dir = Path(env.subst("$PROJECT_SRC_DIR"))
 config = env.GetProjectConfig()
 PIO_EXE = Path(str(Path(env.subst("$PYTHONEXE")).parent / ("pio.exe" if IS_WINDOWS else "pio")))
-flag_custom_sdkconfig = False
-if config.has_option("env:"+env["PIOENV"], "custom_sdkconfig") or env.BoardConfig().get("espidf.custom_sdkconfig", ""):
-    flag_custom_sdkconfig = True
 
 # Ensure log directory exists
 logfile_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1234,7 +1231,7 @@ def terminal_size():
     return 80, 16
 
 # FIRST RUN LOGIC - Execute verbose build and create cache
-if should_trigger_verbose_build() and not github_actions and not flag_custom_sdkconfig:
+if should_trigger_verbose_build() and not github_actions:
     print("🔄 Starting LDF Cache Optimizer...")
     print(f"🔄 First run needed - starting verbose build for {env_name}...")
     print("📋 Reasons:")
