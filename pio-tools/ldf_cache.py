@@ -24,6 +24,7 @@ import subprocess
 import sys
 import shlex
 from pathlib import Path
+from platformio.compat import IS_WINDOWS
 from platformio.builder.tools.piolib import LibBuilderBase
 from platformio.builder.tools.piobuild import SRC_HEADER_EXT, SRC_C_EXT, SRC_CXX_EXT, SRC_ASM_EXT, SRC_BUILD_EXT
 from dataclasses import dataclass
@@ -46,7 +47,7 @@ cache_file = cache_base / f"ldf_cache_{env_name}.py"
 build_dir = Path(env.subst("$BUILD_DIR"))
 src_dir = Path(env.subst("$PROJECT_SRC_DIR"))
 config = env.GetProjectConfig()
-PIO_EXE = Path(env.subst("$PYTHONEXE")).parent / "pio"
+PIO_EXE = Path(env.subst("$PYTHONEXE")).parent / "pio" + (".exe" if IS_WINDOWS else ""))
 flag_custom_sdkconfig = False
 if config.has_option("env:"+env["PIOENV"], "custom_sdkconfig") or env.BoardConfig().get("espidf.custom_sdkconfig", ""):
     flag_custom_sdkconfig = True
