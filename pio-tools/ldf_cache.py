@@ -47,7 +47,7 @@ cache_file = cache_base / f"ldf_cache_{env_name}.py"
 build_dir = Path(env.subst("$BUILD_DIR"))
 src_dir = Path(env.subst("$PROJECT_SRC_DIR"))
 config = env.GetProjectConfig()
-PIO_EXE = Path(env.subst("$PYTHONEXE")).parent / "pio" + (".exe" if IS_WINDOWS else ""))
+PIO_EXE = Path(env.subst("$PYTHONEXE")).parent / "pio" + (".exe" if IS_WINDOWS else "")
 flag_custom_sdkconfig = False
 if config.has_option("env:"+env["PIOENV"], "custom_sdkconfig") or env.BoardConfig().get("espidf.custom_sdkconfig", ""):
     flag_custom_sdkconfig = True
