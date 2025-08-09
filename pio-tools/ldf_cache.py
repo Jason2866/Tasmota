@@ -5,10 +5,6 @@ This script implements a two-phase caching system:
 1. First run: Performs verbose build, collects dependencies, creates cache
 2. Second run: Applies cached dependencies with lib_ldf_mode=off for faster builds
 
-PYTHON_EXE = env.subst("$PYTHONEXE")
-PIO_EXE = os.path.join(os.path.dirname(PYTHON_EXE), "pio")
-print(f"Debug - PYTHON_EXE: {PYTHON_EXE}")
-print(f"Debug - PIO_EXE: {PIO_EXE}")
 Features:
 - Intelligent cache invalidation based on file hashes
 - Build order preservation for correct symbol resolution
