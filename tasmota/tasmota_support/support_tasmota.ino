@@ -389,6 +389,7 @@ void SetAllPower(uint32_t state, uint32_t source) {
     publish_power = false;
   }
   if (((state >= POWER_OFF) && (state <= POWER_TOGGLE)) || (POWER_OFF_FORCE == state))  {
+    power_t current_power = TasmotaGlobal.power;
     power_t all_on = POWER_MASK >> (POWER_SIZE - TasmotaGlobal.devices_present);
     switch (state) {
     case POWER_OFF:
@@ -408,6 +409,13 @@ void SetAllPower(uint32_t state, uint32_t source) {
       TasmotaGlobal.power = 0; 
       break;
     }
+#ifdef USE_SONOFF_IFAN
+    if (IsModuleIfan()) {
+      // Do not touch Fan relays
+      TasmotaGlobal.power &= 0x0001;
+      TasmotaGlobal.power |= (current_power & 0xFFFE);
+    }
+#endif  // USE_SONOFF_IFAN
     SetDevicePower(TasmotaGlobal.power, source);
   }
   if (publish_power) {
@@ -1111,6 +1119,7 @@ void PerformEverySecond(void)
     RtcRebootReset();
 
     Settings->last_module = Settings->module;
+
 
 #ifdef USE_DEEPSLEEP
     if (!(DeepSleepEnabled() && !Settings->flag3.bootcount_update)) {  // SetOption76  - (Deepsleep) Enable incrementing bootcount (1) when deepsleep is enabled

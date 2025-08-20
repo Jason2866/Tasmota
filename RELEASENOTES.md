@@ -36,9 +36,9 @@ While fallback or downgrading is common practice it was never supported due to S
 
 This release will be supported from ESP8266/Arduino library Core version **2.7.8** due to reported security and stability issues on previous Core version. This will also support gzipped binaries.
 
-This release will be supported from ESP32/Arduino library Core version **v3.1.3.250411**.
+This release will be supported from ESP32/Arduino library Core version **v3.1.3.250504**.
 
-Support of ESP8266 Core versions before 2.7.8 and ESP32 Core versions before v3.1.3.250411 have been removed.
+Support of ESP8266 Core versions before 2.7.8 and ESP32 Core versions before v3.1.3.250504 have been removed.
 
 ## Support of TLS
 
@@ -75,12 +75,12 @@ Latest released binaries can be downloaded from
 - http://ota.tasmota.com/tasmota/release
 
 Historical binaries can be downloaded from
-- http://ota.tasmota.com/tasmota/release-14.6.0
+- http://ota.tasmota.com/tasmota/release-15.0.1
 
 The latter links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmota.com/tasmota/release/tasmota.bin.gz``
 
 ### ESP32, ESP32-C2, ESP32-C3, ESP32-C6, ESP32-S2 and ESP32-S3 based
-The following binary downloads have been compiled with ESP32/Arduino library core version **v3.1.3.250411**.
+The following binary downloads have been compiled with ESP32/Arduino library core version **v3.1.3.250504**.
 
 - **tasmota32.bin** = The Tasmota version with most drivers including additional sensors and KNX for 4M+ flash.  **RECOMMENDED RELEASE BINARY**
 - **tasmota32solo1.bin** = The Tasmota version with most drivers including additional sensors and KNX for single core ESP32 and 4M+ flash.
@@ -104,7 +104,7 @@ Latest released binaries can be downloaded from
 - https://ota.tasmota.com/tasmota32/release
 
 Historical binaries can be downloaded from
-- https://ota.tasmota.com/tasmota32/release-14.6.0
+- https://ota.tasmota.com/tasmota32/release-15.0.1
 
 The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasmota.com/tasmota32/release/tasmota32.bin``
 
@@ -114,42 +114,44 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 [Complete list](BUILDS.md) of available feature and sensors.
 
-## Changelog v14.6.0.2
+## Changelog v15.0.1.3
 ### Added
-- Provide serial upload port from VSC to PIO [#23436](https://github.com/arendst/Tasmota/issues/23436)
-- Command `JsonPP 0..7` to enable (>0) JSON Pretty Print on user interfaces and set number of indents
-- Command `JsonPP <command>|backlog <command>;...` to enable JSON PP only once
-- Support for multi channel AU915-928 LoRaWanBridge by Rob Clark [#23372](https://github.com/arendst/Tasmota/issues/23372)
-- Support for LoRaWan Rx1 and Rx2 profiles [#23394](https://github.com/arendst/Tasmota/issues/23394)
-- Allow temporary change of DisplayDimmer [#23406](https://github.com/arendst/Tasmota/issues/23406)
-- WebUI status line for MQTT and TLS, added `FUNC_WEB_STATUS_LEFT` and `FUNC_WEB_STATUS_RIGHT` event [#23354](https://github.com/arendst/Tasmota/issues/23354)
-- WebUI heap status [#23356](https://github.com/arendst/Tasmota/issues/23356)
-- Optional Wifi strength indicator in WebUI status line [#23352](https://github.com/arendst/Tasmota/issues/23352)
-- Wireguard VPN [#23347](https://github.com/arendst/Tasmota/issues/23347)
-- Berry support for `sortedmap` [#23441](https://github.com/arendst/Tasmota/issues/23441)
-- Berry `introspect.module` option to not cache module entry [#23451](https://github.com/arendst/Tasmota/issues/23451)
-- Berry `webserver.remove_route` to revert `webserver.on` [#23452](https://github.com/arendst/Tasmota/issues/23452)
-- Berry `compile` and `tasmota.compile` option to compile in local context [#23457](https://github.com/arendst/Tasmota/issues/23457)
-- HASPmota `antiburn()` [#23400](https://github.com/arendst/Tasmota/issues/23400)
-- HASPmota auto-dimming when no touch [#23425](https://github.com/arendst/Tasmota/issues/23425)
+- Commands `LoRaWanDecoder "` and `LoRaWanName "` to clear name [#23394](https://github.com/arendst/Tasmota/issues/23394)
+- Command `I2sPause` [#23646](https://github.com/arendst/Tasmota/issues/23646)
+- Support for RV3028 RTC [#23672](https://github.com/arendst/Tasmota/issues/23672)
+- Internal function 'WSContentSendRaw_P' [#23641](https://github.com/arendst/Tasmota/issues/23641)
+- Universal display driver for ZJY169S0800TG01 ST7789 280x240 [#23638](https://github.com/arendst/Tasmota/issues/23638)
+- NeoPool add Redox tank alarm [#19811](https://github.com/arendst/Tasmota/issues/19811)
+- I2S additions [#23543](https://github.com/arendst/Tasmota/issues/23543)
+- Basic support for ESP32-P4 [#23663](https://github.com/arendst/Tasmota/issues/23663)
+- ESP32-P4 command `HostedOta` [#23675](https://github.com/arendst/Tasmota/issues/23675)
+- Berry f-strings now support ':' in expression [#23618](https://github.com/arendst/Tasmota/issues/23618)
+- Berry preview of animation framework [#23740](https://github.com/arendst/Tasmota/issues/23740)
+- Berry `call()` now works for classes [#23744](https://github.com/arendst/Tasmota/issues/23744)
 
 ### Breaking Changed
 
 ### Changed
-- ESP8266 platform update from 2024.09.00 to 2025.05.00 [#23448](https://github.com/arendst/Tasmota/issues/23448)
-- ESP32 Platform from 2025.04.30 to 2025.05.30, Framework (Arduino Core) from v3.1.3.250411 to v3.1.3.250504 and IDF from v5.3.2.250403 to v5.3.3.250501 [#23404](https://github.com/arendst/Tasmota/issues/23404)
-- GPIOViewer from v1.6.2 to v1.6.3 (No functional change)
-- Allow command `WebRefresh` minimum from 1000 to 400 mSec
-- Increase number of supported LoRaWan nodes from 4 to 16
+- ESP8266 platform update from 2025.05.00 to 2025.07.00 [#23700](https://github.com/arendst/Tasmota/issues/23700)
+- ESP32 Platform from 2025.05.30 to 2025.08.30, Framework (Arduino Core) from v3.1.3.250504 to v3.1.3.250808 and IDF from v5.3.3.250501 to v5.3.3.250801 [#23778](https://github.com/arendst/Tasmota/issues/23778)
+- Epdiy library from v1.0.0 to v2.0.0
+- OpenTherm library from v0.9.0 to v1.1.5 [#23704](https://github.com/arendst/Tasmota/issues/23704)
+- Library names [#23560](https://github.com/arendst/Tasmota/issues/23560)
+- CSS uses named colors variables [#23597](https://github.com/arendst/Tasmota/issues/23597)
+- VEML6070 and AHT2x device detection [#23581](https://github.com/arendst/Tasmota/issues/23581)
+- Domoticz supports persistent settings for all relays, keys and switches when filesystem `#define USE_UFILESYS` is enabled
+- ESP32 LoRaWan decoding won't duplicate non-decoded message if `SO147 0`
+- BLE updates for esp-nimble-cpp v2.x [#23553](https://github.com/arendst/Tasmota/issues/23553)
+- Berry raise webserver hooks from 16 to 32 [#23748](https://github.com/arendst/Tasmota/issues/23748)
 
 ### Fixed
-- DNS setting with `IPAddress4/5` not persisted [#23426](https://github.com/arendst/Tasmota/issues/23426)
-- NimBLE log_level definition conflict [#23366](https://github.com/arendst/Tasmota/issues/23366)
-- Berry `bytes().asstring()` now truncates a string if buffer contains NULL [#23311](https://github.com/arendst/Tasmota/issues/23311)
-- Berry string literals containing NULL are truncated [#23312](https://github.com/arendst/Tasmota/issues/23312)
-- Berry `display.touch_update` wrongly applies resistive calibration [#23363](https://github.com/arendst/Tasmota/issues/23363)
-- Berry `introspect.module()` failed to load modules in files [#23376](https://github.com/arendst/Tasmota/issues/23376)
-- Matter and mDNS can be enabled at the same time [#23373](https://github.com/arendst/Tasmota/issues/23373)
-- Haspmota `haspmota.parse()` page parsing [#23403](https://github.com/arendst/Tasmota/issues/23403)
+- Syslog RFC5424 compliance [#23509](https://github.com/arendst/Tasmota/issues/23509)
+- AHT30 sensor start with null values after deep sleep [#23624](https://github.com/arendst/Tasmota/issues/23624)
+- NeoPool reset to default settings [#23734](https://github.com/arendst/Tasmota/issues/23734)
+- Berry vulnerability in JSON parsing for unicode [#23603](https://github.com/arendst/Tasmota/issues/23603)
+- Berry security issues in `int64` and improve documentation [#23605](https://github.com/arendst/Tasmota/issues/23605)
+- Berry security issues in `berry_mapping` and improve documentation [#23606](https://github.com/arendst/Tasmota/issues/23606)
+- Berry Hue regression from #23429 [#23623](https://github.com/arendst/Tasmota/issues/23623)
+- LVGL restore `lv_chart.set_range` removed in LVGL 9.3.0 in favor of `lv_chart.set_axis_range` [#23567](https://github.com/arendst/Tasmota/issues/23567)
 
 ### Removed

@@ -71,7 +71,7 @@ extern "C" {
  * 
 \*********************************************************************************************/
 
-#define WEBSERVER_REQ_HANDLER_HOOK_MAX       16      // max number of callbacks, each callback requires a distinct address
+#define WEBSERVER_REQ_HANDLER_HOOK_MAX       32      // max number of callbacks, each callback requires a distinct address
 static String be_webserver_prefix[WEBSERVER_REQ_HANDLER_HOOK_MAX];
 static uint8_t be_webserver_method[WEBSERVER_REQ_HANDLER_HOOK_MAX];
 
@@ -249,7 +249,7 @@ extern "C" {
       } else {
         html = (const char*) be_tocomptr(vm, 1);
       }
-      WSContentSend_P(PSTR("%s"), html);
+      WSContentSendRaw_P( html);
       be_return_nil(vm);
     }
     be_raise(vm, kTypeError, nullptr);
@@ -403,14 +403,18 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
-  // Berry: `webserver.content_status_sticker(msg:string) -> nil`
+  // Berry: `webserver.content_status_sticker(msg:string [,attr:string]) -> nil`
   //
   int32_t w_webserver_content_status_sticker(struct bvm *vm) {
   #ifdef USE_WEB_STATUS_LINE
     int32_t argc = be_top(vm); // Get the number of arguments
     if (argc >= 1 && be_isstring(vm, 1)) {
       const char * msg = be_tostring(vm, 1);
-      WSContentStatusSticker(msg);
+      const char * attr = nullptr;
+      if (argc >= 2 && be_isstring(vm, 2)) {
+        attr = be_tostring(vm, 2);
+      }
+      WSContentStatusSticker(msg, attr);
       be_return_nil(vm);
     }
     be_raise(vm, kTypeError, nullptr);

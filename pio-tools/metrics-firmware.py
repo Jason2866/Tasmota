@@ -1,9 +1,7 @@
 Import("env")
 
 import os
-import tasmotapiolib
 from os.path import join
-import subprocess
 
 def firm_metrics(source, target, env):
     print()

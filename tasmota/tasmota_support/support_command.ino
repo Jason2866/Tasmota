@@ -980,6 +980,9 @@ void CmndStatus(void)
 #endif
                           ",\"" D_JSON_COREVERSION "\":\"" ARDUINO_CORE_RELEASE "\",\"" D_JSON_SDKVERSION "\":\"%s\","
                           "\"CpuFrequency\":%d,\"Hardware\":\"%s\""
+#ifdef CONFIG_ESP_WIFI_REMOTE_ENABLED
+                          ",\"HostedMCU\":{\"Hardware\":\"%s\",\"Version\":\"%s\"}"
+#endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED
                           "%s}}"),
                           TasmotaGlobal.version, TasmotaGlobal.image_name, GetCodeCores().c_str(), GetBuildDateAndTime().c_str()
 #ifdef ESP8266
@@ -987,6 +990,9 @@ void CmndStatus(void)
 #endif
                           , ESP.getSdkVersion(),
                           ESP.getCpuFreqMHz(), GetDeviceHardwareRevision().c_str(),
+#ifdef CONFIG_ESP_WIFI_REMOTE_ENABLED
+                          GetHostedMCU().c_str(), GetHostedMCUFwVersion().c_str(),
+#endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED
                           GetStatistics().c_str());
     CmndStatusResponse(2);
   }
@@ -3096,5 +3102,4 @@ void CmndTouchThres(void) {
   ResponseCmndNumber(Settings->touch_threshold);
 }
 #endif  // ESP32 SOC_TOUCH_VERSION_1 or SOC_TOUCH_VERSION_2
-
 #endif  // ESP32
