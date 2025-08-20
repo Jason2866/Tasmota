@@ -1422,6 +1422,18 @@ const char PINS_WEMOS[] PROGMEM = "AOAOAOAOAOIOIOIOIOIOIOFLFLFLFLFLFLFLIORXTX";
 //                                  0 1 2 3 4 5 6 7 8 9101112131415161718192021
 const char PINS_WEMOS[] PROGMEM = "AOAOAOAOAOAOIOIOIOIOIOFLFLFLFLFLFLFLIOIORXTX";
 
+#elif CONFIG_IDF_TARGET_ESP32C5  // ESP32-C5
+/* ****************************************
+ * ESP32C5
+ * ****************************************/
+#define MAX_GPIO_PIN       27   // Number of supported GPIO
+#define MIN_FLASH_PINS     0    // Number of flash chip pins unusable for configuration (GPIO11 to 17)
+#define MAX_USER_PINS      27   // MAX_GPIO_PIN - MIN_FLASH_PINS
+#define WEMOS_MODULE       0    // Wemos module
+
+//                                  0 1 2 3 4 5 6 7 8 91011121314151617181920212223242526
+const char PINS_WEMOS[] PROGMEM = "IOAOAOAOAOAOAOIOIOIOIOIOIOIOIOIOIOIOFLFLFLIOFLFLFLIOIO";
+
 #elif CONFIG_IDF_TARGET_ESP32C6
 
 /* ****************************************
