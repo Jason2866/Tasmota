@@ -1427,7 +1427,7 @@ const char PINS_WEMOS[] PROGMEM = "AOAOAOAOAOAOIOIOIOIOIOFLFLFLFLFLFLFLIOIORXTX"
  * ESP32C5
  * ****************************************/
 #define MAX_GPIO_PIN       27   // Number of supported GPIO
-#define MIN_FLASH_PINS     0    // Number of flash chip pins unusable for configuration (GPIO11 to 17)
+#define MIN_FLASH_PINS     0    // Number of flash chip pins unusable for configuration (GPIO24 to 26)
 #define MAX_USER_PINS      27   // MAX_GPIO_PIN - MIN_FLASH_PINS
 #define WEMOS_MODULE       0    // Wemos module
 
