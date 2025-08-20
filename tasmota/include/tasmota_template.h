@@ -3090,6 +3090,66 @@ const mytmplt kModules[] PROGMEM = {
  Known templates
 \*********************************************************************************************/
 
+#elif CONFIG_IDF_TARGET_ESP32C5
+/********************************************************************************************\
+ * ESP32-C5 Module templates
+\********************************************************************************************/
+
+#define USER_MODULE        255
+
+// Supported hardware modules
+enum SupportedModulesESP32C5 {
+  WEMOS,
+  MAXMODULE };
+
+// Default module settings
+const uint8_t kModuleNiceList[] PROGMEM = {
+  WEMOS,
+};
+
+// !!! Update this list in the same order as kModuleNiceList !!!
+const char kModuleNames[] PROGMEM =
+  "ESP32C5|"
+  ;
+
+// !!! Update this list in the same order as SupportedModulesESP32C5 !!!
+const mytmplt kModules[] PROGMEM = {
+  {                              // Generic ESP32C5 device
+    AGPIO(GPIO_USER),            // 0       IO                  GPIO0
+    AGPIO(GPIO_USER),            // 1       AO                  GPIO1, ADC1_CH0
+    AGPIO(GPIO_USER),            // 2       AO                  GPIO2, ADC1_CH1  
+    AGPIO(GPIO_USER),            // 3       AO                  GPIO3, ADC1_CH2
+    AGPIO(GPIO_USER),            // 4       AO                  GPIO4, ADC1_CH3
+    AGPIO(GPIO_USER),            // 5       AO                  GPIO5, ADC1_CH4
+    AGPIO(GPIO_USER),            // 6       AO                  GPIO6, ADC1_CH5
+    AGPIO(GPIO_USER),            // 7       AO                  GPIO7, ADC1_CH6
+    AGPIO(GPIO_USER),            // 8       IO                  GPIO8
+    AGPIO(GPIO_USER),            // 9       IO                  GPIO9
+    AGPIO(GPIO_USER),            // 10      IO                  GPIO10
+    AGPIO(GPIO_USER),            // 11      IO                  GPIO11
+    AGPIO(GPIO_USER),            // 12      IO                  GPIO12
+    AGPIO(GPIO_USER),            // 13      IO                  GPIO13
+    AGPIO(GPIO_USER),            // 14      IO                  GPIO14
+    AGPIO(GPIO_USER),            // 15      IO                  GPIO15
+    AGPIO(GPIO_USER),            // 16      IO                  GPIO16
+    AGPIO(GPIO_USER),            // 17      IO                  GPIO17
+    AGPIO(GPIO_USER),            // 18      IO                  GPIO18
+    AGPIO(GPIO_USER),            // 19      IO                  GPIO19
+    AGPIO(GPIO_USER),            // 20      IO                  GPIO20
+    AGPIO(GPIO_USER),            // 21      IO                  GPIO21
+    AGPIO(GPIO_USER),            // 22      IO                  GPIO22
+    AGPIO(GPIO_USER),            // 23      IO                  GPIO23
+    0,                           // 24      FL                  GPIO24, Flash
+    0,                           // 25      FL                  GPIO25, Flash  
+    0,                           // 26      FL                  GPIO26, Flash
+    0                            // Flag
+  },
+};
+
+/*********************************************************************************************\
+ Known templates
+\*********************************************************************************************/
+
 #elif CONFIG_IDF_TARGET_ESP32C6
 /********************************************************************************************\
  * ESP32-C6 Module templates
