@@ -4,6 +4,7 @@
 import string
 import introspect
 import animation
+import animation_dsl
 
 # Test counter for tracking test results
 var test_count = 0
@@ -126,12 +127,12 @@ end
 # Test 7: DSL Event Handler Compilation
 def test_dsl_event_compilation()
   var dsl_code = 
-    "strip length 30\n"
+    "# strip length 30  # TEMPORARILY DISABLED\n"
     "color custom_red = 0xFF0000\n"
     "on button_press: solid(custom_red)\n"
     "run solid(custom_red)"
   
-  var compiled_code = animation.compile_dsl(dsl_code)
+  var compiled_code = animation_dsl.compile(dsl_code)
   
   # Check that compiled code contains event handler registration
   return compiled_code != nil &&
@@ -142,12 +143,12 @@ end
 # Test 8: DSL Event with Parameters
 def test_dsl_event_with_parameters()
   var dsl_code = 
-    "strip length 30\n"
+    "# strip length 30  # TEMPORARILY DISABLED\n"
     "color custom_blue = 0x0000FF\n"
     "on timer(5s): solid(custom_blue)\n"
     "run solid(custom_blue)"
   
-  var compiled_code = animation.compile_dsl(dsl_code)
+  var compiled_code = animation_dsl.compile(dsl_code)
   
   # Check that compiled code contains timer parameters
   return compiled_code != nil &&

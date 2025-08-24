@@ -6,15 +6,16 @@ import os
 import sys
 
 # Add animation library path
-sys.path().push("lib/libesp32/berry_animation")
+sys.path().push("lib/libesp32/berry_animation/src")
 
 # Import animation framework
 import animation
+import animation_dsl
 
 def run_compiled_example(filename)
   print(f"Running {filename}...")
   try
-    var f = open(f"anim_examples/compiled/{filename}", "r")
+    var f = open(f"lib/libesp32/berry_animation/anim_examples/compiled/{filename}", "r")
     var code = f.read()
     f.close()
     
@@ -34,7 +35,7 @@ def run_compiled_example(filename)
 end
 
 def run_all_examples()
-  var files = os.listdir("compiled")
+  var files = os.listdir("lib/libesp32/berry_animation/anim_examples/compiled")
   var success_count = 0
   var total_count = 0
   
