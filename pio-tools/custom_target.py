@@ -317,7 +317,7 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: Path):
 
     if not downloaded_file.exists():
         print(f"ERROR: {downloaded_file} not found, maybe download failed due to speed.")
-        assert 0
+        env.Exit(1)
 
     # Clean and recreate unpack_dir
     if unpack_dir.exists():
