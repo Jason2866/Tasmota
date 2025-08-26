@@ -267,7 +267,7 @@ def esp32_create_combined_bin(source, target, env):
         fw_size = getsize(firmware_name)
         if (fw_size > max_size):
             print(Fore.RED + "firmware binary too large: %d > %d" % (fw_size, max_size))
-            exit(1)
+            env.Exit(1)
 
         print()
         print("    Offset   | File")
