@@ -20,6 +20,7 @@
 #   custom_unpack_dir = some_other_dir
 # in the corresponding platformio.ini environment.
 
+import os
 import re
 import sys
 from pathlib import Path
