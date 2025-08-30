@@ -250,6 +250,85 @@ end
    animation pulse_anim = pulsating_animation(color=red, period=2s)
    ```
 
+6. **Variable Duration Support:**
+   ```berry
+   # Now supported - variables in play/wait durations
+   set eye_duration = 5s
+   
+   sequence cylon_eye {
+     play red_eye for eye_duration    # ✓ Variables now work
+     wait eye_duration                # ✓ Variables work in wait too
+   }
+   
+   # Also supported - value providers for dynamic duration
+   set dynamic_time = triangle(min_value=1000, max_value=3000, period=10s)
+   
+   sequence demo {
+     play animation for dynamic_time  # ✓ Dynamic duration
+   }
+   ```
+
+7. **Template Definition Errors:**
+   ```berry
+   # Wrong - missing braces
+   template pulse_effect
+     param color type color
+     param speed
+   # Error: Expected '{' after template name
+   
+   # Wrong - invalid parameter syntax
+   template pulse_effect {
+     param color as color  # Error: Use 'type' instead of 'as'
+     param speed
+   }
+   
+   # Wrong - missing template body
+   template pulse_effect {
+     param color type color
+   }
+   # Error: Template body cannot be empty
+   
+   # Correct - proper template syntax
+   template pulse_effect {
+     param color type color
+     param speed
+     
+     animation pulse = pulsating_animation(
+       color=color
+       period=speed
+     )
+     
+     run pulse
+   }
+   ```
+
+8. **Template Call Errors:**
+   ```berry
+   # Wrong - template not defined
+   pulse_effect(red, 2s)
+   # Error: "Undefined reference: 'pulse_effect'"
+   
+   # Wrong - incorrect parameter count
+   template pulse_effect {
+     param color type color
+     param speed
+     # ... template body ...
+   }
+   
+   pulse_effect(red)  # Error: Expected 2 parameters, got 1
+   
+   # Correct - define template first, call with correct parameters
+   template pulse_effect {
+     param color type color
+     param speed
+     
+     animation pulse = pulsating_animation(color=color, period=speed)
+     run pulse
+   }
+   
+   pulse_effect(red, 2s)  # ✓ Correct usage
+   ```
+
 6. **Parameter Constraint Violations:**
    ```berry
    # Wrong - negative period not allowed
@@ -265,7 +344,182 @@ end
    animation good_comet = comet_animation(color=red, direction=1)
    ```
 
-### DSL Runtime Errors
+7. **Repeat Syntax Errors:**
+   ```berry
+   # Wrong - old colon syntax no longer supported
+   sequence bad_demo {
+     repeat 3 times:  # Error: Expected '{' after 'times'
+       play anim for 1s
+   }
+   
+   # Wrong - missing braces
+   sequence bad_demo2 {
+     repeat 3 times
+       play anim for 1s  # Error: Expected '{' after 'times'
+   }
+   
+   # Correct - use braces for repeat blocks
+   sequence good_demo {
+     repeat 3 times {
+       play anim for 1s
+     }
+   }
+   
+   # Also correct - alternative syntax
+   sequence good_demo_alt repeat 3 times {
+     play anim for 1s
+   }
+   
+   # Correct - forever syntax
+   sequence infinite_demo {
+     repeat forever {
+       play anim for 1s
+       wait 500ms
+     }
+   }
+   ```
+
+### Template Issues
+
+### Template Definition Problems
+
+**Problem:** Template definitions fail to compile
+
+**Common Template Errors:**
+
+1. **Missing Template Body:**
+   ```berry
+   # Wrong - empty template
+   template empty_template {
+     param color type color
+   }
+   # Error: "Template body cannot be empty"
+   
+   # Correct - template must have content
+   template pulse_effect {
+     param color type color
+     param speed
+     
+     animation pulse = pulsating_animation(color=color, period=speed)
+     run pulse
+   }
+   ```
+
+2. **Invalid Parameter Syntax:**
+   ```berry
+   # Wrong - old 'as' syntax
+   template pulse_effect {
+     param color as color
+   }
+   # Error: Expected 'type' keyword, got 'as'
+   
+   # Correct - use 'type' keyword
+   template pulse_effect {
+     param color type color
+     param speed  # Type annotation is optional
+   }
+   ```
+
+3. **Template Name Conflicts:**
+   ```berry
+   # Wrong - template name conflicts with built-in function
+   template solid {  # 'solid' is a built-in animation function
+     param color type color
+     # ...
+   }
+   # Error: "Template name 'solid' conflicts with built-in function"
+   
+   # Correct - use unique template names
+   template solid_effect {
+     param color type color
+     # ...
+   }
+   ```
+
+### Template Usage Problems
+
+**Problem:** Template calls fail or behave unexpectedly
+
+**Common Issues:**
+
+1. **Undefined Template:**
+   ```berry
+   # Wrong - calling undefined template
+   my_effect(red, 2s)
+   # Error: "Undefined reference: 'my_effect'"
+   
+   # Correct - define template first
+   template my_effect {
+     param color type color
+     param speed
+     # ... template body ...
+   }
+   
+   my_effect(red, 2s)  # Now works
+   ```
+
+2. **Parameter Count Mismatch:**
+   ```berry
+   template pulse_effect {
+     param color type color
+     param speed
+     param brightness
+   }
+   
+   # Wrong - missing parameters
+   pulse_effect(red, 2s)  # Error: Expected 3 parameters, got 2
+   
+   # Correct - provide all parameters
+   pulse_effect(red, 2s, 200)
+   ```
+
+3. **Parameter Type Issues:**
+   ```berry
+   template pulse_effect {
+     param color type color
+     param speed
+   }
+   
+   # Wrong - invalid color parameter
+   pulse_effect("not_a_color", 2s)
+   # Runtime error: Invalid color value
+   
+   # Correct - use valid color
+   pulse_effect(red, 2s)      # Named color
+   pulse_effect(0xFF0000, 2s) # Hex color
+   ```
+
+### Template vs User Function Confusion
+
+**Problem:** Mixing template and user function concepts
+
+**Key Differences:**
+
+```berry
+# Template (DSL-native) - Recommended for most cases
+template pulse_effect {
+  param color type color
+  param speed
+  
+  animation pulse = pulsating_animation(color=color, period=speed)
+  run pulse
+}
+
+# User Function (Berry-native) - For complex logic
+def create_pulse_effect(engine, color, speed)
+  var pulse = animation.pulsating_animation(engine)
+  pulse.color = color
+  pulse.period = speed
+  return pulse
+end
+animation.register_user_function("pulse_effect", create_pulse_effect)
+```
+
+**When to Use Each:**
+- **Templates**: Simple to moderate effects, DSL syntax, type safety
+- **User Functions**: Complex logic, Berry features, return values
+
+## DSL Runtime Errors
 
 **Problem:** DSL compiles but fails at runtime
 
@@ -281,7 +535,28 @@ end
    run red_anim
    ```
 
-2. **Sequence Issues:**
+2. **Repeat Performance Issues:**
+   ```berry
+   # Efficient - runtime repeats don't expand at compile time
+   sequence efficient {
+     repeat 1000 times {  # No memory overhead for large counts
+       play anim for 100ms
+       wait 50ms
+     }
+   }
+   
+   # Nested repeats work efficiently
+   sequence nested {
+     repeat 100 times {
+       repeat 50 times {  # Total: 5000 iterations, but efficient
+         play quick_flash for 10ms
+       }
+       wait 100ms
+     }
+   }
+   ```
+
+3. **Sequence Issues:**
    ```berry
    # Make sure animations are defined before sequences
    color red = 0xFF0000
@@ -294,7 +569,7 @@ end
    run demo
    ```
 
-3. **Undefined References:**
+4. **Undefined References:**
    ```berry
    # Wrong - using undefined animation in sequence
    sequence bad_demo {
@@ -712,6 +987,22 @@ This format helps identify issues quickly and provide targeted solutions.
 color red = 0xFF0000
 animation red_solid = solid(color=red)
 run red_solid
+```
+
+### Templates
+```berry
+# Define reusable template
+template pulse_effect {
+  param color type color
+  param speed
+  
+  animation pulse = pulsating_animation(color=color, period=speed)
+  run pulse
+}
+
+# Use template multiple times
+pulse_effect(red, 2s)
+pulse_effect(blue, 1s)
 ```
 
 ### Animation with Parameters

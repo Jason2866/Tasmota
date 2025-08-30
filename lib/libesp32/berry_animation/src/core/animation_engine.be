@@ -1,8 +1,5 @@
 # Unified Animation Engine
-# Combines AnimationController, AnimationManager, and Renderer into a single efficient class
 #
-# This unified approach eliminates redundancy and provides a simpler, more efficient
-# animation system for Tasmota LED control.
 
 class AnimationEngine
   # Core properties
@@ -59,6 +56,12 @@ class AnimationEngine
       var now = tasmota.millis()
       while (i < size(self.animations))
         self.animations[i].start(now)
+        i += 1
+      end
+
+      i = 0
+      while (i < size(self.sequence_managers))
+        self.sequence_managers[i].start(now)
         i += 1
       end
       
@@ -126,7 +129,7 @@ class AnimationEngine
     self.animations = []
     var i = 0
     while i < size(self.sequence_managers)
-      self.sequence_managers[i].stop_sequence()
+      self.sequence_managers[i].stop()
       i += 1
     end
     self.sequence_managers = []
@@ -168,6 +171,9 @@ class AnimationEngine
       current_time = tasmota.millis()
     end
     
+    # Check if strip length changed since last time
+    self.check_strip_length()
+    
     # Update engine time
     self.time_ms = current_time
     
@@ -187,7 +193,7 @@ class AnimationEngine
     # Update sequence managers
     var i = 0
     while i < size(self.sequence_managers)
-      self.sequence_managers[i].update()
+      self.sequence_managers[i].update(current_time)
       i += 1
     end
     
@@ -250,6 +256,7 @@ class AnimationEngine
       var rendered = anim.render(self.temp_buffer, time_ms)
       
       if rendered
+        anim.post_render(self.temp_buffer, time_ms)
         # Blend temp buffer into main buffer
         self.frame_buffer.blend_pixels(self.temp_buffer)
       end
@@ -356,6 +363,7 @@ class AnimationEngine
   end
   
   def get_strip_length()
+    self.check_strip_length()
     return self.width
   end
   
@@ -369,6 +377,34 @@ class AnimationEngine
   
   def get_animations()
     return self.animations
+  end
+  
+  # Check if the length of the strip changes
+  #
+  # @return bool - True if strip lengtj was changed, false otherwise
+  def check_strip_length()
+    var current_length = self.strip.length()
+    if current_length != self.width
+      self._handle_strip_length_change(current_length)
+      return true  # Length changed
+    end
+    return false  # No change
+  end
+  
+  # Handle strip length changes by resizing buffers
+  def _handle_strip_length_change(new_length)
+    if new_length <= 0
+      return  # Invalid length, ignore
+    end
+    
+    self.width = new_length
+    
+    # Resize existing frame buffers instead of creating new ones
+    self.frame_buffer.resize(new_length)
+    self.temp_buffer.resize(new_length)
+    
+    # Force a render to clear any stale pixels
+    self.render_needed = true
   end
   
   # Cleanup method for proper resource management
@@ -391,11 +427,5 @@ def create_engine(strip)
   return animation.animation_engine(strip)
 end
 
-# Compatibility function for legacy examples
-def animation_controller(strip)
-  return animation.animation_engine(strip)
-end
-
 return {'animation_engine': AnimationEngine,
-        'create_engine': create_engine,
-        'animation_controller': animation_controller}
+        'create_engine': create_engine}

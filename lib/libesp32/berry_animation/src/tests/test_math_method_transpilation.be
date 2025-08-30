@@ -109,7 +109,7 @@ def test_is_math_method_function()
   var transpiler = animation_dsl.SimpleDSLTranspiler([])
   
   # Test mathematical methods
-  var math_methods = ["min", "max", "abs", "round", "sqrt", "scale", "sine", "cosine"]
+  var math_methods = ["min", "max", "abs", "round", "sqrt", "scale", "sin", "cos"]
   for method : math_methods
     if !transpiler.is_math_method(method)
       print(f"    ❌ {method} should be detected as a math method")
@@ -153,7 +153,7 @@ def test_math_method_transpilation()
     "set x = 10\n"
     "set y = 20\n"
     "animation wave = pulsating_animation(color=blue, period=3s)\n"
-    "wave.brightness = max(min(x, y), sqrt(abs(x - y)))\n"
+    "wave.min_brightness = max(min(x, y), sqrt(abs(x - y)))\n"
     "run wave"
   
   var result2 = test_transpilation_case(dsl_code2, ["max", "min", "sqrt", "abs"], "Multiple math functions")
@@ -165,10 +165,10 @@ def test_math_method_transpilation()
   var dsl_code3 = 
     "set angle = 45\n"
     "animation rotate = pulsating_animation(color=green, period=2s)\n"
-    "rotate.brightness = round(sine(angle) * 180 + cosine(angle) * 90)\n"
+    "rotate.min_brightness = round(sin(angle) * 180 + cos(angle) * 90)\n"
     "run rotate"
   
-  var result3 = test_transpilation_case(dsl_code3, ["round", "sine", "cosine"], "Complex math expressions")
+  var result3 = test_transpilation_case(dsl_code3, ["round", "sin", "cos"], "Complex math expressions")
   if !result3
     return false
   end
@@ -176,7 +176,7 @@ def test_math_method_transpilation()
   # Test case 4: Ensure non-math functions are NOT prefixed with self.
   var dsl_code4 = 
     "animation pulse = pulsating_animation(color=red, period=2s)\n"
-    "pulse.brightness = scale(50, 0, 100)\n"
+    "pulse.min_brightness = scale(50, 0, 100)\n"
     "run pulse"
   
   var result4 = test_non_math_functions(dsl_code4)

@@ -93,16 +93,21 @@ The Animation DSL uses a declarative syntax with named parameters. All animation
 
 ### Key Syntax Features
 
+- **Import statements**: `import module_name` for loading Berry modules
 - **Named parameters**: All function calls use `name=value` syntax
 - **Time units**: `2s`, `500ms`, `1m`, `1h` 
 - **Hex colors**: `#FF0000`, `#80FF0000` (ARGB)
 - **Named colors**: `red`, `blue`, `white`, etc.
 - **Comments**: `# This is a comment`
 - **Property assignment**: `animation.property = value`
+- **User functions**: `user.function_name()` for custom functions
 
 ### Basic Structure
 
 ```berry
+# Import statements (optional, for user functions or custom modules)
+import user_functions
+
 # Optional strip configuration
 strip length 60
 
@@ -114,8 +119,9 @@ color blue = #0000FF
 animation pulse_red = pulsating_animation(color=red, period=2s)
 animation comet_blue = comet_animation(color=blue, tail_length=10, speed=1500)
 
-# Property assignments
+# Property assignments with user functions
 pulse_red.priority = 10
+pulse_red.opacity = user.breathing_effect()
 comet_blue.direction = -1
 
 # Execution
@@ -180,7 +186,185 @@ my_animation.priority = 10
 
 This intelligent resolution ensures optimal performance while maintaining clear separation between framework and user code.
 
+## Import Statement Transpilation
+
+The DSL supports importing Berry modules using the `import` keyword, which provides a clean way to load user functions and custom modules.
+
+### Import Syntax
+
+```berry
+# DSL Import Syntax
+import user_functions
+import my_custom_module
+import math
+```
+
+### Transpilation Behavior
+
+Import statements are transpiled directly to Berry import statements with quoted module names:
+
+```berry
+# DSL Code
+import user_functions
+
+# Transpiles to Berry Code
+import "user_functions"
+```
+
+### Import Processing
+
+1. **Early Processing**: Import statements are processed early in transpilation
+2. **Module Loading**: Imported modules are loaded using standard Berry import mechanism
+3. **Function Registration**: User function modules should register functions using `animation.register_user_function()`
+4. **No Validation**: The DSL doesn't validate module existence at compile time
+
+### Example Import Workflow
+
+**Step 1: Create User Functions Module (`user_functions.be`)**
+```berry
+import animation
+
+def rand_demo(engine)
+  import math
+  return math.rand() % 256
+end
+
+# Register for DSL use
+animation.register_user_function("rand_demo", rand_demo)
+```
+
+**Step 2: Use in DSL**
+```berry
+import user_functions
+
+animation test = solid(color=blue)
+test.opacity = user.rand_demo()
+run test
+```
+
+**Step 3: Generated Berry Code**
+```berry
+import animation
+var engine = animation.init_strip()
+
+import "user_functions"
+var test_ = animation.solid(engine)
+test_.color = 0xFF0000FF
+test_.opacity = animation.create_closure_value(engine, 
+  def (self) return animation.get_user_function('rand_demo')(self.engine) end)
+engine.add_animation(test_)
+engine.start()
+```
+
 ## Advanced DSL Features
+
+### Templates
+
+Templates provide a DSL-native way to create reusable animation patterns with parameters. Templates are transpiled into Berry functions and automatically registered for use.
+
+#### Template Definition Transpilation
+
+```berry
+# DSL Template
+template pulse_effect {
+  param color type color
+  param speed
+  
+  animation pulse = pulsating_animation(
+    color=color
+    period=speed
+  )
+  
+  run pulse
+}
+```
+
+**Transpiles to:**
+
+```berry
+def pulse_effect(engine, color, speed)
+  var pulse_ = animation.pulsating_animation(engine)
+  pulse_.color = color
+  pulse_.period = speed
+  engine.add_animation(pulse_)
+  engine.start_animation(pulse_)
+end
+
+animation.register_user_function("pulse_effect", pulse_effect)
+```
+
+#### Template Transpilation Process
+
+1. **Function Generation**: Template becomes a Berry function with `engine` as first parameter
+2. **Parameter Mapping**: Template parameters become function parameters (after `engine`)
+3. **Body Transpilation**: Template body is transpiled using standard DSL rules
+4. **Auto-Registration**: Generated function is automatically registered as a user function
+5. **Type Annotations**: Optional `type` annotations are preserved as comments for documentation
+
+#### Template Call Transpilation
+
+```berry
+# DSL Template Call
+pulse_effect(red, 2s)
+```
+
+**Transpiles to:**
+
+```berry
+pulse_effect(engine, animation.red, 2000)
+```
+
+Template calls are transpiled as regular user function calls with automatic `engine` parameter injection.
+
+#### Advanced Template Features
+
+**Multi-Animation Templates:**
+```berry
+template comet_chase {
+  param trail_color type color
+  param bg_color type color
+  param chase_speed
+  
+  animation background = solid_animation(color=bg_color)
+  animation comet = comet_animation(color=trail_color, speed=chase_speed)
+  
+  run background
+  run comet
+}
+```
+
+**Transpiles to:**
+```berry
+def comet_chase(engine, trail_color, bg_color, chase_speed)
+  var background_ = animation.solid_animation(engine)
+  background_.color = bg_color
+  var comet_ = animation.comet_animation(engine)
+  comet_.color = trail_color
+  comet_.speed = chase_speed
+  engine.add_animation(background_)
+  engine.start_animation(background_)
+  engine.add_animation(comet_)
+  engine.start_animation(comet_)
+end
+
+animation.register_user_function("comet_chase", comet_chase)
+```
+
+#### Template vs User Function Transpilation
+
+**Templates** (DSL-native):
+- Defined within DSL files
+- Use DSL syntax in body
+- Automatically registered
+- Type annotations supported
+- Transpiled to Berry functions
+
+**User Functions** (Berry-native):
+- Defined in Berry code
+- Use Berry syntax
+- Manually registered
+- Full Berry language features
+- Called from DSL
 
 ### User-Defined Functions
 
@@ -292,9 +476,14 @@ animation bad2 = math_function(value=10)
 
 **Parameter Validation:**
 ```berry
-# Error: Invalid parameter name
+# Error: Invalid parameter name in constructor
 animation pulse = pulsating_animation(invalid_param=123)
 # Transpiler error: "Parameter 'invalid_param' is not valid for pulsating_animation"
+
+# Error: Invalid parameter name in property assignment
+animation pulse = pulsating_animation(color=red, period=2s)
+pulse.wrong_arg = 15
+# Transpiler error: "Animation 'PulseAnimation' does not have parameter 'wrong_arg'"
 
 # Error: Parameter constraint violation
 animation comet = comet_animation(tail_length=-5)
@@ -318,16 +507,23 @@ color bad2 = pulsating_animation(color=red)
 animation pulse = pulsating_animation(color=undefined_color)
 # Transpiler error: "Undefined reference: 'undefined_color'"
 
-# Error: Undefined animation reference
+# Error: Undefined animation reference in run statement
 run nonexistent_animation
-# Transpiler error: "Undefined reference: 'nonexistent_animation'"
+# Transpiler error: "Undefined reference 'nonexistent_animation' in run"
+
+# Error: Undefined animation reference in sequence
+sequence demo {
+  play nonexistent_animation for 5s
+}
+# Transpiler error: "Undefined reference 'nonexistent_animation' in sequence play"
 ```
 
 ### Error Categories
 
 - **Syntax errors**: Invalid DSL syntax (lexer/parser errors)
 - **Factory validation**: Non-existent or invalid animation/color provider factories
-- **Parameter validation**: Invalid parameter names or constraint violations
+- **Parameter validation**: Invalid parameter names in constructors or property assignments
+- **Constraint validation**: Parameter values that violate defined constraints (min/max, enums, types)
 - **Reference validation**: Using undefined colors, animations, or variables
 - **Type validation**: Incorrect parameter types or incompatible assignments
 - **Runtime errors**: Errors during Berry code execution (rare with good validation)
@@ -355,12 +551,12 @@ run nonexistent_animation
 2. **Use programmatic API for performance-critical code**:
    ```berry
    # DSL for high-level structure
-   animation_dsl.execute('''
-   sequence main {
-     play performance_critical_anim for 10s
-   }
-   run main
-   ''')
+   animation_dsl.execute(
+     "sequence main {\n"
+       "play performance_critical_anim for 10s\n"
+    "}\n"
+    "run main"
+   )
    
    # Programmatic for performance-critical animations
    var performance_critical_anim = animation.create_optimized_animation()
