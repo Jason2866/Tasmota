@@ -19,5 +19,6 @@ const char HTTP_HEAD_STYLE_ROOT_COLOR[] PROGMEM =
   "--c_intxt:#%06x;"
   "--c_csl:#%06x;"
   "--c_csltxt:#%06x;"
-  "}"
-  "</style>";
+  "--c_tab:#%06x;"
+  "--c_tabtxt:#%06x;"
+  "}";

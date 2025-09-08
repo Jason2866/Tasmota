@@ -83,6 +83,14 @@ be_extern_native_module(haspmota);
 #endif // USE_LVGL_HASPMOTA
 #endif // USE_LVGL
 #ifdef USE_MATTER_DEVICE
+#ifdef USE_WS2812
+#ifdef USE_BERRY_ANIMATION
+be_extern_native_module(animation);
+#ifdef USE_BERRY_ANIMATION_DSL
+be_extern_native_module(animation_dsl);
+#endif // USE_BERRY_ANIMATION_DSL
+#endif // USE_BERRY_ANIMATION
+#endif // USE_WS2812
 be_extern_native_module(matter);
 #endif // USE_MATTER_DEVICE
 
@@ -164,7 +172,9 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 #endif // USE_UNISHOX_COMPRESSION
 
 #if defined(USE_WS2812) && !defined(USE_WS2812_FORCE_NEOPIXELBUS)
+  #ifdef USE_BERRY_ANIMATE
     &be_native_module(animate),
+  #endif // USE_BERRY_ANIMATE
 #endif // USE_WS2812
 
 #ifdef USE_LVGL
@@ -217,6 +227,14 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 #ifdef USE_MATTER_DEVICE
     &be_native_module(matter),
 #endif // USE_MATTER_DEVICE
+#ifdef USE_WS2812
+#ifdef USE_BERRY_ANIMATION
+    &be_native_module(animation),
+#ifdef USE_BERRY_ANIMATION_DSL
+    &be_native_module(animation_dsl),
+#endif // USE_BERRY_ANIMATION_DSL
+#endif // USE_BERRY_ANIMATION
+#endif // USE_WS2812
 #endif // TASMOTA
     CUSTOM_NATIVE_MODULES
     /* user-defined modules register end */

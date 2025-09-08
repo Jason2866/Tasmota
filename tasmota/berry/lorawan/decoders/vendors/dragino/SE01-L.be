@@ -8,13 +8,14 @@
 
 import string
 
-global.se01LNodes = {}
+if !global.se01LNodes      # data survive to decoder reload
+  global.se01LNodes = {}
+end
 
 class LwDecoSE01L
-  static def decodeUplink(Node, RSSI, FPort, Bytes)
+  static def decodeUplink(Name, Node, RSSI, FPort, Bytes)
     var data = {"Device":"Dragino SE01-LB/LS"}
-    data.insert("Node", Node)
-
+    
     var valid_values = false
     var last_seen = 1451602800
     var battery_last_seen = 1451602800
@@ -30,15 +31,14 @@ class LwDecoSE01L
     var s_flag # 0: No sensor was identified, 1: The sensor has been identified	
 	
     if global.se01LNodes.find(Node)
-      last_seen = global.se01LNodes.item(Node)[1]
-      battery_last_seen = global.se01LNodes.item(Node)[2]
-      battery = global.se01LNodes.item(Node)[3]
-      rssi = global.se01LNodes.item(Node)[4]
-	  
-      temp = global.se01LNodes.item(Node)[5]
-      conductivity = global.se01LNodes.item(Node)[6]
-      moisture = global.se01LNodes.item(Node)[7]
-      dielectric = global.se01LNodes.item(Node)[8]	  
+      last_seen         = global.se01LNodes.item(Node)[2]
+      battery_last_seen = global.se01LNodes.item(Node)[3]
+      battery           = global.se01LNodes.item(Node)[4]
+      rssi              = global.se01LNodes.item(Node)[5]
+	    temp              = global.se01LNodes.item(Node)[6]
+      conductivity      = global.se01LNodes.item(Node)[7]
+      moisture          = global.se01LNodes.item(Node)[8]
+      dielectric        = global.se01LNodes.item(Node)[9]	  
     end
 	
     ## SENSOR DATA ##
@@ -99,8 +99,8 @@ class LwDecoSE01L
       if global.se01LNodes.find(Node)
         global.se01LNodes.remove(Node)
       end
-      #                         sensor[0]   [1]        [2]                [3]      [4]   [5]   [6]           [7]       [8]         [9]
-      global.se01LNodes.insert(Node, [Node, last_seen, battery_last_seen, battery, RSSI, temp, conductivity, moisture, dielectric, mod])
+      #                         sensor[0]   [1]   [2]        [3]                [4]      [5]   [6]   [7]           [8]       [9]         [10]
+      global.se01LNodes.insert(Node, [Name, Node, last_seen, battery_last_seen, battery, RSSI, temp, conductivity, moisture, dielectric, mod])
     end
 
     return data
@@ -109,24 +109,27 @@ class LwDecoSE01L
   static def add_web_sensor()
     var msg = ""
     for sensor: global.se01LNodes
-      var name = string.format("SE01-L-%i", sensor[0])
+      var name = sensor[0]
+      if string.find(name, "SE01-L") > -1                           # If LoRaWanName contains SE01-L use SE01-L-<node>
+        name = string.format("SE01-L-%i", sensor[1])
+      end
       var name_tooltip = "Dragino SE01-L"
-      var last_seen = sensor[1]
-      var battery_last_seen = sensor[2]
-      var battery = sensor[3]
-      var rssi = sensor[4]
+      var last_seen = sensor[2]
+      var battery_last_seen = sensor[3]
+      var battery = sensor[4]
+      var rssi = sensor[5]
       msg += lwdecode.header(name, name_tooltip, battery, battery_last_seen, rssi, last_seen)
 
       # Sensors
-      var temp = sensor[5]
-      var conductivity = sensor[6]
-      var moisture = sensor[7]
-      var dielectric = sensor[8]
-      var mod = sensor[9]
+      var temp = sensor[6]
+      var conductivity = sensor[7]
+      var moisture = sensor[8]
+      var dielectric = sensor[9]
+      var mod = sensor[10]
 	  
       msg += "<tr class='htr'><td colspan='4'>&#9478;"              # |
       if mod
- 	    msg += string.format(" &kappa; %.1f", dielectric )          # Kappa - dielectric
+ 	    msg += string.format(" &kappa; %.1f", dielectric )            # Kappa - dielectric
         msg += string.format(" &#x1F4A7;&#xFE0F; %u", moisture)     # Raindrop - moisture
         msg += string.format(" &sigma; %u", conductivity)           # Sigma - conductivity 
         msg += " (raw)"                                  

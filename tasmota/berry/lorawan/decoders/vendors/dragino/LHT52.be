@@ -6,13 +6,14 @@
 
 import string
 
-global.lht52Nodes = {}
+if !global.lht52Nodes      # data survive to decoder reload
+  global.lht52Nodes = {}
+end
 
 class LwDecoLHT52
-  static def decodeUplink(Node, RSSI, FPort, Bytes)
+  static def decodeUplink(Name, Node, RSSI, FPort, Bytes)
     var data = {"Device":"Dragino LHT52"}
-    data.insert("Node", Node)
-
+    
     var valid_values = false
     var last_seen = 1451602800
     var battery_last_seen = 1451602800
@@ -22,13 +23,13 @@ class LwDecoLHT52
     var humidity
     var temp_ext = 1000
     if global.lht52Nodes.find(Node)
-      last_seen = global.lht52Nodes.item(Node)[1]
-      battery_last_seen = global.lht52Nodes.item(Node)[2]
-      battery = global.lht52Nodes.item(Node)[3]
-      rssi = global.lht52Nodes.item(Node)[4]
-      temp_int = global.lht52Nodes.item(Node)[5]
-      humidity = global.lht52Nodes.item(Node)[6]
-      temp_ext = global.lht52Nodes.item(Node)[7]
+      last_seen         = global.lht52Nodes.item(Node)[2]
+      battery_last_seen = global.lht52Nodes.item(Node)[3]
+      battery           = global.lht52Nodes.item(Node)[4]
+      rssi              = global.lht52Nodes.item(Node)[5]
+      temp_int          = global.lht52Nodes.item(Node)[6]
+      humidity          = global.lht52Nodes.item(Node)[7]
+      temp_ext          = global.lht52Nodes.item(Node)[8]
     end
     ## SENSOR DATA ##
     if 2 == FPort && Bytes.size() == 11
@@ -81,8 +82,8 @@ class LwDecoLHT52
       if global.lht52Nodes.find(Node)
         global.lht52Nodes.remove(Node)
       end
-      #                         sensor[0]   [1]        [2]                [3]      [4]   [5]       [6]       [7]
-      global.lht52Nodes.insert(Node, [Node, last_seen, battery_last_seen, battery, RSSI, temp_int, humidity, temp_ext])
+      #                         sensor[0]   [1]   [2]        [3]                [4]      [5]   [6]       [7]       [8]
+      global.lht52Nodes.insert(Node, [Name, Node, last_seen, battery_last_seen, battery, RSSI, temp_int, humidity, temp_ext])
     end
 
     return data
@@ -91,18 +92,21 @@ class LwDecoLHT52
   static def add_web_sensor()
     var msg = ""
     for sensor: global.lht52Nodes
-      var name = string.format("LHT52-%i", sensor[0])
+      var name = sensor[0]
+      if string.find(name, "LHT52") > -1                                 # If LoRaWanName contains LHT52 use LHT52-<node>
+        name = string.format("LHT52-%i", sensor[1])
+      end
       var name_tooltip = "Dragino LHT52"
-      var battery = sensor[3]
-      var battery_last_seen = sensor[2]
-      var rssi = sensor[4]
-      var last_seen = sensor[1]
+      var last_seen = sensor[2]
+      var battery_last_seen = sensor[3]
+      var battery = sensor[4]
+      var rssi = sensor[5]
       msg += lwdecode.header(name, name_tooltip, battery, battery_last_seen, rssi, last_seen)
 
       # Sensors
-      var temp_int = sensor[5]
-      var humidity = sensor[6]
-      var temp_ext = sensor[7]
+      var temp_int = sensor[6]
+      var humidity = sensor[7]
+      var temp_ext = sensor[8]
       msg += "<tr class='htr'><td colspan='4'>&#9478;"                   # |
       if temp_int < 1000
         msg += string.format(" &#x2600;&#xFE0F; %.1f°C", temp_int)       # Sunshine - Temperature internal

@@ -62,9 +62,6 @@ const char kTasmotaCommands[] PROGMEM = "|"  // No prefix
 #endif  // ESP32
 
   D_CMND_SETSENSOR "|" D_CMND_SENSOR "|" D_CMND_DRIVER "|" D_CMND_JSON "|" D_CMND_JSON_PP
-#ifdef CONFIG_ESP_WIFI_REMOTE_ENABLED
-"|" D_CMND_HOSTEDOTA
-#endif //CONFIG_ESP_WIFI_REMOTE_ENABLED
 #endif  //FIRMWARE_MINIMAL
   ;
 
@@ -114,9 +111,6 @@ void (* const TasmotaCommand[])(void) PROGMEM = {
 #endif  // ESP32
 
   &CmndSetSensor, &CmndSensor, &CmndDriver, &CmndJson, &CmndJsonPP
-#ifdef CONFIG_ESP_WIFI_REMOTE_ENABLED
-  , &CmdHostedOta
-#endif //CONFIG_ESP_WIFI_REMOTE_ENABLED
 #endif   //FIRMWARE_MINIMAL
   };
 
@@ -987,8 +981,8 @@ void CmndStatus(void)
                           ",\"" D_JSON_COREVERSION "\":\"" ARDUINO_CORE_RELEASE "\",\"" D_JSON_SDKVERSION "\":\"%s\","
                           "\"CpuFrequency\":%d,\"Hardware\":\"%s\""
 #ifdef CONFIG_ESP_WIFI_REMOTE_ENABLED
-                          ",\"HostedMCU\":{\"Hardware\":\"" CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET"\",\"Version\":\"%s\"}"
-#endif
+                          ",\"HostedMCU\":{\"Hardware\":\"%s\",\"Version\":\"%s\"}"
+#endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED
                           "%s}}"),
                           TasmotaGlobal.version, TasmotaGlobal.image_name, GetCodeCores().c_str(), GetBuildDateAndTime().c_str()
 #ifdef ESP8266
@@ -997,8 +991,8 @@ void CmndStatus(void)
                           , ESP.getSdkVersion(),
                           ESP.getCpuFreqMHz(), GetDeviceHardwareRevision().c_str(),
 #ifdef CONFIG_ESP_WIFI_REMOTE_ENABLED
-                          GetHostedMCUFwVersion().c_str(),
-#endif
+                          GetHostedMCU().c_str(), GetHostedMCUFwVersion().c_str(),
+#endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED
                           GetStatistics().c_str());
     CmndStatusResponse(2);
   }
@@ -2149,7 +2143,7 @@ void CmndTemplate(void)
         if (8 == i) { j = 12; }
 #endif  // ESP8266
 #ifdef ESP32
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6
         // No change
 #elif CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
 //        if (22 == i) { j = 33; }  // TODO 20230821 verify
@@ -3108,12 +3102,4 @@ void CmndTouchThres(void) {
   ResponseCmndNumber(Settings->touch_threshold);
 }
 #endif  // ESP32 SOC_TOUCH_VERSION_1 or SOC_TOUCH_VERSION_2
-
-void CmdHostedOta() {
-  if (XdrvMailbox.data_len > 0) {
-    OTAHostedMCU(XdrvMailbox.data);
-  }
-  ResponseCmndDone();
-}
-
 #endif  // ESP32

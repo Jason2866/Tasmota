@@ -815,14 +815,14 @@ typedef union {
 } NeoPoolBitfield;;
 
 // Global structure containing sensor saved variables
-struct {
+typedef struct {
   uint32_t  crc32;
   uint16_t  version;
   NeoPoolBitfield flags;
   uint8_t   result;
   uint16_t  npteleperiod;
-} NeoPoolSettings;
-
+} TNeoPoolSettings;
+TNeoPoolSettings NeoPoolSettings;
 
 #define D_NEOPOOL_NAME "NeoPool"
 
@@ -1011,7 +1011,7 @@ const char HTTP_SNS_NEOPOOL_CELL_RUNTIME[]     PROGMEM = "{s}%s " D_NEOPOOL_CELL
 
 const char HTTP_SNS_NEOPOOL_STATUS[]           PROGMEM = "<span style=\"background-color:%s;font-size:small;text-align:center;%s;\">&nbsp;%s&nbsp;</span>";
 const char HTTP_SNS_NEOPOOL_STATUS_NORMAL[]    PROGMEM = "filter:invert(0.1)";
-const char HTTP_SNS_NEOPOOL_STATUS_DISABLED[]  PROGMEM = "display: none";
+const char HTTP_SNS_NEOPOOL_STATUS_DISABLED[]  PROGMEM = "display:none";
 const char HTTP_SNS_NEOPOOL_STATUS_INACTIVE[]  PROGMEM = "filter:opacity(0.15)";
 const char HTTP_SNS_NEOPOOL_STATUS_ACTIVE[]    PROGMEM = "filter:invert(1)";
 
@@ -1450,6 +1450,9 @@ void NeoPoolInit(void) {
       if (2 == result) {
           ClaimSerial();
       }
+#ifdef ESP32
+      AddLog(LOG_LEVEL_DEBUG, PSTR("NEO: Serial UART%d"), NeoPoolModbus->getUart());
+#endif
       if (NeoPoolInitData()) {  // Claims heap space
         neopool_active = true;
       }
@@ -3381,6 +3384,9 @@ void NeoPoolSettingsLoad(bool erase) {
   NeoPoolSettings.flags.conn_stat = 1;
   NeoPoolSettings.result = NEOPOOL_DEFAULT_RESULT;
   NeoPoolSettings.npteleperiod = NEOPOOL_DEFAULT_NPTELEPERIOD;
+  TNeoPoolSettings NeoPoolSettingsDefaults;
+  memcpy(&NeoPoolSettingsDefaults, &NeoPoolSettings, sizeof(NeoPoolSettingsDefaults));
+
 
 #ifdef USE_UFILESYS
   snprintf_P(filename, sizeof(filename), PSTR(TASM_FILE_SENSOR), XSNS_83);
@@ -3391,6 +3397,10 @@ void NeoPoolSettingsLoad(bool erase) {
 #ifdef DEBUG_TASMOTA_SENSOR
     AddLog(LOG_LEVEL_DEBUG, PSTR("NEO: Settings loaded from file '%s'"), filename);
 #endif  // DEBUG_TASMOTA_SENSOR
+    if (NeoPoolSettings.crc32 != GetCfgCrc32((uint8_t*)&NeoPoolSettings +4, sizeof(NeoPoolSettings) -4)) {
+      AddLog(LOG_LEVEL_INFO, PSTR("NEO: Settings CRC error, reset to defaults"));
+      memcpy(&NeoPoolSettings, &NeoPoolSettingsDefaults, sizeof(NeoPoolSettings));
+    }
   }
   else {
 #ifdef DEBUG_TASMOTA_SENSOR

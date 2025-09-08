@@ -154,7 +154,7 @@ const char HTTP_SCRIPT_TEMPLATE2[] PROGMEM =
     "}";
 #endif  // ESP8266
 #ifdef ESP32
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
 const char HTTP_SCRIPT_TEMPLATE2[] PROGMEM =
     "for(i=0;i<" STR(MAX_USER_PINS) ";i++){"
       "sk(g[i],i);"                       // Set GPIO
@@ -271,7 +271,7 @@ const char HTTP_HEAD_STYLE3_MINIMAL[] PROGMEM =
 #endif  // FIRMWARE_MINIMAL
 
 const char HTTP_MENU_HEAD[] PROGMEM =
-  "<div style='padding:0px 5px;text-align:center;'><h3><hr/>%s<hr/></h3></div>";
+  "<div style='padding:0px 5px;text-align:center;'><h3><hr>%s<hr></h3></div>";
 
 const char HTTP_MSG_SLIDER_SHUTTER[] PROGMEM =
   "<td style='width:70%%'>"
@@ -437,7 +437,7 @@ const char HTTP_COUNTER[] PROGMEM =
   "<br><div id='t' style='text-align:center;'></div>";
 
 const char HTTP_END[] PROGMEM =
-  "<div style='text-align:right;font-size:11px;'><hr/><a href='https://github.com/arendst/Tasmota' target='_blank' style='color:#aaa;'>Tasmota %s %s " D_BY " Theo Arends</a></div>"
+  "<p></p><div style='text-align:right;font-size:11px;'><hr><a href='https://github.com/arendst/Tasmota' target='_blank' style='color:#aaa;'>Tasmota %s %s " D_BY " Theo Arends</a></div>"
   "</div>"
   "</body>"
   "</html>";
@@ -995,24 +995,26 @@ void WSContentSendStyle_P(const char* formatP, ...) {
 
   // Output style root colors by names
   WSContentSend_P(HTTP_HEAD_STYLE_ROOT_COLOR,
-                  WebColor(COL_BACKGROUND),         // --c_bg
-                  WebColor(COL_FORM),               // --c_frm
-                  WebColor(COL_TITLE),              // --c_ttl
-                  WebColor(COL_TEXT),               // --c_txt
-                  WebColor(COL_TEXT_WARNING),       // --c_txtwrn
-                  WebColor(COL_TEXT_SUCCESS),       // --c_txtscc
-                  WebColor(COL_BUTTON),             // --c_btn
-                  WebColor(COL_BUTTON_OFF),         // --c_btnoff
-                  WebColor(COL_BUTTON_TEXT),        // --c_btntxt
-                  WebColor(COL_BUTTON_HOVER),       // --c_btnhvr
-                  WebColor(COL_BUTTON_RESET),       // --c_btnrst
-                  WebColor(COL_BUTTON_RESET_HOVER), // --c_btnrsthvr
-                  WebColor(COL_BUTTON_SAVE),        // --c_btnsv
-                  WebColor(COL_BUTTON_SAVE_HOVER),  // --c_btnsvhvr
-                  WebColor(COL_INPUT),              // --c_in
-                  WebColor(COL_INPUT_TEXT),         // --c_intxt
-                  WebColor(COL_CONSOLE),            // --c_csl
-                  WebColor(COL_CONSOLE_TEXT)        // --c_csltxt
+                  WebColor(COL_BACKGROUND),           // --c_bg
+                  WebColor(COL_FORM),                 // --c_frm
+                  WebColor(COL_TITLE),                // --c_ttl
+                  WebColor(COL_TEXT),                 // --c_txt
+                  WebColor(COL_TEXT_WARNING),         // --c_txtwrn
+                  WebColor(COL_TEXT_SUCCESS),         // --c_txtscc
+                  WebColor(COL_BUTTON),               // --c_btn
+                  WebColor(COL_BUTTON_OFF),           // --c_btnoff
+                  WebColor(COL_BUTTON_TEXT),          // --c_btntxt
+                  WebColor(COL_BUTTON_HOVER),         // --c_btnhvr
+                  WebColor(COL_BUTTON_RESET),         // --c_btnrst
+                  WebColor(COL_BUTTON_RESET_HOVER),   // --c_btnrsthvr
+                  WebColor(COL_BUTTON_SAVE),          // --c_btnsv
+                  WebColor(COL_BUTTON_SAVE_HOVER),    // --c_btnsvhvr
+                  WebColor(COL_INPUT),                // --c_in
+                  WebColor(COL_INPUT_TEXT),           // --c_intxt
+                  WebColor(COL_CONSOLE),              // --c_csl
+                  WebColor(COL_CONSOLE_TEXT),         // --c_csltxt
+                  WebColor(COL_TIMER_TAB_BACKGROUND), // --c_tab
+                  WebColor(COL_TIMER_TAB_TEXT)        // --c_tabtxt
   );
 
   WSContentSendRaw_P(HTTP_HEAD_STYLE1);
@@ -1100,18 +1102,18 @@ void WSContentButton(uint32_t title_index, bool show=true) {
   char action[4];
   char title[100];  // Large to accomodate UTF-16 as used by Russian
 
-  WSContentSend_P(PSTR("<p><form id=but%d style=\"display: %s;\" action='%s' method='get'"),
+  WSContentSend_P(PSTR("<p></p><form id=but%d style=\"display:%s;\" action='%s' method='get'"),
     title_index,
     show ? "block":"none",
     GetTextIndexed(action, sizeof(action), title_index, kButtonAction));
   if (title_index <= BUTTON_RESET_CONFIGURATION) {
     char confirm[100];
-    WSContentSend_P(PSTR(" onsubmit='return confirm(\"%s\");'><button name='%s' class='button bred'>%s</button></form></p>"),
+    WSContentSend_P(PSTR(" onsubmit='return confirm(\"%s\");'><button name='%s' class='button bred'>%s</button></form>"),
       GetTextIndexed(confirm, sizeof(confirm), title_index, kButtonConfirm),
       (!title_index) ? PSTR("rst") : PSTR("non"),
       GetTextIndexed(title, sizeof(title), title_index, kButtonTitle));
   } else {
-    WSContentSend_P(PSTR("><button>%s</button></form></p>"),
+    WSContentSend_P(PSTR("><button>%s</button></form>"),
       GetTextIndexed(title, sizeof(title), title_index, kButtonTitle));
   }
 }
@@ -1119,7 +1121,7 @@ void WSContentButton(uint32_t title_index, bool show=true) {
 /*-------------------------------------------------------------------------------------------*/
 
 void WSContentSpaceButton(uint32_t title_index, bool show=true) {
-  WSContentSend_P(PSTR("<div></div>"));            // 5px padding
+  WSContentSend_P(PSTR("<div></div>"));             // 5px padding
   WSContentButton(title_index, show);
 }
 
@@ -1133,7 +1135,7 @@ void WSContentSeparator(uint32_t state) {
       request = true;
     case 1:    // Print separator if needed
       if (request) {
-        WSContentSend_P(HTTP_SNS_HR);  // <tr><td colspan=2><hr/>{e}
+        WSContentSend_P(HTTP_SNS_HR);  // <tr><td colspan=2><hr>{e}
         request = false;
       }
       break;
@@ -1681,7 +1683,6 @@ void HandleRoot(void) {
   }
 
   // Init buttons 
-  WSContentSend_P(PSTR("<script>"));
   uint32_t max_devices = TasmotaGlobal.devices_present;
 
 #ifdef USE_SONOFF_IFAN
@@ -1690,6 +1691,7 @@ void HandleRoot(void) {
   }
 #endif  // USE_SONOFF_IFAN
 
+  bool use_script = false;
   for (uint32_t idx = 1; idx <= max_devices; idx++) {
     bool not_active = !bitRead(TasmotaGlobal.power, idx -1);
 
@@ -1700,10 +1702,16 @@ void HandleRoot(void) {
 #endif  // USE_SONOFF_IFAN
 
     if (not_active) {
+      if (!use_script) {
+        use_script = true;
+        WSContentSend_P(PSTR("<script>"));
+      }
       WSContentSend_P(PSTR("eb('o%d').style.background='var(--c_btnoff)';"), idx);
     }
   }
-  WSContentSend_P(PSTR("</script>"));
+  if (use_script) {
+    WSContentSend_P(PSTR("</script>"));
+  }
 
   XdrvXsnsCall(FUNC_WEB_ADD_MAIN_BUTTON);
 #endif  // Not FIRMWARE_MINIMAL
@@ -2178,14 +2186,14 @@ void HandleTemplateConfiguration(void) {
     WSContentBegin(200, CT_PLAIN);
     WSContentSend_P(PSTR("%s}1"), AnyModuleName(module).c_str());  // NAME: Generic
     for (uint32_t i = 0; i < nitems(template_gp.io); i++) {        // 17,148,29,149,7,255,255,255,138,255,139,255,255
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C6
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C6
       // ESP32C2/C3/C6 we always send all GPIOs, Flash are just hidden
       WSContentSend_P(PSTR("%s%d"), (i>0)?",":"", template_gp.io[i]);
 #else
       if (!FlashPin(i)) {
         WSContentSend_P(PSTR("%s%d"), (i>0)?",":"", template_gp.io[i]);
       }
-#endif  // CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6
+#endif  // CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6
     }
     WSContentSend_P(PSTR("}1%d}1%d"), flag, Settings->user_template_base);  // FLAG: 1  BASE: 17
     WSContentEnd();
@@ -2223,10 +2231,10 @@ void HandleTemplateConfiguration(void) {
   WSContentSend_P(PSTR("<tr><td><b>" D_TEMPLATE_NAME "</b></td><td style='width:200px'><input id='s1' placeholder='" D_TEMPLATE_NAME "'></td></tr>"
                        "<tr><td><b>" D_BASE_TYPE "</b></td><td><select id='g99' onchange='st(this.value)'></select></td></tr>"
                        "</table>"
-                       "<hr/>"));
+                       "<hr>"));
   WSContentSend_P(HTTP_TABLE100);  // "<table style='width:100%%'>"
   for (uint32_t i = 0; i < MAX_GPIO_PIN; i++) {
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6
     // ESP32C2/C3/C6 all gpios are in the template, flash are hidden
     bool hidden = FlashPin(i);
     WSContentSend_P(PSTR("<tr%s><td><b><font color='#%06x'>" D_GPIO "%d</font></b></td><td%s><select id='g%d' onchange='ot(%d,this.value)'></select></td>"),
@@ -2239,7 +2247,7 @@ void HandleTemplateConfiguration(void) {
         RedPin(i) ? WebColor(COL_TEXT_WARNING) : WebColor(COL_TEXT), i, (0==i) ? PSTR(" style='width:146px'") : "", i, i);
       WSContentSend_P(PSTR("<td style='width:54px'><select id='h%d'></select></td></tr>"), i);
     }
-#endif  // CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6
+#endif  // CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6
   }
   WSContentSend_P(PSTR("</table>"));
 
@@ -2308,7 +2316,7 @@ void TemplateSaveSettings(void) {
     j++;
 #endif  // ESP8266
 #ifdef ESP32
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
     snprintf_P(command, sizeof(command), PSTR("%s%s%d"), command, (i>0)?",":"", WebGetGpioArg(i));
 #elif CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
     if (22 == i) { j = 33; }    // skip 22-32
@@ -2592,7 +2600,7 @@ void HandleWifiConfiguration(void) {
                   for (uint32_t k = 0; k < 4; ++k) {
                     WSContentSend_P(PSTR("<i class='b%d%s'></i>"), k, (num_bars < k) ? PSTR(" o30") : PSTR(""));
                   }
-                  WSContentSend_P(PSTR("</span></div></div>"));
+                  WSContentSend_P(PSTR("</div></span></div>"));
                 } else {
                   if (ssid_showed <= networksToShow ) { networksToShow++; }
                 }
@@ -2669,7 +2677,7 @@ void HandleWifiConfiguration(void) {
       WSContentSend_P(PSTR(D_CONNECT_FAILED_TO " %s<br>" D_CHECK_CREDENTIALS "</h3></div>"), SettingsTextEscaped(SET_STASSID1).c_str());
     }
     // More Options Button
-    WSContentSend_P(PSTR("<div id=butmod style=\"display:%s;\"></div><p><form id=butmo style=\"display:%s;\"><button type='button' onclick='hidBtns()'>" D_SHOW_MORE_OPTIONS "</button></form></p>"),
+    WSContentSend_P(PSTR("<div id=butmod style=\"display:%s;\"></div><p></p><form id=butmo style=\"display:%s;\"><button type='button' onclick='hidBtns()'>" D_SHOW_MORE_OPTIONS "</button></form>"),
       (WIFI_TEST_FINISHED_BAD == Wifi.wifiTest) ? "none" : Web.initial_config ? "block" : "none", Web.initial_config ? "block" : "none"
     );
     WSContentSpaceButton(BUTTON_RESTORE, !Web.initial_config);
@@ -2924,7 +2932,7 @@ void HandleRestoreConfiguration(void) {
 \*********************************************************************************************/
 
 void WSContentSeparatorI(uint32_t size) {
-  WSContentSend_P(PSTR("</td></tr><tr><td colspan=2><hr style='font-size:2px'%s/>"), (1 == size)?" size=1":"");
+  WSContentSend_P(PSTR("</td></tr><tr><td colspan=2><hr style='font-size:2px'%s>"), (1 == size)?" size=1":"");
 //  WSContentSend_P(PSTR("</td></tr><tr><td colspan=2><hr style='font-size:%dpx'/>"), size);
 //  WSContentSend_P(PSTR("</td></tr><tr><td colspan=2><hr style='border_top:%dpx solid'/>"), size);
 //  WSContentSend_P(PSTR("</td></tr><tr><td colspan=2 style='border-bottom:%dpx solid #ccc;'>"), size);
@@ -2940,7 +2948,6 @@ void WSContentSeparatorIFat(void) {
 /*-------------------------------------------------------------------------------------------*/
 
 void WSContentSeparatorIThin(void) {
-//  WSContentSend_P(PSTR("}1<hr/>}2<hr/>"));  // </td></tr><tr><th><hr/></th><td><hr/>
   WSContentSeparatorI(1);
 }
 
@@ -2982,10 +2989,9 @@ void HandleInformation(void) {
   }
   WSContentSeparatorIFat();
 #ifdef CONFIG_ESP_WIFI_REMOTE_ENABLED
-  WSContentSend_P(PSTR("}1 Hosted MCU }2 " CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET ""));
-  WSContentSend_P(PSTR("}1 Hosted Remote Fw }2%s"), GetHostedMCUFwVersion().c_str());
+  WSContentSend_P(PSTR("}1" D_HOSTED_MCU "}2%s (%s)"), GetHostedMCU().c_str(), GetHostedMCUFwVersion().c_str());
   WSContentSeparatorIFat();
-#endif //CONFIG_ESP_WIFI_REMOTE_ENABLED
+#endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED
   bool show_hr = false;
   if ((WiFi.getMode() >= WIFI_AP) && (static_cast<uint32_t>(WiFi.softAPIP()) != 0)) {
     WSContentSend_P(PSTR("}1" D_MAC_ADDRESS "}2%s"), WiFi.softAPmacAddress().c_str());
@@ -3796,7 +3802,7 @@ void HandleManagement(void) {
 
   XdrvMailbox.index = 0;
   XdrvXsnsCall(FUNC_WEB_ADD_CONSOLE_BUTTON);
-//  WSContentSend_P(PSTR("<div></div>"));            // 5px padding
+//  WSContentSend_P(PSTR("<div></div>"));     // 5px padding
   XdrvCall(FUNC_WEB_ADD_MANAGEMENT_BUTTON);
 
   WSContentSpaceButton(BUTTON_MAIN);

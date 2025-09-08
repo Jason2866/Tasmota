@@ -1714,7 +1714,7 @@ void TemplateGpios(myio *gp)
     j++;
 #endif  // ESP8266
 #ifdef ESP32
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
     dest[i] = src[i];
 #elif CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
     if (22 == i) { j = 33; }    // skip 22-32
@@ -1786,6 +1786,8 @@ bool FlashPin(uint32_t pin) {
   return (((pin > 10) && (pin < 12)) || ((pin > 13) && (pin < 18)));  // ESP32C3 has GPIOs 11-17 reserved for Flash, with some boards GPIOs 12 13 are useable
 #elif CONFIG_IDF_TARGET_ESP32C3
   return ((pin > 13) && (pin < 18));   // ESP32C3 has GPIOs 11-17 reserved for Flash, with some boards GPIOs 11 12 13 are useable
+#elif CONFIG_IDF_TARGET_ESP32C5
+  return ((pin > 15) && (pin < 23));   // ESP32C5 has GPIOs 16-22 reserved for Flash
 #elif CONFIG_IDF_TARGET_ESP32C6
   return ((pin == 24) || (pin == 25) || (pin == 27) || (pin == 29) || (pin == 30));  // ESP32C6 has GPIOs 24-30 reserved for Flash, with some boards GPIOs 26 28 are useable
 #elif CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
@@ -1794,7 +1796,7 @@ bool FlashPin(uint32_t pin) {
   return false;                        // ESP32P4 has no flash pins, but GPIOs 34-38 are strapping pins
 #else
   return (pin >= 28) && (pin <= 31);   // ESP32 skip 28-31
-#endif  // ESP32C2/C3/C6 and S2/S3
+#endif  // ESP32C2/C3/C5/C6 and S2/S3
 #endif  // ESP32
 }
 
@@ -1807,6 +1809,8 @@ bool RedPin(uint32_t pin) {            // Pin may be dangerous to change, displa
   return (12 == pin) || (13 == pin);   // ESP32C2: GPIOs 12 13 are usually used for Flash (mode QIO/QOUT)
 #elif CONFIG_IDF_TARGET_ESP32C3
   return (11 == pin) || (12 == pin) || (13 == pin);  // ESP32C3: GPIOs 11 12 13 are usually used for Flash (mode QIO/QOUT)
+#elif CONFIG_IDF_TARGET_ESP32C5
+  return (2 == pin) || (7 == pin) || (25 == pin) || (27 == pin) || (28 == pin);  // ESP32C5: GPIO2,7,25,27,28 are strapping pins
 #elif CONFIG_IDF_TARGET_ESP32C6
   return (26 == pin) || (28 == pin);   // ESP32C6: GPIOs 26 28 are usually used for Flash (mode QIO/QOUT)
 #elif CONFIG_IDF_TARGET_ESP32S2
@@ -2207,7 +2211,7 @@ void SetSerial(uint32_t baudrate, uint32_t serial_config) {
 
 void ClaimSerial(void) {
 #ifdef ESP32
-#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
 #ifdef USE_USB_CDC_CONSOLE
   if (!tasconsole_serial) {
     return;              // USB console does not use serial
@@ -2516,16 +2520,16 @@ void SyslogAsync(bool refresh) {
       char* msg_start = line +mxtime;
       uint32_t msg_len = len -mxtime -1;
 
-      /* RFC5424 - Syslog protocol - <PRI>VERSION TIMESTAMP HOSTNAME APP_NAME PROCID STRUCTURED-DATA MSGID MSG
+      /* RFC5424 - Syslog protocol - <PRI>VERSION TIMESTAMP HOSTNAME APP_NAME PROCID MSGID STRUCTURED-DATA MSG
          <PRI>[5] = Facility 16 (= local use 0), Severity 6 (= informational) => 16 * 8 + 6 = <134>
          VERSION[2] = 1
          TIMESTAMP = yyyy-mm-ddThh:mm:ss.nnnnnn-hh:mm (= local with timezone)
          HOSTNAME[255] = wemos5
          APP_NAME[48] = tasmota
          PROCID[128] = -
-         STRUCTURED-DATA = -
          MSGID[32] = HTP:
-         SYSLOG-MSG = <134>1 1970-01-01T00:00:02.096000+01:00 wemos5 tasmota - - HTP: Web server active on wemos5 with IP address 192.168.2.172
+         STRUCTURED-DATA = -
+         SYSLOG-MSG = <134>1 1970-01-01T00:00:02.096000+01:00 wemos5 tasmota - HTP: - Web server active on wemos5 with IP address 192.168.2.172
          Result = 1970-01-01T00:00:02.096000+00:00 wemos5 tasmota HTP: Web server active on wemos5 with IP address 192.168.2.172
          Notice date and time is provided by Tasmota device.
 
@@ -2536,43 +2540,38 @@ void SyslogAsync(bool refresh) {
       char timestamp[mxtime];
       subStr(timestamp, line, " ", 1);                        // 00:00:02.096-026
       subStr(timestamp, timestamp, "-", 1);                   // 00:00:02.096
-/*
+
       snprintf_P(header, sizeof(header), PSTR("<%d>1 %s%s000%s %s tasmota - - -"),
-        128 + min(loglevel * 3, 7),
+        128 + min(loglevel * 3, 7),                           // Error (1) = 131, Info (2) = 134, Debug (3) = 135, DebugMore = (4) 135
         GetDate().c_str(), timestamp, GetTimeZone().c_str(),  // 1970-01-01T00:00:02.096000+01:00
         NetworkHostname());
-*/
 /*
       // msgid is currently not well supported in rsyslog (https://github.com/rsyslog/rsyslog/issues/3592#issuecomment-480186237)
       char msgid[5];
       char* line_msgid = strchr(msg_start, ' ');
       if (line_msgid && (line_msgid - msg_start < sizeof(msgid))) {  // Only 3 character message ids supported
         subStr(msgid, msg_start, " ", 1);                     // HTP:
-        msg_start += strlen(msgid);
-        msg_len -= strlen(msgid);
+        uint32_t strlen_msgid = strlen(msgid) +1;
+        msg_start += strlen_msgid;
+        msg_len -= strlen_msgid;
       } else {
         strcpy(msgid, "-");                                   // -
       }
-*/
-      char msgid[2] = { 0 };
-      char* line_msgid = strchr(msg_start, ':');
-      if ((line_msgid == nullptr) || (line_msgid - msg_start != 3)) {  // Only 3 character message id supported
-        strcpy(msgid, "-");                                   // -
-      }
-
-      snprintf_P(header, sizeof(header), PSTR("<%d>1 %s%s000%s %s tasmota - - %s"),
+      snprintf_P(header, sizeof(header), PSTR("<%d>1 %s%s000%s %s tasmota - %s -"),
         128 + min(loglevel * 3, 7),                           // Error (1) = 131, Info (2) = 134, Debug (3) = 135, DebugMore = (4) 135
         GetDate().c_str(), timestamp, GetTimeZone().c_str(),  // 1970-01-01T00:00:02.096000+01:00
         NetworkHostname(), msgid);
+*/
 
 /*
-      TasConsole.printf("Loglevel ");
-      TasConsole.print(loglevel);
-      TasConsole.printf(", Header '");
+      TasConsole.printf((char*)"Loglevel ");
+      char number[10];
+      TasConsole.printf(itoa(loglevel, number, 10));
+      TasConsole.printf((char*)", Header '");
       TasConsole.printf(header);
-      TasConsole.printf("', Msg '");
+      TasConsole.printf((char*)"', Msg '");
       TasConsole.write((uint8_t*)msg_start, msg_len);
-      TasConsole.printf("'\r\n");
+      TasConsole.printf((char*)"'\r\n");
 */
 #ifdef ESP8266
       // Packets over 1460 bytes are not send

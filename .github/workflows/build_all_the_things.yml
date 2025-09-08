@@ -32,9 +32,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          enable-cache: false
       - name: Install dependencies
         run: |
-          pip install uv
           uv pip install --system platformio
       - name: Run PlatformIO
         env:
@@ -60,9 +64,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          enable-cache: false
       - name: Install dependencies
         run: |
-          pip install uv
           uv pip install --system platformio
       - name: Run PlatformIO
         env:
@@ -94,6 +102,7 @@ jobs:
           - tasmota32solo1
           - tasmota32c2
           - tasmota32c3
+          - tasmota32c5
           - tasmota32c6
           - tasmota32p4
           - tasmota32s2
@@ -112,6 +121,7 @@ jobs:
           - tasmota32s3-safeboot
           - tasmota32c2-safeboot
           - tasmota32c3-safeboot
+          - tasmota32c5-safeboot
           - tasmota32c6-safeboot
           - tasmota32p4-safeboot
     steps:
@@ -120,9 +130,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          enable-cache: false
       - name: Install dependencies
         run: |
-          pip install uv
           uv pip install --system platformio
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Run PlatformIO
@@ -149,9 +163,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          enable-cache: false
       - name: Install dependencies
         run: |
-          pip install uv
           uv pip install --system platformio
       - name: Run PlatformIO
         env:
