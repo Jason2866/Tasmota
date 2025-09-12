@@ -12,7 +12,6 @@ class DSLLexer
   var line            # Integer - current line number (1-based)
   var column          # Integer - current column number (1-based)
   var tokens          # List - generated tokens
-  var errors          # List - lexical errors encountered
   
   # Initialize lexer with source code
   #
@@ -23,7 +22,6 @@ class DSLLexer
     self.line = 1
     self.column = 1
     self.tokens = []
-    self.errors = []
   end
   
   # Tokenize the entire source code
@@ -31,7 +29,6 @@ class DSLLexer
   # @return list - Array of Token objects
   def tokenize()
     self.tokens = []
-    self.errors = []
     self.position = 0
     self.line = 1
     self.column = 1
@@ -68,7 +65,13 @@ class DSLLexer
     elif self.is_digit(ch)
       self.scan_number()
     elif ch == '"' || ch == "'"
-      self.scan_string(ch)
+      # Check for triple quotes
+      if (ch == '"' && self.peek() == '"' && self.peek_ahead(1) == '"') ||
+         (ch == "'" && self.peek() == "'" && self.peek_ahead(1) == "'")
+        self.scan_triple_quoted_string(ch)
+      else
+        self.scan_string(ch)
+      end
     elif ch == '$'
       self.scan_variable_reference()
     else
@@ -111,8 +114,7 @@ class DSLLexer
     if hex_digits == 6 || hex_digits == 8
       self.add_token(4 #-animation_dsl.Token.COLOR-#, color_value, size(color_value))
     else
-      self.add_error("Invalid hex color format: " + color_value + " (expected 0xRRGGBB or 0xAARRGGBB)")
-      self.add_token(39 #-animation_dsl.Token.ERROR-#, color_value, size(color_value))
+      self.error("Invalid hex color format: " + color_value + " (expected 0xRRGGBB or 0xAARRGGBB)")
     end
   end
   
@@ -259,11 +261,52 @@ class DSLLexer
     end
     
     if self.at_end()
-      self.add_error("Unterminated string literal")
-      self.add_token(39 #-animation_dsl.Token.ERROR-#, value, self.position - start_pos)
+      self.error("Unterminated string literal")
     else
       # Consume closing quote
       self.advance()
+      self.add_token(3 #-animation_dsl.Token.STRING-#, value, self.position - start_pos)
+    end
+  end
+  
+  # Scan triple-quoted string literal (for berry code blocks)
+  def scan_triple_quoted_string(quote_char)
+    var start_pos = self.position - 1  # Include first opening quote
+    var start_column = self.column - 1
+    var value = ""
+    
+    # Consume the two remaining opening quotes
+    self.advance()  # second quote
+    self.advance()  # third quote
+    
+    # Look for the closing triple quotes
+    while !self.at_end()
+      var ch = self.peek()
+      
+      # Check for closing triple quotes
+      if ch == quote_char && 
+         self.peek_ahead(1) == quote_char && 
+         self.peek_ahead(2) == quote_char
+        # Found closing triple quotes - consume them
+        self.advance()  # first closing quote
+        self.advance()  # second closing quote
+        self.advance()  # third closing quote
+        break
+      end
+      
+      # Regular character - add to value
+      ch = self.advance()
+      if ch == '\n'
+        self.line += 1
+        self.column = 1
+      end
+      value += ch
+    end
+    
+    # Check if we reached end without finding closing quotes
+    if self.at_end() && !(self.source[self.position-3..self.position-1] == quote_char + quote_char + quote_char)
+      self.error("Unterminated triple-quoted string literal")
+    else
       self.add_token(3 #-animation_dsl.Token.STRING-#, value, self.position - start_pos)
     end
   end
@@ -274,9 +317,7 @@ class DSLLexer
     var start_column = self.column - 1
     
     if self.at_end() || !(self.is_alpha(self.peek()) || self.peek() == '_')
-      self.add_error("Invalid variable reference: $ must be followed by identifier")
-      self.add_token(39 #-animation_dsl.Token.ERROR-#, "$", 1)
-      return
+      self.error("Invalid variable reference: $ must be followed by identifier")
     end
     
     # Scan identifier part
@@ -309,7 +350,7 @@ class DSLLexer
         self.add_token(18 #-animation_dsl.Token.LESS_EQUAL-#, "<=", 2)
       elif self.match('<')
         # Left shift - not used in DSL but included for completeness
-        self.add_token(39 #-animation_dsl.Token.ERROR-#, "<<", 2)
+        self.error("Left shift operator '<<' not supported in DSL")
       else
         self.add_token(17 #-animation_dsl.Token.LESS_THAN-#, "<", 1)
       end
@@ -318,7 +359,7 @@ class DSLLexer
         self.add_token(20 #-animation_dsl.Token.GREATER_EQUAL-#, ">=", 2)
       elif self.match('>')
         # Right shift - not used in DSL but included for completeness
-        self.add_token(39 #-animation_dsl.Token.ERROR-#, ">>", 2)
+        self.error("Right shift operator '>>' not supported in DSL")
       else
         self.add_token(19 #-animation_dsl.Token.GREATER_THAN-#, ">", 1)
       end
@@ -326,15 +367,13 @@ class DSLLexer
       if self.match('&')
         self.add_token(21 #-animation_dsl.Token.LOGICAL_AND-#, "&&", 2)
       else
-        self.add_error("Single '&' not supported in DSL")
-        self.add_token(39 #-animation_dsl.Token.ERROR-#, "&", 1)
+        self.error("Single '&' not supported in DSL")
       end
     elif ch == '|'
       if self.match('|')
         self.add_token(22 #-animation_dsl.Token.LOGICAL_OR-#, "||", 2)
       else
-        self.add_error("Single '|' not supported in DSL")
-        self.add_token(39 #-animation_dsl.Token.ERROR-#, "|", 1)
+        self.error("Single '|' not supported in DSL")
       end
     elif ch == '-'
       if self.match('>')
@@ -379,8 +418,7 @@ class DSLLexer
         self.add_token(33 #-animation_dsl.Token.DOT-#, ".", 1)
       end
     else
-      self.add_error("Unexpected character: '" + ch + "'")
-      self.add_token(39 #-animation_dsl.Token.ERROR-#, ch, 1)
+      self.error("Unexpected character: '" + ch + "'")
     end
   end
   
@@ -419,6 +457,14 @@ class DSLLexer
     return self.source[self.position + 1]
   end
   
+  # Peek ahead by n characters without advancing
+  def peek_ahead(n)
+    if self.position + n >= size(self.source)
+      return ""
+    end
+    return self.source[self.position + n]
+  end
+  
   # Check if current character matches expected and advance if so
   def match(expected)
     if self.at_end() || self.source[self.position] != expected
@@ -453,37 +499,10 @@ class DSLLexer
     self.tokens.push(token)
   end
   
-  # Add error to errors list
-  def add_error(message)
-    self.errors.push({
-      "message": message,
-      "line": self.line,
-      "column": self.column,
-      "position": self.position
-    })
-  end
-  
-  # Get all errors encountered during tokenization
-  def get_errors()
-    return self.errors
-  end
-  
-  # Check if any errors were encountered
-  def has_errors()
-    return size(self.errors) > 0
-  end
-  
-  # Get a formatted error report
-  def get_error_report()
-    if !self.has_errors()
-      return "No lexical errors"
-    end
-    
-    var report = "Lexical errors (" + str(size(self.errors)) + "):\n"
-    for error : self.errors
-      report += "  Line " + str(error["line"]) + ":" + str(error["column"]) + ": " + error["message"] + "\n"
-    end
-    return report
+  # Raise lexical error immediately
+  def error(message)
+    var error_msg = "Line " + str(self.line) + ":" + str(self.column) + ": " + message
+    raise "lexical_error", error_msg
   end
   
   # Reset lexer state for reuse
@@ -493,7 +512,6 @@ class DSLLexer
     self.line = 1
     self.column = 1
     self.tokens = []
-    self.errors = []
   end
   
   # Get current position info for debugging
@@ -506,16 +524,7 @@ class DSLLexer
     }
   end
   
-  # Tokenize and return both tokens and errors
-  def tokenize_with_errors()
-    var tokens = self.tokenize()
-    var result = {
-      "tokens": tokens,
-      "errors": self.errors,
-      "success": !self.has_errors()
-    }
-    return result
-  end
+
 end
 
 # Utility function to tokenize DSL source code
@@ -527,17 +536,7 @@ def tokenize_dsl(source)
   return lexer.tokenize()
 end
 
-# Utility function to tokenize with error handling
-#
-# @param source: string - DSL source code
-# @return map - {tokens: list, errors: list, success: bool}
-def tokenize_dsl_with_errors(source)
-  var lexer = animation_dsl.DSLLexer(source)
-  return lexer.tokenize_with_errors()
-end
-
 return {
   "DSLLexer": DSLLexer,
-  "tokenize_dsl": tokenize_dsl,
-  "tokenize_dsl_with_errors": tokenize_dsl_with_errors
+  "tokenize_dsl": tokenize_dsl
 }

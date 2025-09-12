@@ -8,10 +8,12 @@ def test_transpilation_case(dsl_code, expected_methods, test_name)
   print(f"\n  Testing: {test_name}")
   
   var lexer = animation_dsl.DSLLexer(dsl_code)
-  var tokens = lexer.tokenize()
+  var tokens
   
-  if size(lexer.errors) > 0
-    print(f"    ❌ Lexer errors: {lexer.errors}")
+  try
+    tokens = lexer.tokenize()
+  except "lexical_error" as e, msg
+    print(f"    ❌ Lexer error: {msg}")
     return false
   end
   
@@ -63,10 +65,12 @@ def test_non_math_functions(dsl_code)
   print("\n  Testing: Non-math functions should NOT be prefixed with animation._math.")
   
   var lexer = animation_dsl.DSLLexer(dsl_code)
-  var tokens = lexer.tokenize()
+  var tokens
   
-  if size(lexer.errors) > 0
-    print(f"    ❌ Lexer errors: {lexer.errors}")
+  try
+    tokens = lexer.tokenize()
+  except "lexical_error" as e, msg
+    print(f"    ❌ Lexer error: {msg}")
     return false
   end
   
@@ -111,7 +115,8 @@ def test_is_math_method_function()
   # Test mathematical methods
   var math_methods = ["min", "max", "abs", "round", "sqrt", "scale", "sin", "cos"]
   for method : math_methods
-    if !transpiler.is_math_method(method)
+    var entry = transpiler.symbol_table.get(method)
+    if entry == nil || entry.type != animation_dsl._symbol_entry.TYPE_MATH_FUNCTION
       print(f"    ❌ {method} should be detected as a math method")
       return false
     else
@@ -122,7 +127,8 @@ def test_is_math_method_function()
   # Test non-mathematical methods
   var non_math_methods = ["pulsating_animation", "solid", "color_cycle", "unknown_method"]
   for method : non_math_methods
-    if transpiler.is_math_method(method)
+    var entry = transpiler.symbol_table.get(method)
+    if entry != nil && entry.type == animation_dsl._symbol_entry.TYPE_MATH_FUNCTION
       print(f"    ❌ {method} should NOT be detected as a math method")
       return false
     else
