@@ -1,15 +1,14 @@
 import subprocess
 import re
-import os
 import platform
-import tempfile
+import os
 from pathlib import Path
 
+Import("env")
 env = DefaultEnvironment()
 os_name = platform.system()
 
 if os_name == "Darwin":
-    print("Detected OS Platform:", os_name)
     class MacOSRamDisk:
         """
         Class to manage RamDisk on macOS
@@ -184,33 +183,28 @@ if os_name == "Darwin":
 # Configuration
 RAMDISK_SIZE_MB = 256
 RAMDISK_NAME = "RAMDisk"
-    
-print("=== Enhanced RamDisk Management ===")
-print("\n1. Using MacOSRamDisk class:")
+
 try:
     ramdisk = MacOSRamDisk(size_mb=RAMDISK_SIZE_MB, name=RAMDISK_NAME)
     path = ramdisk.get_ramdisk_path()
-    print(f'RamDisk available at: {path}')
-        
     # Get detailed information
     info = ramdisk.get_ramdisk_info()
     if info:
         print(f'Device: {info["device"]}')
         print(f'Size: {info["size_mb"]} MB')
         print(f'Filesystem: {info["filesystem"]}')
-        
-        # Test the RamDisk
-        test_dir = Path(path) / "test_directory"
-        test_dir.mkdir(exist_ok=True)
-        
-        test_file = test_dir / "example.txt"
-        test_file.write_text("Hello RamDisk from Python!")
-        
-        print(f'Test successful: {test_file} created')
-        print(f'File contents: {test_file.read_text()}')
-        
+
+        # Set environment variable
+        ramdisk_build_cache_dir = str(Path(path) / ".cache")
+        os.environ['PLATFORMIO_BUILD_CACHE_DIR'] = ramdisk_build_cache_dir
+        # print(f'Environment variable set: PLATFORMIO_BUILD_CACHE_DIR={os.environ["PLATFORMIO_BUILD_CACHE_DIR"]}')
+        projectconfig = env.GetProjectConfig()
+        set_build_cache_dir = projectconfig.get("platformio", "build_cache_dir")
+        print(f'Build cache directory: {set_build_cache_dir}')
+
+
         # Optional: Clean up (uncomment to remove RamDisk)
-        ramdisk.cleanup()
+#        ramdisk.cleanup()
         
 except Exception as e:
     print(f'Error: {e}')
