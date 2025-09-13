@@ -3,6 +3,7 @@ import re
 import platform
 import os
 from pathlib import Path
+import shutil
 
 Import("env")
 env = DefaultEnvironment()
@@ -181,7 +182,7 @@ if os_name == "Darwin":
 
 
 # Configuration
-RAMDISK_SIZE_MB = 256
+RAMDISK_SIZE_MB = 1024  # Size in MB
 RAMDISK_NAME = "RAMDisk"
 
 try:
@@ -194,14 +195,32 @@ try:
         print(f'Size: {info["size_mb"]} MB')
         print(f'Filesystem: {info["filesystem"]}')
 
-        # Set environment variable
-        ramdisk_build_cache_dir = str(Path(path) / ".cache")
-        os.environ['PLATFORMIO_BUILD_CACHE_DIR'] = ramdisk_build_cache_dir
-        # print(f'Environment variable set: PLATFORMIO_BUILD_CACHE_DIR={os.environ["PLATFORMIO_BUILD_CACHE_DIR"]}')
-        projectconfig = env.GetProjectConfig()
-        set_build_cache_dir = projectconfig.get("platformio", "build_cache_dir")
-        print(f'Build cache directory: {set_build_cache_dir}')
+    if path:
+        path_build_cache = Path(env.GetProjectConfig().get("platformio", "build_cache_dir"))
+        print(f'Config build_cache_dir: {path_build_cache}')
+        if path_build_cache.exists():
+            if path_build_cache.is_symlink():
+                path_build_cache.unlink()
+            else:
+                shutil.rmtree(path_build_cache)
 
+        ramdisk_build_cache_dir = Path(path) / ".cache"
+        ramdisk_build_cache_dir.mkdir(parents=True, exist_ok=True)
+        os.symlink(str(ramdisk_build_cache_dir), path_build_cache)
+        print(f'Symlink created: {path_build_cache} -> {ramdisk_build_cache_dir}')
+
+        path_build_dir = Path(env.GetProjectConfig().get("platformio", "build_dir"))
+        print(f'Config build_dir: {path_build_dir}')
+        if path_build_dir.exists():
+            if path_build_dir.is_symlink():
+                path_build_dir.unlink()
+            else:
+                shutil.rmtree(path_build_dir)
+
+        ramdisk_build_dir = Path(path) / ".pio" / "build"
+        ramdisk_build_dir.mkdir(parents=True, exist_ok=True)
+        os.symlink(str(ramdisk_build_dir), path_build_dir)
+        print(f'Symlink created: {path_build_dir} -> {ramdisk_build_dir}')
 
         # Optional: Clean up (uncomment to remove RamDisk)
 #        ramdisk.cleanup()
