@@ -14,7 +14,7 @@ if os_name == "Darwin":
         """
         Class to manage RamDisk on macOS
         """
-        def __init__(self, size_mb=64, name="RAMDisk", filesystem="HFS+"):
+        def __init__(self, size_mb=64, name="RAMDisk", filesystem="APFS"):
             """
             Initialize RamDisk configuration
             
