@@ -84,6 +84,10 @@ void lv_obj_set_y(lv_obj_t * obj, int32_t y)
     }
 }
 
+// Workaround for GCC internal compiler error with RISC-V ESP32-P4 at high optimization levels
+#pragma GCC push_options
+#pragma GCC optimize("O1")
+
 bool lv_obj_refr_size(lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
@@ -209,6 +213,7 @@ bool lv_obj_refr_size(lv_obj_t * obj)
 
     return true;
 }
+#pragma GCC pop_options
 
 void lv_obj_set_size(lv_obj_t * obj, int32_t w, int32_t h)
 {
