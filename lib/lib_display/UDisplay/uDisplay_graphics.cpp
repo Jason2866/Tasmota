@@ -4,14 +4,9 @@
 
 // ===== Basic Drawing Primitives =====
 
-#define RGB16_TO_MONO       0x8410
-#define RGB16_SWAP_TO_MONO  0x1084
-#define udisp_swap(a, b) (((a) ^= (b)), ((b) ^= (a)), ((a) ^= (b))) ///< No-temp-var swap operation
-#define CD_XS width()
-#define CD_YS height()
-
+static constexpr uint16_t RGB16_TO_MONO      = 0x8410;
+static constexpr uint16_t RGB16_SWAP_TO_MONO = 0x1084;
 #define renderer_swap(a, b) { int16_t t = a; a = b; b = t; }
-
 
 void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
 #ifdef USE_ESP32_S3

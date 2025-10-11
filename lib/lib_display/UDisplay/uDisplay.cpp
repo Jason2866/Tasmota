@@ -28,9 +28,6 @@
 #include "tasmota_options.h"
 
 
-extern int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
-
-
 //#define UDSP_DEBUG
 
 #ifndef UDSP_LBSIZE
@@ -984,8 +981,6 @@ exit:
 }
 
 Renderer *uDisplay::Init(void) {
-  extern bool UsePSRAM(void);
-
   if (!interface) {   // no valid configuration, abort
     #ifdef UDSP_DEBUG
     Serial.printf("Dsp Init no valid configuration\n");

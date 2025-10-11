@@ -3,8 +3,6 @@
 
 #ifdef USE_UNIVERSAL_TOUCH
 
-extern float CharToFloat(const char *str);
-
 // ===== Touch IRQ Handler =====
 
 uint8_t ut_irq_flg;
@@ -12,7 +10,6 @@ uint8_t ut_irq_flg;
 void IRAM_ATTR ut_touch_irq(void) {
   ut_irq_flg = 1;
 }
-
 
 // ===== Touch Initialization =====
 
@@ -34,8 +31,6 @@ bool uDisplay::utouch_Init(char **name) {
       pinMode(ut_irq, INPUT);
       attachInterrupt(ut_irq, ut_touch_irq, FALLING);
     }
-
-    extern SPIClass *SpiBegin(uint32 bus);
 
     if (ut_spi_nr == spi_nr) {
       // same as display

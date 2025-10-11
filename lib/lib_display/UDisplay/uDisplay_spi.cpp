@@ -7,10 +7,10 @@
 
 // ===== Low-Level SPI Write Functions =====
 // ===== RA8876 Controller Commands =====
-#define RA8876_DATA_WRITE  0x80
-#define RA8876_DATA_READ   0xC0
-#define RA8876_CMD_WRITE   0x00
-#define RA8876_STATUS_READ 0x40
+static constexpr uint8_t RA8876_DATA_WRITE  = 0x80;
+static constexpr uint8_t RA8876_DATA_READ   = 0xC0;
+static constexpr uint8_t RA8876_CMD_WRITE   = 0x00;
+static constexpr uint8_t RA8876_STATUS_READ = 0x40;
 
 #ifdef ESP32
 void uDisplay::hw_write9(uint8_t val, uint8_t dc) {

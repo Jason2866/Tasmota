@@ -2,7 +2,7 @@
 #include "uDisplay_config.h"
 
 // Color palette definition
-static const uint16_t udisp_colors[] = {
+static constexpr uint16_t udisp_colors[] = {
     UDISP_BLACK, UDISP_WHITE, UDISP_RED, UDISP_GREEN, UDISP_BLUE, UDISP_CYAN, 
     UDISP_MAGENTA, UDISP_YELLOW, UDISP_NAVY, UDISP_DARKGREEN, UDISP_DARKCYAN, 
     UDISP_MAROON, UDISP_PURPLE, UDISP_OLIVE, UDISP_LIGHTGREY, UDISP_DARKGREY, 
