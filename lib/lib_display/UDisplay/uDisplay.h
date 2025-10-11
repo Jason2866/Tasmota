@@ -10,19 +10,14 @@
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 #define USE_ESP32_S3
 #endif
-#include "driver/spi_master.h"
 #include "soc/gpio_periph.h"
 #include <rom/gpio.h>
+#include "driver/spi_master.h"
 #endif
 
 enum {
   UT_RD,UT_RDM,UT_CP,UT_RTF,UT_MV,UT_MVB,UT_RT,UT_RTT,UT_RDW,UT_RDWM,UT_WR,UT_WRW,UT_CPR,UT_AND,UT_SCALE,UT_LIM,UT_DBG,UT_GSRT,UT_XPT,UT_CPM,UT_END
 };
-
-#define RA8876_DATA_WRITE  0x80
-#define RA8876_DATA_READ   0xC0
-#define RA8876_CMD_WRITE   0x00
-#define RA8876_STATUS_READ 0x40
 
 #define UDSP_WRITE_16 0xf0
 #define UDSP_READ_DATA 0xf1
@@ -72,65 +67,6 @@ static inline void gpio_lo(int_fast8_t pin) { if (pin >= 0) *get_gpio_lo_reg(pin
 #define DISPLAY_INIT_PARTIAL 1
 #define DISPLAY_INIT_FULL 2
 
-enum uColorType { uCOLOR_BW, uCOLOR_COLOR };
-
-// Color definitions
-#define UDISP_BLACK       0x0000      /*   0,   0,   0 */
-#define UDISP_NAVY        0x000F      /*   0,   0, 128 */
-#define UDISP_DARKGREEN   0x03E0      /*   0, 128,   0 */
-#define UDISP_DARKCYAN    0x03EF      /*   0, 128, 128 */
-#define UDISP_MAROON      0x7800      /* 128,   0,   0 */
-#define UDISP_PURPLE      0x780F      /* 128,   0, 128 */
-#define UDISP_OLIVE       0x7BE0      /* 128, 128,   0 */
-#define UDISP_LIGHTGREY   0xC618      /* 192, 192, 192 */
-#define UDISP_DARKGREY    0x7BEF      /* 128, 128, 128 */
-#define UDISP_BLUE        0x001F      /*   0,   0, 255 */
-#define UDISP_GREEN       0x07E0      /*   0, 255,   0 */
-#define UDISP_CYAN        0x07FF      /*   0, 255, 255 */
-#define UDISP_RED         0xF800      /* 255,   0,   0 */
-#define UDISP_MAGENTA     0xF81F      /* 255,   0, 255 */
-#define UDISP_YELLOW      0xFFE0      /* 255, 255,   0 */
-#define UDISP_WHITE       0xFFFF      /* 255, 255, 255 */
-#define UDISP_ORANGE      0xFD20      /* 255, 165,   0 */
-#define UDISP_GREENYELLOW 0xAFE5      /* 173, 255,  47 */
-#define UDISP_PINK        0xFc18      /* 255, 128, 192 */
-
-#ifdef ESP8266
-#define PIN_OUT_SET 0x60000304
-#define PIN_OUT_CLEAR 0x60000308
-#define GPIO_SET(A) WRITE_PERI_REG( PIN_OUT_SET, 1 << A)
-#define GPIO_CLR(A) WRITE_PERI_REG( PIN_OUT_CLEAR, 1 << A)
-#define GPIO_CLR_SLOW(A) digitalWrite(A, LOW)
-#define GPIO_SET_SLOW(A) digitalWrite(A, HIGH)
-#else
-#undef GPIO_SET
-#undef GPIO_CLR
-#undef GPIO_SET_SLOW
-#undef GPIO_CLR_SLOW
-
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
-#define GPIO_CLR(A) GPIO.out_w1tc.val = (1 << A)
-#define GPIO_SET(A) GPIO.out_w1ts.val = (1 << A)
-#else // plain ESP32
-#define GPIO_CLR(A) GPIO.out_w1tc = (1 << A)
-#define GPIO_SET(A) GPIO.out_w1ts = (1 << A)
-#endif
-
-
-
-
-#define GPIO_CLR_SLOW(A) digitalWrite(A, LOW)
-#define GPIO_SET_SLOW(A) digitalWrite(A, HIGH)
-
-#endif
-
-#define SPI_BEGIN_TRANSACTION if (spi_nr <= 2) beginTransaction(spiSettings);
-#define SPI_END_TRANSACTION if (spi_nr <= 2) endTransaction();
-
-#define SPI_CS_LOW if (spi_cs >= 0) GPIO_CLR_SLOW(spi_cs);
-#define SPI_CS_HIGH if (spi_cs >= 0) GPIO_SET_SLOW(spi_cs);
-#define SPI_DC_LOW if (spi_dc >= 0) GPIO_CLR_SLOW(spi_dc);
-#define SPI_DC_HIGH if (spi_dc >= 0) GPIO_SET_SLOW(spi_dc);
 
 class uDisplay : public Renderer {
  public:
