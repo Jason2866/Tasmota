@@ -228,15 +228,170 @@ void uDisplay::fillScreen(uint16_t color) {
     fillRect(0, 0, width(), height(), color);
 }
 
+static inline void lvgl_color_swap(uint16_t *data, uint16_t len) { for (uint32_t i = 0; i < len; i++) (data[i] = data[i] << 8 | data[i] >> 8); }
+
 void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
-    // Implementation uses DMA and various optimizations
-    // This is a complex function that we'll need to handle carefully
-    // Let me know if you want the full implementation extracted
+
+  if (lvgl_param.swap_color) {
+    not_swapped = !not_swapped;
+  }
+
+  //Serial.printf("push %x - %d - %d - %d\n", (uint32_t)data, len, not_swapped, lvgl_param.data);
+
+  // Isolating _UDSP_RGB to increase code sharing
+  //
+  // Use ESP-IDF LCD driver to push colors and rely on the following assumptions:
+  // * bytes swapping is already handled in the driver configuration (see uDisplay::Init()),
+  // * pushColors() is only called with not_swapped equals true,
+  // * cache flushing is done by the LCD driver.
+  if (interface == _UDSP_RGB) {
+#ifdef USE_ESP32_S3
+    if (!not_swapped) {
+      // internal error -> write error message but continue (with possibly wrong colors)
+      AddLog(LOG_LEVEL_ERROR, PSTR("DSP: Unexpected byte-swapping requested in pushColors()"));
+    }
+
+    // check that bytes count matches the size of area, and remove from inner loop
+    if ((seta_yp2 - seta_yp1) * (seta_xp2 - seta_xp2) > len) { return; }
+
+    esp_lcd_panel_draw_bitmap(_panel_handle, seta_xp1, seta_yp1, seta_xp2, seta_yp2, (void *)data);
+#endif
+    return;
+  }
+
+
+  if (not_swapped == false) {
+    // called from LVGL bytes are swapped
+    if (bpp != 16) {
+      // lvgl_color_swap(data, len); -- no need to swap anymore, we have inverted the mask
+      pushColorsMono(data, len, true);
+      return;
+    }
+
+    if ( (col_mode != 18) && (spi_dc >= 0) && (spi_nr <= 2) ) {
+      // special version 8 bit spi I or II
+#ifdef ESP8266
+      lvgl_color_swap(data, len);
+      while (len--) {
+        uspi->write(*data++);
+      }
+#else
+      if (lvgl_param.use_dma) {
+        pushPixelsDMA(data, len );
+      } else {
+        uspi->writeBytes((uint8_t*)data, len * 2);
+      }
+#endif
+    } else {
+
+#ifdef ESP32
+      if ( (col_mode == 18) && (spi_dc >= 0) && (spi_nr <= 2) ) {
+        uint8_t *line = (uint8_t*)malloc(len * 3);
+        uint8_t *lp = line;
+        if (line) {
+          uint16_t color;
+          for (uint32_t cnt = 0; cnt < len; cnt++) {
+            color = *data++;
+            color = (color << 8) | (color >> 8);
+            uint8_t r = (color & 0xF800) >> 11;
+            uint8_t g = (color & 0x07E0) >> 5;
+            uint8_t b = color & 0x001F;
+            r = (r * 255) / 31;
+            g = (g * 255) / 63;
+            b = (b * 255) / 31;
+            *lp++ = r;
+            *lp++ = g;
+            *lp++ = b;
+          }
+
+          if (lvgl_param.use_dma) {
+            pushPixels3DMA(line, len );
+          } else {
+            uspi->writeBytes(line, len * 3);
+          }
+          free(line);
+        }
+
+      } else {
+        // 9 bit and others
+        if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+  #ifdef USE_ESP32_S3
+          pb_pushPixels(data, len, true, false);
+  #endif // USE_ESP32_S3
+        } else {
+          lvgl_color_swap(data, len);
+          while (len--) {
+            WriteColor(*data++);
+          }
+        }
+      }
+#endif // ESP32
+
+#ifdef ESP8266
+      lvgl_color_swap(data, len);
+      while (len--) {
+        WriteColor(*data++);
+      }
+#endif
+    }
+  } else {
+    // called from displaytext, no byte swap, currently no dma here
+
+    if (bpp != 16) {
+      pushColorsMono(data, len);
+      return;
+    }
+    if ( (col_mode != 18) && (spi_dc >= 0) && (spi_nr <= 2) ) {
+      // special version 8 bit spi I or II
+  #ifdef ESP8266
+      while (len--) {
+        //uspi->write(*data++);
+        WriteColor(*data++);
+      }
+  #else
+      uspi->writePixels(data, len * 2);
+  #endif
+    } else {
+      // 9 bit and others
+      if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+#ifdef USE_ESP32_S3
+        pb_pushPixels(data, len, false, false);
+#endif // USE_ESP32_S3
+      } else {
+        while (len--) {
+          WriteColor(*data++);
+        }
+      }
+    }
+  }
 }
 
+// convert to mono, these are framebuffer based
 void uDisplay::pushColorsMono(uint16_t *data, uint16_t len, bool rgb16_swap) {
-    // Implementation for monochrome displays
-    // This converts 16-bit color to 1-bit monochrome
+  // pixel is white if at least one of the 3 components is above 50%
+  // this is tested with a simple mask, swapped if needed
+  uint16_t rgb16_to_mono_mask = rgb16_swap ? RGB16_SWAP_TO_MONO : RGB16_TO_MONO;
+
+  for (uint32_t y = seta_yp1; y < seta_yp2; y++) {
+    seta_yp1++;
+    if (lvgl_param.invert_bw) {
+      for (uint32_t x = seta_xp1; x < seta_xp2; x++) {
+        uint16_t color = *data++;
+        if (bpp == 1) color = (color & rgb16_to_mono_mask) ? 0 : 1;
+        drawPixel(x, y, color);   // todo - inline the method to save speed
+        len--;
+        if (!len) return;         // failsafe - exist if len (pixel number) is exhausted
+      }
+    } else {
+      for (uint32_t x = seta_xp1; x < seta_xp2; x++) {
+        uint16_t color = *data++;
+        if (bpp == 1) color = (color & rgb16_to_mono_mask) ? 1 : 0;
+        drawPixel(x, y, color);   // todo - inline the method to save speed
+        len--;
+        if (!len) return;         // failsafe - exist if len (pixel number) is exhausted
+      }
+    }
+  }
 }
 
 void uDisplay::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
