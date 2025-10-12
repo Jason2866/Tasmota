@@ -7,6 +7,12 @@
 #include <SPI.h>
 
 #ifdef ESP32
+#if __has_include("soc/soc_caps.h")
+# include "soc/soc_caps.h"
+#else
+# error "No ESP capability header found"
+#endif
+
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 #define USE_ESP32_S3
 #endif
@@ -44,6 +50,10 @@ enum {
 #include <rom/cache.h>
 #include "esp_rom_lldesc.h"
 #endif // USE_ESP32_S3
+
+#ifdef ESP32
+#include "esp8266toEsp32.h" // must rename LCD_CAM_LCD_UPDATE_REG after include #include <soc/lcd_cam_reg.h> !!!!
+#endif
 
 #define _UDSP_I2C 1
 #define _UDSP_SPI 2
@@ -243,37 +253,32 @@ private:
     void send_spi_icmds(uint16_t cmd_size);
    
 
-#ifdef USE_ESP32_S3
+// ===== I80 Parallel Interface Members =====
+#if SOC_LCD_I80_SUPPORTED
+   // I80 Bus control pins
    int8_t par_cs;
-   int8_t par_rs;
+   int8_t par_rs; 
    int8_t par_wr;
    int8_t par_rd;
 
-   int8_t par_dbl[8];
-   int8_t par_dbh[8];
-
-   int8_t de;
-   int8_t vsync;
-   int8_t hsync;
-   int8_t pclk;
-
-   uint16_t hsync_polarity;
-   uint16_t hsync_front_porch;
-   uint16_t hsync_pulse_width;
-   uint16_t hsync_back_porch;
-   uint16_t vsync_polarity;
-   uint16_t vsync_front_porch;
-   uint16_t vsync_pulse_width;
-   uint16_t vsync_back_porch;
-   uint16_t pclk_active_neg;
-
-   esp_lcd_panel_handle_t _panel_handle = NULL;
-
+   // I80 Bus hardware handles
    esp_lcd_i80_bus_handle_t _i80_bus = nullptr;
+   volatile lcd_cam_dev_t* _dev;
+   uint32_t _clock_reg_value;
+
+   // I80 DMA resources  
    gdma_channel_handle_t _dma_chan;
    lldesc_t *_dmadesc = nullptr;
    uint32_t _dmadesc_size = 0;
-   uint32_t _clock_reg_value;
+
+   // I80 Transaction state
+   uint32_t* _cache_flip;
+   static constexpr size_t CACHE_SIZE = 256;
+   uint32_t _cache[2][CACHE_SIZE / sizeof(uint32_t)];
+   bool _has_align_data;
+   uint8_t _align_data;
+
+   // I80 Methods
    void calcClockDiv(uint32_t* div_a, uint32_t* div_b, uint32_t* div_n, uint32_t* clkcnt, uint32_t baseClock, uint32_t targetFreq);
    void _alloc_dmadesc(size_t len);
    void _setup_dma_desc_links(const uint8_t *data, int32_t len);
@@ -287,15 +292,33 @@ private:
    void pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, bool use_dma);
    void pb_writeBytes(const uint8_t* data, uint32_t length, bool use_dma);
    void _send_align_data(void);
-   volatile lcd_cam_dev_t* _dev;
-   uint32_t* _cache_flip;
-   static constexpr size_t CACHE_SIZE = 256;
-   uint32_t _cache[2][CACHE_SIZE / sizeof(uint32_t)];
-   bool _has_align_data;
-   uint8_t _align_data;
    void cs_control(bool level);
    uint32_t get_sr_touch(uint32_t xp, uint32_t xm, uint32_t yp, uint32_t ym);
+#endif // SOC_LCD_I80_SUPPORTED
+
+// ===== RGB Interface Members =====  
+#if SOC_LCD_RGB_SUPPORTED
+   // RGB control pins
+   int8_t de;
+   int8_t vsync;
+   int8_t hsync;
+   int8_t pclk;
+
+   // RGB timing parameters
+   esp_lcd_rgb_timing_t _rgb_timing;
+
+   // RGB panel handle
+   esp_lcd_panel_handle_t _panel_handle = NULL;
+
+   // RGB Methods
    void drawPixel_RGB(int16_t x, int16_t y, uint16_t color);
+#endif // SOC_LCD_RGB_SUPPORTED
+
+// ===== Common ESP32-S3 Features =====
+#if SOC_LCD_I80_SUPPORTED || SOC_LCD_RGB_SUPPORTED
+   // Shared between I80 and RGB interfaces
+   int8_t par_dbl[8];  // RGB data low byte or Data bus low byte (D0-D7)
+   int8_t par_dbh[8];  // RGB data high byte or Data bus high byte (D8-D15) for 16-bit
 #endif
 
 #ifdef ESP32

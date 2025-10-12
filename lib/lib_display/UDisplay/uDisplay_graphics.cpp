@@ -6,7 +6,6 @@
 
 static constexpr uint16_t RGB16_TO_MONO      = 0x8410;
 static constexpr uint16_t RGB16_SWAP_TO_MONO = 0x1084;
-#define renderer_swap(a, b) { int16_t t = a; a = b; b = t; }
 
 void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
 #ifdef USE_ESP32_S3
@@ -445,8 +444,8 @@ void uDisplay::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
                  y2 = y + h - 1;
 
         if (cur_rot & 1) { // Vertical address increment mode
-            renderer_swap(x,y);
-            renderer_swap(x2,y2);
+            std::swap(x,y);
+            std::swap(x2,y2);
         }
         ulcd_command(saw_1);
         if (allcmd_mode) {
@@ -529,37 +528,3 @@ void uDisplay::setRotation(uint8_t rotation) {
     }
 #endif
 }
-
-#ifdef USE_ESP32_S3
-void uDisplay::drawPixel_RGB(int16_t x, int16_t y, uint16_t color) {
-    int16_t w = _width, h = _height;
-
-    if ((x < 0) || (x >= w) || (y < 0) || (y >= h)) {
-        return;
-    }
-
-    // check rotation, move pixel around if necessary
-    switch (cur_rot) {
-    case 1:
-        renderer_swap(w, h);
-        renderer_swap(x, y);
-        x = w - x - 1;
-        break;
-    case 2:
-        x = w - x - 1;
-        y = h - y - 1;
-        break;
-    case 3:
-        renderer_swap(w, h);
-        renderer_swap(x, y);
-        y = h - y - 1;
-        break;
-    }
-
-    uint16_t *fb = rgb_fb;
-    fb += (int32_t)y * w;
-    fb += x;
-    *fb = color;
-    Cache_WriteBack_Addr((uint32_t)fb, 2);
-}
-#endif

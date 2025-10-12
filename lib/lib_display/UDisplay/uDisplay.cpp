@@ -22,9 +22,6 @@
 #include "uDisplay_config.h"
 #include "uDisplay_spi.h"
 
-#ifdef ESP32
-#include "esp8266toEsp32.h"
-#endif
 #include "tasmota_options.h"
 
 
@@ -430,15 +427,18 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             break;
 #ifdef USE_ESP32_S3
           case 'V':
-            hsync_polarity = next_val(&lp1);
-            hsync_front_porch = next_val(&lp1);
-            hsync_pulse_width = next_val(&lp1);
-            hsync_back_porch = next_val(&lp1);
-            vsync_polarity = next_val(&lp1);
-            vsync_front_porch = next_val(&lp1);
-            vsync_pulse_width = next_val(&lp1);
-            vsync_back_porch = next_val(&lp1);
-            pclk_active_neg = next_val(&lp1);
+            _rgb_timing.flags.hsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
+            _rgb_timing.hsync_front_porch = next_val(&lp1);
+            _rgb_timing.hsync_pulse_width = next_val(&lp1);
+            _rgb_timing.hsync_back_porch = next_val(&lp1);
+            _rgb_timing.flags.vsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
+            _rgb_timing.vsync_front_porch = next_val(&lp1);
+            _rgb_timing.vsync_pulse_width = next_val(&lp1);
+            _rgb_timing.vsync_back_porch = next_val(&lp1);
+            _rgb_timing.flags.pclk_active_neg = next_val(&lp1);
+            // Set fixed flags (not in descriptor)
+            _rgb_timing.flags.de_idle_high = 0;
+            _rgb_timing.flags.pclk_idle_high = 0;
             break;
 #endif // USE_ESP32_S3
           case 'o':
@@ -1062,7 +1062,7 @@ Renderer *uDisplay::Init(void) {
   }
 
   if (interface == _UDSP_RGB) {
-#ifdef USE_ESP32_S3
+#if SOC_LCD_RGB_SUPPORTED
     if (!UsePSRAM())  {        // RGB is not supported on S3 without PSRAM
       #ifdef UDSP_DEBUG
       AddLog(LOG_LEVEL_INFO, "UDisplay: Dsp RGB requires PSRAM, abort");
@@ -1080,21 +1080,10 @@ Renderer *uDisplay::Init(void) {
     //if (spi_speed > 14) {
       //spi_speed = 14;
     //}
+    _panel_config->timings = _rgb_timing;
     _panel_config->timings.pclk_hz = spi_speed*1000000;
     _panel_config->timings.h_res = gxs;
     _panel_config->timings.v_res = gys;
-
-    _panel_config->timings.hsync_pulse_width = hsync_pulse_width;
-    _panel_config->timings.hsync_back_porch = hsync_back_porch;
-    _panel_config->timings.hsync_front_porch = hsync_front_porch;
-    _panel_config->timings.vsync_pulse_width = vsync_pulse_width;
-    _panel_config->timings.vsync_back_porch = vsync_back_porch;
-    _panel_config->timings.vsync_front_porch = vsync_front_porch;
-    _panel_config->timings.flags.hsync_idle_low = (hsync_polarity == 0) ? 1 : 0;
-    _panel_config->timings.flags.vsync_idle_low = (vsync_polarity == 0) ? 1 : 0;
-    _panel_config->timings.flags.de_idle_high = 0;
-    _panel_config->timings.flags.pclk_active_neg = pclk_active_neg;
-    _panel_config->timings.flags.pclk_idle_high = 0;
 
     _panel_config->data_width = 16; // RGB565 in parallel mode, thus 16bit in width
     _panel_config->sram_trans_align = 8;
@@ -1139,7 +1128,7 @@ Renderer *uDisplay::Init(void) {
 
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
 
-#ifdef USE_ESP32_S3
+#if SOC_LCD_I80_SUPPORTED
 
     if (bpanel >= 0) {
       analogWrite(bpanel, 32);
@@ -1268,7 +1257,7 @@ Renderer *uDisplay::Init(void) {
     pb_endTransaction();
 
 
-#endif // USE_ESP32_S3
+#endif // SOC_LCD_I80_SUPPORTED
 
   }
 
