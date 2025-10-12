@@ -1128,7 +1128,7 @@ Renderer *uDisplay::Init(void) {
 
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
 
-#if SOC_LCD_I80_SUPPORTED
+#if UDISPLAY_I80
 
     if (bpanel >= 0) {
       analogWrite(bpanel, 32);
@@ -1257,7 +1257,7 @@ Renderer *uDisplay::Init(void) {
     pb_endTransaction();
 
 
-#endif // SOC_LCD_I80_SUPPORTED
+#endif // UDISPLAY_I80
 
   }
 

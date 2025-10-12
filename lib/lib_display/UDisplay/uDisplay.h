@@ -12,6 +12,9 @@
 #else
 # error "No ESP capability header found"
 #endif
+#if SOC_LCDCAM_I80_NUM_BUSES
+  #define UDISPLAY_I80
+#endif
 
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 #define USE_ESP32_S3
@@ -254,7 +257,7 @@ private:
    
 
 // ===== I80 Parallel Interface Members =====
-#if SOC_LCD_I80_SUPPORTED
+#if UDISPLAY_I80 // ESP32 has only support via I2S f
    // I80 Bus control pins
    int8_t par_cs;
    int8_t par_rs; 
@@ -294,7 +297,7 @@ private:
    void _send_align_data(void);
    void cs_control(bool level);
    uint32_t get_sr_touch(uint32_t xp, uint32_t xm, uint32_t yp, uint32_t ym);
-#endif // SOC_LCD_I80_SUPPORTED
+#endif // UDISPLAY_I80
 
 // ===== RGB Interface Members =====  
 #if SOC_LCD_RGB_SUPPORTED
@@ -315,7 +318,7 @@ private:
 #endif // SOC_LCD_RGB_SUPPORTED
 
 // ===== Common ESP32-S3 Features =====
-#if SOC_LCD_I80_SUPPORTED || SOC_LCD_RGB_SUPPORTED
+#if UDISPLAY_I80 || SOC_LCD_RGB_SUPPORTED
    // Shared between I80 and RGB interfaces
    int8_t par_dbl[8];  // RGB data low byte or Data bus low byte (D0-D7)
    int8_t par_dbh[8];  // RGB data high byte or Data bus high byte (D8-D15) for 16-bit

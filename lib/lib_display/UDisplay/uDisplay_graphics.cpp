@@ -8,7 +8,7 @@ static constexpr uint16_t RGB16_TO_MONO      = 0x8410;
 static constexpr uint16_t RGB16_SWAP_TO_MONO = 0x1084;
 
 void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
-#ifdef USE_ESP32_S3
+#if SOC_LCD_RGB_SUPPORTED
     if (interface == _UDSP_RGB) {
         drawPixel_RGB(x, y, color);
         return;
@@ -50,7 +50,7 @@ void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
     if((x >= _width) || (y >= _height)) return;
     if((x + w - 1) >= _width)  w = _width - x;
 
-#ifdef USE_ESP32_S3
+#if SOC_LCD_RGB_SUPPORTED
     if (interface == _UDSP_RGB) {
         if (cur_rot > 0) {
             while (w--) {
@@ -114,7 +114,7 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
     if ((x >= _width) || (y >= _height)) return;
     if ((y + h - 1) >= _height) h = _height - y;
 
-#ifdef USE_ESP32_S3
+#if SOC_LCD_RGB_SUPPORTED
     if (interface == _UDSP_RGB) {
         if (cur_rot > 0) {
             while (h--) {
@@ -164,7 +164,7 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 }
 
 void uDisplay::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-#ifdef USE_ESP32_S3
+#if SOC_LCD_RGB_SUPPORTED
     if (interface == _UDSP_RGB) {
         for (uint32_t yp = y; yp < y + h; yp++) {
             drawFastHLine(x, yp, w, color);
@@ -239,7 +239,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
   // * pushColors() is only called with not_swapped equals true,
   // * cache flushing is done by the LCD driver.
   if (interface == _UDSP_RGB) {
-#ifdef USE_ESP32_S3
+#if SOC_LCD_RGB_SUPPORTED
     if (!not_swapped) {
       // internal error -> write error message but continue (with possibly wrong colors)
       AddLog(LOG_LEVEL_ERROR, PSTR("DSP: Unexpected byte-swapping requested in pushColors()"));
@@ -309,7 +309,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
       } else {
         // 9 bit and others
         if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-  #ifdef USE_ESP32_S3
+  #if UDISPLAY_I80
           pb_pushPixels(data, len, true, false);
   #endif // USE_ESP32_S3
         } else {
@@ -348,7 +348,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
     } else {
       // 9 bit and others
       if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-#ifdef USE_ESP32_S3
+#if UDISPLAY_I80
         pb_pushPixels(data, len, false, false);
 #endif // USE_ESP32_S3
       } else {
@@ -520,7 +520,7 @@ void uDisplay::setRotation(uint8_t rotation) {
             break;
     }
 
-#ifdef USE_ESP32_S3
+#if SOC_LCD_RGB_SUPPORTED
     if (interface == _UDSP_RGB) {
         // Utilize the ESP-IDF LCD driver's support for display rotation
         esp_lcd_panel_mirror(_panel_handle, rotation == 1 || rotation == 2, rotation & 2);
