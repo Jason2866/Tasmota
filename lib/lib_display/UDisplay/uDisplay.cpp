@@ -36,7 +36,7 @@
 
 uDisplay::~uDisplay(void) {
 #ifdef UDSP_DEBUG
-  Serial.printf("dealloc\n");
+  AddLog(LOG_LEVEL_DEBUG, "UDisplay: dealloc");
 #endif
   if (frame_buffer) {
     free(frame_buffer);
@@ -145,7 +145,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
     if (*lp1 == '#') break;
     if (*lp1 == '\n') lp1++;
     while (*lp1 == ' ') lp1++;
-    //Serial.printf(">> %s\n",lp1);
+    //AddLog(LOG_LEVEL_DEBUG, ">> %s\n",lp1);
     if (*lp1 != ';') {
       // check ids:
       if (*lp1 == ':') {
@@ -190,10 +190,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 reset_pin(50, 200);
               }
 #ifdef UDSP_DEBUG
-              Serial.printf("SSPI_MOSI  : %d\n", spi_mosi);
-              Serial.printf("SSPI_SCLK  : %d\n", spi_clk);
-              Serial.printf("SSPI_CS  : %d\n", spi_cs);
-              Serial.printf("DSP RESET : %d\n", reset);
+              AddLog(LOG_LEVEL_DEBUG, "UDisplay: SSPI_MOSI:%d SSPI_SCLK:%d SSPI_CS:%d DSP_RESET:%d", spi_mosi, spi_clk, spi_cs, reset);
 #endif
             }
           } else if (*lp1 == 'I') {
@@ -205,8 +202,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               wire_n = next_val(&lp1);
               i2caddr = next_hex(&lp1);
 #ifdef UDSP_DEBUG
-              Serial.printf("I2C_INIT bus : %d\n", wire_n);
-              Serial.printf("I2C_INIT addr : %02x\n", i2caddr);
+              AddLog(LOG_LEVEL_DEBUG, "UDisplay: I2C_INIT bus:%d addr:%02x", wire_n, i2caddr);
 #endif
               if (wire_n == 1) {
                 wire = &Wire;
@@ -374,12 +370,12 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                   wire->write(dsp_cmds[1]);
                   wire->endTransmission();
 #ifdef UDSP_DEBUG
-                  Serial.printf("reg = %02x, val = %02x\n", dsp_cmds[0], dsp_cmds[1]);
+                  AddLog(LOG_LEVEL_DEBUG, "UDisplay: reg=%02x val=%02x", dsp_cmds[0], dsp_cmds[1]);
 #endif
                 } else {
                   delay(dsp_cmds[0]);
 #ifdef UDSP_DEBUG
-                  Serial.printf("delay = %d ms\n", dsp_cmds[0]);
+                  AddLog(LOG_LEVEL_DEBUG, "UDisplay: delay=%d ms", dsp_cmds[0]);
 #endif
                 }
               }
@@ -687,118 +683,74 @@ void UfsCheckSDCardInit(void);
   }
 
 #ifdef UDSP_DEBUG
-  Serial.printf("Device : %s\n", dname);
-  Serial.printf("xs : %d\n", gxs);
-  Serial.printf("ys : %d\n", gys);
-  Serial.printf("bpp: %d\n", bpp);
+  AddLog(LOG_LEVEL_DEBUG, "UDisplay: Device:%s xs:%d ys:%d bpp:%d", dname, gxs, gys, bpp);
 
   if (interface == _UDSP_SPI) {
-    Serial.printf("Nr. : %d\n", spi_nr);
-    Serial.printf("CS  : %d\n", spi_cs);
-    Serial.printf("CLK : %d\n", spi_clk);
-    Serial.printf("MOSI: %d\n", spi_mosi);
-    Serial.printf("DC  : %d\n", spi_dc);
-    Serial.printf("TS_CS: %d\n", ut_spi_cs);
-    Serial.printf("TS_RST: %d\n", ut_reset);
-    Serial.printf("TS_IRQ: %d\n", ut_irq);
-    Serial.printf("BPAN: %d\n", bpanel);
-    Serial.printf("RES : %d\n", reset);
-    Serial.printf("MISO: %d\n", spi_miso);
-    Serial.printf("SPED: %d\n", spi_speed*1000000);
-    Serial.printf("Pixels: %d\n", col_mode);
-    Serial.printf("SaMode: %d\n", sa_mode);
-    Serial.printf("DMA-Mode: %d\n", lvgl_param.use_dma);
-
-    Serial.printf("opts: %02x,%02x,%02x\n", saw_3, dim_op, startline);
-
-    Serial.printf("SetAddr : %x,%x,%x\n", saw_1, saw_2, saw_3);
-
-    Serial.printf("Rot 0: %x,%x - %d - %d\n", madctrl, rot[0], x_addr_offs[0], y_addr_offs[0]);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: Nr:%d CS:%d CLK:%d MOSI:%d DC:%d TS_CS:%d TS_RST:%d TS_IRQ:%d", 
+       spi_nr, spi_cs, spi_clk, spi_mosi, spi_dc, ut_spi_cs, ut_reset, ut_irq);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: BPAN:%d RES:%d MISO:%d SPED:%d Pixels:%d SaMode:%d DMA-Mode:%d opts:%02x,%02x,%02x SetAddr:%x,%x,%x", 
+       bpanel, reset, spi_miso, spi_speed*1000000, col_mode, sa_mode, lvgl_param.use_dma, saw_3, dim_op, startline, saw_1, saw_2, saw_3);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: Rot 0: %x,%x - %d - %d", madctrl, rot[0], x_addr_offs[0], y_addr_offs[0]);
 
     if (ep_mode == 1) {
-      Serial.printf("LUT_Partial : %d - %d - %x - %d - %d\n", lut_siz_partial, lutpsize, lut_cmd[0], epcoffs_part, epc_part_cnt);
-      Serial.printf("LUT_Full : %d - %d - %x - %d - %d\n", lut_siz_full, lutfsize, lut_cmd[0], epcoffs_full, epc_full_cnt);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_Partial:%d-%d-%x-%d-%d LUT_Full:%d-%d-%x-%d-%d", 
+       lut_siz_partial, lutpsize, lut_cmd[0], epcoffs_part, epc_part_cnt, 
+       lut_siz_full, lutfsize, lut_cmd[0], epcoffs_full, epc_full_cnt);
     }
     if (ep_mode == 2) {
-      Serial.printf("LUT_SIZE 1: %d\n", lut_cnt[0]);
-      Serial.printf("LUT_SIZE 2: %d\n", lut_cnt[1]);
-      Serial.printf("LUT_SIZE 3: %d\n", lut_cnt[2]);
-      Serial.printf("LUT_SIZE 4: %d\n", lut_cnt[3]);
-      Serial.printf("LUT_SIZE 5: %d\n", lut_cnt[4]);
-      Serial.printf("LUT_CMDS %02x-%02x-%02x-%02x-%02x\n", lut_cmd[0], lut_cmd[1], lut_cmd[2], lut_cmd[3], lut_cmd[4]);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_SIZE 1:%d 2:%d 3:%d 4:%d 5:%d", 
+       lut_cnt[0], lut_cnt[1], lut_cnt[2], lut_cnt[3], lut_cnt[4]);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_CMDS %02x-%02x-%02x-%02x-%02x", 
+       lut_cmd[0], lut_cmd[1], lut_cmd[2], lut_cmd[3], lut_cmd[4]);
     }
   }
   if (interface == _UDSP_I2C) {
-    Serial.printf("Addr : %02x\n", i2caddr);
-    Serial.printf("SCL  : %d\n", i2c_scl);
-    Serial.printf("SDA  : %d\n", i2c_sda);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: Addr:%02x SCL:%d SDA:%d", i2caddr, i2c_scl, i2c_sda);
 
-    Serial.printf("SPA   : %x\n", saw_1);
-    Serial.printf("pa_sta: %x\n", i2c_page_start);
-    Serial.printf("pa_end: %x\n", i2c_page_end);
-    Serial.printf("SCA   : %x\n", saw_2);
-    Serial.printf("ca_sta: %x\n", i2c_col_start);
-    Serial.printf("pa_end: %x\n", i2c_col_end);
-    Serial.printf("WRA   : %x\n", saw_3);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: SPA:%x pa_sta:%x pa_end:%x SCA:%x ca_sta:%x ca_end:%x WRA:%x", 
+       saw_1, i2c_page_start, i2c_page_end, saw_2, i2c_col_start, i2c_col_end, saw_3);
   }
 
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
 #ifdef USE_ESP32_S3
-    Serial.printf("par  mode: %d\n", interface);
-    Serial.printf("par  res: %d\n", reset);
-    Serial.printf("par  cs : %d\n", par_cs);
-    Serial.printf("par  rs : %d\n", par_rs);
-    Serial.printf("par  wr : %d\n", par_wr);
-    Serial.printf("par  rd : %d\n", par_rd);
-    Serial.printf("par  bp : %d\n", bpanel);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: par mode:%d res:%d cs:%d rs:%d wr:%d rd:%d bp:%d", 
+       interface, reset, par_cs, par_rs, par_wr, par_rd, bpanel);
 
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      Serial.printf("par  d%d: %d\n", cnt, par_dbl[cnt]);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: par d%d:%d", cnt, par_dbl[cnt]);
     }
 
     if (interface == _UDSP_PAR16) {
       for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-        Serial.printf("par  d%d: %d\n", cnt + 8, par_dbh[cnt]);
+        AddLog(LOG_LEVEL_DEBUG, "UDisplay: par d%d:%d", cnt + 8, par_dbh[cnt]);
       }
     }
-    Serial.printf("par  freq : %d\n", spi_speed);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: par freq:%d", spi_speed);
 #endif // USE_ESP32_S3
 
   }
   if (interface == _UDSP_RGB) {
 #ifdef USE_ESP32_S3
 
-    Serial.printf("rgb  de: %d\n", de);
-    Serial.printf("rgb  vsync: %d\n", vsync);
-    Serial.printf("rgb  hsync : %d\n", hsync);
-    Serial.printf("rgb  pclk : %d\n", pclk);
-    Serial.printf("rgb  bp : %d\n", bpanel);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb de:%d vsync:%d hsync:%d pclk:%d bp:%d", de, vsync, hsync, pclk, bpanel);
 
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      Serial.printf("rgb  d%d: %d\n", cnt, par_dbl[cnt]);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb d%d:%d", cnt, par_dbl[cnt]);
     }
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      Serial.printf("rgb  d%d: %d\n", cnt + 8, par_dbh[cnt]);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb d%d:%d", cnt + 8, par_dbh[cnt]);
     }
 
-    Serial.printf("rgb  freq : %d\n", spi_speed);
-
-    Serial.printf("rgb  hsync_polarity: %d\n", hsync_polarity);
-    Serial.printf("rgb  hsync_front_porch: %d\n", hsync_front_porch);
-    Serial.printf("rgb  hsync_pulse_width : %d\n", hsync_pulse_width);
-    Serial.printf("rgb  hsync_back_porch : %d\n", hsync_back_porch);
-    Serial.printf("rgb  vsync_polarity : %d\n", vsync_polarity);
-    Serial.printf("rgb  vsync_front_porch : %d\n", vsync_front_porch);
-    Serial.printf("rgb  vsync_pulse_width : %d\n", vsync_pulse_width);
-    Serial.printf("rgb  vsync_back_porch : %d\n", vsync_back_porch);
-    Serial.printf("rgb  pclk_active_neg : %d\n", pclk_active_neg);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb freq:%d hsync_pol:%d hsync_fp:%d hsync_pw:%d hsync_bp:%d vsync_pol:%d vsync_fp:%d vsync_pw:%d vsync_bp:%d pclk_neg:%d",
+       spi_speed, hsync_polarity, hsync_front_porch, hsync_pulse_width, hsync_back_porch,
+       vsync_polarity, vsync_front_porch, vsync_pulse_width, vsync_back_porch, pclk_active_neg);
 
 #endif // USE_ESP32_S3
   }
 #endif
 
 #ifdef UDSP_DEBUG
-  Serial.printf("Dsp class init complete\n");
+  AddLog(LOG_LEVEL_DEBUG, "UDisplay: Dsp class init complete");
 #endif
 }
 
@@ -809,7 +761,7 @@ uint16_t cmd_offset = 0;
 
 
 #ifdef UDSP_DEBUG
-  Serial.printf("start send icmd table\n");
+  AddLog(LOG_LEVEL_DEBUG, "UDisplay: start send icmd table");
 #endif
   while (1) {
     uint8_t iob;
@@ -820,27 +772,24 @@ uint16_t cmd_offset = 0;
     uint8_t args = dsp_cmds[cmd_offset++];
     index++;
 #ifdef UDSP_DEBUG
-    Serial.printf("cmd, args %02x, %d ", iob, args & 0x7f);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd, args %02x, %d", iob, args & 0x7f);
 #endif
     for (uint32_t cnt = 0; cnt < (args & 0x7f); cnt++) {
       iob = dsp_cmds[cmd_offset++];
       index++;
 #ifdef UDSP_DEBUG
-      Serial.printf("%02x ", iob);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: %02x", iob);
 #endif
       ulcd_data8(iob);
     }
     SPI_CS_HIGH
-#ifdef UDSP_DEBUG
-    Serial.printf("\n");
-#endif
     if (args & 0x80) {  // delay after the command
       delay_arg(args);
     }
     if (index >= cmd_size) break;
   }
 #ifdef UDSP_DEBUG
-  Serial.printf("end send icmd table\n");
+  AddLog(LOG_LEVEL_DEBUG, "UDisplay: end send icmd table");
 #endif
   return;
 }
@@ -849,7 +798,7 @@ uint16_t cmd_offset = 0;
 void uDisplay::send_spi_cmds(uint16_t cmd_offset, uint16_t cmd_size) {
 uint16_t index = 0;
 #ifdef UDSP_DEBUG
-  Serial.printf("start send cmd table\n");
+  AddLog(LOG_LEVEL_DEBUG, "UDisplay: start send cmd table");
 #endif
   while (1) {
     uint8_t iob;
@@ -861,7 +810,7 @@ uint16_t index = 0;
       uint8_t args = dsp_cmds[cmd_offset++];
       index++;
 #ifdef UDSP_DEBUG
-      Serial.printf("cmd, args %02x, %d ", iob, args & 0x1f);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd, args %02x, %d", iob, args & 0x1f);
 #endif
       switch (iob) {
         case EP_RESET:
@@ -925,9 +874,8 @@ uint16_t index = 0;
       }
 #ifdef UDSP_DEBUG
       if (args & 1) {
-        Serial.printf("%02x ", iob );
+        AddLog(LOG_LEVEL_DEBUG, "UDisplay: %02x", iob);
       }
-      Serial.printf("\n");
 #endif
       if (args & 0x80) {  // delay after the command
         delay_arg(args);
@@ -948,13 +896,13 @@ uint16_t index = 0;
       uint8_t args = dsp_cmds[cmd_offset++];
       index++;
 #ifdef UDSP_DEBUG
-      Serial.printf("cmd, args %02x, %d ", iob, args & 0x1f);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd, args %02x, %d", iob, args & 0x1f);
 #endif
       for (uint32_t cnt = 0; cnt < (args & 0x1f); cnt++) {
         iob = dsp_cmds[cmd_offset++];
         index++;
 #ifdef UDSP_DEBUG
-        Serial.printf("%02x ", iob );
+        AddLog(LOG_LEVEL_DEBUG, "%02x ", iob );
 #endif
         if (!allcmd_mode) {
           ulcd_data8(iob);
@@ -963,9 +911,6 @@ uint16_t index = 0;
         }
       }
       SPI_CS_HIGH
-#ifdef UDSP_DEBUG
-      Serial.printf("\n");
-#endif
       if (args & 0x80) {  // delay after the command
         delay_arg(args);
       }
@@ -975,7 +920,7 @@ uint16_t index = 0;
 
 exit:
 #ifdef UDSP_DEBUG
-  Serial.printf("end send cmd table\n");
+  AddLog(LOG_LEVEL_DEBUG, "UDisplay: end send cmd table");
 #endif
   return;
 }
@@ -983,13 +928,13 @@ exit:
 Renderer *uDisplay::Init(void) {
   if (!interface) {   // no valid configuration, abort
     #ifdef UDSP_DEBUG
-    Serial.printf("Dsp Init no valid configuration\n");
+    AddLog(LOG_LEVEL_INFO, "UDisplay: Dsp Init no valid configuration");
     #endif
     return NULL;
   }
 
   #ifdef UDSP_DEBUG
-    Serial.printf("Dsp Init 1 start \n");
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: Dsp Init 1 start");
   #endif
 
   // for any bpp below native 16 bits, we allocate a local framebuffer to copy into
@@ -1022,12 +967,12 @@ Renderer *uDisplay::Init(void) {
     }
 */
 #ifdef UDSP_DEBUG
-    Serial.printf("I2C cmds: %d\n", dsp_ncmds);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: I2C cmds:%d", dsp_ncmds);
 #endif
     for (uint32_t cnt = 0; cnt < dsp_ncmds; cnt++) {
       i2c_command(dsp_cmds[cnt]);
 #ifdef UDSP_DEBUG
-      Serial.printf("cmd = %x\n", dsp_cmds[cnt]);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd=%x", dsp_cmds[cnt]);
 #endif
     }
 
@@ -1093,7 +1038,7 @@ Renderer *uDisplay::Init(void) {
         busy_pin = spi_miso;
         pinMode(spi_miso, INPUT_PULLUP);
 #ifdef UDSP_DEBUG
-        Serial.printf("Dsp busy pin: %d\n", busy_pin);
+        AddLog(LOG_LEVEL_DEBUG, "UDisplay: Dsp busy pin:%d", busy_pin);
 #endif
       }
     }
@@ -1120,7 +1065,7 @@ Renderer *uDisplay::Init(void) {
 #ifdef USE_ESP32_S3
     if (!UsePSRAM())  {        // RGB is not supported on S3 without PSRAM
       #ifdef UDSP_DEBUG
-      Serial.printf("Dsp RGB requires PSRAM, abort\n");
+      AddLog(LOG_LEVEL_INFO, "UDisplay: Dsp RGB requires PSRAM, abort");
       #endif
       return NULL;
     }
@@ -1292,19 +1237,16 @@ Renderer *uDisplay::Init(void) {
 
       uint8_t args = dsp_cmds[index++];
     #ifdef UDSP_DEBUG
-      Serial.printf("cmd, args %02x, %d ", iob, args&0x1f);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd, args %02x, %d", iob, args & 0x1f);
     #endif
       for (uint32_t cnt = 0; cnt < (args & 0x1f); cnt++) {
         iob = dsp_cmds[index++];
     #ifdef UDSP_DEBUG
-        Serial.printf("%02x ", iob );
+        AddLog(LOG_LEVEL_DEBUG, "UDisplay: %02x", iob);
     #endif
         pb_writeData(iob, 8);
       }
       cs_control(1);
-    #ifdef UDSP_DEBUG
-      Serial.printf("\n");
-    #endif
       if (args & 0x80) {  // delay after the command
         uint32_t delay_ms = 0;
         switch (args & 0xE0) {
@@ -1315,7 +1257,7 @@ Renderer *uDisplay::Init(void) {
         if (delay_ms > 0) {
           delay(delay_ms);
     #ifdef UDSP_DEBUG
-          Serial.printf("delay %d ms\n", delay_ms);
+          AddLog(LOG_LEVEL_DEBUG, "UDisplay: delay %d ms", delay_ms);
     #endif
         }
 
@@ -1337,7 +1279,7 @@ Renderer *uDisplay::Init(void) {
   }
 
 #ifdef UDSP_DEBUG
-  Serial.printf("Dsp Init 1 complete \n");
+  AddLog(LOG_LEVEL_DEBUG, "UDisplay: Dsp Init 1 complete");
 #endif
   return this;
 }
@@ -1348,7 +1290,7 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
     if (p == DISPLAY_INIT_PARTIAL) {
       if (lutpsize) {
 #ifdef UDSP_DEBUG
-        Serial.printf("init partial epaper mode\n");
+        AddLog(LOG_LEVEL_DEBUG, "init partial epaper mode");
 #endif
         SetLut(lut_partial);
         Updateframe_EPD();
@@ -1357,7 +1299,7 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
       return;
     } else if (p == DISPLAY_INIT_FULL) {
 #ifdef UDSP_DEBUG
-      Serial.printf("init full epaper mode\n");
+      AddLog(LOG_LEVEL_DEBUG, "init full epaper mode");
 #endif
       if (lutfsize) {
         SetLut(lut_full);
@@ -1385,13 +1327,13 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
     }
 
 #ifdef UDSP_DEBUG
-    Serial.printf("Dsp Init 2 complete \n");
+    AddLog(LOG_LEVEL_DEBUG, "Dsp Init 2 complete");
 #endif
   }
 }
 
 void uDisplay::i2c_command(uint8_t val) {
-  //Serial.printf("%02x\n",val );
+  //AddLog(LOG_LEVEL_DEBUG, "%02x\n",val );
   wire->beginTransmission(i2caddr);
   wire->write(0);
   wire->write(val);
@@ -1490,7 +1432,7 @@ void uDisplay::Updateframe(void) {
     //uint8_t xs = 132 >> 3;
 	  uint8_t m_row = saw_2;
 	  uint8_t m_col = i2c_col_start;
-    // Serial.printf("m_row=%d m_col=%d xs=%d ys=%d\n", m_row, m_col, xs, ys);
+    // AddLog(LOG_LEVEL_DEBUG, "m_row=%d m_col=%d xs=%d ys=%d\n", m_row, m_col, xs, ys);
 
 	  uint16_t p = 0;
 
