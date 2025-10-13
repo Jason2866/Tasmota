@@ -16,6 +16,11 @@
   #define UDISPLAY_I80
 #endif
 
+#if defined(SOC_LCD_RGB_SUPPORTED)
+  #define USE_UNIVERSAL_PANEL
+  #include "uDisplay_rgb_panel.h"
+#endif
+
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 #define USE_ESP32_S3
 #endif
@@ -39,16 +44,12 @@ enum {
 #define SIMPLERS_YM par_dbl[0]
 
 #ifdef USE_ESP32_S3
-#include <esp_lcd_panel_io.h>
 #include "esp_private/gdma.h"
 #include <hal/gpio_ll.h>
 #include <hal/lcd_hal.h>
 #include <soc/lcd_cam_reg.h>
 #include <soc/lcd_cam_struct.h>
-#include "esp_lcd_panel_interface.h"
-#include "esp_lcd_panel_rgb.h"
 #include "esp_pm.h"
-#include "esp_lcd_panel_ops.h"
 #include <hal/dma_types.h>
 #include <rom/cache.h>
 #include "esp_rom_lldesc.h"
@@ -299,14 +300,15 @@ private:
    uint32_t get_sr_touch(uint32_t xp, uint32_t xm, uint32_t yp, uint32_t ym);
 #endif // UDISPLAY_I80
 
-// ===== RGB Interface Members =====  
-#if SOC_LCD_RGB_SUPPORTED
+#ifdef USE_UNIVERSAL_PANEL
+#if defined(SOC_LCD_RGB_SUPPORTED)
    esp_lcd_rgb_panel_config_t _panel_config; //move to heap later
-   // RGB panel handle
-   esp_lcd_panel_handle_t _panel_handle = NULL;
-   // RGB Methods
-   void drawPixel_RGB(int16_t x, int16_t y, uint16_t color);
+  //  esp_lcd_panel_handle_t _panel_handle = NULL;
+  UniversalPanel* universal_panel = nullptr;  // ← ABSTRACT INTERFACE!
+
+  //  void draxwPixel_RGB(int16_t x, int16_t y, uint16_t color);
 #endif // SOC_LCD_RGB_SUPPORTED
+#endif //USE_UNIVERSAL_PANEL
 
 // ===== Common ESP32-S3 Features =====
 #if defined(UDISPLAY_I80) || SOC_LCD_RGB_SUPPORTED

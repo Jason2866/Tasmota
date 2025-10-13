@@ -8,9 +8,9 @@ static constexpr uint16_t RGB16_TO_MONO      = 0x8410;
 static constexpr uint16_t RGB16_SWAP_TO_MONO = 0x1084;
 
 void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
-#if SOC_LCD_RGB_SUPPORTED
-    if (interface == _UDSP_RGB) {
-        drawPixel_RGB(x, y, color);
+#ifdef USE_UNIVERSAL_PANEL
+    if (universal_panel) {
+        universal_panel->drawPixel(x, y, color);
         return;
     }
 #endif
@@ -50,24 +50,9 @@ void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
     if((x >= _width) || (y >= _height)) return;
     if((x + w - 1) >= _width)  w = _width - x;
 
-#if SOC_LCD_RGB_SUPPORTED
-    if (interface == _UDSP_RGB) {
-        if (cur_rot > 0) {
-            while (w--) {
-                drawPixel_RGB(x , y , color);
-                x++;
-            }
-        } else {
-            uint16_t *fb = rgb_fb;
-            fb += (int32_t)y * _width;
-            fb += x;
-            while (w--) {
-                *fb = color;
-                Cache_WriteBack_Addr((uint32_t)fb, 2);
-                fb++;
-                x++;
-            }
-        }
+#ifdef USE_UNIVERSAL_PANEL
+    if (universal_panel) {
+        universal_panel->drawFastHLine(x, y, w, color);
         return;
     }
 #endif
@@ -114,24 +99,9 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
     if ((x >= _width) || (y >= _height)) return;
     if ((y + h - 1) >= _height) h = _height - y;
 
-#if SOC_LCD_RGB_SUPPORTED
-    if (interface == _UDSP_RGB) {
-        if (cur_rot > 0) {
-            while (h--) {
-                drawPixel_RGB(x , y , color);
-                y++;
-            }
-        } else {
-            uint16_t *fb = rgb_fb;
-            fb += (int32_t)y * _width;
-            fb += x;
-            while (h--) {
-                *fb = color;
-                Cache_WriteBack_Addr((uint32_t)fb, 2);
-                fb+=_width;
-                y++;
-            }
-        }
+#ifdef USE_UNIVERSAL_PANEL
+    if (universal_panel) {
+        universal_panel->drawFastVLine(x, y, h, color);
         return;
     }
 #endif
@@ -164,11 +134,9 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 }
 
 void uDisplay::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-#if SOC_LCD_RGB_SUPPORTED
-    if (interface == _UDSP_RGB) {
-        for (uint32_t yp = y; yp < y + h; yp++) {
-            drawFastHLine(x, yp, w, color);
-        }
+#ifdef USE_UNIVERSAL_PANEL
+    if (universal_panel) {
+        universal_panel->fillRect(x, y, w, h, color);
         return;
     }
 #endif
@@ -229,6 +197,12 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
   if (lvgl_param.swap_color) {
     not_swapped = !not_swapped;
   }
+#ifdef USE_UNIVERSAL_PANEL
+    if (universal_panel) {
+        universal_panel->pushColors(data, len, not_swapped);
+        return;
+    }
+#endif
 
   //Serial.printf("push %x - %d - %d - %d\n", (uint32_t)data, len, not_swapped, lvgl_param.data);
 
@@ -237,21 +211,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
   // Use ESP-IDF LCD driver to push colors and rely on the following assumptions:
   // * bytes swapping is already handled in the driver configuration (see uDisplay::Init()),
   // * pushColors() is only called with not_swapped equals true,
-  // * cache flushing is done by the LCD driver.
-  if (interface == _UDSP_RGB) {
-#if SOC_LCD_RGB_SUPPORTED
-    if (!not_swapped) {
-      // internal error -> write error message but continue (with possibly wrong colors)
-      AddLog(LOG_LEVEL_ERROR, PSTR("DSP: Unexpected byte-swapping requested in pushColors()"));
-    }
-
-    // check that bytes count matches the size of area, and remove from inner loop
-    if ((seta_yp2 - seta_yp1) * (seta_xp2 - seta_xp2) > len) { return; }
-
-    esp_lcd_panel_draw_bitmap(_panel_handle, seta_xp1, seta_yp1, seta_xp2, seta_yp2, (void *)data);
-#endif
-    return;
-  }
+  // * cache flushing is done by the LCD driver
 
 
   if (not_swapped == false) {
@@ -389,24 +349,12 @@ void uDisplay::pushColorsMono(uint16_t *data, uint16_t len, bool rgb16_swap) {
 }
 
 void uDisplay::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
-    if (bpp != 16 || interface == _UDSP_RGB) {
-        // Just save params or update frame
-        if (!x0 && !y0 && !x1 && !y1) {
-            if (!ep_mode) {
-                Updateframe();
-            }
-        } else {
-            seta_xp1 = x0;
-            seta_xp2 = x1;
-            seta_yp1 = y0;
-            seta_yp2 = y1;
-        }
+#ifdef USE_UNIVERSAL_PANEL
+    if (universal_panel) {
+        universal_panel->setAddrWindow(x0, y0, x1, y1);
         return;
     }
-
-    if (interface == _UDSP_RGB) {
-        return;
-    }
+#endif
 
     if (!x0 && !y0 && !x1 && !y1) {
         SPI_CS_HIGH
@@ -471,6 +419,12 @@ void uDisplay::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 
 void uDisplay::setRotation(uint8_t rotation) {
     cur_rot = rotation;
+#ifdef USE_UNIVERSAL_PANEL
+    if (universal_panel) {
+        universal_panel->setRotation(rotation);
+        return;
+    }
+#endif
 
     if (framebuffer) {
         Renderer::setRotation(cur_rot);
@@ -478,6 +432,7 @@ void uDisplay::setRotation(uint8_t rotation) {
     }
 
     if (interface == _UDSP_SPI || interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+
         if (ep_mode) {
             Renderer::setRotation(cur_rot);
             return;
@@ -519,12 +474,4 @@ void uDisplay::setRotation(uint8_t rotation) {
             _height = gxs;
             break;
     }
-
-#if SOC_LCD_RGB_SUPPORTED
-    if (interface == _UDSP_RGB) {
-        // Utilize the ESP-IDF LCD driver's support for display rotation
-        esp_lcd_panel_mirror(_panel_handle, rotation == 1 || rotation == 2, rotation & 2);
-        esp_lcd_panel_swap_xy(_panel_handle, rotation & 1);
-    }
-#endif
 }

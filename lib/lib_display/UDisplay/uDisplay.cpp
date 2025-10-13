@@ -1079,7 +1079,6 @@ Renderer *uDisplay::Init(void) {
     _panel_config.timings.pclk_hz = spi_speed*1000000;
     _panel_config.timings.h_res = gxs;
     _panel_config.timings.v_res = gys;
-
     _panel_config.data_width = 16; // RGB565 in parallel mode, thus 16bit in width
     _panel_config.sram_trans_align = 8;
     _panel_config.psram_trans_align = 64;
@@ -1103,16 +1102,8 @@ Renderer *uDisplay::Init(void) {
     _panel_config.flags.refresh_on_demand = 0;
     _panel_config.flags.fb_in_psram = 1;             // allocate frame buffer in PSRAM
 
-    ESP_ERROR_CHECK(esp_lcd_new_rgb_panel((const esp_lcd_rgb_panel_config_t*)&_panel_config, &_panel_handle));
-    ESP_ERROR_CHECK(esp_lcd_panel_reset(_panel_handle));
-    ESP_ERROR_CHECK(esp_lcd_panel_init(_panel_handle));
-
-    uint16_t color = random(0xffff);
-    ESP_ERROR_CHECK(_panel_handle->draw_bitmap(_panel_handle, 0, 0, 1, 1, &color));
-
-    void * buf = NULL;
-    esp_lcd_rgb_panel_get_frame_buffer(_panel_handle, 1, &buf);
-    rgb_fb = (uint16_t *)buf;
+    universal_panel = new RGBPanel(_panel_config);
+    rgb_fb = universal_panel->framebuffer;
 
 #endif // SOC_LCD_RGB_SUPPORTED
   }
