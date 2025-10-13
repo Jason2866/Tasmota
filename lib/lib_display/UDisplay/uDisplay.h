@@ -257,7 +257,7 @@ private:
    
 
 // ===== I80 Parallel Interface Members =====
-#if defined(UDISPLAY_I80) // ESP32 has only support via I2S f
+#if defined(UDISPLAY_I80) // ESP32 has only support via I2S for I80
    // I80 Bus control pins
    int8_t par_cs;
    int8_t par_rs; 
@@ -301,18 +301,9 @@ private:
 
 // ===== RGB Interface Members =====  
 #if SOC_LCD_RGB_SUPPORTED
-   // RGB control pins
-   int8_t de;
-   int8_t vsync;
-   int8_t hsync;
-   int8_t pclk;
-
-   // RGB timing parameters
-   esp_lcd_rgb_timing_t _rgb_timing;
-
+   esp_lcd_rgb_panel_config_t _panel_config; //move to heap later
    // RGB panel handle
    esp_lcd_panel_handle_t _panel_handle = NULL;
-
    // RGB Methods
    void drawPixel_RGB(int16_t x, int16_t y, uint16_t color);
 #endif // SOC_LCD_RGB_SUPPORTED

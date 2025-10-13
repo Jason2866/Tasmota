@@ -311,7 +311,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
         if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
   #if defined(UDISPLAY_I80)
           pb_pushPixels(data, len, true, false);
-  #endif // USE_ESP32_S3
+  #endif // UDISPLAY_I80
         } else {
           lvgl_color_swap(data, len);
           while (len--) {
@@ -350,7 +350,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
       if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
 #if defined(UDISPLAY_I80)
         pb_pushPixels(data, len, false, false);
-#endif // USE_ESP32_S3
+#endif // UDISPLAY_I80
       } else {
         while (len--) {
           WriteColor(*data++);

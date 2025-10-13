@@ -406,7 +406,7 @@ int16_t uDisplay::ut_execute(uint8_t *ut_code) {
         break;
 
       case UT_GSRT:
-#ifdef USE_ESP32_S3      
+#ifdef UDISPLAY_I80      
         { 
           uint32_t val = get_sr_touch(SIMPLERS_XP, SIMPLERS_XM, SIMPLERS_YP, SIMPLERS_YM);
           if (val == 0) {
@@ -426,7 +426,7 @@ int16_t uDisplay::ut_execute(uint8_t *ut_code) {
           }
           return false;
         }
-#endif // USE_ESP32_S3
+#endif // UDISPLAY_I80
         break;
 
       case UT_XPT:
