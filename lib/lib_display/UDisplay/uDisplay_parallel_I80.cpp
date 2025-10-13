@@ -1,7 +1,7 @@
 #include "uDisplay.h"
 #include "uDisplay_config.h"
 
-#if UDISPLAY_I80
+#if defined(UDISPLAY_I80)
 
 #define WAIT_LCD_NOT_BUSY while (*reg_lcd_user & LCD_CAM_LCD_START) {}
 

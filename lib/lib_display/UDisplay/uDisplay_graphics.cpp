@@ -309,7 +309,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
       } else {
         // 9 bit and others
         if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-  #if UDISPLAY_I80
+  #if defined(UDISPLAY_I80)
           pb_pushPixels(data, len, true, false);
   #endif // USE_ESP32_S3
         } else {
@@ -348,7 +348,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
     } else {
       // 9 bit and others
       if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-#if UDISPLAY_I80
+#if defined(UDISPLAY_I80)
         pb_pushPixels(data, len, false, false);
 #endif // USE_ESP32_S3
       } else {

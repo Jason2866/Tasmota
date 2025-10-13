@@ -257,7 +257,7 @@ private:
    
 
 // ===== I80 Parallel Interface Members =====
-#if UDISPLAY_I80 // ESP32 has only support via I2S f
+#if defined(UDISPLAY_I80) // ESP32 has only support via I2S f
    // I80 Bus control pins
    int8_t par_cs;
    int8_t par_rs; 
@@ -318,7 +318,7 @@ private:
 #endif // SOC_LCD_RGB_SUPPORTED
 
 // ===== Common ESP32-S3 Features =====
-#if UDISPLAY_I80 || SOC_LCD_RGB_SUPPORTED
+#if defined(UDISPLAY_I80) || SOC_LCD_RGB_SUPPORTED
    // Shared between I80 and RGB interfaces
    int8_t par_dbl[8];  // RGB data low byte or Data bus low byte (D0-D7)
    int8_t par_dbh[8];  // RGB data high byte or Data bus high byte (D8-D15) for 16-bit

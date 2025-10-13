@@ -1128,7 +1128,7 @@ Renderer *uDisplay::Init(void) {
 
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
 
-#if UDISPLAY_I80
+#if defined(UDISPLAY_I80)
 
     if (bpanel >= 0) {
       analogWrite(bpanel, 32);
