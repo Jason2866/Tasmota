@@ -2,7 +2,7 @@
 // panel/uDisplay_rgb_panel.cpp - RGB Panel Implementation
 // ======================================================
 
-// #if defined(USE_UNIVERSAL_PANEL)
+#if SOC_LCD_RGB_SUPPORTED
 
 #include "uDisplay_rgb_panel.h"
 #include <cstdint>
@@ -97,4 +97,4 @@ void RGBPanel::setRotation(uint8_t rotation) {
     esp_lcd_panel_swap_xy(panel_handle, rotation & 1);
 }
 
-// #endif // USE_UNIVERSAL_PANEL
+#endif // #if SOC_LCD_RGB_SUPPORTED

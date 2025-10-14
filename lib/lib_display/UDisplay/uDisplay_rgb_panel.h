@@ -4,7 +4,7 @@
 
 #pragma once
 
-// #ifdef USE_UNIVERSAL_PANEL
+#if SOC_LCD_RGB_SUPPORTED
 
 #include "uDisplay_panel.h"
 #include "esp_lcd_panel_interface.h"
@@ -42,4 +42,4 @@ private:
 
 };
 
-// #endif // USE_UNIVERSAL_PANEL
+#endif //SOC_LCD_RGB_SUPPORTED
