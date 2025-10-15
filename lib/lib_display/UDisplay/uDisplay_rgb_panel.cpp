@@ -1,17 +1,10 @@
 // ======================================================
 // panel/uDisplay_rgb_panel.cpp - RGB Panel Implementation
 // ======================================================
-#ifdef ESP32
-#if __has_include("soc/soc_caps.h")
-# include "soc/soc_caps.h"
-#else
-# error "No ESP capability header found"
-#endif
-#endif
+#include "uDisplay_rgb_panel.h"
 
 #if SOC_LCD_RGB_SUPPORTED
 
-#include "uDisplay_rgb_panel.h"
 #include <cstdint>
 #include <algorithm>
 #include <rom/cache.h>
