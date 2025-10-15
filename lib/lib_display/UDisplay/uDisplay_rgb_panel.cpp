@@ -1,6 +1,13 @@
 // ======================================================
 // panel/uDisplay_rgb_panel.cpp - RGB Panel Implementation
 // ======================================================
+#ifdef ESP32
+#if __has_include("soc/soc_caps.h")
+# include "soc/soc_caps.h"
+#else
+# error "No ESP capability header found"
+#endif
+#endif
 
 #if SOC_LCD_RGB_SUPPORTED
 
@@ -43,7 +50,6 @@ void RGBPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
     framebuffer[y * w + x] = color;
     Cache_WriteBack_Addr((uint32_t)&framebuffer[y * w + x], 2);
 }
-
 
 void RGBPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
     for (int16_t yp = y; yp < y + h; yp++) {

@@ -29,8 +29,13 @@ static constexpr uint8_t RA8876_STATUS_READ = 0x40;
 extern void AddLog(uint32_t loglevel, const char* formatP, ...);
 
 SPIController::SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, int8_t dc, int8_t clk, int8_t mosi, 
-                           int8_t miso, uint8_t spi_nr, bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
-                           void* spi_host_ptr)  // spi_host is spi_host_device_t in ESP32
+                           int8_t miso, uint8_t spi_nr
+#ifdef ESP32
+                           , bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
+                           void* spi_host_ptr
+                        
+#endif
+                        )
     : spi(spi_ptr),
       speed(spi_speed),
       pin_cs(cs), 
@@ -38,10 +43,16 @@ SPIController::SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, i
       pin_clk(clk), 
       pin_mosi(mosi), 
       pin_miso(miso),
-      spi_bus_nr(spi_nr),
+      spi_bus_nr(spi_nr)
+#ifdef ESP32      
+      ,
       async_dma_enabled(async_dma),
       busy_pin(busy_pin_ref),
-      spi_host(*(spi_host_device_t*)spi_host_ptr)
+      spi_host(*(spi_host_device_t*)spi_host_ptr),
+      dma_enabled(use_dma),
+      DMA_Enabled(false),
+      spiBusyCheck(0)
+#endif //ESP32
 {
     if (pin_dc >= 0) {
       pinMode(pin_dc, OUTPUT);
@@ -63,7 +74,6 @@ SPIController::SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, i
       digitalWrite(pin_mosi, LOW);
       if (pin_miso >= 0) {
         pinMode(pin_miso, INPUT_PULLUP);
-        busy_pin_ref = pin_miso;  // Update the reference
       }
     }
 #endif // ESP8266
@@ -72,18 +82,18 @@ SPIController::SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, i
     if (spi_nr == 1) {
       spi = &SPI;
       spi->begin(pin_clk, pin_miso, pin_mosi, -1);
-      if (use_dma) {
+      if (dma_enabled) {
         spi_host_device_t* spi_host = (spi_host_device_t*)spi_host_ptr;
         *spi_host = VSPI_HOST;
-        // initDMA would need to be called separately or passed as callback
+        initDMA(async_dma ? pin_cs : -1); 
       }
     } else if (spi_nr == 2) {
       spi = new SPIClass(HSPI);
       spi->begin(pin_clk, pin_miso, pin_mosi, -1);
-      if (use_dma) {
+      if (dma_enabled) {
         spi_host_device_t* spi_host = (spi_host_device_t*)spi_host_ptr;
         *spi_host = HSPI_HOST;
-        // initDMA would need to be called separately
+        initDMA(async_dma ? pin_cs : -1); 
       }
     } else {
       pinMode(pin_clk, OUTPUT);
@@ -96,10 +106,6 @@ SPIController::SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, i
       }
     }
 #endif // ESP32
-    if (use_dma) {
-        initDMA(async_dma ? pin_cs : -1);
-    }
-    
     spi_settings = SPISettings((uint32_t)spi_speed*1000000, MSBFIRST, SPI_MODE3);
 }
 
@@ -124,16 +130,16 @@ void SPIController::dcHigh() {
 // ===== Transaction Control =====
 
 void SPIController::beginTransaction() {
-    if (spi) {
-        AddLog(3, "SPICtrl: beginTransaction, spi=%p set=%p", spi, spi_settings);
-        spi->beginTransaction(spi_settings);
-    } else {
-        AddLog(3, "SPICtrl: SPI is NULL!");
+    #ifdef ESP32
+    if (dma_enabled) {
+        dmaWait();
     }
+    #endif
+    if (spi_bus_nr <= 2) spi->beginTransaction(spi_settings);
 }
 
 void SPIController::endTransaction() {
-    if (spi) spi->endTransaction();
+    if (spi_bus_nr <= 2) spi->endTransaction();
 }
 
 // ===== Low-Level Write Functions =====
@@ -257,8 +263,9 @@ void SPIController::hw_write9(uint8_t val, uint8_t dc) {
 }
 #endif
 
-bool SPIController::initDMA(int32_t ctrl_cs) {
+// DMA
 #ifdef ESP32
+bool SPIController::initDMA(int32_t ctrl_cs) {
     if (!spi) return false;
     
     esp_err_t ret;
@@ -295,12 +302,93 @@ bool SPIController::initDMA(int32_t ctrl_cs) {
     if (ret != ESP_OK) return false;
     
     ret = spi_bus_add_device(spi_host, &devcfg, &dmaHAL);
-    return (ret == ESP_OK);
-#else
+    if (ret == ESP_OK) {
+        DMA_Enabled = true;  // ← CRITICAL: Set this to true!
+        spiBusyCheck = 0;
+        return true;
+    }
     return false;
-#endif
 }
 
+// just a placeholder
+// void SPIController::deInitDMA(void) {
+//   if (!DMA_Enabled) return;
+//   spi_bus_remove_device(dmaHAL);
+//   spi_bus_free(spi_host);
+//   DMA_Enabled = false;
+// }
+
+bool SPIController::dmaBusy(void) {
+  if (!DMA_Enabled || !spiBusyCheck) return false;
+
+  spi_transaction_t *rtrans;
+  esp_err_t ret;
+  uint8_t checks = spiBusyCheck;
+  for (int i = 0; i < checks; ++i) {
+    ret = spi_device_get_trans_result(dmaHAL, &rtrans, 0);
+    if (ret == ESP_OK) spiBusyCheck--;
+  }
+  if (spiBusyCheck == 0) return false;
+  return true;
+}
+
+void SPIController::dmaWait(void) {
+  if (!DMA_Enabled || !spiBusyCheck) return;
+  spi_transaction_t *rtrans;
+  esp_err_t ret;
+  for (int i = 0; i < spiBusyCheck; ++i) {
+    ret = spi_device_get_trans_result(dmaHAL, &rtrans, portMAX_DELAY);
+    assert(ret == ESP_OK);
+  }
+  spiBusyCheck = 0;
+}
+
+void SPIController::pushPixelsDMA(uint16_t* image, uint32_t len) {
+  if ((len == 0) || (!DMA_Enabled)) return;
+
+  dmaWait();
+
+  esp_err_t ret;
+
+  memset(&trans, 0, sizeof(spi_transaction_t));
+
+  trans.user = (void *)1;
+  trans.tx_buffer = image;  //finally send the line data
+  trans.length = len * 16;        //Data length, in bits
+  trans.flags = 0;                //SPI_TRANS_USE_TXDATA flag
+
+  ret = spi_device_queue_trans(dmaHAL, &trans, portMAX_DELAY);
+  assert(ret == ESP_OK);
+
+  spiBusyCheck++;
+  if (!async_dma_enabled) {
+    dmaWait();
+  }
+}
+
+void SPIController::pushPixels3DMA(uint8_t* image, uint32_t len) {
+  if ((len == 0) || (!DMA_Enabled)) return;
+
+  dmaWait();
+
+  esp_err_t ret;
+
+  memset(&trans, 0, sizeof(spi_transaction_t));
+
+  trans.user = (void *)1;
+  trans.tx_buffer = image;  //finally send the line data
+  trans.length = len * 24;        //Data length, in bits
+  trans.flags = 0;                //SPI_TRANS_USE_TXDATA flag
+
+  ret = spi_device_queue_trans(dmaHAL, &trans, portMAX_DELAY);
+  assert(ret == ESP_OK);
+
+  spiBusyCheck++;
+  if (!async_dma_enabled) {
+    dmaWait();
+  }
+}
+#endif // ESP32
 // ===== RA8876 Specific =====
 
 uint8_t SPIController::writeReg16(uint8_t reg, uint16_t wval) {

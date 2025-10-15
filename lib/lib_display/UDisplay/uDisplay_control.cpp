@@ -1,6 +1,5 @@
 #include "uDisplay.h"
 #include "uDisplay_config.h"
-#include "uDisplay_spi.h"
 
 void udisp_bpwr(uint8_t on);
 
@@ -93,12 +92,12 @@ void uDisplay::dim10(uint8_t dim, uint16_t dim_gamma) {
     
     if (interface == _UDSP_SPI) {
         if (dim_op != 0xff) {
-            SPI_BEGIN_TRANSACTION
-            SPI_CS_LOW
+            spiController->beginTransaction();
+            spiController->csLow();
             ulcd_command(dim_op);
             ulcd_data8(dimmer8);
-            SPI_CS_HIGH
-            SPI_END_TRANSACTION
+            spiController->csHigh();
+            spiController->endTransaction();
         }
     }
 }

@@ -9,13 +9,13 @@
 #include "soc/spi_struct.h"
 #include "esp32-hal-spi.h"
 #include "driver/spi_master.h"
+#include "soc/gpio_periph.h"
 #endif
 
 #ifndef ESP32
 #include "spi_register.h"
 #endif
 
-#include "soc/gpio_periph.h"
 
 /**
  * Minimal SPIController - wraps low-level SPI functions
@@ -24,8 +24,12 @@
 class SPIController {
 public:
     SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, int8_t dc, int8_t clk, int8_t mosi, 
-                           int8_t miso, uint8_t spi_nr, bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
-                           void* spi_host_ptr) ;
+                           int8_t miso, uint8_t spi_nr
+#ifdef ESP32
+                           , bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
+                           void* spi_host_ptr
+#endif
+                        ) ;
     ~SPIController() = default;
 
     // ===== Pin Control =====
@@ -56,8 +60,14 @@ public:
     SPIClass* getSPI() { return spi; }
     SPISettings getSPISettings() { return spi_settings; }
 
+    // ===== DMA =====
+#ifdef ESP32
     bool initDMA(int32_t ctrl_cs);
-
+    void dmaWait(void);
+    bool dmaBusy(void);
+    void pushPixelsDMA(uint16_t* image, uint32_t len);
+    void pushPixels3DMA(uint8_t* image, uint32_t len);
+#endif
 
 private:
     SPIClass* spi;
@@ -69,6 +79,7 @@ private:
     int8_t pin_miso;
     uint8_t spi_bus_nr;
     int speed;
+#ifdef ESP32
     bool dma_enabled;
     bool async_dma_enabled; 
     int8_t& busy_pin;  // Reference to busy_pin in uDisplay
@@ -76,6 +87,8 @@ private:
     bool DMA_Enabled;
     uint8_t spiBusyCheck;
     spi_device_handle_t dmaHAL;  // For DMA
+    spi_transaction_t trans;
+#endif  //ESP32
 };
 
 #endif // _UDISPLAY_SPI_CONTROLLER_H_

@@ -34,7 +34,7 @@ bool uDisplay::utouch_Init(char **name) {
 
     if (ut_spi_nr == spi_nr) {
       // same as display
-      ut_spi = uspi;
+      ut_spi = spiController->getSPI();
     } else {
 #ifdef ESP32
       ut_spi = SpiBegin(ut_spi_nr);

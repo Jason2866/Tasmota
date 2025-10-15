@@ -3,6 +3,13 @@
 // ======================================================
 
 #pragma once
+#ifdef ESP32
+#if __has_include("soc/soc_caps.h")
+# include "soc/soc_caps.h"
+#else
+# error "No ESP capability header found"
+#endif
+#endif
 
 #if SOC_LCD_RGB_SUPPORTED
 

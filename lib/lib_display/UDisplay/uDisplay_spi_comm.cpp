@@ -1,6 +1,5 @@
 #include "uDisplay.h"
 #include "uDisplay_config.h"
-#include "uDisplay_spi.h"  // Your SPI header
 
 // ===== High-Level SPI Communication Functions =====
 
@@ -9,25 +8,25 @@ void uDisplay::ulcd_command(uint8_t val) {
         if (spi_dc < 0) {
             if (spi_nr > 2) {
                 if (spi_nr == 3) {
-                    write9(val, 0);
+                    spiController->write9(val, 0);
                 } else {
-                    write9_slow(val, 0);
+                    spiController->write9_slow(val, 0);
                 }
             } else {
-                hw_write9(val, 0);
+                spiController->write9(val, 0);
             }
         } else {
-            SPI_DC_LOW
+            spiController->dcLow();
             if (spi_nr > 2) {
                 if (spi_nr == 3) {
-                    write8(val);
+                    spiController->write8(val);
                 } else {
-                    write8_slow(val);
+                    spiController->write8_slow(val);
                 }
             } else {
-                uspi->write(val);
+                spiController->getSPI()->write(val);
             }
-            SPI_DC_HIGH
+            spiController->dcHigh();
         }
         return;
     }
@@ -44,22 +43,22 @@ void uDisplay::ulcd_data8(uint8_t val) {
         if (spi_dc < 0) {
             if (spi_nr > 2) {
                 if (spi_nr == 3) {
-                    write9(val, 1);
+                    spiController->write9(val, 1);
                 } else {
-                    write9_slow(val, 1);
+                    spiController->write9_slow(val, 1);
                 }
             } else {
-                hw_write9(val, 1);
+                spiController->write9(val, 1);
             }
         } else {
             if (spi_nr > 2) {
                 if (spi_nr == 3) {
-                    write8(val);
+                    spiController->write8(val);
                 } else {
-                    write8_slow(val);
+                    spiController->write8_slow(val);
                 }
             } else {
-                uspi->write(val);
+                spiController->getSPI()->write(val);
             }
         }
         return;
@@ -76,17 +75,17 @@ void uDisplay::ulcd_data16(uint16_t val) {
     if (interface == _UDSP_SPI) {
         if (spi_dc < 0) {
             if (spi_nr > 2) {
-                write9(val >> 8, 1);
-                write9(val, 1);
+                spiController->write9(val >> 8, 1);
+                spiController->write9(val, 1);
             } else {
-                hw_write9(val >> 8, 1);
-                hw_write9(val, 1);
+                spiController->write9(val >> 8, 1);
+                spiController->write9(val, 1);
             }
         } else {
             if (spi_nr > 2) {
-                write16(val);
+                spiController->write16(val);
             } else {
-                uspi->write16(val);
+                spiController->getSPI()->write16(val);
             }
         }
         return;
@@ -103,21 +102,21 @@ void uDisplay::ulcd_data32(uint32_t val) {
     if (interface == _UDSP_SPI) {
         if (spi_dc < 0) {
             if (spi_nr > 2) {
-                write9(val >> 24, 1);
-                write9(val >> 16, 1);
-                write9(val >> 8, 1);
-                write9(val, 1);
+                spiController->write9(val >> 24, 1);
+                spiController->write9(val >> 16, 1);
+                spiController->write9(val >> 8, 1);
+                spiController->write9(val, 1);
             } else {
-                hw_write9(val >> 24, 1);
-                hw_write9(val >> 16, 1);
-                hw_write9(val >> 8, 1);
-                hw_write9(val, 1);
+                spiController->write9(val >> 24, 1);
+                spiController->write9(val >> 16, 1);
+                spiController->write9(val >> 8, 1);
+                spiController->write9(val, 1);
             }
         } else {
             if (spi_nr > 2) {
-                write32(val);
+                spiController->write32(val);
             } else {
-                uspi->write32(val);
+                spiController->getSPI()->write32(val);
             }
         }
         return;
@@ -132,11 +131,11 @@ void uDisplay::ulcd_data32(uint32_t val) {
 
 void uDisplay::ulcd_command_one(uint8_t val) {
     if (interface == _UDSP_SPI) {
-        SPI_BEGIN_TRANSACTION
-        SPI_CS_LOW
+        spiController->beginTransaction();
+        spiController->csLow();
         ulcd_command(val);
-        SPI_CS_HIGH
-        SPI_END_TRANSACTION
+        spiController->csHigh();
+        spiController->endTransaction();
     }
 }
 

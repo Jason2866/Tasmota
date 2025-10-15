@@ -1,6 +1,5 @@
 #include "uDisplay.h"
 #include "uDisplay_config.h"
-#include "uDisplay_spi.h"
 
 // ===== Basic Drawing Primitives =====
 
@@ -27,12 +26,12 @@ void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
 
     if ((x < 0) || (x >= _width) || (y < 0) || (y >= _height)) return;
 
-    SPI_BEGIN_TRANSACTION
-    SPI_CS_LOW
+    spiController->beginTransaction();
+    spiController->csLow();
     setAddrWindow_int(x, y, 1, 1);
     WriteColor(color);
-    SPI_CS_HIGH
-    SPI_END_TRANSACTION
+    spiController->csHigh();
+    spiController->endTransaction();
 }
 
 void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
@@ -57,8 +56,8 @@ void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
     }
 #endif
 
-    SPI_BEGIN_TRANSACTION
-    SPI_CS_LOW
+    spiController->beginTransaction();
+    spiController->csLow();
     setAddrWindow_int(x, y, w, 1);
 
     if (col_mode == 18) {
@@ -80,8 +79,8 @@ void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
         }
     }
 
-    SPI_CS_HIGH
-    SPI_END_TRANSACTION
+    spiController->csHigh();
+    spiController->endTransaction();
 }
 
 void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
@@ -106,8 +105,8 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
     }
 #endif
 
-    SPI_BEGIN_TRANSACTION
-    SPI_CS_LOW
+    spiController->beginTransaction();
+    spiController->csLow();
     setAddrWindow_int(x, y, 1, h);
 
     if (col_mode == 18) {
@@ -129,8 +128,8 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
         }
     }
 
-    SPI_CS_HIGH
-    SPI_END_TRANSACTION
+    spiController->csHigh();
+    spiController->endTransaction();
 }
 
 void uDisplay::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
@@ -155,8 +154,8 @@ void uDisplay::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
     if((x + w - 1) >= _width)  w = _width - x;
     if((y + h - 1) >= _height) h = _height - y;
 
-    SPI_BEGIN_TRANSACTION
-    SPI_CS_LOW
+    spiController->beginTransaction();
+    spiController->csLow();
     setAddrWindow_int(x, y, w, h);
 
     if (col_mode == 18) {
@@ -182,8 +181,8 @@ void uDisplay::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
         }
     }
     
-    SPI_CS_HIGH
-    SPI_END_TRANSACTION
+    spiController->csHigh();
+    spiController->endTransaction();
 }
 
 void uDisplay::fillScreen(uint16_t color) {
@@ -227,13 +226,13 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
 #ifdef ESP8266
       lvgl_color_swap(data, len);
       while (len--) {
-        uspi->write(*data++);
+       spiController->getSPI()->write(*data++);
       }
 #else
       if (lvgl_param.use_dma) {
-        pushPixelsDMA(data, len );
+        spiController->pushPixelsDMA(data, len );
       } else {
-        uspi->writeBytes((uint8_t*)data, len * 2);
+        spiController->getSPI()->writeBytes((uint8_t*)data, len * 2);
       }
 #endif
     } else {
@@ -259,9 +258,9 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
           }
 
           if (lvgl_param.use_dma) {
-            pushPixels3DMA(line, len );
+            spiController->pushPixels3DMA(line, len );
           } else {
-            uspi->writeBytes(line, len * 3);
+            spiController->getSPI()->writeBytes(line, len * 3);
           }
           free(line);
         }
@@ -303,7 +302,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
         WriteColor(*data++);
       }
   #else
-      uspi->writePixels(data, len * 2);
+      spiController->getSPI()->writePixels(data, len * 2);
   #endif
     } else {
       // 9 bit and others
@@ -357,11 +356,11 @@ void uDisplay::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 #endif
 
     if (!x0 && !y0 && !x1 && !y1) {
-        SPI_CS_HIGH
-        SPI_END_TRANSACTION
+        spiController->csHigh();
+        spiController->endTransaction();
     } else {
-        SPI_BEGIN_TRANSACTION
-        SPI_CS_LOW
+        spiController->beginTransaction();
+        spiController->csLow();
         setAddrWindow_int(x0, y0, x1 - x0, y1 - y0);
     }
 }
@@ -437,8 +436,8 @@ void uDisplay::setRotation(uint8_t rotation) {
             Renderer::setRotation(cur_rot);
             return;
         }
-        SPI_BEGIN_TRANSACTION
-        SPI_CS_LOW
+        spiController->beginTransaction();
+        spiController->csLow();
         ulcd_command(madctrl);
 
         if (!allcmd_mode) {
@@ -452,8 +451,8 @@ void uDisplay::setRotation(uint8_t rotation) {
             ulcd_data8((cur_rot < 2) ? height() : 0);
         }
 
-        SPI_CS_HIGH
-        SPI_END_TRANSACTION
+        spiController->csHigh();
+        spiController->endTransaction();
     }
     
     switch (rotation) {

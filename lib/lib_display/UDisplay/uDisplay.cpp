@@ -20,7 +20,6 @@
 #include <Arduino.h>
 #include "uDisplay.h"
 #include "uDisplay_config.h"
-#include "uDisplay_spi.h"
 
 #include "tasmota_options.h"
 
@@ -766,7 +765,7 @@ uint16_t cmd_offset = 0;
 #endif
   while (1) {
     uint8_t iob;
-    SPI_CS_LOW
+    spiController->csLow();
     iob = dsp_cmds[cmd_offset++];
     index++;
     ulcd_command(iob);
@@ -783,7 +782,7 @@ uint16_t cmd_offset = 0;
 #endif
       ulcd_data8(iob);
     }
-    SPI_CS_HIGH
+    spiController->csHigh();
     if (args & 0x80) {  // delay after the command
       delay_arg(args);
     }
@@ -803,7 +802,7 @@ uint16_t index = 0;
 #endif
   while (1) {
     uint8_t iob;
-    SPI_CS_LOW
+    spiController->csLow();
     iob = dsp_cmds[cmd_offset++];
     index++;
     if ((ep_mode == 1 || ep_mode == 3) && iob >= EP_RESET) {
@@ -911,7 +910,7 @@ uint16_t index = 0;
           ulcd_command(iob);
         }
       }
-      SPI_CS_HIGH
+      spiController->csHigh();
       if (args & 0x80) {  // delay after the command
         delay_arg(args);
       }
@@ -991,11 +990,15 @@ Renderer *uDisplay::Init(void) {
     }
 
     spiController = new SPIController(uspi, spi_speed, spi_cs, spi_dc, spi_clk, spi_mosi, 
-                                 spi_miso, spi_nr, lvgl_param.use_dma, lvgl_param.async_dma, 
-                                 busy_pin, &spi_host);
+                                 spi_miso, spi_nr
+#ifdef ESP32 
+                                 , lvgl_param.use_dma, lvgl_param.async_dma, 
+                                 busy_pin, &spi_host
+#endif
+                                );
     spiSettings = spiController->getSPISettings();
+    busy_pin = spi_miso; // update for timing
 
-    // SPI_BEGIN_TRANSACTION
     // spiController->beginTransaction();
 
     if (reset >= 0) {
@@ -1004,12 +1007,8 @@ Renderer *uDisplay::Init(void) {
       delay(50);
       reset_pin(50, 200);
     }
-
     send_spi_cmds(0, dsp_ncmds);
     // spiController->endTransaction();
-
-    // SPI_END_TRANSACTION
-
   }
 
   if (interface == _UDSP_RGB) {
@@ -1340,9 +1339,8 @@ void uDisplay::Updateframe(void) {
   if (interface == _UDSP_SPI) {
     if (framebuffer == nullptr) { return; }
 
-    SPI_BEGIN_TRANSACTION
-    SPI_CS_LOW
-
+    spiController->beginTransaction();
+    spiController->csLow();
     // below commands are not needed for SH1107
     // ulcd_command(saw_1 | 0x0);  // set low col = 0, 0x00
     // ulcd_command(i2c_page_start | 0x0);  // set hi col = 0, 0x10
@@ -1370,10 +1368,8 @@ void uDisplay::Updateframe(void) {
             }
 	      }
     }
-
-    SPI_CS_HIGH
-    SPI_END_TRANSACTION
-
+    spiController->csLow();
+    spiController->beginTransaction();
   }
 
 }

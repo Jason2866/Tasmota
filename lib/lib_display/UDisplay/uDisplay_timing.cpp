@@ -43,18 +43,3 @@ void uDisplay::delay_sync(int32_t ms) {
     delay(ms);
   }
 }
-
-// ===== SPI Transaction Control =====
-
-void uDisplay::beginTransaction(SPISettings s) {
-#ifdef ESP32
-  if (lvgl_param.use_dma) {
-    dmaWait();
-  }
-#endif
-  uspi->beginTransaction(s);
-}
-
-void uDisplay::endTransaction(void) {
-  uspi->endTransaction();
-}

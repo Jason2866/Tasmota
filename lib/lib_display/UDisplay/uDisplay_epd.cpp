@@ -1,6 +1,5 @@
 #include "uDisplay.h"
 #include "uDisplay_config.h"
-#include "uDisplay_spi.h"
 
 
 // ===== EPD Command Definitions =====
@@ -346,17 +345,17 @@ void uDisplay::drawFastHLine_EPD(int16_t x, int16_t y, int16_t w, uint16_t color
 // ===== EPD SPI Helpers =====
 
 void uDisplay::spi_command_EPD(uint8_t val) {
-    SPI_BEGIN_TRANSACTION
-    SPI_CS_LOW
+    spiController->beginTransaction();
+    spiController->csLow();
     ulcd_command(val);
-    SPI_CS_HIGH
-    SPI_END_TRANSACTION
+    spiController->csHigh();
+    spiController->endTransaction();
 }
 
 void uDisplay::spi_data8_EPD(uint8_t val) {
-    SPI_BEGIN_TRANSACTION
-    SPI_CS_LOW
+    spiController->beginTransaction();
+    spiController->csLow();
     ulcd_data8(val);
-    SPI_CS_HIGH
-    SPI_END_TRANSACTION
+    spiController->csHigh();
+    spiController->endTransaction();
 }
