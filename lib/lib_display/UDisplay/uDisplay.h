@@ -29,6 +29,8 @@
 #include "driver/spi_master.h"
 #endif
 
+#include "uDisplay_SPI_controller.h"
+
 enum {
   UT_RD,UT_RDM,UT_CP,UT_RTF,UT_MV,UT_MVB,UT_RT,UT_RTT,UT_RDW,UT_RDWM,UT_WR,UT_WRW,UT_CPR,UT_AND,UT_SCALE,UT_LIM,UT_DBG,UT_GSRT,UT_XPT,UT_CPM,UT_END
 };
@@ -114,6 +116,8 @@ private:
     uint8_t *lut_array[MAX_LUTS];
     uint8_t dsp_cmds[256];
     char dname[16];
+
+    SPIController *spiController;
     SPIClass *uspi;
     TwoWire *wire;
     SPISettings spiSettings;

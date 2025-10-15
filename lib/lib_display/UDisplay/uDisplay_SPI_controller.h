@@ -1,0 +1,81 @@
+#ifndef _UDISPLAY_SPI_CONTROLLER_H_
+#define _UDISPLAY_SPI_CONTROLLER_H_
+
+#include <Arduino.h>
+#include <SPI.h>
+
+#ifdef ESP32
+#include "soc/spi_reg.h"
+#include "soc/spi_struct.h"
+#include "esp32-hal-spi.h"
+#include "driver/spi_master.h"
+#endif
+
+#ifndef ESP32
+#include "spi_register.h"
+#endif
+
+#include "soc/gpio_periph.h"
+
+/**
+ * Minimal SPIController - wraps low-level SPI functions
+ * Extracted from uDisplay_spi.cpp
+ */
+class SPIController {
+public:
+    SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, int8_t dc, int8_t clk, int8_t mosi, 
+                           int8_t miso, uint8_t spi_nr, bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
+                           void* spi_host_ptr) ;
+    ~SPIController() = default;
+
+    // ===== Pin Control =====
+    void csLow();
+    void csHigh();
+    void dcLow();
+    void dcHigh();
+
+    // ===== Transaction Control =====
+    void beginTransaction();
+    void endTransaction();
+
+    // ===== Low-Level Write Functions =====
+    void write8(uint8_t val);
+    void write8_slow(uint8_t val);
+    void write9(uint8_t val, uint8_t dc);
+    void write9_slow(uint8_t val, uint8_t dc);
+    void write16(uint16_t val);
+    void write32(uint32_t val);
+    void hw_write9(uint8_t val, uint8_t dc);
+
+    // ===== RA8876 Specific =====
+    uint8_t writeReg16(uint8_t reg, uint16_t wval);
+    uint8_t readData(void);
+    uint8_t readStatus(void);
+
+    // ===== Direct Access =====
+    SPIClass* getSPI() { return spi; }
+    SPISettings getSPISettings() { return spi_settings; }
+
+    bool initDMA(int32_t ctrl_cs);
+
+
+private:
+    SPIClass* spi;
+    SPISettings spi_settings;
+    int8_t pin_cs;
+    int8_t pin_dc;
+    int8_t pin_clk;
+    int8_t pin_mosi;
+    int8_t pin_miso;
+    uint8_t spi_bus_nr;
+    int speed;
+    bool dma_enabled;
+    bool async_dma_enabled; 
+    int8_t& busy_pin;  // Reference to busy_pin in uDisplay
+    spi_host_device_t spi_host;
+    bool DMA_Enabled;
+    uint8_t spiBusyCheck;
+    spi_device_handle_t dmaHAL;  // For DMA
+};
+
+#endif // _UDISPLAY_SPI_CONTROLLER_H_

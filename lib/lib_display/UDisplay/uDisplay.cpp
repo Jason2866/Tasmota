@@ -989,65 +989,14 @@ Renderer *uDisplay::Init(void) {
         digitalWrite(bpanel, HIGH);
 #endif // ESP32
     }
-    if (spi_dc >= 0) {
-      pinMode(spi_dc, OUTPUT);
-      digitalWrite(spi_dc, HIGH);
-    }
-    if (spi_cs >= 0) {
-      pinMode(spi_cs, OUTPUT);
-      digitalWrite(spi_cs, HIGH);
-    }
 
-#ifdef ESP8266
-    if (spi_nr <= 1) {
-      SPI.begin();
-      uspi = &SPI;
-    } else {
-      pinMode(spi_clk, OUTPUT);
-      digitalWrite(spi_clk, LOW);
-      pinMode(spi_mosi, OUTPUT);
-      digitalWrite(spi_mosi, LOW);
-      if (spi_miso >= 0) {
-        pinMode(spi_miso, INPUT_PULLUP);
-        busy_pin = spi_miso;
-      }
-    }
-#endif // ESP8266
+    spiController = new SPIController(uspi, spi_speed, spi_cs, spi_dc, spi_clk, spi_mosi, 
+                                 spi_miso, spi_nr, lvgl_param.use_dma, lvgl_param.async_dma, 
+                                 busy_pin, &spi_host);
+    spiSettings = spiController->getSPISettings();
 
-#ifdef ESP32
-    if (spi_nr == 1) {
-      uspi = &SPI;
-      uspi->begin(spi_clk, spi_miso, spi_mosi, -1);
-      if (lvgl_param.use_dma) {
-        spi_host = VSPI_HOST;
-        initDMA(lvgl_param.async_dma ? spi_cs : -1);   // disable DMA CS if sync, we control it directly
-      }
-
-    } else if (spi_nr == 2) {
-      uspi = new SPIClass(HSPI);
-      uspi->begin(spi_clk, spi_miso, spi_mosi, -1);
-      if (lvgl_param.use_dma) {
-        spi_host = HSPI_HOST;
-        initDMA(lvgl_param.async_dma ? spi_cs : -1);   // disable DMA CS if sync, we control it directly
-      }
-    } else {
-      pinMode(spi_clk, OUTPUT);
-      digitalWrite(spi_clk, LOW);
-      pinMode(spi_mosi, OUTPUT);
-      digitalWrite(spi_mosi, LOW);
-      if (spi_miso >= 0) {
-        busy_pin = spi_miso;
-        pinMode(spi_miso, INPUT_PULLUP);
-#ifdef UDSP_DEBUG
-        AddLog(LOG_LEVEL_DEBUG, "UDisplay: Dsp busy pin:%d", busy_pin);
-#endif
-      }
-    }
-#endif // ESP32
-
-
-    spiSettings = SPISettings((uint32_t)spi_speed*1000000, MSBFIRST, SPI_MODE3);
-    SPI_BEGIN_TRANSACTION
+    // SPI_BEGIN_TRANSACTION
+    // spiController->beginTransaction();
 
     if (reset >= 0) {
       pinMode(reset, OUTPUT);
@@ -1057,8 +1006,9 @@ Renderer *uDisplay::Init(void) {
     }
 
     send_spi_cmds(0, dsp_ncmds);
+    // spiController->endTransaction();
 
-    SPI_END_TRANSACTION
+    // SPI_END_TRANSACTION
 
   }
 
