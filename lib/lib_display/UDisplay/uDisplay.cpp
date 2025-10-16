@@ -170,9 +170,11 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               spi_cs = next_val(&lp1);
               reset = next_val(&lp1);
 
-              spiController = new SPIController(uspi, spi_speed, spi_cs, spi_dc, spi_clk, spi_mosi, 
-                                 spi_miso, spi_nr, false, false, 
-                                 busy_pin, &spi_host);
+              spiController = new SPIController(uspi, spi_speed, spi_cs, spi_dc, spi_clk, spi_mosi, spi_miso, spi_nr
+#ifdef ESP32
+                                 , false, false, busy_pin, &spi_host
+#endif // ESP32
+                                );
               spiSettings = spiController->getSPISettings();
               busy_pin = spi_miso; // update for timing
 

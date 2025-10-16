@@ -2,131 +2,52 @@
 #include "uDisplay_config.h"
 
 // ===== High-Level SPI Communication Functions =====
-
 void uDisplay::ulcd_command(uint8_t val) {
     if (interface == _UDSP_SPI) {
-        if (spi_dc < 0) {
-            if (spi_nr > 2) {
-                if (spi_nr == 3) {
-                    spiController->write9(val, 0);
-                } else {
-                    spiController->write9_slow(val, 0);
-                }
-            } else {
-                spiController->hw_write9(val, 0);
-            }
-        } else {
-            spiController->dcLow();
-            if (spi_nr > 2) {
-                if (spi_nr == 3) {
-                    spiController->write8(val);
-                } else {
-                    spiController->write8_slow(val);
-                }
-            } else {
-                spiController->getSPI()->write(val);
-            }
-            spiController->dcHigh();
-        }
+        spiController->writeCommand(val);
         return;
     }
-
 #ifdef UDISPLAY_I80
     if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
         pb_writeCommand(val, 8);
     }
-#endif //UDISPLAY_I80
+#endif
 }
 
 void uDisplay::ulcd_data8(uint8_t val) {
     if (interface == _UDSP_SPI) {
-        if (spi_dc < 0) {
-            if (spi_nr > 2) {
-                if (spi_nr == 3) {
-                    spiController->write9(val, 1);
-                } else {
-                    spiController->write9_slow(val, 1);
-                }
-            } else {
-                spiController->hw_write9(val, 1);
-            }
-        } else {
-            if (spi_nr > 2) {
-                if (spi_nr == 3) {
-                    spiController->write8(val);
-                } else {
-                    spiController->write8_slow(val);
-                }
-            } else {
-                spiController->getSPI()->write(val);
-            }
-        }
+        spiController->writeData8(val);
         return;
     }
-
 #ifdef UDISPLAY_I80
     if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
         pb_writeData(val, 8);
     }
-#endif // UDISPLAY_I80
+#endif
 }
 
 void uDisplay::ulcd_data16(uint16_t val) {
     if (interface == _UDSP_SPI) {
-        if (spi_dc < 0) {
-            if (spi_nr > 2) {
-                spiController->write9(val >> 8, 1);
-                spiController->write9(val, 1);
-            } else {
-                spiController->hw_write9(val >> 8, 1);
-                spiController->hw_write9(val, 1);
-            }
-        } else {
-            if (spi_nr > 2) {
-                spiController->write16(val);
-            } else {
-                spiController->getSPI()->write16(val);
-            }
-        }
+        spiController->writeData16(val);
         return;
     }
-
 #ifdef UDISPLAY_I80
     if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
         pb_writeData(val, 16);
     }
-#endif // UDISPLAY_I80
+#endif
 }
 
 void uDisplay::ulcd_data32(uint32_t val) {
     if (interface == _UDSP_SPI) {
-        if (spi_dc < 0) {
-            if (spi_nr > 2) {
-                spiController->write9(val >> 24, 1);
-                spiController->write9(val >> 16, 1);
-                spiController->write9(val >> 8, 1);
-                spiController->write9(val, 1);
-            } else {
-                spiController->hw_write9(val >> 24, 1);
-                spiController->hw_write9(val >> 16, 1);
-                spiController->hw_write9(val >> 8, 1);
-                spiController->hw_write9(val, 1);
-            }
-        } else {
-            if (spi_nr > 2) {
-                spiController->write32(val);
-            } else {
-                spiController->getSPI()->write32(val);
-            }
-        }
+        spiController->writeData32(val);
         return;
     }
-
 #ifdef UDISPLAY_I80
     if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
         pb_writeData(val, 32);
     }
-#endif //UDISPLAY_I80
+#endif
 }
 
 void uDisplay::ulcd_command_one(uint8_t val) {

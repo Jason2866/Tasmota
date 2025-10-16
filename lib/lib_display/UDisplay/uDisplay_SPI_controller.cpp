@@ -143,6 +143,90 @@ void SPIController::endTransaction() {
 }
 
 // ===== Low-Level Write Functions =====
+void SPIController::writeCommand(uint8_t cmd) {
+    if (pin_dc < 0) {
+        // 9-bit mode
+        if (spi_bus_nr > 2) {
+            if (spi_bus_nr == 3) write9(cmd, 0);
+            else write9_slow(cmd, 0);
+        } else {
+            hw_write9(cmd, 0);
+        }
+    } else {
+        // 8-bit mode  
+        dcLow();
+        writeData8(cmd);
+        dcHigh();
+    }
+}
+
+void SPIController::writeData8(uint8_t data) {
+    if (pin_dc < 0) {
+        // 9-bit mode
+        if (spi_bus_nr > 2) {
+            if (spi_bus_nr == 3) write9(data, 1);
+            else write9_slow(data, 1);
+        } else {
+            hw_write9(data, 1);
+        }
+    } else {
+        // 8-bit mode
+        if (spi_bus_nr > 2) {
+            if (spi_bus_nr == 3) write8(data);
+            else write8_slow(data);
+        } else {
+            spi->write(data);
+        }
+    }
+}
+
+void SPIController::writeData16(uint16_t data) {
+    if (pin_dc < 0) {
+        // 9-bit: break into bytes
+        writeData8(data >> 8);
+        writeData8(data);
+    } else {
+        // 8-bit mode
+        if (spi_bus_nr > 2) {
+            if (spi_bus_nr == 3) write16(data);
+            else {
+                // Slow mode: break into bytes
+                writeData8(data >> 8);
+                writeData8(data);
+            }
+        } else {
+            spi->write16(data); // Assume SPI has write16
+        }
+    }
+}
+
+void SPIController::writeData32(uint32_t data) {
+    if (pin_dc < 0) {
+        // 9-bit mode: break into bytes
+        writeData8(data >> 24);
+        writeData8(data >> 16);
+        writeData8(data >> 8);
+        writeData8(data);
+    } else {
+        // 8-bit mode
+        if (spi_bus_nr > 2) {
+            if (spi_bus_nr == 3) {
+                write32(data);  // Fast bit-banging
+            } else {
+                // Slow mode: break into bytes
+                writeData8(data >> 24);
+                writeData8(data >> 16);
+                writeData8(data >> 8);
+                writeData8(data);
+            }
+        } else {
+            // Hardware SPI
+            spi->write32(data);  // Assume SPI has write32 on ESP32
+        }
+    }
+}
+
+// ===== Low-Level Write Functions =====
 
 void SPIController::write8(uint8_t val) {
     for (uint8_t bit = 0x80; bit; bit >>= 1) {

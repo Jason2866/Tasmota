@@ -42,14 +42,11 @@ public:
     void beginTransaction();
     void endTransaction();
 
-    // ===== Low-Level Write Functions =====
-    void write8(uint8_t val);
-    void write8_slow(uint8_t val);
-    void write9(uint8_t val, uint8_t dc);
-    void write9_slow(uint8_t val, uint8_t dc);
-    void write16(uint16_t val);
-    void write32(uint32_t val);
-    void hw_write9(uint8_t val, uint8_t dc);
+    // ===== High-Level Write Functions =====
+    void writeCommand(uint8_t cmd);
+    void writeData8(uint8_t data);
+    void writeData16(uint16_t data); 
+    void writeData32(uint32_t data);
 
     // ===== RA8876 Specific =====
     uint8_t writeReg16(uint8_t reg, uint16_t wval);
@@ -72,13 +69,24 @@ public:
 private:
     SPIClass* spi;
     SPISettings spi_settings;
+    
+    // ===== Low-Level Write Functions =====
+    void write8(uint8_t val);
+    void write8_slow(uint8_t val);
+    void write9(uint8_t val, uint8_t dc);
+    void write9_slow(uint8_t val, uint8_t dc);
+    void write16(uint16_t val);
+    void write32(uint32_t val);
+    void hw_write9(uint8_t val, uint8_t dc);
+
+    int speed;
     int8_t pin_cs;
     int8_t pin_dc;
     int8_t pin_clk;
     int8_t pin_mosi;
     int8_t pin_miso;
     uint8_t spi_bus_nr;
-    int speed;
+
 #ifdef ESP32
     bool dma_enabled;
     bool async_dma_enabled; 
