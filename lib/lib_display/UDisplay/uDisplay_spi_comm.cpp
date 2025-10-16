@@ -13,7 +13,7 @@ void uDisplay::ulcd_command(uint8_t val) {
                     spiController->write9_slow(val, 0);
                 }
             } else {
-                spiController->write9(val, 0);
+                spiController->hw_write9(val, 0);
             }
         } else {
             spiController->dcLow();
@@ -48,7 +48,7 @@ void uDisplay::ulcd_data8(uint8_t val) {
                     spiController->write9_slow(val, 1);
                 }
             } else {
-                spiController->write9(val, 1);
+                spiController->hw_write9(val, 1);
             }
         } else {
             if (spi_nr > 2) {
@@ -78,8 +78,8 @@ void uDisplay::ulcd_data16(uint16_t val) {
                 spiController->write9(val >> 8, 1);
                 spiController->write9(val, 1);
             } else {
-                spiController->write9(val >> 8, 1);
-                spiController->write9(val, 1);
+                spiController->hw_write9(val >> 8, 1);
+                spiController->hw_write9(val, 1);
             }
         } else {
             if (spi_nr > 2) {
@@ -107,10 +107,10 @@ void uDisplay::ulcd_data32(uint32_t val) {
                 spiController->write9(val >> 8, 1);
                 spiController->write9(val, 1);
             } else {
-                spiController->write9(val >> 24, 1);
-                spiController->write9(val >> 16, 1);
-                spiController->write9(val >> 8, 1);
-                spiController->write9(val, 1);
+                spiController->hw_write9(val >> 24, 1);
+                spiController->hw_write9(val >> 16, 1);
+                spiController->hw_write9(val >> 8, 1);
+                spiController->hw_write9(val, 1);
             }
         } else {
             if (spi_nr > 2) {
