@@ -22,7 +22,7 @@
 class RGBPanel : public UniversalPanel {
 public:
     // Takes only the ESP-IDF config
-    RGBPanel(const esp_lcd_rgb_panel_config_t& config);
+    RGBPanel(const esp_lcd_rgb_panel_config_t *config);
     ~RGBPanel();
     
     void drawPixel(int16_t x, int16_t y, uint16_t color) override;

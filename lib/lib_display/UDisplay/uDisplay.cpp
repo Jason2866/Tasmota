@@ -318,19 +318,20 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
 #ifdef SOC_LCD_RGB_SUPPORTED
               interface = _UDSP_RGB;
               // Set pin configuration directly in _panel_config
-              _panel_config.de_gpio_num = (gpio_num_t)next_val(&lp1);
-              _panel_config.vsync_gpio_num = (gpio_num_t)next_val(&lp1);
-              _panel_config.hsync_gpio_num = (gpio_num_t)next_val(&lp1);
-              _panel_config.pclk_gpio_num = (gpio_num_t)next_val(&lp1);
+              _panel_config = (esp_lcd_rgb_panel_config_t *)heap_caps_calloc(1, sizeof(esp_lcd_rgb_panel_config_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+              _panel_config->de_gpio_num = (gpio_num_t)next_val(&lp1);
+              _panel_config->vsync_gpio_num = (gpio_num_t)next_val(&lp1);
+              _panel_config->hsync_gpio_num = (gpio_num_t)next_val(&lp1);
+              _panel_config->pclk_gpio_num = (gpio_num_t)next_val(&lp1);
               bpanel = next_val(&lp1);
               // Set data pins in _panel_config
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
                   par_dbl[cnt] = next_val(&lp1);
-                  _panel_config.data_gpio_nums[cnt] = (gpio_num_t)par_dbl[cnt];
+                  _panel_config->data_gpio_nums[cnt] = (gpio_num_t)par_dbl[cnt];
               }
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
                   par_dbh[cnt] = next_val(&lp1);
-                  _panel_config.data_gpio_nums[cnt + 8] = (gpio_num_t)par_dbh[cnt];
+                  _panel_config->data_gpio_nums[cnt + 8] = (gpio_num_t)par_dbh[cnt];
               }
               spi_speed = next_val(&lp1);
 #endif // SOC_LCD_RGB_SUPPORTED
@@ -433,18 +434,18 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             break;
 #if SOC_LCD_RGB_SUPPORTED
           case 'V':
-            _panel_config.timings.flags.hsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
-            _panel_config.timings.hsync_front_porch = next_val(&lp1);
-            _panel_config.timings.hsync_pulse_width = next_val(&lp1);
-            _panel_config.timings.hsync_back_porch = next_val(&lp1);
-            _panel_config.timings.flags.vsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
-            _panel_config.timings.vsync_front_porch = next_val(&lp1);
-            _panel_config.timings.vsync_pulse_width = next_val(&lp1);
-            _panel_config.timings.vsync_back_porch = next_val(&lp1);
-            _panel_config.timings.flags.pclk_active_neg = next_val(&lp1);
+            _panel_config->timings.flags.hsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
+            _panel_config->timings.hsync_front_porch = next_val(&lp1);
+            _panel_config->timings.hsync_pulse_width = next_val(&lp1);
+            _panel_config->timings.hsync_back_porch = next_val(&lp1);
+            _panel_config->timings.flags.vsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
+            _panel_config->timings.vsync_front_porch = next_val(&lp1);
+            _panel_config->timings.vsync_pulse_width = next_val(&lp1);
+            _panel_config->timings.vsync_back_porch = next_val(&lp1);
+            _panel_config->timings.flags.pclk_active_neg = next_val(&lp1);
             // Set fixed flags (not in descriptor)
-            _panel_config.timings.flags.de_idle_high = 0;
-            _panel_config.timings.flags.pclk_idle_high = 0;
+            _panel_config->timings.flags.de_idle_high = 0;
+            _panel_config->timings.flags.pclk_idle_high = 0;
             break;
 #endif // SOC_LCD_RGB_SUPPORTED
           case 'o':
@@ -1030,32 +1031,32 @@ Renderer *uDisplay::Init(void) {
       analogWrite(bpanel, 32);
     }
 
-    _panel_config.clk_src = LCD_CLK_SRC_PLL160M;
-    _panel_config.timings.pclk_hz = spi_speed*1000000;
-    _panel_config.timings.h_res = gxs;
-    _panel_config.timings.v_res = gys;
-    _panel_config.data_width = 16; // RGB565 in parallel mode, thus 16bit in width
-    _panel_config.sram_trans_align = 8;
-    _panel_config.psram_trans_align = 64;
+    _panel_config->clk_src = LCD_CLK_SRC_PLL160M;
+    _panel_config->timings.pclk_hz = spi_speed*1000000;
+    _panel_config->timings.h_res = gxs;
+    _panel_config->timings.v_res = gys;
+    _panel_config->data_width = 16; // RGB565 in parallel mode, thus 16bit in width
+    _panel_config->sram_trans_align = 8;
+    _panel_config->psram_trans_align = 64;
 
     // assume that byte swapping of 16-bit color is done only upon request
     // via display.ini and not by callers of pushColor()
     // -> swap bytes by swapping GPIO numbers
     int8_t *par_db8 = lvgl_param.swap_color ? par_dbl : par_dbh;
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      _panel_config.data_gpio_nums[cnt] = par_db8[cnt];
+      _panel_config->data_gpio_nums[cnt] = par_db8[cnt];
     }
     par_db8 = lvgl_param.swap_color ? par_dbh : par_dbl;
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      _panel_config.data_gpio_nums[cnt + 8] = par_db8[cnt];
+      _panel_config->data_gpio_nums[cnt + 8] = par_db8[cnt];
     }
     lvgl_param.swap_color = 0;
 
-    _panel_config.disp_gpio_num = GPIO_NUM_NC;
+    _panel_config->disp_gpio_num = GPIO_NUM_NC;
 
-    _panel_config.flags.disp_active_low = 0;
-    _panel_config.flags.refresh_on_demand = 0;
-    _panel_config.flags.fb_in_psram = 1;             // allocate frame buffer in PSRAM
+    _panel_config->flags.disp_active_low = 0;
+    _panel_config->flags.refresh_on_demand = 0;
+    _panel_config->flags.fb_in_psram = 1;             // allocate frame buffer in PSRAM
 
     universal_panel = new RGBPanel(_panel_config);
     rgb_fb = universal_panel->framebuffer;

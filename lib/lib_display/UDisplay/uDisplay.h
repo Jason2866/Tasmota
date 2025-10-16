@@ -306,7 +306,7 @@ private:
 
 #ifdef USE_UNIVERSAL_PANEL
 #if SOC_LCD_RGB_SUPPORTED
-   esp_lcd_rgb_panel_config_t _panel_config; //move to heap later
+   esp_lcd_rgb_panel_config_t *_panel_config;
   //  esp_lcd_panel_handle_t _panel_handle = NULL;
   UniversalPanel* universal_panel = nullptr;  // ← ABSTRACT INTERFACE!
 

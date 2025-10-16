@@ -11,12 +11,12 @@
 
 extern int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
 
-RGBPanel::RGBPanel(const esp_lcd_rgb_panel_config_t& config) {
-    ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(&config, &panel_handle));
+RGBPanel::RGBPanel(const esp_lcd_rgb_panel_config_t *config) {
+    ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(config, &panel_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
-    width = config.timings.h_res;
-    height = config.timings.v_res;
+    width = config->timings.h_res;
+    height = config->timings.v_res;
     void* buf = NULL;
     esp_lcd_rgb_panel_get_frame_buffer(panel_handle, 1, &buf);
     framebuffer = (uint16_t*)buf;
