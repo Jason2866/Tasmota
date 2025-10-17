@@ -23,7 +23,7 @@
  */
 class SPIController {
 public:
-    SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, int8_t dc, int8_t clk, int8_t mosi, 
+    SPIController(uint32_t spi_speed, int8_t cs, int8_t dc, int8_t clk, int8_t mosi, 
                            int8_t miso, uint8_t spi_nr
 #ifdef ESP32
                            , bool use_dma, bool async_dma, int8_t& busy_pin_ref, 

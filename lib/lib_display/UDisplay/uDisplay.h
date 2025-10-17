@@ -118,9 +118,9 @@ private:
     char dname[16];
 
     SPIController *spiController;
-    SPIClass *uspi;
+    // SPIClass *uspi;
     TwoWire *wire;
-    SPISettings spiSettings;
+    // SPISettings spiSettings;
 
     uint16_t x_addr_offs[4];
     uint16_t y_addr_offs[4];
@@ -211,7 +211,7 @@ private:
     uint32_t str2c(char **sp, char *vp, uint32_t len);
 
     void i2c_command(uint8_t val);
-    
+
     void ulcd_command_one(uint8_t val);
     void ulcd_command(uint8_t val);
     void ulcd_data8(uint8_t val);

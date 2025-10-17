@@ -28,7 +28,7 @@ static constexpr uint8_t RA8876_STATUS_READ = 0x40;
 
 extern void AddLog(uint32_t loglevel, const char* formatP, ...);
 
-SPIController::SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, int8_t dc, int8_t clk, int8_t mosi, 
+SPIController::SPIController(uint32_t spi_speed, int8_t cs, int8_t dc, int8_t clk, int8_t mosi, 
                            int8_t miso, uint8_t spi_nr
 #ifdef ESP32
                            , bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
@@ -36,8 +36,7 @@ SPIController::SPIController(SPIClass* spi_ptr, uint32_t spi_speed, int8_t cs, i
                         
 #endif
                         )
-    : spi(spi_ptr),
-      speed(spi_speed),
+    : speed(spi_speed),
       pin_cs(cs), 
       pin_dc(dc), 
       pin_clk(clk), 
