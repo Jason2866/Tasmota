@@ -1123,8 +1123,8 @@ Renderer *uDisplay::Init(void) {
     }
 
     // to disable SPI TRANSACTION
-    spi_nr = 3;
-    spi_cs = par_cs;
+    spiController->spi_config.bus_nr = 3; // TODO!! really refactor this!!
+    spiController->spi_config.cs = par_cs;
 
     _i80_bus = nullptr;
 
