@@ -204,31 +204,21 @@ private:
     int16_t rotmap_ymin;
     int16_t rotmap_ymax;
 
-    void beginTransaction(SPISettings s);
-    void endTransaction(void);
     void setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
     void drawPixel(int16_t x, int16_t y, uint16_t color);
     void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color);
     void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color);
     uint32_t str2c(char **sp, char *vp, uint32_t len);
+
     void i2c_command(uint8_t val);
+    
     void ulcd_command_one(uint8_t val);
     void ulcd_command(uint8_t val);
     void ulcd_data8(uint8_t val);
     void ulcd_data16(uint16_t val);
     void ulcd_data32(uint32_t val);
-    void write8(uint8_t val);
-    void write8_slow(uint8_t val);
-    void write9(uint8_t val, uint8_t dc);
-    void write9_slow(uint8_t val, uint8_t dc);
-    void hw_write9(uint8_t val, uint8_t dc);
-    void write16(uint16_t val);
-    void write32(uint32_t val);
-    void spi_data9(uint8_t d, uint8_t dc);
-    uint8_t readData(void);
-    uint8_t readStatus(void);
-    uint8_t writeReg16(uint8_t reg, uint16_t wval);
     void WriteColor(uint16_t color);
+
     void SetLut(const unsigned char* lut);
     void SetLuts(void);
     void DisplayFrame_29(void);
