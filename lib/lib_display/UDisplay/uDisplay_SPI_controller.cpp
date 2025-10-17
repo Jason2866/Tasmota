@@ -28,21 +28,13 @@ static constexpr uint8_t RA8876_STATUS_READ = 0x40;
 
 extern void AddLog(uint32_t loglevel, const char* formatP, ...);
 
-SPIController::SPIController(uint32_t spi_speed, int8_t cs, int8_t dc, int8_t clk, int8_t mosi, 
-                           int8_t miso, uint8_t spi_nr
+SPIController::SPIController(const SPIControllerConfig& config
 #ifdef ESP32
                            , bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
                            void* spi_host_ptr
-                        
 #endif
                         )
-    : speed(spi_speed),
-      pin_cs(cs), 
-      pin_dc(dc), 
-      pin_clk(clk), 
-      pin_mosi(mosi), 
-      pin_miso(miso),
-      spi_bus_nr(spi_nr)
+    : spi_config(config)
 #ifdef ESP32      
       ,
       async_dma_enabled(async_dma),
@@ -53,77 +45,77 @@ SPIController::SPIController(uint32_t spi_speed, int8_t cs, int8_t dc, int8_t cl
       spiBusyCheck(0)
 #endif //ESP32
 {
-    if (pin_dc >= 0) {
-      pinMode(pin_dc, OUTPUT);
-      digitalWrite(pin_dc, HIGH);
+    if (spi_config.dc >= 0) {
+      pinMode(spi_config.dc, OUTPUT);
+      digitalWrite(spi_config.dc, HIGH);
     }
-    if (pin_cs >= 0) {
-      pinMode(pin_cs, OUTPUT);
-      digitalWrite(pin_cs, HIGH);
+    if (spi_config.cs >= 0) {
+      pinMode(spi_config.cs, OUTPUT);
+      digitalWrite(spi_config.cs, HIGH);
     }
 
 #ifdef ESP8266
-    if (spi_nr <= 1) {
+    if (spi_config.bus_nr <= 1) {
       SPI.begin();
       spi = &SPI;
     } else {
-      pinMode(pin_clk, OUTPUT);
-      digitalWrite(pin_clk, LOW);
-      pinMode(pin_mosi, OUTPUT);
-      digitalWrite(pin_mosi, LOW);
-      if (pin_miso >= 0) {
-        pinMode(pin_miso, INPUT_PULLUP);
+      pinMode(spi_config.clk, OUTPUT);
+      digitalWrite(spi_config.clk, LOW);
+      pinMode(spi_config.mosi, OUTPUT);
+      digitalWrite(spi_config.mosi, LOW);
+      if (spi_config.miso >= 0) {
+        pinMode(spi_config.miso, INPUT_PULLUP);
       }
     }
 #endif // ESP8266
 
 #ifdef ESP32
-    if (spi_nr == 1) {
+    if (spi_config.bus_nr == 1) {
       spi = &SPI;
-      spi->begin(pin_clk, pin_miso, pin_mosi, -1);
+      spi->begin(spi_config.clk, spi_config.miso, spi_config.mosi, -1);
       if (dma_enabled) {
         spi_host_device_t* spi_host = (spi_host_device_t*)spi_host_ptr;
         *spi_host = VSPI_HOST;
-        initDMA(async_dma ? pin_cs : -1); 
+        initDMA(async_dma ? spi_config.cs : -1); 
       }
-    } else if (spi_nr == 2) {
+    } else if (spi_config.bus_nr == 2) {
       spi = new SPIClass(HSPI);
-      spi->begin(pin_clk, pin_miso, pin_mosi, -1);
+      spi->begin(spi_config.clk, spi_config.miso, spi_config.mosi, -1);
       if (dma_enabled) {
         spi_host_device_t* spi_host = (spi_host_device_t*)spi_host_ptr;
         *spi_host = HSPI_HOST;
-        initDMA(async_dma ? pin_cs : -1); 
+        initDMA(async_dma ? spi_config.cs : -1); 
       }
     } else {
-      pinMode(pin_clk, OUTPUT);
-      digitalWrite(pin_clk, LOW);
-      pinMode(pin_mosi, OUTPUT);
-      digitalWrite(pin_mosi, LOW);
-      if (pin_miso >= 0) {
-        busy_pin_ref = pin_miso;
-        pinMode(pin_miso, INPUT_PULLUP);
+      pinMode(spi_config.clk, OUTPUT);
+      digitalWrite(spi_config.clk, LOW);
+      pinMode(spi_config.mosi, OUTPUT);
+      digitalWrite(spi_config.mosi, LOW);
+      if (spi_config.miso >= 0) {
+        busy_pin_ref = spi_config.miso;
+        pinMode(spi_config.miso, INPUT_PULLUP);
       }
     }
 #endif // ESP32
-    spi_settings = SPISettings((uint32_t)spi_speed*1000000, MSBFIRST, SPI_MODE3);
+    spi_settings = SPISettings((uint32_t)spi_config.speed*1000000, MSBFIRST, SPI_MODE3);
 }
 
 // ===== Pin Control =====
 
 void SPIController::csLow() {
-    if (pin_cs >= 0) GPIO_CLR_SLOW(pin_cs);
+    if (spi_config.cs >= 0) GPIO_CLR_SLOW(spi_config.cs);
 }
 
 void SPIController::csHigh() {
-    if (pin_cs >= 0) GPIO_SET_SLOW(pin_cs);
+    if (spi_config.cs >= 0) GPIO_SET_SLOW(spi_config.cs);
 }
 
 void SPIController::dcLow() {
-    if (pin_dc >= 0) GPIO_CLR_SLOW(pin_dc);
+    if (spi_config.dc >= 0) GPIO_CLR_SLOW(spi_config.dc);
 }
 
 void SPIController::dcHigh() {
-    if (pin_dc >= 0) GPIO_SET_SLOW(pin_dc);
+    if (spi_config.dc >= 0) GPIO_SET_SLOW(spi_config.dc);
 }
 
 // ===== Transaction Control =====
@@ -134,19 +126,19 @@ void SPIController::beginTransaction() {
         dmaWait();
     }
     #endif
-    if (spi_bus_nr <= 2) spi->beginTransaction(spi_settings);
+    if (spi_config.bus_nr <= 2) spi->beginTransaction(spi_settings);
 }
 
 void SPIController::endTransaction() {
-    if (spi_bus_nr <= 2) spi->endTransaction();
+    if (spi_config.bus_nr <= 2) spi->endTransaction();
 }
 
 // ===== Low-Level Write Functions =====
 void SPIController::writeCommand(uint8_t cmd) {
-    if (pin_dc < 0) {
+    if (spi_config.dc < 0) {
         // 9-bit mode
-        if (spi_bus_nr > 2) {
-            if (spi_bus_nr == 3) write9(cmd, 0);
+        if (spi_config.bus_nr > 2) {
+            if (spi_config.bus_nr == 3) write9(cmd, 0);
             else write9_slow(cmd, 0);
         } else {
             hw_write9(cmd, 0);
@@ -160,18 +152,18 @@ void SPIController::writeCommand(uint8_t cmd) {
 }
 
 void SPIController::writeData8(uint8_t data) {
-    if (pin_dc < 0) {
+    if (spi_config.dc < 0) {
         // 9-bit mode
-        if (spi_bus_nr > 2) {
-            if (spi_bus_nr == 3) write9(data, 1);
+        if (spi_config.bus_nr > 2) {
+            if (spi_config.bus_nr == 3) write9(data, 1);
             else write9_slow(data, 1);
         } else {
             hw_write9(data, 1);
         }
     } else {
         // 8-bit mode
-        if (spi_bus_nr > 2) {
-            if (spi_bus_nr == 3) write8(data);
+        if (spi_config.bus_nr > 2) {
+            if (spi_config.bus_nr == 3) write8(data);
             else write8_slow(data);
         } else {
             spi->write(data);
@@ -180,14 +172,14 @@ void SPIController::writeData8(uint8_t data) {
 }
 
 void SPIController::writeData16(uint16_t data) {
-    if (pin_dc < 0) {
+    if (spi_config.dc < 0) {
         // 9-bit: break into bytes
         writeData8(data >> 8);
         writeData8(data);
     } else {
         // 8-bit mode
-        if (spi_bus_nr > 2) {
-            if (spi_bus_nr == 3) write16(data);
+        if (spi_config.bus_nr > 2) {
+            if (spi_config.bus_nr == 3) write16(data);
             else {
                 // Slow mode: break into bytes
                 writeData8(data >> 8);
@@ -200,7 +192,7 @@ void SPIController::writeData16(uint16_t data) {
 }
 
 void SPIController::writeData32(uint32_t data) {
-    if (pin_dc < 0) {
+    if (spi_config.dc < 0) {
         // 9-bit mode: break into bytes
         writeData8(data >> 24);
         writeData8(data >> 16);
@@ -208,8 +200,8 @@ void SPIController::writeData32(uint32_t data) {
         writeData8(data);
     } else {
         // 8-bit mode
-        if (spi_bus_nr > 2) {
-            if (spi_bus_nr == 3) {
+        if (spi_config.bus_nr > 2) {
+            if (spi_config.bus_nr == 3) {
                 write32(data);  // Fast bit-banging
             } else {
                 // Slow mode: break into bytes
@@ -229,65 +221,65 @@ void SPIController::writeData32(uint32_t data) {
 
 void SPIController::write8(uint8_t val) {
     for (uint8_t bit = 0x80; bit; bit >>= 1) {
-        GPIO_CLR(pin_clk);
-        if (val & bit) GPIO_SET(pin_mosi);
-        else GPIO_CLR(pin_mosi);
-        GPIO_SET(pin_clk);
+        GPIO_CLR(spi_config.clk);
+        if (val & bit) GPIO_SET(spi_config.mosi);
+        else GPIO_CLR(spi_config.mosi);
+        GPIO_SET(spi_config.clk);
     }
 }
 
 void SPIController::write8_slow(uint8_t val) {
     for (uint8_t bit = 0x80; bit; bit >>= 1) {
-        GPIO_CLR_SLOW(pin_clk);
-        if (val & bit) GPIO_SET_SLOW(pin_mosi);
-        else GPIO_CLR_SLOW(pin_mosi);
-        GPIO_SET_SLOW(pin_clk);
+        GPIO_CLR_SLOW(spi_config.clk);
+        if (val & bit) GPIO_SET_SLOW(spi_config.mosi);
+        else GPIO_CLR_SLOW(spi_config.mosi);
+        GPIO_SET_SLOW(spi_config.clk);
     }
 }
 
 void SPIController::write9(uint8_t val, uint8_t dc) {
-    GPIO_CLR(pin_clk);
-    if (dc) GPIO_SET(pin_mosi);
-    else GPIO_CLR(pin_mosi);
-    GPIO_SET(pin_clk);
+    GPIO_CLR(spi_config.clk);
+    if (dc) GPIO_SET(spi_config.mosi);
+    else GPIO_CLR(spi_config.mosi);
+    GPIO_SET(spi_config.clk);
 
     for (uint8_t bit = 0x80; bit; bit >>= 1) {
-        GPIO_CLR(pin_clk);
-        if (val & bit) GPIO_SET(pin_mosi);
-        else GPIO_CLR(pin_mosi);
-        GPIO_SET(pin_clk);
+        GPIO_CLR(spi_config.clk);
+        if (val & bit) GPIO_SET(spi_config.mosi);
+        else GPIO_CLR(spi_config.mosi);
+        GPIO_SET(spi_config.clk);
     }
 }
 
 void SPIController::write9_slow(uint8_t val, uint8_t dc) {
-    GPIO_CLR_SLOW(pin_clk);
-    if (dc) GPIO_SET_SLOW(pin_mosi);
-    else GPIO_CLR_SLOW(pin_mosi);
-    GPIO_SET_SLOW(pin_clk);
+    GPIO_CLR_SLOW(spi_config.clk);
+    if (dc) GPIO_SET_SLOW(spi_config.mosi);
+    else GPIO_CLR_SLOW(spi_config.mosi);
+    GPIO_SET_SLOW(spi_config.clk);
 
     for (uint8_t bit = 0x80; bit; bit >>= 1) {
-        GPIO_CLR_SLOW(pin_clk);
-        if (val & bit) GPIO_SET_SLOW(pin_mosi);
-        else GPIO_CLR_SLOW(pin_mosi);
-        GPIO_SET_SLOW(pin_clk);
+        GPIO_CLR_SLOW(spi_config.clk);
+        if (val & bit) GPIO_SET_SLOW(spi_config.mosi);
+        else GPIO_CLR_SLOW(spi_config.mosi);
+        GPIO_SET_SLOW(spi_config.clk);
     }
 }
 
 void SPIController::write16(uint16_t val) {
     for (uint16_t bit = 0x8000; bit; bit >>= 1) {
-        GPIO_CLR(pin_clk);
-        if (val & bit) GPIO_SET(pin_mosi);
-        else GPIO_CLR(pin_mosi);
-        GPIO_SET(pin_clk);
+        GPIO_CLR(spi_config.clk);
+        if (val & bit) GPIO_SET(spi_config.mosi);
+        else GPIO_CLR(spi_config.mosi);
+        GPIO_SET(spi_config.clk);
     }
 }
 
 void SPIController::write32(uint32_t val) {
     for (uint32_t bit = 0x80000000; bit; bit >>= 1) {
-        GPIO_CLR(pin_clk);
-        if (val & bit) GPIO_SET(pin_mosi);
-        else GPIO_CLR(pin_mosi);
-        GPIO_SET(pin_clk);
+        GPIO_CLR(spi_config.clk);
+        if (val & bit) GPIO_SET(spi_config.mosi);
+        else GPIO_CLR(spi_config.mosi);
+        GPIO_SET(spi_config.clk);
     }
 }
 
@@ -295,7 +287,7 @@ void SPIController::write32(uint32_t val) {
 
 #ifdef ESP32
 void SPIController::hw_write9(uint8_t val, uint8_t dc) {
-    if (pin_dc < -1) {
+    if (spi_config.dc < -1) {
         // RA8876 mode
         if (!dc) {
             spi->write(RA8876_CMD_WRITE);
@@ -320,7 +312,7 @@ void SPIController::hw_write9(uint8_t val, uint8_t dc) {
 }
 #else
 void SPIController::hw_write9(uint8_t val, uint8_t dc) {
-    if (pin_dc < -1) {
+    if (spi_config.dc < -1) {
         // RA8876 mode
         if (!dc) {
             spi->write(RA8876_CMD_WRITE);
@@ -353,9 +345,9 @@ bool SPIController::initDMA(int32_t ctrl_cs) {
     
     esp_err_t ret;
     spi_bus_config_t buscfg = {
-        .mosi_io_num = pin_mosi,
+        .mosi_io_num = spi_config.mosi,
         .miso_io_num = -1,
-        .sclk_io_num = pin_clk,
+        .sclk_io_num = spi_config.clk,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
         .max_transfer_sz = 320 * 240 * 2 + 8,
@@ -371,7 +363,7 @@ bool SPIController::initDMA(int32_t ctrl_cs) {
         .duty_cycle_pos = 0,
         .cs_ena_pretrans = 0,
         .cs_ena_posttrans = 0,
-        .clock_speed_hz = speed,
+        .clock_speed_hz = (int)spi_config.speed,
         .input_delay_ns = 0,
         .spics_io_num = ctrl_cs,
         .flags = SPI_DEVICE_NO_DUMMY,
@@ -380,7 +372,7 @@ bool SPIController::initDMA(int32_t ctrl_cs) {
         .post_cb = 0
     };
     
-    spi_host_device_t spi_host = (spi_bus_nr == 1) ? VSPI_HOST : HSPI_HOST;
+    spi_host_device_t spi_host = (spi_config.bus_nr == 1) ? VSPI_HOST : HSPI_HOST;
     ret = spi_bus_initialize(spi_host, &buscfg, 1);
     if (ret != ESP_OK) return false;
     

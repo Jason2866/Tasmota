@@ -221,7 +221,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
       return;
     }
 
-    if ( (col_mode != 18) && (spi_dc >= 0) && (spi_nr <= 2) ) {
+    if ( (col_mode != 18) && (spiController->spi_config.dc >= 0) && (spiController->spi_config.bus_nr <= 2) ) {
       // special version 8 bit spi I or II
 #ifdef ESP8266
       lvgl_color_swap(data, len);
@@ -238,7 +238,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
     } else {
 
 #ifdef ESP32
-      if ( (col_mode == 18) && (spi_dc >= 0) && (spi_nr <= 2) ) {
+      if ( (col_mode == 18) && (spiController->spi_config.dc >= 0) && (spiController->spi_config.bus_nr <= 2) ) {
         uint8_t *line = (uint8_t*)malloc(len * 3);
         uint8_t *lp = line;
         if (line) {
@@ -294,7 +294,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
       pushColorsMono(data, len);
       return;
     }
-    if ( (col_mode != 18) && (spi_dc >= 0) && (spi_nr <= 2) ) {
+    if ( (col_mode != 18) && (spiController->spi_config.dc >= 0) && (spiController->spi_config.bus_nr <= 2) ) {
       // special version 8 bit spi I or II
   #ifdef ESP8266
       while (len--) {

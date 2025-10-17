@@ -156,36 +156,29 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
           }
           
           if (*lp1 == 'S') {
-            // pecial case RGB with software SPI init clk,mosi,cs,reset
+            // special case RGB with software SPI init clk,mosi,cs,reset
             lp1++;
             if (interface == _UDSP_RGB) { 
-              // collect line and send directly
-              lp1++;
-              spi_nr = 4;
-              spec_init = _UDSP_SPI;
-              spi_dc = -1;
-              spi_miso = -1;
-              spi_clk = next_val(&lp1);
-              spi_mosi = next_val(&lp1);
-              spi_cs = next_val(&lp1);
-              reset = next_val(&lp1);
+                lp1++;
+                SPIControllerConfig spi_cfg = {
+                    .bus_nr = 4,
+                    .cs = (int8_t)next_val(&lp1),
+                    .clk = (int8_t)next_val(&lp1),
+                    .mosi = (int8_t)next_val(&lp1),
+                    .dc = -1,
+                    .miso = -1,
+                    .speed = spi_speed
+                };
+                spec_init = _UDSP_SPI;
+                reset = next_val(&lp1);
 
-              spiController = new SPIController(spi_speed, spi_cs, spi_dc, spi_clk, spi_mosi, spi_miso, spi_nr
+                spiController = new SPIController(spi_cfg
 #ifdef ESP32
                                  , false, false, busy_pin, &spi_host
 #endif // ESP32
                                 );
               // spiSettings = spiController->getSPISettings();
-              busy_pin = spi_miso; // update for timing
-
-              pinMode(spi_cs, OUTPUT);
-              digitalWrite(spi_cs, HIGH);
-
-              pinMode(spi_clk, OUTPUT);
-              digitalWrite(spi_clk, LOW);
-
-              pinMode(spi_mosi, OUTPUT);
-              digitalWrite(spi_mosi, LOW);
+              busy_pin = spi_cfg.miso; // update for timing
 
               if (reset >= 0) {
                 pinMode(reset, OUTPUT);
@@ -194,7 +187,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 reset_pin(50, 200);
               }
 #ifdef UDSP_DEBUG
-              AddLog(LOG_LEVEL_DEBUG, "UDisplay: SSPI_MOSI:%d SSPI_SCLK:%d SSPI_CS:%d DSP_RESET:%d", spi_mosi, spi_clk, spi_cs, reset);
+              AddLog(LOG_LEVEL_DEBUG, "UDisplay: SSPI_MOSI:%d SSPI_SCLK:%d SSPI_CS:%d DSP_RESET:%d", spiController->spi_config.mosi, spiController->spi_config.clk, spiController->spi_config.dc, reset);
 #endif
             }
           } else if (*lp1 == 'I') {
@@ -279,15 +272,24 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               section = 0;
             } else if (!strncmp(ibuff, "SPI", 3)) {
               interface = _UDSP_SPI;
-              spi_nr = next_val(&lp1);
-              spi_cs = next_val(&lp1);
-              spi_clk = next_val(&lp1);
-              spi_mosi = next_val(&lp1);
-              spi_dc = next_val(&lp1);
+              SPIControllerConfig spi_cfg = {
+                  .bus_nr = (uint8_t)next_val(&lp1),
+                  .cs = (int8_t)next_val(&lp1),
+                  .clk = (int8_t)next_val(&lp1),
+                  .mosi = (int8_t)next_val(&lp1),
+                  .dc = (int8_t)next_val(&lp1)
+              };
               bpanel = next_val(&lp1);
               reset = next_val(&lp1);
-              spi_miso = next_val(&lp1);
-              spi_speed = next_val(&lp1);
+              spi_cfg.miso = (int8_t)next_val(&lp1);
+              spi_cfg.speed = next_val(&lp1);
+              spiController = new SPIController(spi_cfg
+#ifdef ESP32 
+                              , lvgl_param.use_dma, lvgl_param.async_dma, 
+                              busy_pin, &spi_host
+#endif
+                            );
+
               section = 0;
             } else if (!strncmp(ibuff, "PAR", 3)) {
 #if defined(UDISPLAY_I80)
@@ -696,9 +698,9 @@ void UfsCheckSDCardInit(void);
 
   if (interface == _UDSP_SPI) {
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Nr:%d CS:%d CLK:%d MOSI:%d DC:%d TS_CS:%d TS_RST:%d TS_IRQ:%d", 
-       spi_nr, spi_cs, spi_clk, spi_mosi, spi_dc, ut_spi_cs, ut_reset, ut_irq);
+       spi_nr, spiController->spi_config.dc, spiController->spi_config.clk, spiController->spi_config.mosi, spiController->spi_config.dc, ut_spi_cs, ut_reset, ut_irq);
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: BPAN:%d RES:%d MISO:%d SPED:%d Pixels:%d SaMode:%d DMA-Mode:%d opts:%02x,%02x,%02x SetAddr:%x,%x,%x", 
-       bpanel, reset, spi_miso, spi_speed*1000000, col_mode, sa_mode, lvgl_param.use_dma, saw_3, dim_op, startline, saw_1, saw_2, saw_3);
+       bpanel, reset, spiController->spi_config.miso, spiController->spi_config.speed*1000000, col_mode, sa_mode, lvgl_param.use_dma, saw_3, dim_op, startline, saw_1, saw_2, saw_3);
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Rot 0: %x,%x - %d - %d", madctrl, rot[0], x_addr_offs[0], y_addr_offs[0]);
 
     if (ep_mode == 1) {
@@ -751,7 +753,7 @@ void UfsCheckSDCardInit(void);
     }
 
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb freq:%d hsync_pol:%d hsync_fp:%d hsync_pw:%d hsync_bp:%d vsync_pol:%d vsync_fp:%d vsync_pw:%d vsync_bp:%d pclk_neg:%d",
-       spi_speed, hsync_polarity, hsync_front_porch, hsync_pulse_width, hsync_back_porch,
+       spiController->spi_config.speed, hsync_polarity, hsync_front_porch, hsync_pulse_width, hsync_back_porch,
        vsync_polarity, vsync_front_porch, vsync_pulse_width, vsync_back_porch, pclk_active_neg);
 
 #endif // SOC_LCD_RGB_SUPPORTED
@@ -890,7 +892,7 @@ uint16_t index = 0;
         delay_arg(args);
       }
     } else {
-      if (spi_dc == -2) {
+      if (spiController->spi_config.dc == -2) {
         // pseudo opcodes
         switch (iob) {
           case UDSP_WRITE_16:
@@ -997,16 +999,7 @@ Renderer *uDisplay::Init(void) {
         digitalWrite(bpanel, HIGH);
 #endif // ESP32
     }
-
-    spiController = new SPIController(spi_speed, spi_cs, spi_dc, spi_clk, spi_mosi, 
-                                 spi_miso, spi_nr
-#ifdef ESP32 
-                                 , lvgl_param.use_dma, lvgl_param.async_dma, 
-                                 busy_pin, &spi_host
-#endif
-                                );
-    // spiSettings = spiController->getSPISettings();
-    busy_pin = spi_miso; // update for timing
+    busy_pin = spiController->spi_config.miso; // update for timing
 
     // spiController->beginTransaction();
 

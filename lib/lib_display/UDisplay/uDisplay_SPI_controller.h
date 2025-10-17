@@ -16,6 +16,15 @@
 #include "spi_register.h"
 #endif
 
+struct SPIControllerConfig {
+    uint8_t bus_nr;
+    int8_t cs;
+    int8_t clk;
+    int8_t mosi;
+    int8_t dc;
+    int8_t miso;
+    uint32_t speed;
+};
 
 /**
  * Minimal SPIController - wraps low-level SPI functions
@@ -23,8 +32,7 @@
  */
 class SPIController {
 public:
-    SPIController(uint32_t spi_speed, int8_t cs, int8_t dc, int8_t clk, int8_t mosi, 
-                           int8_t miso, uint8_t spi_nr
+    SPIController(const SPIControllerConfig& config
 #ifdef ESP32
                            , bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
                            void* spi_host_ptr
@@ -65,6 +73,7 @@ public:
     void pushPixelsDMA(uint16_t* image, uint32_t len);
     void pushPixels3DMA(uint8_t* image, uint32_t len);
 #endif
+    SPIControllerConfig spi_config; // make this private in the future again!
 
 private:
     SPIClass* spi;
@@ -78,14 +87,6 @@ private:
     void write16(uint16_t val);
     void write32(uint32_t val);
     void hw_write9(uint8_t val, uint8_t dc);
-
-    int speed;
-    int8_t pin_cs;
-    int8_t pin_dc;
-    int8_t pin_clk;
-    int8_t pin_mosi;
-    int8_t pin_miso;
-    uint8_t spi_bus_nr;
 
 #ifdef ESP32
     bool dma_enabled;

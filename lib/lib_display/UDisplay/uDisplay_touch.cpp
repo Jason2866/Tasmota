@@ -32,7 +32,7 @@ bool uDisplay::utouch_Init(char **name) {
       attachInterrupt(ut_irq, ut_touch_irq, FALLING);
     }
 
-    if (ut_spi_nr == spi_nr) {
+    if (ut_spi_nr == spiController->spi_config.bus_nr) {
       // same as display
       ut_spi = spiController->getSPI();
     } else {

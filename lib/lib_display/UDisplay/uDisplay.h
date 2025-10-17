@@ -154,7 +154,7 @@ private:
     uint8_t splash_size;
     uint8_t dimmer8;
     uint8_t spi_speed;
-    uint8_t spi_nr;
+    // uint8_t spi_nr;
     uint8_t rot[4];
     uint8_t rot_t[4];
     uint8_t madctrl;
@@ -190,12 +190,12 @@ private:
     int8_t reset;
     int8_t splash_font;
     int8_t bpmode;
-    int8_t spi_cs;
-    int8_t spi_clk;
-    int8_t spi_mosi;
-    int8_t spi_dc;
+    // int8_t spi_cs;
+    // int8_t spi_clk;
+    // int8_t spi_mosi;
+    // int8_t spi_dc;
     int8_t bpanel;
-    int8_t spi_miso;
+    // int8_t spi_miso;
     int8_t busy_pin;
 
     int16_t lutftime;
