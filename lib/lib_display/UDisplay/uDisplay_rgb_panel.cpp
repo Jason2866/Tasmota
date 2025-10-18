@@ -28,23 +28,24 @@ RGBPanel::~RGBPanel() {
     // TODO: Cleanup panel_handle if needed
 }
 
-void RGBPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
+bool RGBPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
     int16_t w = width, h = height;
     
-    // Apply rotation (copied from uDisplay)
+    // Apply rotation
     switch (rotation) {
     case 1: std::swap(w, h); std::swap(x, y); x = w - x - 1; break;
     case 2: x = w - x - 1; y = h - y - 1; break;
     case 3: std::swap(w, h); std::swap(x, y); y = h - y - 1; break;
     }
     
-    if ((x < 0) || (x >= w) || (y < 0) || (y >= h)) return;
+    if ((x < 0) || (x >= w) || (y < 0) || (y >= h)) return true; // Handled (out of bounds)
     
     framebuffer[y * w + x] = color;
     Cache_WriteBack_Addr((uint32_t)&framebuffer[y * w + x], 2);
+    return true; // Handled by RGB panel
 }
 
-void RGBPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
+bool RGBPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
     for (int16_t yp = y; yp < y + h; yp++) {
         uint16_t* line_start = &framebuffer[yp * width + x];
         for (int16_t i = 0; i < w; i++) {
@@ -52,48 +53,60 @@ void RGBPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
         }
         Cache_WriteBack_Addr((uint32_t)line_start, w * 2);
     }
+    return true; // Handled by RGB panel
 }
 
-void RGBPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+bool RGBPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
     window_x1 = x0;
     window_y1 = y0; 
     window_x2 = x1;
     window_y2 = y1;
+    return true; // Handled by RGB panel
 }
 
-void RGBPanel::pushColors(uint16_t *data, uint16_t len, bool first) {
+bool RGBPanel::pushColors(uint16_t *data, uint16_t len, bool first) {
     esp_lcd_panel_draw_bitmap(panel_handle, window_x1, window_y1, window_x2, window_y2, data);
+    return true; // Handled by RGB panel
 }
 
-void RGBPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
-    // No rotation handling - coordinates are already rotated by setRotation()
+bool RGBPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
     uint16_t* line_start = &framebuffer[y * width + x];
     for (int16_t i = 0; i < w; i++) {
         line_start[i] = color;
     }
     Cache_WriteBack_Addr((uint32_t)line_start, w * 2);
+    return true; // Handled by RGB panel
 }
 
-void RGBPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
-    // No rotation handling - coordinates are already rotated by setRotation()
+bool RGBPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
     for (int16_t j = 0; j < h; j++) {
         framebuffer[(y + j) * width + x] = color;
     }
     Cache_WriteBack_Addr((uint32_t)&framebuffer[y * width + x], h * 2);
+    return true; // Handled by RGB panel
 }
 
-void RGBPanel::displayOnff(int8_t on) {
+bool RGBPanel::displayOnff(int8_t on) {
     esp_lcd_panel_disp_on_off(panel_handle, on != 0);
+    return true; // Handled by RGB panel
 }
 
-void RGBPanel::invertDisplay(bool invert) {
+bool RGBPanel::invertDisplay(bool invert) {
     // TODO: Not supported by RGB panels in ESP-IDF API
+    return false; // Not handled - let uDisplay handle if possible
 }
 
-void RGBPanel::setRotation(uint8_t rotation) {
-    this->rotation = rotation & 3;  // Store for drawPixel
+bool RGBPanel::setRotation(uint8_t rotation) {
+    this->rotation = rotation & 3;
     esp_lcd_panel_mirror(panel_handle, rotation == 1 || rotation == 2, rotation & 2);
     esp_lcd_panel_swap_xy(panel_handle, rotation & 1);
+    return true; // Handled by RGB panel
 }
+
+bool RGBPanel::updateFrame() {
+    // RGB doesn't need explicit frame updates - handled by hardware
+    return true; // Handled (no-op is still handled)
+}
+
 
 #endif // #if SOC_LCD_RGB_SUPPORTED

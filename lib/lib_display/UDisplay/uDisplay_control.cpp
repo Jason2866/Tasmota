@@ -20,6 +20,11 @@ void uDisplay::DisplayOnff(int8_t on) {
     if (pwr_cbp) {
         pwr_cbp(on);
     }
+#ifdef USE_UNIVERSAL_PANEL
+    if (universal_panel && universal_panel->displayOnff(on)) {
+        return;
+    }
+#endif
 
 #define AW_PWMRES 1024
 
@@ -108,7 +113,11 @@ void uDisplay::invertDisplay(boolean i) {
     if (ep_mode) {
         return;
     }
-
+#ifdef USE_UNIVERSAL_PANEL
+    if (universal_panel && universal_panel->invertDisplay(i)) {
+        return;
+    }
+#endif
     if (interface == _UDSP_SPI || interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
         if (i) {
             ulcd_command_one(inv_on);
