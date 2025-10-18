@@ -973,21 +973,11 @@ Renderer *uDisplay::Init(void) {
       wire = &Wire1;
     }
 #endif // ESP32
-/*
-    if (i2c_sda != i2c_scl) {
-      wire->begin(i2c_sda, i2c_scl);    // TODO: aren't I2C buses already initialized? Shouldn't this be moved to display driver?
-    }
-*/
-#ifdef UDSP_DEBUG
-    AddLog(LOG_LEVEL_DEBUG, "UDisplay: I2C cmds:%d", dsp_ncmds);
-#endif
-    for (uint32_t cnt = 0; cnt < dsp_ncmds; cnt++) {
-      i2c_command(dsp_cmds[cnt]);
-#ifdef UDSP_DEBUG
-      AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd=%x", dsp_cmds[cnt]);
-#endif
-    }
 
+    if (wire) {
+      universal_panel = new i2c_panel(i2caddr, *wire, gxs, gys, saw_1, saw_2, saw_3, i2c_page_start, i2c_page_end,
+                                       i2c_col_start, i2c_col_end, dsp_on, dsp_off, inv_on, inv_off, dsp_cmds, dsp_ncmds, frame_buffer);
+    }
   }
 
   if (interface == _UDSP_SPI) {
@@ -1255,124 +1245,4 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
   }
 }
 
-void uDisplay::i2c_command(uint8_t val) {
-  //AddLog(LOG_LEVEL_DEBUG, "%02x\n",val );
-  wire->beginTransmission(i2caddr);
-  wire->write(0);
-  wire->write(val);
-  wire->endTransmission();
-}
-
-
 #define WIRE_MAX 32
-
-void uDisplay::Updateframe(void) {
-
-  if (interface == _UDSP_RGB) {
-    return;
-  }
-
-  if (ep_mode) {
-    Updateframe_EPD();
-    return;
-  }
-
-  if (interface == _UDSP_I2C) {
-
-  #if 0
-    i2c_command(saw_1);
-    i2c_command(i2c_page_start);
-    i2c_command(i2c_page_end);
-    i2c_command(saw_2);
-    i2c_command(i2c_col_start);
-    i2c_command(i2c_col_end);
-
-    uint16_t count = gxs * ((gys + 7) / 8);
-    uint8_t *ptr   = framebuffer;
-    wire->beginTransmission(i2caddr);
-    i2c_command(saw_3);
-    uint8_t bytesOut = 1;
-    while (count--) {
-      if (bytesOut >= WIRE_MAX) {
-        wire->endTransmission();
-        wire->beginTransmission(i2caddr);
-        i2c_command(saw_3);
-        bytesOut = 1;
-      }
-      i2c_command(*ptr++);
-      bytesOut++;
-    }
-    wire->endTransmission();
-#else
-
-    i2c_command(saw_1 | 0x0);  // set low col = 0, 0x00
-    i2c_command(i2c_page_start | 0x0);  // set hi col = 0, 0x10
-    i2c_command(i2c_page_end | 0x0); // set startline line #0, 0x40
-
-	  uint8_t ys = gys >> 3;
-	  uint8_t xs = gxs >> 3;
-    //uint8_t xs = 132 >> 3;
-	  uint8_t m_row = saw_2;
-	  uint8_t m_col = i2c_col_start;
-
-	  uint16_t p = 0;
-
-	  uint8_t i, j, k = 0;
-
-	  for ( i = 0; i < ys; i++) {
-		    // send a bunch of data in one xmission
-        i2c_command(0xB0 + i + m_row); //set page address
-        i2c_command(m_col & 0xf); //set lower column address
-        i2c_command(0x10 | (m_col >> 4)); //set higher column address
-
-        for ( j = 0; j < 8; j++) {
-			      wire->beginTransmission(i2caddr);
-            wire->write(0x40);
-            for ( k = 0; k < xs; k++, p++) {
-		            wire->write(framebuffer[p]);
-            }
-            wire->endTransmission();
-	      }
-    }
-#endif
-
- }
-
-
-  if (interface == _UDSP_SPI) {
-    if (framebuffer == nullptr) { return; }
-
-    spiController->beginTransaction();
-    spiController->csLow();
-    // below commands are not needed for SH1107
-    // ulcd_command(saw_1 | 0x0);  // set low col = 0, 0x00
-    // ulcd_command(i2c_page_start | 0x0);  // set hi col = 0, 0x10
-    // ulcd_command(i2c_page_end | 0x0); // set startline line #0, 0x40
-
-	  uint8_t ys = gys >> 3;
-	  uint8_t xs = gxs >> 3;
-    //uint8_t xs = 132 >> 3;
-	  uint8_t m_row = saw_2;
-	  uint8_t m_col = i2c_col_start;
-    // AddLog(LOG_LEVEL_DEBUG, "m_row=%d m_col=%d xs=%d ys=%d\n", m_row, m_col, xs, ys);
-
-	  uint16_t p = 0;
-
-	  uint8_t i, j, k = 0;
-	  for ( i = 0; i < ys; i++) {   // i = line from 0 to ys
-		    // send a bunch of data in one xmission
-        ulcd_command(0xB0 + i + m_row); //set page address
-        ulcd_command(m_col & 0xf); //set lower column address
-        ulcd_command(0x10 | (m_col >> 4)); //set higher column address
-
-        for ( j = 0; j < 8; j++) {
-            for ( k = 0; k < xs; k++, p++) {
-		            ulcd_data8(framebuffer[p]);
-            }
-	      }
-    }
-    spiController->csLow();
-    spiController->beginTransaction();
-  }
-
-}

@@ -20,55 +20,45 @@ void uDisplay::DisplayOnff(int8_t on) {
     if (pwr_cbp) {
         pwr_cbp(on);
     }
-#ifdef USE_UNIVERSAL_PANEL
     if (universal_panel && universal_panel->displayOnff(on)) {
         return;
     }
-#endif
 
 #define AW_PWMRES 1024
 
-    if (interface == _UDSP_I2C) {
-        if (on) {
-            i2c_command(dsp_on);
-        } else {
-            i2c_command(dsp_off);
+    if (on) {
+        if (dsp_on != 0xff) ulcd_command_one(dsp_on);
+        if (bpanel >= 0) {
+#ifdef ESP32
+            if (!bpmode) {
+                analogWrite(bpanel, dimmer10_gamma);
+            } else {
+                analogWrite(bpanel, AW_PWMRES - dimmer10_gamma);
+            }
+#else
+            if (!bpmode) {
+                digitalWrite(bpanel, HIGH);
+            } else {
+                digitalWrite(bpanel, LOW);
+            }
+#endif
         }
     } else {
-        if (on) {
-            if (dsp_on != 0xff) ulcd_command_one(dsp_on);
-            if (bpanel >= 0) {
+        if (dsp_off != 0xff) ulcd_command_one(dsp_off);
+        if (bpanel >= 0) {
 #ifdef ESP32
-                if (!bpmode) {
-                    analogWrite(bpanel, dimmer10_gamma);
-                } else {
-                    analogWrite(bpanel, AW_PWMRES - dimmer10_gamma);
-                }
-#else
-                if (!bpmode) {
-                    digitalWrite(bpanel, HIGH);
-                } else {
-                    digitalWrite(bpanel, LOW);
-                }
-#endif
+            if (!bpmode) {
+                analogWrite(bpanel, 0);
+            } else {
+                analogWrite(bpanel, AW_PWMRES - 1);
             }
-        } else {
-            if (dsp_off != 0xff) ulcd_command_one(dsp_off);
-            if (bpanel >= 0) {
-#ifdef ESP32
-                if (!bpmode) {
-                    analogWrite(bpanel, 0);
-                } else {
-                    analogWrite(bpanel, AW_PWMRES - 1);
-                }
 #else
-                if (!bpmode) {
-                    digitalWrite(bpanel, LOW);
-                } else {
-                    digitalWrite(bpanel, HIGH);
-                }
-#endif
+            if (!bpmode) {
+                digitalWrite(bpanel, LOW);
+            } else {
+                digitalWrite(bpanel, HIGH);
             }
+#endif
         }
     }
 }
@@ -113,24 +103,16 @@ void uDisplay::invertDisplay(boolean i) {
     if (ep_mode) {
         return;
     }
-#ifdef USE_UNIVERSAL_PANEL
+
     if (universal_panel && universal_panel->invertDisplay(i)) {
         return;
     }
-#endif
+
     if (interface == _UDSP_SPI || interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
         if (i) {
             ulcd_command_one(inv_on);
         } else {
             ulcd_command_one(inv_off);
-        }
-    }
-    
-    if (interface == _UDSP_I2C) {
-        if (i) {
-            i2c_command(inv_on);
-        } else {
-            i2c_command(inv_off);
         }
     }
 }

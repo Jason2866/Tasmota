@@ -16,8 +16,8 @@
   #define UDISPLAY_I80
 #endif
 
+#define USE_UNIVERSAL_PANEL
 #if defined(SOC_LCD_RGB_SUPPORTED)
-  #define USE_UNIVERSAL_PANEL
   #include "uDisplay_rgb_panel.h"
 #endif
 
@@ -30,6 +30,7 @@
 #endif
 
 #include "uDisplay_SPI_controller.h"
+#include "uDisplay_i2c_panel.h"
 
 enum {
   UT_RD,UT_RDM,UT_CP,UT_RTF,UT_MV,UT_MVB,UT_RT,UT_RTT,UT_RDW,UT_RDWM,UT_WR,UT_WRW,UT_CPR,UT_AND,UT_SCALE,UT_LIM,UT_DBG,UT_GSRT,UT_XPT,UT_CPM,UT_END
@@ -118,9 +119,9 @@ private:
     char dname[16];
 
     SPIController *spiController;
-    // SPIClass *uspi;
     TwoWire *wire;
-    // SPISettings spiSettings;
+    UniversalPanel* universal_panel = nullptr;
+
 
     uint16_t x_addr_offs[4];
     uint16_t y_addr_offs[4];
@@ -294,15 +295,10 @@ private:
    uint32_t get_sr_touch(uint32_t xp, uint32_t xm, uint32_t yp, uint32_t ym);
 #endif // UDISPLAY_I80
 
-#ifdef USE_UNIVERSAL_PANEL
+
 #if SOC_LCD_RGB_SUPPORTED
    esp_lcd_rgb_panel_config_t *_panel_config;
-  //  esp_lcd_panel_handle_t _panel_handle = NULL;
-  UniversalPanel* universal_panel = nullptr;  // ← ABSTRACT INTERFACE!
-
-  //  void draxwPixel_RGB(int16_t x, int16_t y, uint16_t color);
 #endif // SOC_LCD_RGB_SUPPORTED
-#endif //USE_UNIVERSAL_PANEL
 
 // ===== Common ESP32-S3 Features =====
 #if defined(UDISPLAY_I80) || SOC_LCD_RGB_SUPPORTED

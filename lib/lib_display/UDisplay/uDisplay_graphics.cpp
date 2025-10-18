@@ -412,11 +412,9 @@ void uDisplay::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 
 void uDisplay::setRotation(uint8_t rotation) {
     cur_rot = rotation;
-#ifdef USE_UNIVERSAL_PANEL
     if (universal_panel && universal_panel->setRotation(rotation)) {
         return;
     }
-#endif
 
     if (framebuffer) {
         Renderer::setRotation(cur_rot);
@@ -466,4 +464,52 @@ void uDisplay::setRotation(uint8_t rotation) {
             _height = gxs;
             break;
     }
+}
+
+void uDisplay::Updateframe(void) {
+
+  if (universal_panel && universal_panel->updateFrame()) {
+      return;
+  }
+
+  if (ep_mode) {
+    Updateframe_EPD();
+    return;
+  }
+
+  if (interface == _UDSP_SPI) {
+    if (framebuffer == nullptr) { return; }
+
+    spiController->beginTransaction();
+    spiController->csLow();
+    // below commands are not needed for SH1107
+    // ulcd_command(saw_1 | 0x0);  // set low col = 0, 0x00
+    // ulcd_command(i2c_page_start | 0x0);  // set hi col = 0, 0x10
+    // ulcd_command(i2c_page_end | 0x0); // set startline line #0, 0x40
+
+	  uint8_t ys = gys >> 3;
+	  uint8_t xs = gxs >> 3;
+    //uint8_t xs = 132 >> 3;
+	  uint8_t m_row = saw_2;
+	  uint8_t m_col = i2c_col_start; // reuse global var i2c_col_start for spi
+    // AddLog(LOG_LEVEL_DEBUG, "m_row=%d m_col=%d xs=%d ys=%d\n", m_row, m_col, xs, ys);
+
+	  uint16_t p = 0;
+
+	  uint8_t i, j, k = 0;
+	  for ( i = 0; i < ys; i++) {   // i = line from 0 to ys
+		    // send a bunch of data in one xmission
+        ulcd_command(0xB0 + i + m_row); //set page address
+        ulcd_command(m_col & 0xf); //set lower column address
+        ulcd_command(0x10 | (m_col >> 4)); //set higher column address
+
+        for ( j = 0; j < 8; j++) {
+            for ( k = 0; k < xs; k++, p++) {
+		            ulcd_data8(framebuffer[p]);
+            }
+	      }
+    }
+    spiController->csLow();
+    spiController->beginTransaction();
+  }
 }

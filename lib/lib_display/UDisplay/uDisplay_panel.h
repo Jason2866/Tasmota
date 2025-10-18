@@ -26,6 +26,6 @@ public:
     // Frame update method for displays that need explicit updates
     virtual bool updateFrame() = 0;
     
-    // Framebuffer - panels can use this if they manage their own
+    // Framebuffer - own or external
     uint16_t* framebuffer = nullptr;
 };
