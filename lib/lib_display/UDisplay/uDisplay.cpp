@@ -162,13 +162,14 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 lp1++;
                 SPIControllerConfig spi_cfg = {
                     .bus_nr = 4,
-                    .cs = (int8_t)next_val(&lp1),
+                    .cs = -1,
                     .clk = (int8_t)next_val(&lp1),
                     .mosi = (int8_t)next_val(&lp1),
                     .dc = -1,
                     .miso = -1,
                     .speed = spi_speed
                 };
+                spi_cfg.cs = (int8_t)next_val(&lp1);
                 spec_init = _UDSP_SPI;
                 reset = next_val(&lp1);
 
