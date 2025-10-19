@@ -108,7 +108,7 @@ void uDisplay::invertDisplay(boolean i) {
         return;
     }
 
-    if (interface == _UDSP_SPI || interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+    if (interface == _UDSP_SPI) {
         if (i) {
             ulcd_command_one(inv_on);
         } else {

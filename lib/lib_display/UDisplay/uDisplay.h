@@ -14,6 +14,7 @@
 #endif
 #if SOC_LCDCAM_I80_NUM_BUSES
   #define UDISPLAY_I80
+  #include "uDisplay_i80_panel.h"
 #endif
 
 #define USE_UNIVERSAL_PANEL
@@ -46,17 +47,6 @@ enum {
 #define SIMPLERS_YP par_rs
 #define SIMPLERS_YM par_dbl[0]
 
-#ifdef USE_ESP32_S3
-#include "esp_private/gdma.h"
-#include <hal/gpio_ll.h>
-#include <hal/lcd_hal.h>
-#include <soc/lcd_cam_reg.h>
-#include <soc/lcd_cam_struct.h>
-#include "esp_pm.h"
-#include <hal/dma_types.h>
-#include <rom/cache.h>
-#include "esp_rom_lldesc.h"
-#endif // USE_ESP32_S3
 
 #ifdef ESP32
 #include "esp8266toEsp32.h" // must rename LCD_CAM_LCD_UPDATE_REG after include #include <soc/lcd_cam_reg.h> !!!!
@@ -260,39 +250,12 @@ private:
    int8_t par_wr;
    int8_t par_rd;
 
-   // I80 Bus hardware handles
-   esp_lcd_i80_bus_handle_t _i80_bus = nullptr;
-   volatile lcd_cam_dev_t* _dev;
-   uint32_t _clock_reg_value;
-
-   // I80 DMA resources  
-   gdma_channel_handle_t _dma_chan;
-   lldesc_t *_dmadesc = nullptr;
-   uint32_t _dmadesc_size = 0;
-
    // I80 Transaction state
    uint32_t* _cache_flip;
    static constexpr size_t CACHE_SIZE = 256;
    uint32_t _cache[2][CACHE_SIZE / sizeof(uint32_t)];
    bool _has_align_data;
    uint8_t _align_data;
-
-   // I80 Methods
-   void calcClockDiv(uint32_t* div_a, uint32_t* div_b, uint32_t* div_n, uint32_t* clkcnt, uint32_t baseClock, uint32_t targetFreq);
-   void _alloc_dmadesc(size_t len);
-   void _setup_dma_desc_links(const uint8_t *data, int32_t len);
-   void pb_beginTransaction(void);
-   void pb_endTransaction(void);
-   void pb_wait(void);
-   bool pb_busy(void);
-   void _pb_init_pin(bool);
-   bool pb_writeCommand(uint32_t data, uint_fast8_t bit_length);
-   void pb_writeData(uint32_t data, uint_fast8_t bit_length);
-   void pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, bool use_dma);
-   void pb_writeBytes(const uint8_t* data, uint32_t length, bool use_dma);
-   void _send_align_data(void);
-   void cs_control(bool level);
-   uint32_t get_sr_touch(uint32_t xp, uint32_t xm, uint32_t yp, uint32_t ym);
 #endif // UDISPLAY_I80
 
 
@@ -315,12 +278,12 @@ private:
    spi_device_handle_t dmaHAL;
    spi_host_device_t spi_host = VSPI_HOST;
    // spi_host_device_t spi_host = VSPI_HOST;
-   bool initDMA(int32_t ctrl_cs);
-   void deInitDMA(void);
-   bool dmaBusy(void);
-   void dmaWait(void);
-   void pushPixelsDMA(uint16_t* image, uint32_t len);
-   void pushPixels3DMA(uint8_t* image, uint32_t len);
+  //  bool initDMA(int32_t ctrl_cs);
+  //  void deInitDMA(void);
+  //  bool dmaBusy(void);
+  //  void dmaWait(void);
+  //  void pushPixelsDMA(uint16_t* image, uint32_t len);
+  //  void pushPixels3DMA(uint8_t* image, uint32_t len);
 #endif // ESP32
 
 #ifdef USE_UNIVERSAL_TOUCH

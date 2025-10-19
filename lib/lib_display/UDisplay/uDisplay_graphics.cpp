@@ -7,11 +7,9 @@ static constexpr uint16_t RGB16_TO_MONO      = 0x8410;
 static constexpr uint16_t RGB16_SWAP_TO_MONO = 0x1084;
 
 void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
-#ifdef USE_UNIVERSAL_PANEL
     if (universal_panel && universal_panel->drawPixel(x, y, color)) {
         return; // Handled by universal panel
     }
-#endif
 
     if (ep_mode) {
         drawPixel_EPD(x, y, color);
@@ -48,11 +46,9 @@ void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
     if((x >= _width) || (y >= _height)) return;
     if((x + w - 1) >= _width)  w = _width - x;
 
-#ifdef USE_UNIVERSAL_PANEL
     if (universal_panel && universal_panel->drawFastHLine(x, y, w, color)) {
         return;
     }
-#endif
 
     spiController->beginTransaction();
     spiController->csLow();
@@ -96,11 +92,9 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
     if ((x >= _width) || (y >= _height)) return;
     if ((y + h - 1) >= _height) h = _height - y;
 
-#ifdef USE_UNIVERSAL_PANEL
     if (universal_panel && universal_panel->drawFastVLine(x, y, h, color)) {
         return;
     }
-#endif
 
     spiController->beginTransaction();
     spiController->csLow();
@@ -130,11 +124,9 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 }
 
 void uDisplay::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-#ifdef USE_UNIVERSAL_PANEL
     if (universal_panel && universal_panel->fillRect(x, y, w, h, color)) {
         return;
     }
-#endif
 
     if (ep_mode) {
         fillRect_EPD(x, y, w, h, color);
@@ -261,17 +253,10 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
         }
 
       } else {
-        // 9 bit and others
-        if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-  #if defined(UDISPLAY_I80)
-          pb_pushPixels(data, len, true, false);
-  #endif // UDISPLAY_I80
-        } else {
           lvgl_color_swap(data, len);
           while (len--) {
             WriteColor(*data++);
           }
-        }
       }
 #endif // ESP32
 
@@ -301,15 +286,9 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {
   #endif
     } else {
       // 9 bit and others
-      if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-#if defined(UDISPLAY_I80)
-        pb_pushPixels(data, len, false, false);
-#endif // UDISPLAY_I80
-      } else {
         while (len--) {
           WriteColor(*data++);
         }
-      }
     }
   }
 }
@@ -343,11 +322,9 @@ void uDisplay::pushColorsMono(uint16_t *data, uint16_t len, bool rgb16_swap) {
 }
 
 void uDisplay::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
-#ifdef USE_UNIVERSAL_PANEL
     if (universal_panel && universal_panel->setAddrWindow(x0, y0, x1, y1)) {
         return;
     }
-#endif
 
     if (!x0 && !y0 && !x1 && !y1) {
         spiController->csHigh();

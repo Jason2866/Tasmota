@@ -66,17 +66,6 @@ uDisplay::~uDisplay(void) {
     free(ut_gety_code);
   }
 #endif // USE_UNIVERSAL_TOUCH
-
-#ifdef USE_ESP32_S3
-  if (_dmadesc) {
-    heap_caps_free(_dmadesc);
-    _dmadesc = nullptr;
-    _dmadesc_size = 0;
-  }
-  if (_i80_bus) {
-    esp_lcd_del_i80_bus(_i80_bus);
-  }
-#endif // USE_ESP32_S3
 }
 
 uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
@@ -1051,140 +1040,32 @@ Renderer *uDisplay::Init(void) {
   }
 
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+  #ifdef UDISPLAY_I80
+      universal_panel = new I80Panel(
+          gxs, gys,                    // width, height
+          par_cs, par_rs, par_wr, par_rd,  // control pins
+          par_dbl, par_dbh,            // data pins
+          (interface == _UDSP_PAR16) ? 16 : 8, // bus width
+          spi_speed,                   // clock speed
+          saw_1, saw_2, saw_3,         // column, row, write commands
+          col_mode,                    // color mode (16 or 18)
+          x_addr_offs, y_addr_offs,    // rotation offsets
+          dsp_cmds, dsp_ncmds          // INIT COMMANDS - ADD THIS
+      );
 
-#if defined(UDISPLAY_I80)
-
-    if (bpanel >= 0) {
-      analogWrite(bpanel, 32);
-    }
-
-    pinMode(par_cs, OUTPUT);
-    digitalWrite(par_cs, HIGH);
-
-    pinMode(par_rs, OUTPUT);
-    digitalWrite(par_rs, HIGH);
-
-    pinMode(par_wr, OUTPUT);
-    digitalWrite(par_wr, HIGH);
-
-    if (par_rd >= 0) {
-      pinMode(par_rd, OUTPUT);
-      digitalWrite(par_rd, HIGH);
-    }
-
-    for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-        pinMode(par_dbl[cnt], OUTPUT);
-    }
-
-    uint8_t bus_width = 8;
-
-    if (interface == _UDSP_PAR16) {
-      for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-          pinMode(par_dbh[cnt], OUTPUT);
+      // Reset handling
+      if (reset >= 0) {
+          pinMode(reset, OUTPUT);
+          digitalWrite(reset, HIGH);
+          delay(50);
+          reset_pin(50, 200);
       }
-      bus_width = 16;
-    }
 
-    if (reset >= 0) {
-      pinMode(reset, OUTPUT);
-      digitalWrite(reset, HIGH);
-      delay(50);
-      reset_pin(50, 200);
-    }
-
-    esp_lcd_i80_bus_config_t bus_config = {
-        .dc_gpio_num = par_rs,
-        .wr_gpio_num = par_wr,
-        .clk_src = LCD_CLK_SRC_DEFAULT,
-        .bus_width = bus_width,
-        .max_transfer_bytes = 32768
-    };
-
-    if (interface == _UDSP_PAR8) {
-      for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-        bus_config.data_gpio_nums[cnt] = par_dbl[cnt];
+      if (bpanel >= 0) {
+          analogWrite(bpanel, 32);
       }
-    } else {
-      for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-        bus_config.data_gpio_nums[cnt] = par_dbl[cnt];
-      }
-      for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-        bus_config.data_gpio_nums[cnt + 8] = par_dbh[cnt];
-      }
-    }
-
-    // to disable SPI TRANSACTION
-    spiController->spi_config.bus_nr = 3; // TODO!! really refactor this!!
-    spiController->spi_config.cs = par_cs;
-
-    _i80_bus = nullptr;
-
-    esp_lcd_new_i80_bus(&bus_config, &_i80_bus);
-
-    uint32_t div_a, div_b, div_n, clkcnt;
-    calcClockDiv(&div_a, &div_b, &div_n, &clkcnt, 240*1000*1000, spi_speed*1000000);
-    lcd_cam_lcd_clock_reg_t lcd_clock;
-    lcd_clock.lcd_clkcnt_n = std::max((uint32_t)1u, clkcnt - 1); // ESP_IDF_VERSION_MAJOR >= 5
-    lcd_clock.lcd_clk_equ_sysclk = (clkcnt == 1);
-    lcd_clock.lcd_ck_idle_edge = true;
-    lcd_clock.lcd_ck_out_edge = false;
-    lcd_clock.lcd_clkm_div_num = div_n;
-    lcd_clock.lcd_clkm_div_b = div_b;
-    lcd_clock.lcd_clkm_div_a = div_a;
-    lcd_clock.lcd_clk_sel = 2; // clock_select: 1=XTAL CLOCK / 2=240MHz / 3=160MHz
-    lcd_clock.clk_en = true;
-    _clock_reg_value = lcd_clock.val;
-
-    _alloc_dmadesc(1);
-
-    _dev = &LCD_CAM;
-
-    pb_beginTransaction();
-    uint16_t index = 0;
-    while (1) {
-      uint8_t iob;
-      cs_control(0);
-
-      iob = dsp_cmds[index++];
-      pb_writeCommand(iob, 8);
-
-      uint8_t args = dsp_cmds[index++];
-    #ifdef UDSP_DEBUG
-      AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd, args %02x, %d", iob, args & 0x1f);
-    #endif
-      for (uint32_t cnt = 0; cnt < (args & 0x1f); cnt++) {
-        iob = dsp_cmds[index++];
-    #ifdef UDSP_DEBUG
-        AddLog(LOG_LEVEL_DEBUG, "UDisplay: %02x", iob);
-    #endif
-        pb_writeData(iob, 8);
-      }
-      cs_control(1);
-      if (args & 0x80) {  // delay after the command
-        uint32_t delay_ms = 0;
-        switch (args & 0xE0) {
-          case 0x80:  delay_ms = 150; break;
-          case 0xA0:  delay_ms =  10; break;
-          case 0xE0:  delay_ms = 500; break;
-        }
-        if (delay_ms > 0) {
-          delay(delay_ms);
-    #ifdef UDSP_DEBUG
-          AddLog(LOG_LEVEL_DEBUG, "UDisplay: delay %d ms", delay_ms);
-    #endif
-        }
-
-      }
-      if (index >= dsp_ncmds) break;
-    }
-
-    pb_endTransaction();
-
-
-#endif // UDISPLAY_I80
-
+  #endif
   }
-
   // must init luts on epaper
   if (ep_mode) {
     if (ep_mode == 2) Init_EPD(DISPLAY_INIT_FULL);
