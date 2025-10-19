@@ -398,7 +398,7 @@ void uDisplay::setRotation(uint8_t rotation) {
         return;
     }
 
-    if (interface == _UDSP_SPI || interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+    if (interface == _UDSP_SPI) {
 
         if (ep_mode) {
             Renderer::setRotation(cur_rot);
