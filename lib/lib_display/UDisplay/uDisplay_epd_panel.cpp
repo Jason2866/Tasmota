@@ -1,4 +1,3 @@
-// WIP
 // ======================================================
 // uDisplay_epd_panel.cpp - E-Paper Display Panel Implementation
 // ======================================================
@@ -62,6 +61,21 @@ EPDPanel::~EPDPanel() {
     // Panel doesn't own framebuffer or SPI controller
 }
 
+void EPDPanel::delay_sync(int32_t ms) {
+    uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
+    uint32_t time = millis();
+    if (cfg.busy_pin >= 0) {
+        while (digitalRead(cfg.busy_pin) == busy_level) {
+            delay(1);
+            if ((millis() - time) > cfg.busy_timeout) {
+                break;
+            }
+        }
+    } else {
+        delay(ms);
+    }
+}
+
 void EPDPanel::resetDisplay() {
     if (cfg.reset_pin < 0) return;
     
@@ -72,22 +86,12 @@ void EPDPanel::resetDisplay() {
     delay(10);
     digitalWrite(cfg.reset_pin, HIGH);
     delay(10);
-    waitBusy();
+    delay_sync(100); // Use delay_sync instead of waitBusy
 }
 
 void EPDPanel::waitBusy() {
-    if (cfg.busy_pin < 0) {
-        delay(cfg.update_time);
-        return;
-    }
-    
-    pinMode(cfg.busy_pin, INPUT);
-    uint32_t timeout = millis() + 10000; // 10 second timeout
-    
-    while (digitalRead(cfg.busy_pin) == HIGH) {
-        if (millis() > timeout) break;
-        delay(1);
-    }
+    // Deprecated - use delay_sync instead
+    delay_sync(cfg.update_time);
 }
 
 void EPDPanel::setLut(const uint8_t* lut, uint16_t len) {
@@ -169,7 +173,7 @@ void EPDPanel::displayFrame() {
     spi->csHigh();
     spi->endTransaction();
     
-    waitBusy();
+    delay_sync(cfg.update_time); // Use delay_sync with proper timing
 }
 
 void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
@@ -288,11 +292,11 @@ bool EPDPanel::updateFrame() {
     // Update display
     displayFrame();
     
-    // Wait appropriate time based on update mode
+    // Wait appropriate time based on update mode using delay_sync
     if (update_mode == 0) {
-        delay(cfg.lut_full_time);
+        delay_sync(cfg.lut_full_time);
     } else {
-        delay(cfg.lut_partial_time);
+        delay_sync(cfg.lut_partial_time);
     }
     
     return true;

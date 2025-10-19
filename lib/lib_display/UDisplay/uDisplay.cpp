@@ -969,7 +969,7 @@ Renderer *uDisplay::Init(void) {
     }
   }
 
-  if (interface == _UDSP_SPI) {
+if (interface == _UDSP_SPI) {
 
     if (bpanel >= 0) {
 #ifdef ESP32
@@ -989,9 +989,67 @@ Renderer *uDisplay::Init(void) {
       delay(50);
       reset_pin(50, 200);
     }
-    send_spi_cmds(0, dsp_ncmds);
+    
+    if (ep_mode) {
+        EPDPanelConfig epd_config = {
+            .width = gxs,
+            .height = gys,
+            .bpp = bpp,
+            .ep_mode = ep_mode,
+            .lut_full_time = lutftime,
+            .lut_partial_time = lutptime,
+            .update_time = lut3time,
+            .reset_pin = reset,
+            .busy_pin = busy_pin,
+            .invert_colors = false,  // Will be set from descriptor
+            .invert_framebuffer = true, // Most EPDs need this
+            .busy_invert = (bool)lvgl_param.busy_invert
+        };
+        send_spi_cmds(0, dsp_ncmds);
+        universal_panel = new EPDPanel(epd_config, spiController, frame_buffer,
+                                      lut_full, lutfsize, 
+                                      lut_partial, lutpsize);
+    } else {   
+        AddLog(2,"SPI Panel!");
+        SPIPanelConfig spi_config = {
+            .width = gxs,
+            .height = gys,
+            .bpp = bpp,
+            .col_mode = col_mode,
+            .cmd_set_addr_x = saw_1,
+            .cmd_set_addr_y = saw_2,
+            .cmd_write_ram = saw_3,
+            .cmd_display_on = dsp_on,
+            .cmd_display_off = dsp_off,
+            .cmd_invert_on = inv_on,
+            .cmd_invert_off = inv_off,
+            .cmd_memory_access = madctrl,
+            .cmd_startline = startline,
+            .reset_pin = reset,
+            .busy_pin = busy_pin,
+            .bpanel = bpanel
+        };
+        
+        // Copy rotation configuration
+        for (int i = 0; i < 4; i++) {
+            spi_config.rot_cmd[i] = rot[i];
+            spi_config.x_addr_offset[i] = x_addr_offs[i];
+            spi_config.y_addr_offset[i] = y_addr_offs[i];
+        }
+        
+        spi_config.all_commands_mode = allcmd_mode;
+        spi_config.address_mode = sa_mode;
+        send_spi_cmds(0, dsp_ncmds);  // Send init commands for regular SPI
+        universal_panel = new SPIPanel(spi_config, spiController, frame_buffer);
+        universal_panel->fillRect(0, 0, 100, 100, 0xFF00);  // Yellow
+        delay(2000);  // Hold for 2 seconds before anything else runs
+    }
+
     // spiController->endTransaction();
-  }
+
+    // EPD LUT initialization is now handled inside EPDPanel constructor
+    // so we don't need to call Init_EPD here anymore
+}
 
   if (interface == _UDSP_RGB) {
 #if SOC_LCD_RGB_SUPPORTED
@@ -1065,11 +1123,6 @@ Renderer *uDisplay::Init(void) {
           analogWrite(bpanel, 32);
       }
   #endif
-  }
-  // must init luts on epaper
-  if (ep_mode) {
-    if (ep_mode == 2) Init_EPD(DISPLAY_INIT_FULL);
-    //if (ep_mode == 1) Init_EPD(DISPLAY_INIT_PARTIAL);
   }
 
 #ifdef UDSP_DEBUG

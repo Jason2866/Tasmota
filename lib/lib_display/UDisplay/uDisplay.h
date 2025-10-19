@@ -32,6 +32,8 @@
 
 #include "uDisplay_SPI_controller.h"
 #include "uDisplay_i2c_panel.h"
+#include "uDisplay_epd_panel.h"
+#include "uDisplay_spi_panel.h"
 
 enum {
   UT_RD,UT_RDM,UT_CP,UT_RTF,UT_MV,UT_MVB,UT_RT,UT_RTT,UT_RDW,UT_RDWM,UT_WR,UT_WRW,UT_CPR,UT_AND,UT_SCALE,UT_LIM,UT_DBG,UT_GSRT,UT_XPT,UT_CPM,UT_END
@@ -210,6 +212,7 @@ private:
     void ulcd_data32(uint32_t val);
     void WriteColor(uint16_t color);
 
+    // EPD - needs to be removed latwer
     void SetLut(const unsigned char* lut);
     void SetLuts(void);
     void DisplayFrame_29(void);
@@ -224,11 +227,13 @@ private:
     void drawFastVLine_EPD(int16_t x, int16_t y, int16_t h, uint16_t color);
     void drawFastHLine_EPD(int16_t x, int16_t y, int16_t w, uint16_t color);
     void Init_EPD(int8_t p);
+    void Send_EP_Data(void);
     void spi_command_EPD(uint8_t val);
     void spi_data8_EPD(uint8_t val);
     void ClearFrameMemory(unsigned char color);
     void ClearFrame_42(void);
     void DisplayFrame_42(void);
+
     uint8_t strlen_ln(char *str);
     int32_t next_val(char **sp);
     uint32_t next_hex(char **sp);
@@ -237,7 +242,7 @@ private:
     void delay_sync(int32_t time);
     void reset_pin(int32_t delayl, int32_t delayh);
     void delay_arg(uint32_t arg);
-    void Send_EP_Data(void);
+
     void send_spi_cmds(uint16_t cmd_offset, uint16_t cmd_size);
     void send_spi_icmds(uint16_t cmd_size);
    

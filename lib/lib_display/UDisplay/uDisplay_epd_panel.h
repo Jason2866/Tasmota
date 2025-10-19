@@ -1,4 +1,3 @@
-// WIP
 // ======================================================
 // uDisplay_epd_panel.h - E-Paper Display Panel Implementation
 // ======================================================
@@ -18,7 +17,7 @@ struct EPDPanelConfig {
     uint8_t ep_mode; // 1=2-LUT, 2=5-LUT, 3=command-based
     
     // Timing
-    uint16_t lut_full_time;
+    int16_t lut_full_time;
     uint16_t lut_partial_time;
     uint16_t update_time;
     
@@ -29,6 +28,10 @@ struct EPDPanelConfig {
     // EPD-specific flags
     bool invert_colors;        // If true, invert color logic
     bool invert_framebuffer;   // If true, invert when sending to display
+    bool busy_invert;          // If true, busy pin is active low
+    
+    // Busy timeout
+    uint16_t busy_timeout = 3000; // UDSP_BUSY_TIMEOUT
 };
 
 class EPDPanel : public UniversalPanel {
@@ -74,8 +77,9 @@ private:
     void setMemoryPointer(int x, int y);
     void clearFrameMemory(uint8_t color);
     void displayFrame();
-    void waitBusy();
+    void delay_sync(int32_t ms);  // Added: Busy-aware delay
     void resetDisplay();
+    void waitBusy();
     
     // Drawing helpers
     void drawAbsolutePixel(int x, int y, uint16_t color);

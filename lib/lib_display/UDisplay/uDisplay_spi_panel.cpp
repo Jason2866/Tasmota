@@ -17,27 +17,6 @@ SPIPanel::SPIPanel(const SPIPanelConfig& config,
     window_y0 = 0;
     window_x1 = cfg.width - 1;
     window_y1 = cfg.height - 1;
-    
-    // Setup backlight if pin available (from original uDisplay::Init)
-    if (cfg.bpanel >= 0) {
-#ifdef ESP32
-        analogWrite(cfg.bpanel, 32);
-#else
-        pinMode(cfg.bpanel, OUTPUT);
-        digitalWrite(cfg.bpanel, HIGH);
-#endif
-    }
-    
-    // Reset display if pin available (from original uDisplay::Init)
-    if (cfg.reset_pin >= 0) {
-        pinMode(cfg.reset_pin, OUTPUT);
-        digitalWrite(cfg.reset_pin, HIGH);
-        delay(50);
-        digitalWrite(cfg.reset_pin, LOW);
-        delay(50);
-        digitalWrite(cfg.reset_pin, HIGH);
-        delay(200);
-    }
 }
 
 SPIPanel::~SPIPanel() {
@@ -52,6 +31,8 @@ bool SPIPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
 
     // Only handle direct SPI drawing for color displays without framebuffer
     if (!fb_buffer && cfg.bpp >= 16) {
+        spi->beginTransaction();
+        spi->csLow();
         setAddrWindow_internal(x, y, 1, 1);
         spi->writeCommand(cfg.cmd_write_ram);
         
@@ -69,6 +50,8 @@ bool SPIPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
         } else {
             spi->writeData16(color);
         }
+        spi->csHigh();
+        spi->endTransaction();
         return true;
     }
     
@@ -83,6 +66,8 @@ bool SPIPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
 
     // Only handle direct SPI drawing for color displays without framebuffer
     if (!fb_buffer && cfg.bpp >= 16) {
+        spi->beginTransaction();
+        spi->csLow();
         setAddrWindow_internal(x, y, w, h);
         spi->writeCommand(cfg.cmd_write_ram);
         
@@ -108,29 +93,52 @@ bool SPIPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
                 }
             }
         }
+        spi->csHigh();
+        spi->endTransaction();
         return true;
     }
     
     return false; // Let uDisplay handle framebuffer cases (monochrome OLEDs)
 }
 
-bool SPIPanel::pushColors(uint16_t *data, uint16_t len, bool first) {
-    // From original uDisplay::pushColors - handle both DMA and non-DMA paths
-    if (cfg.bpp >= 16) {
-        if (first) {
-            setAddrWindow_internal(window_x0, window_y0, window_x1, window_y1);
-            spi->writeCommand(cfg.cmd_write_ram);
-        }
-        
-        // Use DMA when available (matches original logic)
-        if (cfg.col_mode == 18) {
+bool SPIPanel::pushColors(uint16_t *data, uint16_t len, bool not_swapped) {
+    // Only handle direct rendering for color displays
+    if (cfg.bpp < 16) {
+        return false;
+    }
+    
+    bool use_hw_spi = (spi->spi_config.dc >= 0) && (spi->spi_config.bus_nr <= 2);
+    
+    // Handle byte swapping for LVGL (when not_swapped == false)
+    if (!not_swapped && cfg.col_mode != 18) {
+        // LVGL data - bytes are already swapped
+        if (use_hw_spi) {
 #ifdef ESP32
-            // 18-bit color with DMA support
+            spi->pushPixelsDMA(data, len);
+#else
+            spi->getSPI()->writeBytes((uint8_t*)data, len * 2);
+#endif
+        } else {
+            // Software SPI - write pixel by pixel
+            for (uint16_t i = 0; i < len; i++) {
+                spi->writeData16(data[i]);
+            }
+        }
+        return true;
+    }
+    
+    // Handle 18-bit color mode
+    if (cfg.col_mode == 18) {
+#ifdef ESP32
+        if (use_hw_spi) {
             uint8_t *line = (uint8_t*)malloc(len * 3);
             if (line) {
                 uint8_t *lp = line;
                 for (uint32_t cnt = 0; cnt < len; cnt++) {
                     uint16_t color = data[cnt];
+                    if (!not_swapped) {
+                        color = (color << 8) | (color >> 8);
+                    }
                     uint8_t r = (color & 0xF800) >> 11;
                     uint8_t g = (color & 0x07E0) >> 5;
                     uint8_t b = color & 0x001F;
@@ -141,15 +149,18 @@ bool SPIPanel::pushColors(uint16_t *data, uint16_t len, bool first) {
                     *lp++ = g;
                     *lp++ = b;
                 }
-                
-                // Use DMA if available, otherwise fall back
                 spi->pushPixels3DMA(line, len);
                 free(line);
             }
-#else
-            // Non-DMA fallback for 18-bit
+        } else
+#endif
+        {
+            // Software SPI or ESP8266
             for (uint16_t i = 0; i < len; i++) {
                 uint16_t color = data[i];
+                if (!not_swapped) {
+                    color = (color << 8) | (color >> 8);
+                }
                 uint8_t r = (color & 0xF800) >> 11;
                 uint8_t g = (color & 0x07E0) >> 5;
                 uint8_t b = color & 0x001F;
@@ -160,21 +171,19 @@ bool SPIPanel::pushColors(uint16_t *data, uint16_t len, bool first) {
                 spi->writeData8(g);
                 spi->writeData8(b);
             }
-#endif
-        } else {
-            // 16-bit color
-#ifdef ESP32
-            // Use DMA for 16-bit if available
-            spi->pushPixelsDMA(data, len);
-#else
-            // Non-DMA fallback for 16-bit
-            for (uint16_t i = 0; i < len; i++) {
-                spi->writeData16(data[i]);
-            }
-#endif
         }
         return true;
     }
+    
+    // Handle 16-bit color mode with no byte swapping (not_swapped == true)
+    if (not_swapped) {
+        // Data from displaytext - needs per-pixel writing
+        for (uint16_t i = 0; i < len; i++) {
+            spi->writeData16(data[i]);
+        }
+        return true;
+    }
+    
     return false;
 }
 
@@ -184,6 +193,14 @@ bool SPIPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
     window_y0 = y0;
     window_x1 = x1;
     window_y1 = y1;
+    if (!x0 && !y0 && !x1 && !y1) {
+        spi->csHigh();
+        spi->endTransaction();
+    } else {
+        spi->beginTransaction();
+        spi->csLow();
+        setAddrWindow_internal(x0, y0, x1 - x0, y1 - y0);
+    }
     return true;
 }
 
@@ -254,13 +271,13 @@ bool SPIPanel::displayOnff(int8_t on) {
     // From original uDisplay::DisplayOnff
     display_on = (on != 0);
     
-    if (display_on && cfg.cmd_display_on != 0xFF) {
-        spi->writeCommand(cfg.cmd_display_on);
-        return true;
-    } else if (!display_on && cfg.cmd_display_off != 0xFF) {
-        spi->writeCommand(cfg.cmd_display_off);
-        return true;
-    }
+    // if (display_on && cfg.cmd_display_on != 0xFF) {
+    //     spi->writeCommand(cfg.cmd_display_on);
+    //     return true;
+    // } else if (!display_on && cfg.cmd_display_off != 0xFF) {
+    //     spi->writeCommand(cfg.cmd_display_off);
+    //     return true;
+    // }
     return false;
 }
 
@@ -268,20 +285,22 @@ bool SPIPanel::invertDisplay(bool invert) {
     // From original uDisplay::invertDisplay
     inverted = invert;
     
-    if (invert && cfg.cmd_invert_on != 0xFF) {
-        spi->writeCommand(cfg.cmd_invert_on);
-        return true;
-    } else if (!invert && cfg.cmd_invert_off != 0xFF) {
-        spi->writeCommand(cfg.cmd_invert_off);
-        return true;
-    }
+    // if (invert && cfg.cmd_invert_on != 0xFF) {
+    //     spi->writeCommand(cfg.cmd_invert_on);
+    //     return true;
+    // } else if (!invert && cfg.cmd_invert_off != 0xFF) {
+    //     spi->writeCommand(cfg.cmd_invert_off);
+    //     return true;
+    // }
     return false;
 }
 
 bool SPIPanel::setRotation(uint8_t rot) {
     // From original uDisplay::setRotation
     rotation = rot & 3;
-    
+    spi->beginTransaction();
+    spi->csLow();
+
     if (cfg.cmd_memory_access != 0xFF && cfg.rot_cmd[rotation] != 0xFF) {
         spi->writeCommand(cfg.cmd_memory_access);
         if (!cfg.all_commands_mode) {
@@ -289,8 +308,12 @@ bool SPIPanel::setRotation(uint8_t rot) {
         } else {
             spi->writeCommand(cfg.rot_cmd[rotation]);
         }
+        spi->csHigh();
+        spi->endTransaction();
         return true;
     }
+    spi->csHigh();
+    spi->endTransaction();
     return false;
 }
 
@@ -308,6 +331,8 @@ bool SPIPanel::updateFrame() {
     uint16_t p = 0;
     uint8_t i, j, k = 0;
 
+    spi->beginTransaction();
+    spi->csLow();
     for (i = 0; i < ys; i++) {
         spi->writeCommand(0xB0 + i + m_row); // set page address
         spi->writeCommand(m_col & 0xf); // set lower column address
@@ -319,5 +344,7 @@ bool SPIPanel::updateFrame() {
             }
         }
     }
+    spi->csHigh();
+    spi->endTransaction();
     return true;
 }
