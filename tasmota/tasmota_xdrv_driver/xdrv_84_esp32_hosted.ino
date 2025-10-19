@@ -21,6 +21,7 @@ extern "C" {
 }
 
 #include "port/esp/freertos/include/port_esp_hosted_host_config.h"
+#include "HttpClientLight.h"
 
 struct Hosted_t {
   char *hosted_ota_url;                     // Hosted MCU OTA URL
@@ -114,7 +115,61 @@ void HostedMCUEverySecond(void) {
     if (Hosted.hosted_ota_state_flag <= 0) {
       // Blocking
       AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("HST: About to OTA update with %s"), Hosted.hosted_ota_url);
-      int ret = esp_hosted_slave_ota(Hosted.hosted_ota_url);
+      // New API: stream OTA to hosted coprocessor using begin/write/end
+      int ret = -1;
+      // Helper that downloads URL and streams it to the hosted OTA APIs
+      auto HostedSlaveOtaFromUrl = [](const char *url) -> int {
+        if (!url) return -1;
+        HTTPClientLight http;
+        if (!http.begin(url)) {
+          AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("HST: HTTP begin failed for %s"), url);
+          return -1;
+        }
+        http.setTimeout(15000);
+        int httpCode = http.GET();
+        if (httpCode != 200) {
+          AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("HST: HTTP GET failed %d"), httpCode);
+          http.end();
+          return httpCode;
+        }
+        // Start OTA on coprocessor
+        esp_err_t err = esp_hosted_slave_ota_begin();
+        if (err != ESP_OK) {
+          AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("HST: ota_begin failed %d"), err);
+          http.end();
+          return err;
+        }
+        // Stream response in blocks
+        WiFiClient& stream = http.getStream();
+        const size_t bufSize = 1024;
+        uint8_t *buf = (uint8_t*)malloc(bufSize);
+        if (!buf) {
+          http.end();
+          return -1;
+        }
+        int read = 0;
+        while ((read = stream.readBytes((char*)buf, bufSize)) > 0) {
+          esp_err_t werr = esp_hosted_slave_ota_write(buf, (uint32_t)read);
+          if (werr != ESP_OK) {
+            AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("HST: ota_write failed %d"), werr);
+            free(buf);
+            http.end();
+            return werr;
+          }
+        }
+        free(buf);
+        http.end();
+        err = esp_hosted_slave_ota_end();
+        if (err != ESP_OK) {
+          AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("HST: ota_end failed %d"), err);
+          return err;
+        }
+        // Activate will likely reboot the slave; return result
+        err = esp_hosted_slave_ota_activate();
+        return err;
+      };
+
+      ret = HostedSlaveOtaFromUrl(Hosted.hosted_ota_url);
       AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("HST: Done with result %d"), ret);
       free(Hosted.hosted_ota_url);
       Hosted.hosted_ota_url = nullptr;
