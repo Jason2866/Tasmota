@@ -120,9 +120,11 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 ### Breaking Changed
 
 ### Changed
+- LVGL library from v9.3.0 to v9.4.0 [#24028](https://github.com/arendst/Tasmota/issues/24028)
 - Refactored library UDisplay [#24007](https://github.com/arendst/Tasmota/issues/24007)
 
 ### Fixed
+- InfluxDb receives IPAddress as a value regression from v15.0.1.3 [#24031](https://github.com/arendst/Tasmota/issues/24031)
 - TLS fix ECDSA and add `SetOption165 1` to enable ECDSA in addition to RSA [#24000](https://github.com/arendst/Tasmota/issues/24000)
 - Extension Manager exception when `OtaUrl` is not defined or invalid
 - Extension Manager Light Theme support and Extensions input field control
