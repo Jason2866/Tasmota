@@ -7,7 +7,7 @@
 # error "No ESP capability header found"
 #endif
 
-#if (SOC_LCD_I80_SUPPORTED && SOC_LCDCAM_I80_NUM_BUSES)
+#if (SOC_LCD_I80_SUPPORTED && SOC_LCDCAM_I80_NUM_BUSES && !SOC_PARLIO_GROUPS)
 
 #include "uDisplay_panel.h"
 

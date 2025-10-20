@@ -4,6 +4,12 @@
 
 #pragma once
 
+#if CONFIG_IDF_TARGET_ESP32P4
+    #define CACHE_WRITEBACK_ADDR(addr, size) Cache_WriteBack_Addr(1, addr, size)
+#else
+    #define CACHE_WRITEBACK_ADDR(addr, size) Cache_WriteBack_Addr(addr, size)
+#endif
+
 #include <Arduino.h>
 
 class UniversalPanel {

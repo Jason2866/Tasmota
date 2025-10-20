@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <rom/cache.h>
 
-extern int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
+extern int CACHE_WRITEBACK_ADDR(uint32_t addr, uint32_t size);
 
 RGBPanel::RGBPanel(const esp_lcd_rgb_panel_config_t *config) {
     ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(config, &panel_handle));
@@ -41,7 +41,7 @@ bool RGBPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
     if ((x < 0) || (x >= w) || (y < 0) || (y >= h)) return true; // Handled (out of bounds)
     
     framebuffer[y * w + x] = color;
-    Cache_WriteBack_Addr((uint32_t)&framebuffer[y * w + x], 2);
+    CACHE_WRITEBACK_ADDR((uint32_t)&framebuffer[y * w + x], 2);
     return true; // Handled by RGB panel
 }
 
@@ -51,7 +51,7 @@ bool RGBPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
         for (int16_t i = 0; i < w; i++) {
             line_start[i] = color;
         }
-        Cache_WriteBack_Addr((uint32_t)line_start, w * 2);
+        CACHE_WRITEBACK_ADDR((uint32_t)line_start, w * 2);
     }
     return true; // Handled by RGB panel
 }
@@ -74,7 +74,7 @@ bool RGBPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
     for (int16_t i = 0; i < w; i++) {
         line_start[i] = color;
     }
-    Cache_WriteBack_Addr((uint32_t)line_start, w * 2);
+    CACHE_WRITEBACK_ADDR((uint32_t)line_start, w * 2);
     return true; // Handled by RGB panel
 }
 
@@ -82,7 +82,7 @@ bool RGBPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
     for (int16_t j = 0; j < h; j++) {
         framebuffer[(y + j) * width + x] = color;
     }
-    Cache_WriteBack_Addr((uint32_t)&framebuffer[y * width + x], h * 2);
+    CACHE_WRITEBACK_ADDR((uint32_t)&framebuffer[y * width + x], h * 2);
     return true; // Handled by RGB panel
 }
 

@@ -1,6 +1,6 @@
 #include "uDisplay_i80_panel.h"
 
-#if (SOC_LCD_I80_SUPPORTED && SOC_LCDCAM_I80_NUM_BUSES)
+#if (SOC_LCD_I80_SUPPORTED && SOC_LCDCAM_I80_NUM_BUSES && !SOC_PARLIO_GROUPS )
 
 #define WAIT_LCD_NOT_BUSY while (*reg_lcd_user & LCD_CAM_LCD_START) {}
 

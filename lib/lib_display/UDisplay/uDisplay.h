@@ -12,7 +12,7 @@
 #else
 # error "No ESP capability header found"
 #endif
-#if SOC_LCDCAM_I80_NUM_BUSES
+#if (SOC_LCDCAM_I80_NUM_BUSES && !SOC_PARLIO_GROUPS)
   #define UDISPLAY_I80
   #include "uDisplay_i80_panel.h"
 #endif
@@ -20,6 +20,9 @@
 #define USE_UNIVERSAL_PANEL
 #if defined(SOC_LCD_RGB_SUPPORTED)
   #include "uDisplay_rgb_panel.h"
+#endif
+#if SOC_MIPI_DSI_SUPPORTED
+    #include "uDisplay_DSI_panel.h"
 #endif
 
 #ifdef CONFIG_IDF_TARGET_ESP32S3
@@ -59,6 +62,7 @@ enum {
 #define _UDSP_PAR8 3
 #define _UDSP_PAR16 4
 #define _UDSP_RGB 5
+#define _UDSP_DSI 6
 
 #define UDISP1_WHITE 1
 #define UDISP1_BLACK 0
@@ -267,6 +271,10 @@ private:
 #if SOC_LCD_RGB_SUPPORTED
    esp_lcd_rgb_panel_config_t *_panel_config;
 #endif // SOC_LCD_RGB_SUPPORTED
+
+#if SOC_MIPI_DSI_SUPPORTED
+   DSIPanelConfig * dsi_panel_config;
+#endif
 
 // ===== Common ESP32-S3 Features =====
 #if defined(UDISPLAY_I80) || SOC_LCD_RGB_SUPPORTED
