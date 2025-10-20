@@ -111,7 +111,11 @@ private:
     uint8_t *lut_full;
     uint8_t *lut_partial;
     uint8_t *lut_array[MAX_LUTS];
+#if ESP32
+    uint8_t dsp_cmds[1024]; // for DSI, does not hurt for ESP32
+#else
     uint8_t dsp_cmds[256];
+#endif
     char dname[16];
 
     SPIController *spiController;
@@ -273,7 +277,7 @@ private:
 #endif // SOC_LCD_RGB_SUPPORTED
 
 #if SOC_MIPI_DSI_SUPPORTED
-   DSIPanelConfig * dsi_panel_config;
+   DSIPanelConfig dsi_panel_config;
 #endif
 
 // ===== Common ESP32-S3 Features =====

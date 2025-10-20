@@ -328,9 +328,37 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                   _panel_config->data_gpio_nums[cnt + 8] = (gpio_num_t)par_dbh[cnt];
               }
               spi_speed = next_val(&lp1);
-#endif // SOC_LCD_RGB_SUPPORTED
+#endif //SOC_LCD_RGB_SUPPORTED
+            } else if (!strncmp(ibuff, "DSI", 3)) {
+#ifdef SOC_MIPI_DSI_SUPPORTED
+              interface = _UDSP_DSI;
+              
+              // Parse DSI-specific parameters directly into member variable
+              dsi_panel_config.dsi_lanes = next_val(&lp1);
+              dsi_panel_config.te_pin = next_val(&lp1);
+              dsi_panel_config.backlight_pin = next_val(&lp1);
+              dsi_panel_config.ldo_channel = next_val(&lp1);
+              dsi_panel_config.ldo_voltage_mv = next_val(&lp1);
+              dsi_panel_config.pixel_clock_hz = next_val(&lp1);
+              dsi_panel_config.lane_speed_mbps = next_val(&lp1);
+              dsi_panel_config.rgb_order = next_val(&lp1);
+              dsi_panel_config.data_endian = next_val(&lp1);
+              
+              // Set display dimensions
+              dsi_panel_config.width = gxs;
+              dsi_panel_config.height = gys;
+              dsi_panel_config.bpp = bpp;
+              
               section = 0;
-            }
+#ifdef UDSP_DEBUG
+              AddLog(LOG_LEVEL_DEBUG, "UDisplay: DSI interface - Lanes:%d TE:%d BL:%d LDO:%d@%dmV Clock:%dHz Speed:%dMbps RGB_Order:%d Endian:%d",
+                    dsi_panel_config.dsi_lanes, dsi_panel_config.te_pin, dsi_panel_config.backlight_pin,
+                    dsi_panel_config.ldo_channel, dsi_panel_config.ldo_voltage_mv,
+                    dsi_panel_config.pixel_clock_hz, dsi_panel_config.lane_speed_mbps,
+                    dsi_panel_config.rgb_order, dsi_panel_config.data_endian);
+#endif
+#endif //SOC_MIPI_DSI_SUPPORTED
+}
             break;
           case 'S':
             splash_font = next_val(&lp1);
@@ -426,8 +454,10 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               }
             }
             break;
-#if SOC_LCD_RGB_SUPPORTED
+
           case 'V':
+#if SOC_LCD_RGB_SUPPORTED
+          if (interface == _UDSP_RGB){
             _panel_config->timings.flags.hsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
             _panel_config->timings.hsync_front_porch = next_val(&lp1);
             _panel_config->timings.hsync_pulse_width = next_val(&lp1);
@@ -440,8 +470,25 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             // Set fixed flags (not in descriptor)
             _panel_config->timings.flags.de_idle_high = 0;
             _panel_config->timings.flags.pclk_idle_high = 0;
-            break;
+          }
 #endif // SOC_LCD_RGB_SUPPORTED
+#if SOC_MIPI_DSI_SUPPORTED
+          if (interface == _UDSP_DSI) {
+            dsi_panel_config.timing.h_front_porch = next_val(&lp1);
+            dsi_panel_config.timing.v_front_porch = next_val(&lp1);
+            dsi_panel_config.timing.h_back_porch = next_val(&lp1);
+            dsi_panel_config.timing.h_sync_pulse = next_val(&lp1);
+            dsi_panel_config.timing.v_sync_pulse = next_val(&lp1);
+            dsi_panel_config.timing.v_back_porch = next_val(&lp1);
+#ifdef UDSP_DEBUG
+            AddLog(LOG_LEVEL_DEBUG, "UDisplay: DSI timing - HFP:%d VFP:%d HBP:%d HSW:%d VSW:%d VBP:%d",
+                  dsi_panel_config.timing.h_front_porch, dsi_panel_config.timing.v_front_porch,
+                  dsi_panel_config.timing.h_back_porch, dsi_panel_config.timing.h_sync_pulse,
+                  dsi_panel_config.timing.v_sync_pulse, dsi_panel_config.timing.v_back_porch);
+#endif
+          }
+#endif //SOC_MIPI_DSI_SUPPORTED
+            break;
           case 'o':
             dsp_off = next_hex(&lp1);
             break;
@@ -1051,8 +1098,8 @@ if (interface == _UDSP_SPI) {
     // so we don't need to call Init_EPD here anymore
 }
 
-  if (interface == _UDSP_RGB) {
 #if SOC_LCD_RGB_SUPPORTED
+  if (interface == _UDSP_RGB) {
     if (!UsePSRAM())  {        // RGB is not supported on S3 without PSRAM
       #ifdef UDSP_DEBUG
       AddLog(LOG_LEVEL_INFO, "UDisplay: Dsp RGB requires PSRAM, abort");
@@ -1094,8 +1141,18 @@ if (interface == _UDSP_SPI) {
     universal_panel = new RGBPanel(_panel_config);
     rgb_fb = universal_panel->framebuffer;
 
-#endif // SOC_LCD_RGB_SUPPORTED
   }
+#endif // SOC_LCD_RGB_SUPPORTED
+#if SOC_MIPI_DSI_SUPPORTED
+     if (interface == _UDSP_DSI) {
+        universal_panel = new DSIPanel(dsi_panel_config);
+        rgb_fb = universal_panel->framebuffer;
+
+        if (bpanel >= 0) {
+          analogWrite(bpanel, 32);
+        }
+     }
+#endif
 
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
   #ifdef UDISPLAY_I80

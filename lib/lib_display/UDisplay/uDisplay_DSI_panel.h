@@ -13,6 +13,13 @@
 
 #if SOC_MIPI_DSI_SUPPORTED
 
+#include "uDisplay_panel.h"
+#include "esp_lcd_panel_interface.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_panel_ops.h"
+#include "esp_lcd_mipi_dsi.h"
+#include "esp_ldo_regulator.h"
+
 struct DSIPanelConfig {
     // Basic display info
     uint16_t width;
@@ -45,16 +52,10 @@ struct DSIPanelConfig {
     uint16_t init_commands_count;
 };
 
-#include "uDisplay_panel.h"
-#include "esp_lcd_panel_interface.h"
-#include "esp_lcd_panel_io.h"
-#include "esp_lcd_panel_ops.h"
-#include "esp_lcd_mipi_dsi.h"
-
 class DSIPanel : public UniversalPanel {
 public:
     // Constructor - takes ESP-IDF panel handle (already initialized)
-    DSIPanel(esp_lcd_panel_handle_t panel, uint16_t width, uint16_t height);
+    DSIPanel(const DSIPanelConfig& config);
     
     // Core graphics API (must return bool)
     bool drawPixel(int16_t x, int16_t y, uint16_t color) override;
@@ -71,20 +72,18 @@ public:
     bool updateFrame() override;
     
     // Get direct framebuffer access (for DPI mode)
-    uint16_t* getFramebuffer() { return framebuffer; }
+    uint16_t* framebuffer = nullptr;
 
 private:
     // ESP-IDF panel handle
-    esp_lcd_panel_handle_t panel_handle;
+    esp_lcd_panel_handle_t panel_handle = nullptr;
+    esp_lcd_panel_io_handle_t io_handle = nullptr;
+    DSIPanelConfig cfg;
+    void sendInitCommandsDBI();
     
     // Display parameters
-    uint16_t width;
-    uint16_t height;
     uint8_t rotation = 0;
-    
-    // Direct framebuffer (for DPI panels)
-    uint16_t* framebuffer = nullptr;
-    
+
     // Address window tracking
     int16_t window_x0 = 0;
     int16_t window_y0 = 0;
