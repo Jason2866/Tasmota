@@ -100,10 +100,6 @@ void uDisplay::dim10(uint8_t dim, uint16_t dim_gamma) {
 // ===== Display Inversion =====
 
 void uDisplay::invertDisplay(boolean i) {
-    if (ep_mode) {
-        return;
-    }
-
     if (universal_panel && universal_panel->invertDisplay(i)) {
         return;
     }

@@ -27,31 +27,31 @@ static constexpr uint8_t TERMINATE_FRAME_READ_WRITE                  = 0xFF;
 
 // ===== EPD Initialization and Control =====
 
-void uDisplay::Init_EPD(int8_t p) {
-    if (p == DISPLAY_INIT_PARTIAL) {
-        if (lutpsize) {
-            AddLog(LOG_LEVEL_DEBUG, PSTR("DSP: init partial epaper mode"));
-            SetLut(lut_partial);
-            Updateframe_EPD();
-            delay_sync(lutptime * 10);
-        }
-        return;
-    } else if (p == DISPLAY_INIT_FULL) {
-        AddLog(LOG_LEVEL_DEBUG, PSTR("DSP: init full epaper mode"));
-        if (lutfsize) {
-            SetLut(lut_full);
-            Updateframe_EPD();
-        }
-        if (ep_mode == 2) {
-            ClearFrame_42();
-            DisplayFrame_42();
-        }
-        delay_sync(lutftime * 10);
-        return;
-    }
+// void uDisplay::Init_EPD(int8_t p) {
+//     if (p == DISPLAY_INIT_PARTIAL) {
+//         if (lutpsize) {
+//             AddLog(LOG_LEVEL_DEBUG, PSTR("DSP: init partial epaper mode"));
+//             SetLut(lut_partial);
+//             Updateframe_EPD();
+//             delay_sync(lutptime * 10);
+//         }
+//         return;
+//     } else if (p == DISPLAY_INIT_FULL) {
+//         AddLog(LOG_LEVEL_DEBUG, PSTR("DSP: init full epaper mode"));
+//         if (lutfsize) {
+//             SetLut(lut_full);
+//             Updateframe_EPD();
+//         }
+//         if (ep_mode == 2) {
+//             ClearFrame_42();
+//             DisplayFrame_42();
+//         }
+//         delay_sync(lutftime * 10);
+//         return;
+//     }
 
-    if (ep_mode == 2) Init_EPD(DISPLAY_INIT_FULL);
-}
+//     if (ep_mode == 2) Init_EPD(DISPLAY_INIT_FULL);
+// }
 
 void uDisplay::SetLut(const unsigned char* lut) {
     spi_command_EPD(lut_cmd[0]);

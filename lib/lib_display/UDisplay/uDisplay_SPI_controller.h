@@ -63,7 +63,7 @@ public:
 
     // ===== Direct Access =====
     SPIClass* getSPI() { return spi; }
-    SPISettings getSPISettings() { return spi_settings; }
+    // SPISettings getSPISettings() { return spi_settings; }
 
     // ===== DMA =====
 #ifdef ESP32
