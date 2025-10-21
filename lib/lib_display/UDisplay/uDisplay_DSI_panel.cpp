@@ -33,29 +33,29 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
 
     ESP_ERROR_CHECK(esp_lcd_new_dsi_bus(&bus_config, &dsi_bus));
 
-    esp_lcd_dpi_panel_config_t dpi_config = {
-        .virtual_channel = 0,
-        .dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT,
-        .dpi_clock_freq_mhz = cfg.pixel_clock_hz / 1000000,
-        .pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565,
-        .in_color_format = LCD_COLOR_FMT_RGB565,
-        .out_color_format = LCD_COLOR_FMT_RGB888, // For 24bpp JD9165 fixed - TODO maybe use descriptor!!
-        .num_fbs = 1,
-        .video_timing = {
-            .h_size = cfg.width,                    // 1024
-            .v_size = cfg.height,                   // 600
-            .hsync_pulse_width = cfg.timing.h_sync_pulse,      // 12
-            .hsync_back_porch = cfg.timing.h_back_porch,       // 160
-            .hsync_front_porch = cfg.timing.h_front_porch,     // 160
-            .vsync_pulse_width = cfg.timing.v_sync_pulse,      // 10
-            .vsync_back_porch = cfg.timing.v_back_porch,       // 23
-            .vsync_front_porch = cfg.timing.v_front_porch,     // 40
-        },
-        .flags = {
-            .use_dma2d = 1,
-            .disable_lp = 0,
-        }
-    };
+    esp_lcd_dpi_panel_config_t *dpi_config = (esp_lcd_dpi_panel_config_t *)heap_caps_calloc(1, sizeof(esp_lcd_dpi_panel_config_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+
+    dpi_config->virtual_channel = 0;
+    dpi_config->dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT;
+    dpi_config->dpi_clock_freq_mhz =  cfg.pixel_clock_hz / 1000000;
+    dpi_config->pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565;
+    dpi_config->in_color_format = LCD_COLOR_FMT_RGB565;
+    dpi_config->out_color_format = LCD_COLOR_FMT_RGB888;
+    dpi_config->num_fbs = 1;
+
+    // Initialize video timing struct
+    dpi_config->video_timing.h_size =  cfg.width;
+    dpi_config->video_timing.v_size =  cfg.height;
+    dpi_config->video_timing.hsync_pulse_width =  cfg.timing.h_sync_pulse;
+    dpi_config->video_timing.hsync_back_porch =  cfg.timing.h_back_porch;
+    dpi_config->video_timing.hsync_front_porch =  cfg.timing.h_front_porch;
+    dpi_config->video_timing.vsync_pulse_width =  cfg.timing.v_sync_pulse;
+    dpi_config->video_timing.vsync_back_porch =  cfg.timing.v_back_porch;
+    dpi_config->video_timing.vsync_front_porch =  cfg.timing.v_front_porch;
+
+    // Initialize flags
+    dpi_config->flags.use_dma2d = 1;
+    dpi_config->flags.disable_lp = 0;
 
     esp_lcd_dbi_io_config_t io_config = {
         .virtual_channel = 0,
@@ -68,7 +68,7 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
 
         sendInitCommandsDBI();
     }
-    ESP_ERROR_CHECK(esp_lcd_new_panel_dpi(dsi_bus, &dpi_config, &panel_handle));
+    ESP_ERROR_CHECK(esp_lcd_new_panel_dpi(dsi_bus, dpi_config, &panel_handle));
     
     // Initialize panel
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
