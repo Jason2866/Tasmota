@@ -111,7 +111,7 @@ private:
     uint8_t *lut_full;
     uint8_t *lut_partial;
     uint8_t *lut_array[MAX_LUTS];
-#if ESP32
+#if SOC_MIPI_DSI_SUPPORTED
     uint8_t dsp_cmds[1024]; // for DSI, does not hurt for ESP32
 #else
     uint8_t dsp_cmds[256];
@@ -148,7 +148,7 @@ private:
     uint8_t i2c_col_end;
     uint8_t i2c_page_start;
     uint8_t i2c_page_end;
-    uint8_t dsp_ncmds;
+    uint16_t dsp_ncmds;
     uint8_t dsp_on;
     uint8_t dsp_off;
     uint8_t allcmd_mode;
@@ -277,7 +277,7 @@ private:
 #endif // SOC_LCD_RGB_SUPPORTED
 
 #if SOC_MIPI_DSI_SUPPORTED
-   DSIPanelConfig dsi_panel_config;
+   DSIPanelConfig dsi_panel_config = {0};
 #endif
 
 // ===== Common ESP32-S3 Features =====

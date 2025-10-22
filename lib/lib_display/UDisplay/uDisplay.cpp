@@ -337,6 +337,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               dsi_panel_config.dsi_lanes = next_val(&lp1);
               dsi_panel_config.te_pin = next_val(&lp1);
               dsi_panel_config.backlight_pin = next_val(&lp1);
+              dsi_panel_config.reset_pin = next_val(&lp1);
               dsi_panel_config.ldo_channel = next_val(&lp1);
               dsi_panel_config.ldo_voltage_mv = next_val(&lp1);
               dsi_panel_config.pixel_clock_hz = next_val(&lp1);
@@ -406,6 +407,22 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 }
               }
               interface = _UDSP_RGB;
+            } else if (interface == _UDSP_DSI) {
+              // DSI - parse current line and accumulate bytes
+              // Don't reset dsp_ncmds - accumulate across all :I lines
+              uint16_t line_bytes = 0;
+              while (1) {
+                if (dsp_ncmds >= sizeof(dsp_cmds)) {
+                  AddLog(LOG_LEVEL_ERROR, "DSI: Init command buffer full at %d bytes", dsp_ncmds);
+                  break;
+                }
+                if (!str2c(&lp1, ibuff, sizeof(ibuff))) {
+                  dsp_cmds[dsp_ncmds++] = strtol(ibuff, 0, 16);
+                  line_bytes++;
+                } else {
+                  break;
+                }
+              }
             } else {
               if (interface == _UDSP_I2C) {
                 dsp_cmds[dsp_ncmds++] = next_hex(&lp1);
@@ -473,19 +490,18 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
           }
 #endif // SOC_LCD_RGB_SUPPORTED
 #if SOC_MIPI_DSI_SUPPORTED
-          if (interface == _UDSP_DSI) {
+          if (interface == _UDSP_DSI && dsi_panel_config.timing.h_front_porch == 0) {
+            AddLog(1, "DSI: Parsing :V timing line");
             dsi_panel_config.timing.h_front_porch = next_val(&lp1);
             dsi_panel_config.timing.v_front_porch = next_val(&lp1);
             dsi_panel_config.timing.h_back_porch = next_val(&lp1);
             dsi_panel_config.timing.h_sync_pulse = next_val(&lp1);
             dsi_panel_config.timing.v_sync_pulse = next_val(&lp1);
             dsi_panel_config.timing.v_back_porch = next_val(&lp1);
-#ifdef UDSP_DEBUG
-            AddLog(LOG_LEVEL_DEBUG, "UDisplay: DSI timing - HFP:%d VFP:%d HBP:%d HSW:%d VSW:%d VBP:%d",
+            AddLog(1, "DSI: Parsed timing - HFP:%d VFP:%d HBP:%d HSW:%d VSW:%d VBP:%d",
                   dsi_panel_config.timing.h_front_porch, dsi_panel_config.timing.v_front_porch,
                   dsi_panel_config.timing.h_back_porch, dsi_panel_config.timing.h_sync_pulse,
                   dsi_panel_config.timing.v_sync_pulse, dsi_panel_config.timing.v_back_porch);
-#endif
           }
 #endif //SOC_MIPI_DSI_SUPPORTED
             break;
@@ -1145,12 +1161,20 @@ if (interface == _UDSP_SPI) {
 #endif // SOC_LCD_RGB_SUPPORTED
 #if SOC_MIPI_DSI_SUPPORTED
      if (interface == _UDSP_DSI) {
-        universal_panel = new DSIPanel(dsi_panel_config);
-        rgb_fb = universal_panel->framebuffer;
-
-        if (bpanel >= 0) {
-          analogWrite(bpanel, 32);
+        // Pass init commands to DSI panel config
+        dsi_panel_config.init_commands = dsp_cmds;
+        dsi_panel_config.init_commands_count = dsp_ncmds;
+               
+        // Pass display on/off commands from descriptor
+        dsi_panel_config.cmd_display_on = dsp_on;
+        dsi_panel_config.cmd_display_off = dsp_off;
+        
+        if (dsi_panel_config.backlight_pin >= 0) {
+          analogWrite(dsi_panel_config.backlight_pin, 32);
         }
+        
+        universal_panel = new DSIPanel(dsi_panel_config);
+        rgb_fb = universal_panel->framebuffer;       
      }
 #endif
 

@@ -1,28 +1,41 @@
-// WIP
 // ======================================================
-// uDisplay_DSI_panel.cpp - MIPI-DSI Display Panel Implementation
+// uDisplay_DSI_panel.cpp - Hardcoded JD9165 MIPI-DSI Implementation
+// Based on esp_lcd_jd9165.c from Espressif
 // ======================================================
-
 
 #include "uDisplay_DSI_panel.h"
 #if SOC_MIPI_DSI_SUPPORTED
 #include "esp_lcd_panel_ops.h"
+#include "esp_lcd_mipi_dsi.h"
+#include "esp_ldo_regulator.h"
+#include "driver/gpio.h"
 #include <rom/cache.h>
+
+extern void AddLog(uint32_t loglevel, const char* formatP, ...);
 
 DSIPanel::DSIPanel(const DSIPanelConfig& config)
     : cfg(config), rotation(0)
 {
-    esp_ldo_channel_handle_t ldo_mipi_phy = nullptr;
-    esp_ldo_channel_config_t ldo_config = {
-        .chan_id = cfg.ldo_channel,
-        .voltage_mv = cfg.ldo_voltage_mv,
-        .flags = {
-            .adjustable = 0,  // Fixed voltage, don't need to adjust later
-            .owned_by_hw = 0, // Software controlled, not hardware/eFuse
-        }
-    };
-    ESP_ERROR_CHECK(esp_ldo_acquire_channel(&ldo_config, &ldo_mipi_phy));
+    esp_err_t ret;
 
+    // Step 1: Initialize LDO for display power (from config)
+    if (cfg.ldo_channel >= 0 && cfg.ldo_voltage_mv > 0) {
+        esp_ldo_channel_config_t ldo_config = {
+            .chan_id = cfg.ldo_channel,
+            .voltage_mv = cfg.ldo_voltage_mv,
+        };
+        ret = esp_ldo_acquire_channel(&ldo_config, &ldo_handle);
+        if (ret != ESP_OK) {
+            AddLog(3, "DSI: Failed to acquire LDO: %d", ret);
+            return;
+        }
+        AddLog(3, "DSI: LDO enabled (ch %d @ %dmV)", cfg.ldo_channel, cfg.ldo_voltage_mv);
+        delay(10);
+    } else {
+        AddLog(3, "DSI: No LDO configuration");
+    }
+
+    // Step 2: Create DSI bus (from config)
     esp_lcd_dsi_bus_handle_t dsi_bus = nullptr;
     esp_lcd_dsi_bus_config_t bus_config = {
         .bus_id = 0,
@@ -30,208 +43,177 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
         .phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT,
         .lane_bit_rate_mbps = cfg.lane_speed_mbps
     };
+    ret = esp_lcd_new_dsi_bus(&bus_config, &dsi_bus);
+    if (ret != ESP_OK) {
+        AddLog(3, "DSI: Failed to create DSI bus: %d", ret);
+        return;
+    }
+    AddLog(3, "DSI: DSI bus created");
 
-    ESP_ERROR_CHECK(esp_lcd_new_dsi_bus(&bus_config, &dsi_bus));
-
-    esp_lcd_dpi_panel_config_t *dpi_config = (esp_lcd_dpi_panel_config_t *)heap_caps_calloc(1, sizeof(esp_lcd_dpi_panel_config_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-
-    dpi_config->virtual_channel = 0;
-    dpi_config->dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT;
-    dpi_config->dpi_clock_freq_mhz =  cfg.pixel_clock_hz / 1000000;
-    dpi_config->pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565;
-    dpi_config->in_color_format = LCD_COLOR_FMT_RGB565;
-    dpi_config->out_color_format = LCD_COLOR_FMT_RGB888;
-    dpi_config->num_fbs = 1;
-
-    // Initialize video timing struct
-    dpi_config->video_timing.h_size =  cfg.width;
-    dpi_config->video_timing.v_size =  cfg.height;
-    dpi_config->video_timing.hsync_pulse_width =  cfg.timing.h_sync_pulse;
-    dpi_config->video_timing.hsync_back_porch =  cfg.timing.h_back_porch;
-    dpi_config->video_timing.hsync_front_porch =  cfg.timing.h_front_porch;
-    dpi_config->video_timing.vsync_pulse_width =  cfg.timing.v_sync_pulse;
-    dpi_config->video_timing.vsync_back_porch =  cfg.timing.v_back_porch;
-    dpi_config->video_timing.vsync_front_porch =  cfg.timing.v_front_porch;
-
-    // Initialize flags
-    dpi_config->flags.use_dma2d = 1;
-    dpi_config->flags.disable_lp = 0;
-
+    // Step 3: Create DBI IO for commands
     esp_lcd_dbi_io_config_t io_config = {
         .virtual_channel = 0,
-        .lcd_cmd_bits = 8,     // Most displays use 8-bit commands
-        .lcd_param_bits = 8,   // Most parameters are 8-bit
+        .lcd_cmd_bits = 8,
+        .lcd_param_bits = 8,
     };
-    ESP_ERROR_CHECK(esp_lcd_new_panel_io_dbi(dsi_bus, &io_config, &io_handle));
+    ret = esp_lcd_new_panel_io_dbi(dsi_bus, &io_config, &io_handle);
+    if (ret != ESP_OK) {
+        AddLog(3, "DSI: Failed to create DBI IO: %d", ret);
+        return;
+    }
+    AddLog(3, "DSI: DBI IO created");
 
+    // Step 4: Configure DPI panel (from config)
+    esp_lcd_dpi_panel_config_t dpi_config = {};
+    dpi_config.dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT;
+    dpi_config.dpi_clock_freq_mhz = cfg.pixel_clock_hz / 1000000;
+    dpi_config.virtual_channel = 0;
+    dpi_config.pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565;
+    dpi_config.num_fbs = 1;
+    dpi_config.video_timing.h_size = cfg.width;
+    dpi_config.video_timing.v_size = cfg.height;
+    dpi_config.video_timing.hsync_back_porch = cfg.timing.h_back_porch;
+    dpi_config.video_timing.hsync_pulse_width = cfg.timing.h_sync_pulse;
+    dpi_config.video_timing.hsync_front_porch = cfg.timing.h_front_porch;
+    dpi_config.video_timing.vsync_back_porch = cfg.timing.v_back_porch;
+    dpi_config.video_timing.vsync_pulse_width = cfg.timing.v_sync_pulse;
+    dpi_config.video_timing.vsync_front_porch = cfg.timing.v_front_porch;
+    dpi_config.flags.use_dma2d = 1;
+    
+    AddLog(3, "DSI: DPI config: clk=%dMHz res=%dx%d", dpi_config.dpi_clock_freq_mhz, cfg.width, cfg.height);
+    AddLog(3, "DSI: H timing: BP=%d PW=%d FP=%d", cfg.timing.h_back_porch, cfg.timing.h_sync_pulse, cfg.timing.h_front_porch);
+    AddLog(3, "DSI: V timing: BP=%d PW=%d FP=%d", cfg.timing.v_back_porch, cfg.timing.v_sync_pulse, cfg.timing.v_front_porch);
+    AddLog(3, "DSI: Expected: clk=54MHz res=1024x600 H:160/40/160 V:23/10/12");
+
+    // Step 5: Create DPI panel
+    ret = esp_lcd_new_panel_dpi(dsi_bus, &dpi_config, &panel_handle);
+    if (ret != ESP_OK) {
+        AddLog(3, "DSI: Failed to create DPI panel: %d", ret);
+        return;
+    }
+    AddLog(3, "DSI: DPI panel created");
+
+    // Step 6: Get framebuffer
+    void* fb_ptr = nullptr;
+    ret = esp_lcd_dpi_panel_get_frame_buffer(panel_handle, 1, &fb_ptr);
+    if (ret == ESP_OK && fb_ptr != nullptr) {
+        framebuffer = (uint16_t*)fb_ptr;
+        AddLog(3, "DSI: Framebuffer at %p", framebuffer);
+    } else {
+        framebuffer = nullptr;
+        AddLog(3, "DSI: No framebuffer, using draw_bitmap");
+    }
+
+    // Step 7: Reset via GPIO (from config)
+    if (cfg.reset_pin >= 0) {
+        gpio_config_t gpio_conf = {
+            .pin_bit_mask = 1ULL << cfg.reset_pin,
+            .mode = GPIO_MODE_OUTPUT,
+        };
+        gpio_config(&gpio_conf);
+        gpio_set_level((gpio_num_t)cfg.reset_pin, 1);
+        delay(5);
+        gpio_set_level((gpio_num_t)cfg.reset_pin, 0);
+        delay(10);
+        gpio_set_level((gpio_num_t)cfg.reset_pin, 1);
+        delay(120);
+        AddLog(3, "DSI: GPIO reset completed (pin %d)", cfg.reset_pin);
+    } else {
+        AddLog(3, "DSI: No reset pin configured");
+    }
+
+    // Step 8: Initialize DPI panel
+    ret = esp_lcd_panel_init(panel_handle);
+    if (ret != ESP_OK) {
+        AddLog(3, "DSI: Panel init failed: %d", ret);
+        return;
+    }
+    AddLog(3, "DSI: DPI panel initialized");
+
+    // Step 9: Send init commands from INI file
     if (cfg.init_commands && cfg.init_commands_count > 0) {
-
-        sendInitCommandsDBI();
-    }
-    ESP_ERROR_CHECK(esp_lcd_new_panel_dpi(dsi_bus, dpi_config, &panel_handle));
-    
-    // Initialize panel
-    ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
-    
-    // Display on
-    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
-
-    void* buf = nullptr;
-    esp_lcd_dpi_panel_get_frame_buffer(panel_handle, 1, &buf);
-    framebuffer = (uint16_t*)buf;
-}
-
-void DSIPanel::sendInitCommandsDBI() {
-    uint16_t index = 0;
-    while (index < cfg.init_commands_count) {
-        // DSI Format: cmd, data_size, data..., delay_ms
-        uint8_t cmd = cfg.init_commands[index++];
-        uint8_t data_size = cfg.init_commands[index++];
+        AddLog(3, "DSI: Sending init commands from INI file");
+        uint16_t index = 0;
+        uint16_t cmd_num = 0;
         
-        // Send command with data
-        if (data_size > 0) {
-            ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io_handle, cmd, 
-                                                     &cfg.init_commands[index], 
-                                                     data_size));
-            index += data_size;
-        } else {
-            ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io_handle, cmd, NULL, 0));
+        while (index < cfg.init_commands_count) {
+            uint8_t cmd = cfg.init_commands[index++];
+            uint8_t data_size = cfg.init_commands[index++];
+            
+            if (data_size > 0) {
+                ret = esp_lcd_panel_io_tx_param(io_handle, cmd, &cfg.init_commands[index], data_size);
+                index += data_size;
+            } else {
+                ret = esp_lcd_panel_io_tx_param(io_handle, cmd, NULL, 0);
+            }
+            
+            if (ret != ESP_OK) {
+                AddLog(3, "DSI: Cmd 0x%02x failed: %d", cmd, ret);
+            }
+            
+            uint8_t delay_ms = cfg.init_commands[index++];
+            if (delay_ms > 0) {
+                vTaskDelay(pdMS_TO_TICKS(delay_ms));
+            }
+            cmd_num++;
         }
-        
-        // Get delay (1 byte)
-        uint8_t delay_ms = cfg.init_commands[index++];
-        
-        // Handle delay
-        if (delay_ms > 0) {
-            vTaskDelay(pdMS_TO_TICKS(delay_ms));
-        }
+        AddLog(3, "DSI: Sent %d commands from INI", cmd_num);
+    } else {
+        AddLog(3, "DSI: No init commands in config");
     }
 }
 
-// ===== Drawing Primitives =====
+DSIPanel::~DSIPanel() {
+    if (panel_handle) {
+        esp_lcd_panel_del(panel_handle);
+    }
+    if (io_handle) {
+        esp_lcd_panel_io_del(io_handle);
+    }
+    if (ldo_handle) {
+        esp_ldo_release_channel(ldo_handle);
+    }
+}
 
 bool DSIPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
     if ((x < 0) || (x >= cfg.width) || (y < 0) || (y >= cfg.height)) return true;
-    
-    if (framebuffer) {
-        // Direct framebuffer access (DPI mode)
-        framebuffer[y * cfg.width + x] = color;
-        CACHE_WRITEBACK_ADDR((uint32_t)&framebuffer[y * cfg.width + x], 2);
-        return true;
-    } else {
-        // DBI mode - draw single pixel via panel API
-        esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, x, y, x + 1, y + 1, &color);
-        return (ret == ESP_OK);
-    }
+    esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, x, y, x + 1, y + 1, &color);
+    return (ret == ESP_OK);
 }
 
 bool DSIPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-    // Clip to screen bounds
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x + w > cfg.width) w = cfg.width - x;
     if (y + h > cfg.height) h = cfg.height - y;
     if (w <= 0 || h <= 0) return true;
     
-    if (framebuffer) {
-        // Direct framebuffer fill (DPI mode)
-        for (int16_t yp = y; yp < y + h; yp++) {
-            uint16_t* line_start = &framebuffer[yp * cfg.width + x];
-            for (int16_t i = 0; i < w; i++) {
-                line_start[i] = color;
-            }
-            CACHE_WRITEBACK_ADDR((uint32_t)line_start, w * 2);
-        }
-        return true;
-    } else {
-        // DBI mode - create buffer and draw
-        uint16_t* buf = (uint16_t*)malloc(w * h * sizeof(uint16_t));
-        if (!buf) return false;
-        
-        for (int i = 0; i < w * h; i++) {
-            buf[i] = color;
-        }
-        esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, x, y, x + w, y + h, buf);
-        free(buf);
-        return (ret == ESP_OK);
+    uint16_t* buf = (uint16_t*)malloc(w * h * sizeof(uint16_t));
+    if (!buf) return false;
+    
+    for (int i = 0; i < w * h; i++) {
+        buf[i] = color;
     }
+    esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, x, y, x + w, y + h, buf);
+    free(buf);
+    return (ret == ESP_OK);
 }
 
 bool DSIPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
-    if ((y < 0) || (y >= cfg.height) || (x >= cfg.width)) return true;
-    if (x < 0) { w += x; x = 0; }
-    if (x + w > cfg.width) w = cfg.width - x;
-    if (w <= 0) return true;
-    
-    if (framebuffer) {
-        // Direct framebuffer access
-        uint16_t* line_start = &framebuffer[y * cfg.width + x];
-        for (int16_t i = 0; i < w; i++) {
-            line_start[i] = color;
-        }
-        CACHE_WRITEBACK_ADDR((uint32_t)line_start, w * 2);
-        return true;
-    } else {
-        // DBI mode
-        return fillRect(x, y, w, 1, color);
-    }
+    return fillRect(x, y, w, 1, color);
 }
 
 bool DSIPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
-    if ((x < 0) || (x >= cfg.width) || (y >= cfg.height)) return true;
-    if (y < 0) { h += y; y = 0; }
-    if (y + h > cfg.height) h = cfg.height - y;
-    if (h <= 0) return true;
-    
-    if (framebuffer) {
-        // Direct framebuffer access
-        for (int16_t j = 0; j < h; j++) {
-            framebuffer[(y + j) * cfg.width + x] = color;
-        }
-        // Cache writeback for the column (might be non-contiguous)
-        for (int16_t j = 0; j < h; j++) {
-            CACHE_WRITEBACK_ADDR((uint32_t)&framebuffer[(y + j) * cfg.width + x], 2);
-        }
-        return true;
-    } else {
-        // DBI mode
-        return fillRect(x, y, 1, h, color);
-    }
+    return fillRect(x, y, 1, h, color);
 }
 
 bool DSIPanel::pushColors(uint16_t *data, uint16_t len, bool not_swapped) {
-    // Use previously set address window
-    // Note: For DSI panels, typically handle byte swapping in hardware
-    // so not_swapped parameter may not be needed
-    
-    if (framebuffer) {
-        // DPI mode - direct framebuffer copy
-        // Calculate dimensions from window
-        int16_t w = window_x1 - window_x0 + 1;
-        int16_t h = window_y1 - window_y0 + 1;
-        
-        uint16_t idx = 0;
-        for (int16_t y = window_y0; y <= window_y1 && idx < len; y++) {
-            for (int16_t x = window_x0; x <= window_x1 && idx < len; x++) {
-                framebuffer[y * cfg.width + x] = data[idx++];
-            }
-        }
-        
-        // Writeback the affected region
-        for (int16_t y = window_y0; y <= window_y1; y++) {
-            CACHE_WRITEBACK_ADDR((uint32_t)&framebuffer[y * cfg.width + window_x0], w * 2);
-        }
-        return true;
-    } else {
-        // DBI mode
-        esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, window_x0, window_y0, 
-                                                  window_x1 + 1, window_y1 + 1, data);
-        return (ret == ESP_OK);
-    }
+    esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, window_x0, window_y0, 
+                                              window_x1 + 1, window_y1 + 1, data);
+    return (ret == ESP_OK);
 }
 
 bool DSIPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
-    // Store window for pushColors
     window_x0 = x0;
     window_y0 = y0;
     window_x1 = x1;
@@ -239,10 +221,10 @@ bool DSIPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
     return true;
 }
 
-// ===== Control Methods =====
-
 bool DSIPanel::displayOnff(int8_t on) {
-    esp_err_t ret = esp_lcd_panel_disp_on_off(panel_handle, on != 0);
+    if (!io_handle) return false;
+    uint8_t cmd = on ? 0x29 : 0x28;
+    esp_err_t ret = esp_lcd_panel_io_tx_param(io_handle, cmd, NULL, 0);
     return (ret == ESP_OK);
 }
 
@@ -253,9 +235,7 @@ bool DSIPanel::invertDisplay(bool invert) {
 
 bool DSIPanel::setRotation(uint8_t rot) {
     rotation = rot & 3;
-    
     esp_err_t ret;
-    // MIPI-DSI panels use mirror/swap for rotation
     switch (rotation) {
     case 0:
         ret = esp_lcd_panel_mirror(panel_handle, false, false);
@@ -278,15 +258,7 @@ bool DSIPanel::setRotation(uint8_t rot) {
 }
 
 bool DSIPanel::updateFrame() {
-    // For DPI mode with framebuffer, no explicit update needed
-    // The DMA continuously sends framebuffer to display
-    
-    // For DBI mode, this would flush any pending operations
-    if (!framebuffer) {
-        // Could implement a dirty region tracking system here if needed
-    }
-    
-    return true;  // Always succeeds for DSI panels
+    return true;
 }
 
 #endif // SOC_MIPI_DSI_SUPPORTED

@@ -32,10 +32,14 @@ bool uDisplay::utouch_Init(char **name) {
       attachInterrupt(ut_irq, ut_touch_irq, FALLING);
     }
 
-    if (ut_spi_nr == spiController->spi_config.bus_nr) {
-      // same as display
+    if (ut_wire) {
+      // I2C touch - no SPI needed
+      ut_spi = nullptr;
+    } else if (spiController && ut_spi_nr == spiController->spi_config.bus_nr) {
+      // SPI touch using same bus as display
       ut_spi = spiController->getSPI();
     } else {
+      // SPI touch using different bus or display doesn't use SPI
 #ifdef ESP32
       ut_spi = SpiBegin(ut_spi_nr);
 #endif
