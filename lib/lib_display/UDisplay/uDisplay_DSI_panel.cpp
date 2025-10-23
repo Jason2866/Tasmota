@@ -208,8 +208,7 @@ bool DSIPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 }
 
 bool DSIPanel::pushColors(uint16_t *data, uint16_t len, bool not_swapped) {
-    esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, window_x0, window_y0, 
-                                              window_x1 + 1, window_y1 + 1, data);
+    esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, window_x0, window_y0, window_x1, window_y1, data);
     return (ret == ESP_OK);
 }
 
