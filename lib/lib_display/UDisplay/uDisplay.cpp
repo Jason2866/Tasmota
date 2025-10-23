@@ -1169,12 +1169,12 @@ if (interface == _UDSP_SPI) {
         dsi_panel_config.cmd_display_on = dsp_on;
         dsi_panel_config.cmd_display_off = dsp_off;
         
+        universal_panel = new DSIPanel(dsi_panel_config);
+        rgb_fb = universal_panel->framebuffer;
+                
         if (dsi_panel_config.backlight_pin >= 0) {
           analogWrite(dsi_panel_config.backlight_pin, 32);
-        }
-        
-        universal_panel = new DSIPanel(dsi_panel_config);
-        rgb_fb = universal_panel->framebuffer;       
+        }   
      }
 #endif
 
