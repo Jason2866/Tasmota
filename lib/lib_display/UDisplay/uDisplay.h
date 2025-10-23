@@ -294,13 +294,6 @@ private:
    spi_transaction_t trans;
    spi_device_handle_t dmaHAL;
    spi_host_device_t spi_host = VSPI_HOST;
-   // spi_host_device_t spi_host = VSPI_HOST;
-  //  bool initDMA(int32_t ctrl_cs);
-  //  void deInitDMA(void);
-  //  bool dmaBusy(void);
-  //  void dmaWait(void);
-  //  void pushPixelsDMA(uint16_t* image, uint32_t len);
-  //  void pushPixels3DMA(uint8_t* image, uint32_t len);
 #endif // ESP32
 
 #ifdef USE_UNIVERSAL_TOUCH

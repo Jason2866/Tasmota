@@ -222,37 +222,49 @@ bool DSIPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
 
 bool DSIPanel::displayOnff(int8_t on) {
     if (!io_handle) return false;
-    uint8_t cmd = on ? 0x29 : 0x28;
+    
+    // Use commands from descriptor
+    uint8_t cmd = on ? cfg.cmd_display_on : cfg.cmd_display_off;
+    
     esp_err_t ret = esp_lcd_panel_io_tx_param(io_handle, cmd, NULL, 0);
     return (ret == ESP_OK);
 }
 
 bool DSIPanel::invertDisplay(bool invert) {
-    esp_err_t ret = esp_lcd_panel_invert_color(panel_handle, invert);
+    if (!io_handle) return false;
+    
+    // Standard MIPI DCS commands for invert
+    uint8_t cmd = invert ? 0x21 : 0x20;  // 0x21 = INVON, 0x20 = INVOFF
+    esp_err_t ret = esp_lcd_panel_io_tx_param(io_handle, cmd, NULL, 0);
     return (ret == ESP_OK);
 }
 
 bool DSIPanel::setRotation(uint8_t rot) {
+    if (!io_handle) return false;
+    
     rotation = rot & 3;
-    esp_err_t ret;
+    
+    // Standard MIPI DCS MADCTL (0x36) values for rotation
+    // These are common values but may need adjustment for specific displays
+    uint8_t madctl_val = 0;
+    
     switch (rotation) {
-    case 0:
-        ret = esp_lcd_panel_mirror(panel_handle, false, false);
-        if (ret == ESP_OK) ret = esp_lcd_panel_swap_xy(panel_handle, false);
+    case 0:  // Portrait
+        madctl_val = 0x00;  // Normal
         break;
-    case 1:
-        ret = esp_lcd_panel_mirror(panel_handle, false, true);
-        if (ret == ESP_OK) ret = esp_lcd_panel_swap_xy(panel_handle, true);
+    case 1:  // Landscape (90° clockwise)
+        madctl_val = 0x60;  // MX + MV
         break;
-    case 2:
-        ret = esp_lcd_panel_mirror(panel_handle, true, true);
-        if (ret == ESP_OK) ret = esp_lcd_panel_swap_xy(panel_handle, false);
+    case 2:  // Portrait inverted (180°)
+        madctl_val = 0xC0;  // MX + MY
         break;
-    case 3:
-        ret = esp_lcd_panel_mirror(panel_handle, true, false);
-        if (ret == ESP_OK) ret = esp_lcd_panel_swap_xy(panel_handle, true);
+    case 3:  // Landscape inverted (270° clockwise)
+        madctl_val = 0xA0;  // MY + MV
         break;
     }
+    
+    // Send MADCTL command (0x36) with rotation value
+    esp_err_t ret = esp_lcd_panel_io_tx_param(io_handle, 0x36, &madctl_val, 1);
     return (ret == ESP_OK);
 }
 
