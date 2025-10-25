@@ -619,7 +619,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             lvgl_param.flushlines = next_val(&lp1);
             lvgl_param.data = next_val(&lp1);
 #ifdef ESP32
-            // if(interface != _UDSP_SPI) // maybe test this later
+            if(interface != _UDSP_SPI) // maybe test this later
             lvgl_param.use_dma = false; // temporary fix to disable DMA due to a problem in esp-idf 5.3
 #endif
             break;

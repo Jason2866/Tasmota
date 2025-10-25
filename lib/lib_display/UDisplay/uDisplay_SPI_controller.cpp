@@ -321,8 +321,8 @@ void SPIController::hw_write9(uint8_t val, uint8_t dc) {
 
 // DMA
 #ifdef ESP32
-bool SPIController::initDMA(uint16_t width, uint16_t height, uint8_t data) {
-    AddLog(3,"init dma %u %u %d",height,data, spi_config.cs);
+bool SPIController::initDMA(uint16_t width, uint16_t flushlines, uint8_t data) {
+    AddLog(3,"init dma %u %u %d",flushlines,data, spi_config.cs);
     if (!spi && spi_config.cs == -1) return false;
     if((data&1) == 0){
         AddLog(3,"no dma selected");
@@ -336,17 +336,15 @@ bool SPIController::initDMA(uint16_t width, uint16_t height, uint8_t data) {
     } else {
         return false;
     }
-    async_dma_enabled = ((data&4) != 0);
-    dma_enabled = true;
     
     esp_err_t ret;
     spi_bus_config_t buscfg = {
         .mosi_io_num = spi_config.mosi,
-        .miso_io_num = -1,
+        .miso_io_num = spi_config.miso,
         .sclk_io_num = spi_config.clk,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = width * height * 2 + 8,
+        .max_transfer_sz = width * flushlines * 2 + 8,
         .flags = 0,
         .intr_flags = 0
     };
@@ -371,7 +369,9 @@ bool SPIController::initDMA(uint16_t width, uint16_t height, uint8_t data) {
     // spi_host_device_t spi_host = (spi_config.bus_nr == 1) ? VSPI_HOST : HSPI_HOST;
     
     // Try to initialize the bus, but if it's already initialized (by Arduino SPI), that's OK
-    ret = spi_bus_initialize(spi_host, &buscfg, 1);
+
+    spi->end();
+    ret = spi_bus_initialize(spi_host, &buscfg, SPI_DMA_CH_AUTO);
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
         AddLog(3,"init dma bus init failed: %d", ret);
         return false;
@@ -383,6 +383,8 @@ bool SPIController::initDMA(uint16_t width, uint16_t height, uint8_t data) {
     ret = spi_bus_add_device(spi_host, &devcfg, &dmaHAL);
     if (ret == ESP_OK) {
         DMA_Enabled = true;
+        async_dma_enabled = ((data&4) != 0);
+        dma_enabled = true;
         spiBusyCheck = 0;
         AddLog(3,"init dma succes");
         return true;
@@ -449,6 +451,7 @@ void SPIController::pushPixelsDMA(uint16_t* image, uint32_t len) {
   if (!async_dma_enabled) {
     dmaWait();
   }
+  AddLog(1,"#####4");
 }
 
 void SPIController::pushPixels3DMA(uint8_t* image, uint32_t len) {
