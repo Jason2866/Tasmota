@@ -16,19 +16,7 @@ void uDisplay::ulcd_data8(uint8_t val) {
     }
 }
 
-void uDisplay::ulcd_data16(uint16_t val) {
-    if (interface == _UDSP_SPI) {
-        spiController->writeData16(val);
-        return;
-    }
-}
-
-void uDisplay::ulcd_data32(uint32_t val) {
-    if (interface == _UDSP_SPI) {
-        spiController->writeData32(val);
-        return;
-    }
-}
+// ulcd_data16, ulcd_data32 - removed as dead code
 
 void uDisplay::ulcd_command_one(uint8_t val) {
     if (interface == _UDSP_SPI) {
@@ -40,19 +28,4 @@ void uDisplay::ulcd_command_one(uint8_t val) {
     }
 }
 
-void uDisplay::WriteColor(uint16_t color) {
-    if (col_mode == 18) {
-        uint8_t r = (color & 0xF800) >> 11;
-        uint8_t g = (color & 0x07E0) >> 5;
-        uint8_t b = color & 0x001F;
-        r = (r * 255) / 31;
-        g = (g * 255) / 63;
-        b = (b * 255) / 31;
-
-        ulcd_data8(r);
-        ulcd_data8(g);
-        ulcd_data8(b);
-    } else {
-        ulcd_data16(color);
-    }
-}
+// WriteColor - removed as dead code (I80Panel has its own implementation)
