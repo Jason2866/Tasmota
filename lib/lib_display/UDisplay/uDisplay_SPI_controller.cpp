@@ -99,12 +99,18 @@ void SPIController::beginTransaction() {
     #ifdef ESP32
     if (dma_enabled) {
         dmaWait();
+        return; // Don't use Arduino SPI transactions when DMA is enabled
     }
     #endif
     if (spi_config.bus_nr <= 2) spi->beginTransaction(spi_settings);
 }
 
 void SPIController::endTransaction() {
+    #ifdef ESP32
+    if (dma_enabled) {
+        return; // Don't use Arduino SPI transactions when DMA is enabled
+    }
+    #endif
     if (spi_config.bus_nr <= 2) spi->endTransaction();
 }
 
@@ -363,8 +369,16 @@ bool SPIController::initDMA(uint16_t width, uint16_t height, uint8_t data) {
     };
     
     // spi_host_device_t spi_host = (spi_config.bus_nr == 1) ? VSPI_HOST : HSPI_HOST;
+    
+    // Try to initialize the bus, but if it's already initialized (by Arduino SPI), that's OK
     ret = spi_bus_initialize(spi_host, &buscfg, 1);
-    if (ret != ESP_OK) return false;
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        AddLog(3,"init dma bus init failed: %d", ret);
+        return false;
+    }
+    if (ret == ESP_ERR_INVALID_STATE) {
+        AddLog(3,"init dma bus already initialized (OK)");
+    }
     
     ret = spi_bus_add_device(spi_host, &devcfg, &dmaHAL);
     if (ret == ESP_OK) {
@@ -417,6 +431,7 @@ void SPIController::pushPixelsDMA(uint16_t* image, uint32_t len) {
   if (len == 0) return;
 
   dmaWait();
+  dcHigh();
 
   esp_err_t ret;
 
@@ -440,6 +455,7 @@ void SPIController::pushPixels3DMA(uint8_t* image, uint32_t len) {
   if ((len == 0) || (!DMA_Enabled)) return;
 
   dmaWait();
+  dcHigh();
 
   esp_err_t ret;
 
