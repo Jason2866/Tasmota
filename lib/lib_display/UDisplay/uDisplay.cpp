@@ -162,13 +162,9 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 spec_init = _UDSP_SPI;
                 reset = next_val(&lp1);
 
-                spiController = new SPIController(spi_cfg
-#ifdef ESP32
-                                 , false, false, busy_pin, &spi_host
-#endif // ESP32
-                                );
+                spiController = new SPIController(spi_cfg);
               // spiSettings = spiController->getSPISettings();
-              busy_pin = spi_cfg.miso; // update for timing
+              // busy_pin = spi_cfg.miso; // update for timing
 
               if (reset >= 0) {
                 pinMode(reset, OUTPUT);
@@ -273,13 +269,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               reset = next_val(&lp1);
               spi_cfg.miso = (int8_t)next_val(&lp1);
               spi_cfg.speed = next_val(&lp1);
-              spiController = new SPIController(spi_cfg
-#ifdef ESP32 
-                              , lvgl_param.use_dma, lvgl_param.async_dma, 
-                              busy_pin, &spi_host
-#endif
-                            );
-
+              spiController = new SPIController(spi_cfg);
               section = 0;
             } else if (!strncmp(ibuff, "PAR", 3)) {
 #if defined(UDISPLAY_I80)
@@ -629,7 +619,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             lvgl_param.flushlines = next_val(&lp1);
             lvgl_param.data = next_val(&lp1);
 #ifdef ESP32
-            lvgl_param.use_dma = false; // temporary fix to disable DMA due to a problem in esp-idf 5.3
+            if(interface != _UDSP_SPI)
+              lvgl_param.use_dma = false; // temporary fix to disable DMA due to a problem in esp-idf 5.3
 #endif
             break;
           case 'M':
@@ -1104,6 +1095,9 @@ if (interface == _UDSP_SPI) {
         spi_config.address_mode = sa_mode;
         send_spi_cmds(0, dsp_ncmds);  // Send init commands for regular SPI
         universal_panel = new SPIPanel(spi_config, spiController, frame_buffer);
+#ifdef ESP32
+        universal_panel->setLVGLData(lvgl_param.flushlines, lvgl_param.data);
+#endif
         universal_panel->fillRect(0, 0, 100, 100, 0xFF00);  // Yellow
         delay(2000);  // Hold for 2 seconds before anything else runs
     }

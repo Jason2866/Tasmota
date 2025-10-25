@@ -32,12 +32,7 @@ struct SPIControllerConfig {
  */
 class SPIController {
 public:
-    SPIController(const SPIControllerConfig& config
-#ifdef ESP32
-                           , bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
-                           void* spi_host_ptr
-#endif
-                        ) ;
+    SPIController(const SPIControllerConfig& config);
     ~SPIController() = default;
 
     // ===== Pin Control =====
@@ -67,7 +62,7 @@ public:
 
     // ===== DMA =====
 #ifdef ESP32
-    bool initDMA(int32_t ctrl_cs);
+    bool initDMA(uint16_t width, uint16_t height, uint8_t data);
     void dmaWait(void);
     bool dmaBusy(void);
     void pushPixelsDMA(uint16_t* image, uint32_t len);
@@ -89,13 +84,13 @@ private:
     void hw_write9(uint8_t val, uint8_t dc);
 
 #ifdef ESP32
-    bool dma_enabled;
-    bool async_dma_enabled; 
-    int8_t& busy_pin;  // Reference to busy_pin in uDisplay
-    spi_host_device_t spi_host;
-    bool DMA_Enabled;
+    bool dma_enabled = false;
+    bool async_dma_enabled = false;
+
+    spi_host_device_t spi_host = VSPI_HOST;
+    bool DMA_Enabled = false;
     uint8_t spiBusyCheck;
-    spi_device_handle_t dmaHAL;  // For DMA
+    spi_device_handle_t dmaHAL = nullptr;  // For DMA
     spi_transaction_t trans;
 #endif  //ESP32
 };

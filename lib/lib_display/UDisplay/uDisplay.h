@@ -287,15 +287,6 @@ private:
    int8_t par_dbh[8];  // RGB data high byte or Data bus high byte (D8-D15) for 16-bit
 #endif
 
-#ifdef ESP32
-   // dma section
-   bool DMA_Enabled = false;
-   uint8_t  spiBusyCheck = 0;
-   spi_transaction_t trans;
-   spi_device_handle_t dmaHAL;
-   spi_host_device_t spi_host = VSPI_HOST;
-#endif // ESP32
-
 #ifdef USE_UNIVERSAL_TOUCH
 // universal touch driver
   void ut_trans(char **sp, uint8_t **ut_code);

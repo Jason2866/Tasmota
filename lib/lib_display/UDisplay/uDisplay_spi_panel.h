@@ -8,6 +8,24 @@
 #include "uDisplay_panel.h"
 #include "uDisplay_SPI_controller.h"
 
+typedef struct LVGL_PARAMS_t {
+  uint16_t flushlines;
+  union {
+    uint8_t data;
+    struct {
+      uint8_t use_dma : 1;
+      uint8_t swap_color : 1;
+      uint8_t async_dma : 1;   // force DMA completion before returning, avoid conflict with other devices on same bus. If set you should make sure the display is the only device on the bus
+      uint8_t busy_invert : 1;
+      uint8_t invert_bw : 1;
+      uint8_t resvd_3 : 1;
+      uint8_t resvd_4 : 1;
+      uint8_t resvd_5 : 1;
+    };
+  };
+}LVGL_PARAMS_t;
+
+
 /**
  * Configuration for SPI-based displays
  */
@@ -70,10 +88,18 @@ public:
     bool setRotation(uint8_t rotation) override;
     bool updateFrame() override;
 
+#ifdef ESP32
+    void setLVGLData(uint16_t flushlines, uint8_t data) override;
+#endif
+
 private:
     // ===== Hardware & Configuration =====
     SPIController* spi;            // Not owned by panel
     SPIPanelConfig cfg;            // Copy of config
+
+#ifdef ESP32
+    LVGL_PARAMS_t lvgl_params;
+#endif
     
     // ===== Framebuffer =====
     uint8_t* fb_buffer;            // Framebuffer (if provided by uDisplay)
@@ -83,6 +109,8 @@ private:
     int16_t window_x0, window_y0, window_x1, window_y1;
     bool display_on;
     bool inverted;
+
+    bool use_hw_spi = false;
 
     // ===== Internal Helpers =====
     void setAddrWindow_internal(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);

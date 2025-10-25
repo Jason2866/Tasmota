@@ -28,22 +28,8 @@ static constexpr uint8_t RA8876_STATUS_READ = 0x40;
 
 extern void AddLog(uint32_t loglevel, const char* formatP, ...);
 
-SPIController::SPIController(const SPIControllerConfig& config
-#ifdef ESP32
-                           , bool use_dma, bool async_dma, int8_t& busy_pin_ref, 
-                           void* spi_host_ptr
-#endif
-                        )
+SPIController::SPIController(const SPIControllerConfig& config)
     : spi_config(config)
-#ifdef ESP32      
-      ,
-      async_dma_enabled(async_dma),
-      busy_pin(busy_pin_ref),
-      spi_host(*(spi_host_device_t*)spi_host_ptr),
-      dma_enabled(use_dma),
-      DMA_Enabled(false),
-      spiBusyCheck(0)
-#endif //ESP32
 {
     if (spi_config.dc >= 0) {
       pinMode(spi_config.dc, OUTPUT);
@@ -73,26 +59,15 @@ SPIController::SPIController(const SPIControllerConfig& config
     if (spi_config.bus_nr == 1) {
       spi = &SPI;
       spi->begin(spi_config.clk, spi_config.miso, spi_config.mosi, -1);
-      if (dma_enabled) {
-        spi_host_device_t* spi_host = (spi_host_device_t*)spi_host_ptr;
-        *spi_host = VSPI_HOST;
-        initDMA(async_dma ? spi_config.cs : -1); 
-      }
     } else if (spi_config.bus_nr == 2) {
       spi = new SPIClass(HSPI);
       spi->begin(spi_config.clk, spi_config.miso, spi_config.mosi, -1);
-      if (dma_enabled) {
-        spi_host_device_t* spi_host = (spi_host_device_t*)spi_host_ptr;
-        *spi_host = HSPI_HOST;
-        initDMA(async_dma ? spi_config.cs : -1); 
-      }
     } else {
       pinMode(spi_config.clk, OUTPUT);
       digitalWrite(spi_config.clk, LOW);
       pinMode(spi_config.mosi, OUTPUT);
       digitalWrite(spi_config.mosi, LOW);
       if (spi_config.miso >= 0) {
-        busy_pin_ref = spi_config.miso;
         pinMode(spi_config.miso, INPUT_PULLUP);
       }
     }
@@ -340,8 +315,23 @@ void SPIController::hw_write9(uint8_t val, uint8_t dc) {
 
 // DMA
 #ifdef ESP32
-bool SPIController::initDMA(int32_t ctrl_cs) {
-    if (!spi) return false;
+bool SPIController::initDMA(uint16_t width, uint16_t height, uint8_t data) {
+    AddLog(3,"init dma %u %u %d",height,data, spi_config.cs);
+    if (!spi && spi_config.cs == -1) return false;
+    if((data&1) == 0){
+        AddLog(3,"no dma selected");
+        return false;
+    }
+    if (spi_config.bus_nr == 1){
+        AddLog(3,"dma spi 1");
+    } else if (spi_config.bus_nr == 2){
+        AddLog(3,"dma spi 2");
+        spi_host = HSPI_HOST;
+    } else {
+        return false;
+    }
+    async_dma_enabled = ((data&4) != 0);
+    dma_enabled = true;
     
     esp_err_t ret;
     spi_bus_config_t buscfg = {
@@ -350,7 +340,7 @@ bool SPIController::initDMA(int32_t ctrl_cs) {
         .sclk_io_num = spi_config.clk,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 320 * 240 * 2 + 8,
+        .max_transfer_sz = width * height * 2 + 8,
         .flags = 0,
         .intr_flags = 0
     };
@@ -365,21 +355,22 @@ bool SPIController::initDMA(int32_t ctrl_cs) {
         .cs_ena_posttrans = 0,
         .clock_speed_hz = (int)spi_config.speed,
         .input_delay_ns = 0,
-        .spics_io_num = ctrl_cs,
+        .spics_io_num = spi_config.cs,
         .flags = SPI_DEVICE_NO_DUMMY,
         .queue_size = 1,
         .pre_cb = 0,
         .post_cb = 0
     };
     
-    spi_host_device_t spi_host = (spi_config.bus_nr == 1) ? VSPI_HOST : HSPI_HOST;
+    // spi_host_device_t spi_host = (spi_config.bus_nr == 1) ? VSPI_HOST : HSPI_HOST;
     ret = spi_bus_initialize(spi_host, &buscfg, 1);
     if (ret != ESP_OK) return false;
     
     ret = spi_bus_add_device(spi_host, &devcfg, &dmaHAL);
     if (ret == ESP_OK) {
-        DMA_Enabled = true;  // ← CRITICAL: Set this to true!
+        DMA_Enabled = true;
         spiBusyCheck = 0;
+        AddLog(3,"init dma succes");
         return true;
     }
     return false;
@@ -419,7 +410,11 @@ void SPIController::dmaWait(void) {
 }
 
 void SPIController::pushPixelsDMA(uint16_t* image, uint32_t len) {
-  if ((len == 0) || (!DMA_Enabled)) return;
+  if(!DMA_Enabled){
+    getSPI()->writePixels(image, len * 2);
+    return;
+  }
+  if (len == 0) return;
 
   dmaWait();
 
