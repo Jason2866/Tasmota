@@ -88,19 +88,11 @@ public:
     bool setRotation(uint8_t rotation) override;
     bool updateFrame() override;
 
-#ifdef ESP32
-    void setLVGLData(uint16_t flushlines, uint8_t data) override;
-#endif
-
 private:
     // ===== Hardware & Configuration =====
     SPIController* spi;            // Not owned by panel
     SPIPanelConfig cfg;            // Copy of config
 
-#ifdef ESP32
-    LVGL_PARAMS_t lvgl_params;
-#endif
-    
     // ===== Framebuffer =====
     uint8_t* fb_buffer;            // Framebuffer (if provided by uDisplay)
 

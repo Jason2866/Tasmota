@@ -31,9 +31,6 @@ public:
     
     // Frame update method for displays that need explicit updates
     virtual bool updateFrame() = 0;
-#ifdef ESP32
-    virtual void setLVGLData(uint16_t flushlines, uint8_t data) {};
-#endif // ESP32
     // Framebuffer - own or external
     uint16_t* framebuffer = nullptr;
 };

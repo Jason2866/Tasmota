@@ -272,75 +272,75 @@ void uDisplay::Send_EP_Data() {
 #define IF_INVERT_COLOR 1
 #define renderer_swap(a, b) { int16_t t = a; a = b; b = t; }
 
-void uDisplay::DrawAbsolutePixel(int x, int y, int16_t color) {
-    int16_t w = width(), h = height();
-    if (cur_rot == 1 || cur_rot == 3) {
-        renderer_swap(w, h);
-    }
+// void uDisplay::DrawAbsolutePixel(int x, int y, int16_t color) {
+//     int16_t w = width(), h = height();
+//     if (cur_rot == 1 || cur_rot == 3) {
+//         renderer_swap(w, h);
+//     }
 
-    if (x < 0 || x >= w || y < 0 || y >= h) {
-        return;
-    }
+//     if (x < 0 || x >= w || y < 0 || y >= h) {
+//         return;
+//     }
     
-    if (IF_INVERT_COLOR) {
-        if (color) {
-            framebuffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
-        } else {
-            framebuffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
-        }
-    } else {
-        if (color) {
-            framebuffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
-        } else {
-            framebuffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
-        }
-    }
-}
+//     if (IF_INVERT_COLOR) {
+//         if (color) {
+//             framebuffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
+//         } else {
+//             framebuffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
+//         }
+//     } else {
+//         if (color) {
+//             framebuffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
+//         } else {
+//             framebuffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
+//         }
+//     }
+// }
 
-void uDisplay::drawPixel_EPD(int16_t x, int16_t y, uint16_t color) {
-    if (!framebuffer) return;
-    if ((x < 0) || (x >= width()) || (y < 0) || (y >= height()))
-        return;
+// void uDisplay::drawPixel_EPD(int16_t x, int16_t y, uint16_t color) {
+//     if (!framebuffer) return;
+//     if ((x < 0) || (x >= width()) || (y < 0) || (y >= height()))
+//         return;
 
-    switch (cur_rot) {
-    case 1:
-        renderer_swap(x, y);
-        x = gxs - x - 1;
-        break;
-    case 2:
-        x = gxs - x - 1;
-        y = gys - y - 1;
-        break;
-    case 3:
-        renderer_swap(x, y);
-        y = gys - y - 1;
-        break;
-    }
+//     switch (cur_rot) {
+//     case 1:
+//         renderer_swap(x, y);
+//         x = gxs - x - 1;
+//         break;
+//     case 2:
+//         x = gxs - x - 1;
+//         y = gys - y - 1;
+//         break;
+//     case 3:
+//         renderer_swap(x, y);
+//         y = gys - y - 1;
+//         break;
+//     }
 
-    DrawAbsolutePixel(x, y, color);
-}
+//     DrawAbsolutePixel(x, y, color);
+// }
 
-void uDisplay::fillRect_EPD(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-    for (uint32_t yp = y; yp < y + h; yp++) {
-        for (uint32_t xp = x; xp < x + w; xp++) {
-            drawPixel_EPD(xp, yp, color);
-        }
-    }
-}
+// void uDisplay::fillRect_EPD(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
+//     for (uint32_t yp = y; yp < y + h; yp++) {
+//         for (uint32_t xp = x; xp < x + w; xp++) {
+//             drawPixel_EPD(xp, yp, color);
+//         }
+//     }
+// }
 
-void uDisplay::drawFastVLine_EPD(int16_t x, int16_t y, int16_t h, uint16_t color) {
-    while (h--) {
-        drawPixel_EPD(x, y, color);
-        y++;
-    }
-}
+// void uDisplay::drawFastVLine_EPD(int16_t x, int16_t y, int16_t h, uint16_t color) {
+//     while (h--) {
+//         drawPixel_EPD(x, y, color);
+//         y++;
+//     }
+// }
 
-void uDisplay::drawFastHLine_EPD(int16_t x, int16_t y, int16_t w, uint16_t color) {
-    while (w--) {
-        drawPixel_EPD(x, y, color);
-        x++;
-    }
-}
+// void uDisplay::drawFastHLine_EPD(int16_t x, int16_t y, int16_t w, uint16_t color) {
+//     while (w--) {
+//         drawPixel_EPD(x, y, color);
+//         x++;
+//     }
+// }
 
 // ===== EPD SPI Helpers =====
 

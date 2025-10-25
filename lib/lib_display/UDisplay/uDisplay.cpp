@@ -619,8 +619,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             lvgl_param.flushlines = next_val(&lp1);
             lvgl_param.data = next_val(&lp1);
 #ifdef ESP32
-            if(interface != _UDSP_SPI)
-              lvgl_param.use_dma = false; // temporary fix to disable DMA due to a problem in esp-idf 5.3
+            // if(interface != _UDSP_SPI) // maybe test this later
+            lvgl_param.use_dma = false; // temporary fix to disable DMA due to a problem in esp-idf 5.3
 #endif
             break;
           case 'M':
@@ -1096,7 +1096,7 @@ if (interface == _UDSP_SPI) {
         send_spi_cmds(0, dsp_ncmds);  // Send init commands for regular SPI
         universal_panel = new SPIPanel(spi_config, spiController, frame_buffer);
 #ifdef ESP32
-        universal_panel->setLVGLData(lvgl_param.flushlines, lvgl_param.data);
+        spiController->initDMA(spi_config.width, lvgl_param.flushlines, lvgl_param.data);
 #endif
         universal_panel->fillRect(0, 0, 100, 100, 0xFF00);  // Yellow
         delay(2000);  // Hold for 2 seconds before anything else runs

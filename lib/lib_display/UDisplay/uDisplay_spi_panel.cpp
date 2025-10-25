@@ -20,19 +20,12 @@ SPIPanel::SPIPanel(const SPIPanelConfig& config,
     window_x1 = 0;
     window_y1 = 0;
     use_hw_spi = (spi->spi_config.dc >= 0) && (spi->spi_config.bus_nr <= 2);
-    lvgl_params.data = 2;
 }
 
 SPIPanel::~SPIPanel() {
     // Panel doesn't own framebuffer or SPI controller
 }
 
-void SPIPanel::setLVGLData(uint16_t flushlines, uint8_t data) {
-     lvgl_params.flushlines = flushlines;
-    lvgl_params.data = data;
-    AddLog(1,"init lvgl_data: %u",lvgl_params.data);
-    spi->initDMA(cfg.width, flushlines, data);
-}
 
 // ===== UniversalPanel Interface Implementation =====
 
@@ -112,14 +105,10 @@ bool SPIPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
     return false; // Let uDisplay handle framebuffer cases (monochrome OLEDs)
 }
 
-bool SPIPanel::pushColors(uint16_t *data, uint16_t len, bool not_swapped) { //not_swapped is always true in call form LVGL driver!!!!
+bool SPIPanel::pushColors(uint16_t *data, uint16_t len, bool not_swapped) {
     // Only handle direct rendering for color displays
     if (cfg.bpp < 16) {
         return false;
-    }
-
-    if (lvgl_params.swap_color) { // swapped?
-        not_swapped = !not_swapped; // old method
     }
     
     // Handle byte swapping for LVGL (when not_swapped == false)
