@@ -34,10 +34,13 @@ EPDPanel::EPDPanel(const EPDPanelConfig& config,
                    const uint8_t* lut_full,
                    uint16_t lut_full_len,
                    const uint8_t* lut_partial,
-                   uint16_t lut_partial_len)
+                   uint16_t lut_partial_len,
+                   const uint8_t** lut_array,
+                   const uint8_t* lut_cnt)
     : spi(spi_ctrl), cfg(config), fb_buffer(framebuffer), update_mode(0),
       lut_full(lut_full), lut_partial(lut_partial),
-      lut_full_len(lut_full_len), lut_partial_len(lut_partial_len)
+      lut_full_len(lut_full_len), lut_partial_len(lut_partial_len),
+      lut_array(lut_array), lut_cnt(lut_cnt)
 {
     // Set EPD-specific defaults
     if (!cfg.invert_framebuffer) {
@@ -122,18 +125,35 @@ void EPDPanel::setMemoryArea(int x_start, int y_start, int x_end, int y_end) {
     spi->writeData8(x_end1);
     
     spi->writeCommand(SET_RAM_Y_ADDRESS_START_END_POSITION);
-    spi->writeData8(y_start1);
-    spi->writeData8(y_start2);
-    spi->writeData8(y_end1);
-    spi->writeData8(y_end2);
+    if (cfg.ep_mode == 3) {
+        // ep_mode 3: reversed Y order
+        spi->writeData8(y_end1);
+        spi->writeData8(y_end2);
+        spi->writeData8(y_start1);
+        spi->writeData8(y_start2);
+    } else {
+        spi->writeData8(y_start1);
+        spi->writeData8(y_start2);
+        spi->writeData8(y_end1);
+        spi->writeData8(y_end2);
+    }
     spi->csHigh();
     spi->endTransaction();
 }
 
 void EPDPanel::setMemoryPointer(int x, int y) {
-    int x1 = (x >> 3) & 0xFF;
-    int y1 = y & 0xFF;
-    int y2 = (y >> 8) & 0xFF;
+    int x1, y1, y2;
+    
+    if (cfg.ep_mode == 3) {
+        x1 = (x >> 3) & 0xFF;
+        y--;
+        y1 = y & 0xFF;
+        y2 = (y >> 8) & 0xFF;
+    } else {
+        x1 = (x >> 3) & 0xFF;
+        y1 = y & 0xFF;
+        y2 = (y >> 8) & 0xFF;
+    }
 
     spi->beginTransaction();
     spi->csLow();
@@ -300,4 +320,139 @@ bool EPDPanel::updateFrame() {
     }
     
     return true;
+}
+
+// ===== ep_mode 2 Support (5-LUT mode) =====
+
+void EPDPanel::setLuts() {
+    if (!lut_array || !lut_cnt) return;
+    
+    for (uint8_t index = 0; index < 5; index++) {
+        if (cfg.lut_cmd[index] == 0 || !lut_array[index]) continue;
+        
+        spi->beginTransaction();
+        spi->csLow();
+        spi->writeCommand(cfg.lut_cmd[index]);
+        for (uint8_t count = 0; count < lut_cnt[index]; count++) {
+            spi->writeData8(lut_array[index][count]);
+        }
+        spi->csHigh();
+        spi->endTransaction();
+    }
+}
+
+void EPDPanel::clearFrame_42() {
+    spi->beginTransaction();
+    spi->csLow();
+    
+    spi->writeCommand(cfg.saw_1);
+    for (uint16_t j = 0; j < cfg.height; j++) {
+        for (uint16_t i = 0; i < cfg.width; i++) {
+            spi->writeData8(0xFF);
+        }
+    }
+
+    spi->writeCommand(cfg.saw_2);
+    for (uint16_t j = 0; j < cfg.height; j++) {
+        for (uint16_t i = 0; i < cfg.width; i++) {
+            spi->writeData8(0xFF);
+        }
+    }
+
+    spi->writeCommand(cfg.saw_3);
+    spi->csHigh();
+    spi->endTransaction();
+    
+    delay_sync(100);
+}
+
+void EPDPanel::displayFrame_42() {
+    spi->beginTransaction();
+    spi->csLow();
+    
+    spi->writeCommand(cfg.saw_1);
+    for(int i = 0; i < cfg.width / 8 * cfg.height; i++) {
+        spi->writeData8(0xFF);
+    }
+    
+    spi->csHigh();
+    spi->endTransaction();
+    delay(2);
+
+    spi->beginTransaction();
+    spi->csLow();
+    spi->writeCommand(cfg.saw_2);
+    for(int i = 0; i < cfg.width / 8 * cfg.height; i++) {
+        spi->writeData8(fb_buffer[i] ^ 0xff);
+    }
+    spi->csHigh();
+    spi->endTransaction();
+    delay(2);
+
+    setLuts();
+
+    spi->beginTransaction();
+    spi->csLow();
+    spi->writeCommand(cfg.saw_3);
+    spi->csHigh();
+    spi->endTransaction();
+    
+    delay_sync(100);
+}
+
+// ===== Frame Memory Management =====
+
+void EPDPanel::setFrameMemory(const uint8_t* image_buffer) {
+    setMemoryArea(0, 0, cfg.width - 1, cfg.height - 1);
+    setMemoryPointer(0, 0);
+    
+    spi->beginTransaction();
+    spi->csLow();
+    spi->writeCommand(WRITE_RAM);
+    for (int i = 0; i < cfg.width / 8 * cfg.height; i++) {
+        spi->writeData8(image_buffer[i] ^ 0xff);
+    }
+    spi->csHigh();
+    spi->endTransaction();
+}
+
+void EPDPanel::setFrameMemory(const uint8_t* image_buffer, uint16_t x, uint16_t y, uint16_t image_width, uint16_t image_height) {
+    if (!image_buffer) return;
+    
+    // Align to 8-pixel boundary
+    x &= 0xFFF8;
+    image_width &= 0xFFF8;
+    
+    uint16_t x_end = (x + image_width >= cfg.width) ? cfg.width - 1 : x + image_width - 1;
+    uint16_t y_end = (y + image_height >= cfg.height) ? cfg.height - 1 : y + image_height - 1;
+
+    // Full screen optimization
+    if (!x && !y && image_width == cfg.width && image_height == cfg.height) {
+        setFrameMemory(image_buffer);
+        return;
+    }
+
+    setMemoryArea(x, y, x_end, y_end);
+    setMemoryPointer(x, y);
+    
+    spi->beginTransaction();
+    spi->csLow();
+    spi->writeCommand(WRITE_RAM);
+    for (uint16_t j = 0; j < y_end - y + 1; j++) {
+        for (uint16_t i = 0; i < (x_end - x + 1) / 8; i++) {
+            spi->writeData8(image_buffer[i + j * (image_width / 8)] ^ 0xff);
+        }
+    }
+    spi->csHigh();
+    spi->endTransaction();
+}
+
+void EPDPanel::sendEPData() {
+    uint16_t image_width = cfg.width & 0xFFF8;
+    
+    for (uint16_t j = 0; j < cfg.height; j++) {
+        for (uint16_t i = 0; i < cfg.width / 8; i++) {
+            spi->writeData8(fb_buffer[i + j * (image_width / 8)] ^ 0xff);
+        }
+    }
 }

@@ -32,6 +32,14 @@ struct EPDPanelConfig {
     
     // Busy timeout
     uint16_t busy_timeout = 3000; // UDSP_BUSY_TIMEOUT
+    
+    // Command bytes for ep_mode 2 (4.2" displays)
+    uint8_t saw_1 = 0;  // First command for frame update
+    uint8_t saw_2 = 0;  // Second command for frame update
+    uint8_t saw_3 = 0;  // Third command for frame update
+    
+    // LUT commands (for ep_mode 2 - 5-LUT mode)
+    uint8_t lut_cmd[5] = {0};  // Commands for each LUT
 };
 
 class EPDPanel : public UniversalPanel {
@@ -42,7 +50,9 @@ public:
              const uint8_t* lut_full = nullptr,
              uint16_t lut_full_len = 0,
              const uint8_t* lut_partial = nullptr, 
-             uint16_t lut_partial_len = 0);
+             uint16_t lut_partial_len = 0,
+             const uint8_t** lut_array = nullptr,  // For ep_mode 2 (5-LUT)
+             const uint8_t* lut_cnt = nullptr);    // LUT sizes for ep_mode 2
 
     ~EPDPanel();
 
@@ -59,28 +69,42 @@ public:
     bool setRotation(uint8_t rotation) override;
     bool updateFrame() override;
 
+    // EPD-specific public methods (for uDisplay wrapper compatibility)
+    void setLut(const uint8_t* lut, uint16_t len);
+    void setLuts();  // For ep_mode 2 (5-LUT mode)
+    void setMemoryArea(int x_start, int y_start, int x_end, int y_end);
+    void setMemoryPointer(int x, int y);
+    void clearFrameMemory(uint8_t color);
+    void displayFrame();
+    void delay_sync(int32_t ms);
+    
+    // ep_mode 2 specific (4.2" displays)
+    void clearFrame_42();
+    void displayFrame_42();
+    
+    // Frame memory management
+    void setFrameMemory(const uint8_t* image_buffer);
+    void setFrameMemory(const uint8_t* image_buffer, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
+    void sendEPData();
+
 private:
     SPIController* spi;
     EPDPanelConfig cfg;
     uint8_t* fb_buffer;  // Framebuffer (always used)
     uint8_t update_mode; // 0=full, 1=partial
     
-    // LUT data
+    // LUT data (ep_mode 1)
     const uint8_t* lut_full;
     const uint8_t* lut_partial;
     uint16_t lut_full_len;
     uint16_t lut_partial_len;
+    
+    // LUT data (ep_mode 2 - 5-LUT mode)
+    const uint8_t** lut_array;  // Array of 5 LUTs
+    const uint8_t* lut_cnt;     // Size of each LUT
 
-    // EPD-specific methods
-    void setLut(const uint8_t* lut, uint16_t len);
-    void setMemoryArea(int x_start, int y_start, int x_end, int y_end);
-    void setMemoryPointer(int x, int y);
-    void clearFrameMemory(uint8_t color);
-    void displayFrame();
-    void delay_sync(int32_t ms);  // Added: Busy-aware delay
+    // Private helpers
     void resetDisplay();
     void waitBusy();
-    
-    // Drawing helpers
     void drawAbsolutePixel(int x, int y, uint16_t color);
 };

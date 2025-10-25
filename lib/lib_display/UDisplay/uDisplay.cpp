@@ -20,6 +20,7 @@
 #include <Arduino.h>
 #include "uDisplay.h"
 #include "uDisplay_config.h"
+#include "uDisplay_epd_panel.h"
 
 #include "tasmota_options.h"
 
@@ -862,6 +863,9 @@ uint16_t index = 0;
     index++;
     if ((ep_mode == 1 || ep_mode == 3) && iob >= EP_RESET) {
       // epaper pseudo opcodes
+      if (!universal_panel) return;
+      EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+      
       uint8_t args = dsp_cmds[cmd_offset++];
       index++;
 #ifdef UDSP_DEBUG
@@ -876,11 +880,11 @@ uint16_t index = 0;
           reset_pin(iob, iob);
           break;
         case EP_LUT_FULL:
-          SetLut(lut_full);
+          epd->setLut(lut_full, lutfsize);
           ep_update_mode = DISPLAY_INIT_FULL;
           break;
         case EP_LUT_PARTIAL:
-          SetLut(lut_partial);
+          epd->setLut(lut_partial, lutpsize);
           ep_update_mode = DISPLAY_INIT_PARTIAL;
           break;
         case EP_WAITIDLE:
@@ -888,23 +892,22 @@ uint16_t index = 0;
             iob = dsp_cmds[cmd_offset++];
             index++;
           }
-          //delay(iob * 10);
           delay_sync(iob * 10);
           break;
         case EP_SET_MEM_AREA:
-          SetMemoryArea(0, 0, gxs - 1, gys - 1);
+          epd->setMemoryArea(0, 0, gxs - 1, gys - 1);
           break;
         case EP_SET_MEM_PTR:
-          SetMemoryPointer(0, 0);
+          epd->setMemoryPointer(0, 0);
           break;
         case EP_SEND_DATA:
-          Send_EP_Data();
+          epd->sendEPData();
           break;
         case EP_CLR_FRAME:
-          ClearFrameMemory(0xFF);
+          epd->clearFrameMemory(0xFF);
           break;
         case EP_SEND_FRAME:
-          SetFrameMemory(framebuffer);
+          epd->setFrameMemory(framebuffer);
           break;
         case EP_BREAK_RR_EQU:
           if (args & 1) {
@@ -1206,6 +1209,32 @@ if (interface == _UDSP_SPI) {
   return this;
 }
 
+// EPD update coordinator - dispatches to appropriate EPD update method
+void uDisplay::Updateframe_EPD(void) {
+    if (!universal_panel) return;
+    EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+    
+    if (ep_mode == 1 || ep_mode == 3) {
+        switch (ep_update_mode) {
+            case DISPLAY_INIT_PARTIAL:
+                if (epc_part_cnt) {
+                    send_spi_cmds(epcoffs_part, epc_part_cnt);
+                }
+                break;
+            case DISPLAY_INIT_FULL:
+                if (epc_full_cnt) {
+                    send_spi_cmds(epcoffs_full, epc_full_cnt);
+                }
+                break;
+            default:
+                epd->setFrameMemory(framebuffer, 0, 0, gxs, gys);
+                epd->displayFrame();
+        }
+    } else {
+        epd->displayFrame_42();
+    }
+}
+
 void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
   if (p != DISPLAY_INIT_MODE && ep_mode) {
     ep_update_mode = p;
@@ -1214,7 +1243,10 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
 #ifdef UDSP_DEBUG
         AddLog(LOG_LEVEL_DEBUG, "init partial epaper mode");
 #endif
-        SetLut(lut_partial);
+        if (universal_panel) {
+          EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+          epd->setLut(lut_partial, lutpsize);
+        }
         Updateframe_EPD();
         delay_sync(lutptime * 10);
       }
@@ -1223,13 +1255,15 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
 #ifdef UDSP_DEBUG
       AddLog(LOG_LEVEL_DEBUG, "init full epaper mode");
 #endif
-      if (lutfsize) {
-        SetLut(lut_full);
+      if (lutfsize && universal_panel) {
+        EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+        epd->setLut(lut_full, lutfsize);
         Updateframe_EPD();
       }
-      if (ep_mode == 2) {
-        ClearFrame_42();
-        DisplayFrame_42();
+      if (ep_mode == 2 && universal_panel) {
+        EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+        epd->clearFrame_42();
+        epd->displayFrame_42();
       }
       delay_sync(lutftime * 10);
       return;
