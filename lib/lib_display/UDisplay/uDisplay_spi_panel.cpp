@@ -180,10 +180,17 @@ bool SPIPanel::pushColors(uint16_t *data, uint16_t len, bool not_swapped) {
     // Handle 16-bit color mode with no byte swapping (not_swapped == true)
     if (not_swapped) {
         if (use_hw_spi) {
+#ifdef ESP32
             spi->getSPI()->writePixels(data, len * 2);
+#else
+            // ESP8266: writePixels() doesn't exist, use per-pixel write
+            for (uint16_t i = 0; i < len; i++) {
+                spi->writeData16(data[i]);
+            }
+#endif
             return true;
         }
-        // Data from displaytext - needs per-pixel writing
+        // Software SPI - write per-pixel
         for (uint16_t i = 0; i < len; i++) {
             spi->writeData16(data[i]);
         }
