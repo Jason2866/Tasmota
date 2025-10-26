@@ -1,34 +1,27 @@
 #include "uDisplay_i2c_panel.h"
 
-i2c_panel::i2c_panel(uint8_t i2c_addr, TwoWire& wire,
-                     uint16_t width, uint16_t height,
-                     uint8_t set_x_cmd, uint8_t set_y_cmd, uint8_t write_cmd,
-                     uint8_t page_start, uint8_t page_end, uint8_t col_start, uint8_t col_end,
-                     uint8_t display_on_cmd, uint8_t display_off_cmd,
-                     uint8_t invert_on_cmd, uint8_t invert_off_cmd, uint8_t* init_commands, uint16_t init_commands_count, uint8_t* framebuffer)
-    : _i2c_address(i2c_addr), _wire(wire),
-      _width(width), _height(height),
-      _set_x_cmd(set_x_cmd), _set_y_cmd(set_y_cmd), _write_cmd(write_cmd),
-      _page_start(page_start), _page_end(page_end), _col_start(col_start), _col_end(col_end),
-      _display_on_cmd(display_on_cmd), _display_off_cmd(display_off_cmd),
-      _invert_on_cmd(invert_on_cmd), _invert_off_cmd(invert_off_cmd), framebuffer(framebuffer) {
+i2c_panel::i2c_panel(const I2CPanelConfig& config, uint8_t* framebuffer)
+    : cfg(config), framebuffer(framebuffer) {
             
-        for (uint16_t i = 0; i < init_commands_count; i++) {
-            i2c_command(init_commands[i]);
+    // Execute initialization commands
+    if (cfg.init_commands && cfg.init_commands_count > 0) {
+        for (uint16_t i = 0; i < cfg.init_commands_count; i++) {
+            i2c_command(cfg.init_commands[i]);
         }
+    }
 }
 
 bool i2c_panel::updateFrame() {
     if (!framebuffer) return false;
     
-    i2c_command(_set_x_cmd | 0x0);
-    i2c_command(_page_start | 0x0);  
-    i2c_command(_page_end | 0x0);
+    i2c_command(cfg.cmd_set_addr_x | 0x0);
+    i2c_command(cfg.page_start | 0x0);  
+    i2c_command(cfg.page_end | 0x0);
 
-    uint8_t ys = _height >> 3;  // Use stored height
-    uint8_t xs = _width >> 3;   // Use stored width
-    uint8_t m_row = _set_y_cmd;
-    uint8_t m_col = _col_start;
+    uint8_t ys = cfg.height >> 3;
+    uint8_t xs = cfg.width >> 3;
+    uint8_t m_row = cfg.cmd_set_addr_y;
+    uint8_t m_col = cfg.col_start;
 
     uint16_t p = 0;
     uint8_t i, j, k = 0;
@@ -39,30 +32,30 @@ bool i2c_panel::updateFrame() {
         i2c_command(0x10 | (m_col >> 4));
 
         for (j = 0; j < 8; j++) {
-            _wire.beginTransmission(_i2c_address);
-            _wire.write(0x40);
+            cfg.wire->beginTransmission(cfg.i2c_address);
+            cfg.wire->write(0x40);
             for (k = 0; k < xs; k++, p++) {
-                _wire.write(framebuffer[p]);
+                cfg.wire->write(framebuffer[p]);
             }
-            _wire.endTransmission();
+            cfg.wire->endTransmission();
         }
     }
     return true;
 }
 
 bool i2c_panel::displayOnff(int8_t on) {
-    i2c_command(on ? _display_on_cmd : _display_off_cmd);
+    i2c_command(on ? cfg.cmd_display_on : cfg.cmd_display_off);
     return true;
 }
 
 bool i2c_panel::invertDisplay(bool invert) {
-    i2c_command(invert ? _invert_on_cmd : _invert_off_cmd);
+    i2c_command(invert ? cfg.cmd_invert_on : cfg.cmd_invert_off);
     return true;
 }
 
 void i2c_panel::i2c_command(uint8_t val) {
-    _wire.beginTransmission(_i2c_address);
-    _wire.write(0);
-    _wire.write(val);
-    _wire.endTransmission();
+    cfg.wire->beginTransmission(cfg.i2c_address);
+    cfg.wire->write(0);
+    cfg.wire->write(val);
+    cfg.wire->endTransmission();
 }

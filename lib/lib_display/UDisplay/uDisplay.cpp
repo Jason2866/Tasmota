@@ -1021,8 +1021,27 @@ Renderer *uDisplay::Init(void) {
 #endif // ESP32
 
     if (wire) {
-      universal_panel = new i2c_panel(i2caddr, *wire, gxs, gys, saw_1, saw_2, saw_3, i2c_page_start, i2c_page_end,
-                                       i2c_col_start, i2c_col_end, dsp_on, dsp_off, inv_on, inv_off, dsp_cmds, dsp_ncmds, frame_buffer);
+      I2CPanelConfig i2c_config = {
+        .width = gxs,
+        .height = gys,
+        .bpp = bpp,
+        .i2c_address = i2caddr,
+        .wire = wire,
+        .cmd_set_addr_x = saw_1,
+        .cmd_set_addr_y = saw_2,
+        .cmd_write_ram = saw_3,
+        .cmd_display_on = dsp_on,
+        .cmd_display_off = dsp_off,
+        .cmd_invert_on = inv_on,
+        .cmd_invert_off = inv_off,
+        .page_start = i2c_page_start,
+        .page_end = i2c_page_end,
+        .col_start = i2c_col_start,
+        .col_end = i2c_col_end,
+        .init_commands = dsp_cmds,
+        .init_commands_count = dsp_ncmds
+      };
+      universal_panel = new i2c_panel(i2c_config, frame_buffer);
     }
   }
 
@@ -1177,17 +1196,37 @@ if (interface == _UDSP_SPI) {
 
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
   #ifdef UDISPLAY_I80
-      universal_panel = new I80Panel(
-          gxs, gys,                    // width, height
-          par_cs, par_rs, par_wr, par_rd,  // control pins
-          par_dbl, par_dbh,            // data pins
-          (interface == _UDSP_PAR16) ? 16 : 8, // bus width
-          spi_speed,                   // clock speed
-          saw_1, saw_2, saw_3,         // column, row, write commands
-          col_mode,                    // color mode (16 or 18)
-          x_addr_offs, y_addr_offs,    // rotation offsets
-          dsp_cmds, dsp_ncmds          // INIT COMMANDS - ADD THIS
-      );
+      I80PanelConfig i80_config = {
+        .width = gxs,
+        .height = gys,
+        .bpp = bpp,
+        .color_mode = col_mode,
+        .cs_pin = par_cs,
+        .dc_pin = par_rs,
+        .wr_pin = par_wr,
+        .rd_pin = par_rd,
+        .bus_width = (uint8_t)((interface == _UDSP_PAR16) ? 16 : 8),
+        .clock_speed_hz = spi_speed * 1000000,
+        .cmd_set_addr_x = saw_1,
+        .cmd_set_addr_y = saw_2,
+        .cmd_write_ram = saw_3,
+        .init_commands = dsp_cmds,
+        .init_commands_count = dsp_ncmds
+      };
+      
+      // Copy data pins
+      for (int i = 0; i < 8; i++) {
+        i80_config.data_pins_low[i] = par_dbl[i];
+        i80_config.data_pins_high[i] = par_dbh[i];
+      }
+      
+      // Copy rotation offsets
+      for (int i = 0; i < 4; i++) {
+        i80_config.x_addr_offset[i] = x_addr_offs[i];
+        i80_config.y_addr_offset[i] = y_addr_offs[i];
+      }
+      
+      universal_panel = new I80Panel(i80_config);
 
       // Reset handling
       if (reset >= 0) {

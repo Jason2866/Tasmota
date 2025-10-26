@@ -10,59 +10,33 @@ static inline volatile uint32_t* get_gpio_lo_reg(int_fast8_t pin) { return (pin 
 static inline void gpio_hi(int_fast8_t pin) { if (pin >= 0) *get_gpio_hi_reg(pin) = 1 << (pin & 31); }
 static inline void gpio_lo(int_fast8_t pin) { if (pin >= 0) *get_gpio_lo_reg(pin) = 1 << (pin & 31); }
 
-I80Panel::I80Panel(int16_t width, int16_t height,
-                   int8_t cs_pin, int8_t dc_pin, int8_t wr_pin, int8_t rd_pin,
-                   int8_t* data_pins_low, int8_t* data_pins_high, uint8_t bus_width,
-                   uint32_t clock_speed_hz,
-                   uint8_t col_cmd, uint8_t row_cmd, uint8_t write_cmd,
-                   uint8_t color_mode,
-                   uint16_t* x_offsets, uint16_t* y_offsets,
-                   uint8_t* init_commands, uint16_t init_commands_count)
-    : _cs_pin(cs_pin), _dc_pin(dc_pin), _wr_pin(wr_pin), _rd_pin(rd_pin),
-      _bus_width(bus_width), _clock_speed(clock_speed_hz),
-      _width(width), _height(height), _rotation(0),
-      _color_mode(color_mode),
-      _col_cmd(col_cmd), _row_cmd(row_cmd), _write_cmd(write_cmd),
+I80Panel::I80Panel(const I80PanelConfig& config)
+    : cfg(config),
+      _width(config.width), _height(config.height), _rotation(0),
       _i80_bus(nullptr), _dev(nullptr), _dmadesc(nullptr),
       _DMA_Enabled(false), _dma_chan(nullptr), _dmadesc_size(0),
       _addr_x0(0), _addr_y0(0), _addr_x1(0), _addr_y1(0) {
-    
-    // Store original dimensions for rotation
-    _orig_width = width;
-    _orig_height = height;
-    
-    // Initialize rotation offsets
-    for (int i = 0; i < 4; i++) {
-        _x_offsets[i] = (x_offsets != nullptr) ? x_offsets[i] : 0;
-        _y_offsets[i] = (y_offsets != nullptr) ? y_offsets[i] : 0;
-    }
-    
-    // Copy data pins
-    for (int i = 0; i < 8; i++) {
-        _data_pins_low[i] = data_pins_low[i];
-        _data_pins_high[i] = data_pins_high[i];
-    }
     
     framebuffer = nullptr;
 
     // Initialize I80 bus using ESP LCD API
     esp_lcd_i80_bus_config_t bus_config = {
-        .dc_gpio_num = _dc_pin,
-        .wr_gpio_num = _wr_pin,
+        .dc_gpio_num = cfg.dc_pin,
+        .wr_gpio_num = cfg.wr_pin,
         .clk_src = LCD_CLK_SRC_DEFAULT,
-        .bus_width = _bus_width,
-        .max_transfer_bytes = (size_t)_width * _height * 2
+        .bus_width = cfg.bus_width,
+        .max_transfer_bytes = (size_t)cfg.width * cfg.height * 2
     };
     
     // Set data pins
-    if (_bus_width == 8) {
+    if (cfg.bus_width == 8) {
         for (int i = 0; i < 8; i++) {
-            bus_config.data_gpio_nums[i] = _data_pins_low[i];
+            bus_config.data_gpio_nums[i] = cfg.data_pins_low[i];
         }
     } else {
         for (int i = 0; i < 8; i++) {
-            bus_config.data_gpio_nums[i] = _data_pins_low[i];
-            bus_config.data_gpio_nums[i + 8] = _data_pins_high[i];
+            bus_config.data_gpio_nums[i] = cfg.data_pins_low[i];
+            bus_config.data_gpio_nums[i + 8] = cfg.data_pins_high[i];
         }
     }
     
@@ -70,29 +44,29 @@ I80Panel::I80Panel(int16_t width, int16_t height,
     esp_lcd_new_i80_bus(&bus_config, &_i80_bus);
 
     // Initialize pins manually
-    pinMode(_cs_pin, OUTPUT);
-    digitalWrite(_cs_pin, HIGH);
-    pinMode(_dc_pin, OUTPUT);
-    digitalWrite(_dc_pin, HIGH);
-    pinMode(_wr_pin, OUTPUT);
-    digitalWrite(_wr_pin, HIGH);
-    if (_rd_pin >= 0) {
-        pinMode(_rd_pin, OUTPUT);
-        digitalWrite(_rd_pin, HIGH);
+    pinMode(cfg.cs_pin, OUTPUT);
+    digitalWrite(cfg.cs_pin, HIGH);
+    pinMode(cfg.dc_pin, OUTPUT);
+    digitalWrite(cfg.dc_pin, HIGH);
+    pinMode(cfg.wr_pin, OUTPUT);
+    digitalWrite(cfg.wr_pin, HIGH);
+    if (cfg.rd_pin >= 0) {
+        pinMode(cfg.rd_pin, OUTPUT);
+        digitalWrite(cfg.rd_pin, HIGH);
     }
 
     for (int i = 0; i < 8; i++) {
-        pinMode(_data_pins_low[i], OUTPUT);
+        pinMode(cfg.data_pins_low[i], OUTPUT);
     }
-    if (_bus_width == 16) {
+    if (cfg.bus_width == 16) {
         for (int i = 0; i < 8; i++) {
-            pinMode(_data_pins_high[i], OUTPUT);
+            pinMode(cfg.data_pins_high[i], OUTPUT);
         }
     }
 
     // Calculate clock using original algorithm
     uint32_t div_a, div_b, div_n, clkcnt;
-    calcClockDiv(&div_a, &div_b, &div_n, &clkcnt, 240*1000*1000, _clock_speed*1000000);
+    calcClockDiv(&div_a, &div_b, &div_n, &clkcnt, 240*1000*1000, cfg.clock_speed_hz);
     
     lcd_cam_lcd_clock_reg_t lcd_clock;
     lcd_clock.lcd_clkcnt_n = std::max((uint32_t)1u, clkcnt - 1);
@@ -110,22 +84,22 @@ I80Panel::I80Panel(int16_t width, int16_t height,
     _dev = &LCD_CAM;
 
     // EXECUTE INITIALIZATION COMMANDS (from original uDisplay code)
-    if (init_commands && init_commands_count > 0) {
+    if (cfg.init_commands && cfg.init_commands_count > 0) {
         uint16_t index = 0;
         pb_beginTransaction();
         
-        while (index < init_commands_count) {
+        while (index < cfg.init_commands_count) {
             cs_control(false);
             
-            uint8_t cmd = init_commands[index++];
+            uint8_t cmd = cfg.init_commands[index++];
             pb_writeCommand(cmd, 8);
             
-            if (index < init_commands_count) {
-                uint8_t args = init_commands[index++];
+            if (index < cfg.init_commands_count) {
+                uint8_t args = cfg.init_commands[index++];
                 uint8_t arg_count = args & 0x1f;
                 
-                for (uint32_t cnt = 0; cnt < arg_count && index < init_commands_count; cnt++) {
-                    uint8_t arg_data = init_commands[index++];
+                for (uint32_t cnt = 0; cnt < arg_count && index < cfg.init_commands_count; cnt++) {
+                    uint8_t arg_data = cfg.init_commands[index++];
                     pb_writeData(arg_data, 8);
                 }
                 
@@ -305,13 +279,13 @@ bool I80Panel::setRotation(uint8_t rotation) {
     switch (_rotation) {
         case 0:
         case 2:
-            _width = _orig_width;
-            _height = _orig_height;
+            _width = cfg.width;
+            _height = cfg.height;
             break;
         case 1:
         case 3:
-            _width = _orig_height;
-            _height = _orig_width;
+            _width = cfg.height;
+            _height = cfg.width;
             break;
     }
     
@@ -328,46 +302,46 @@ uint32_t I80Panel::getSimpleResistiveTouch(uint32_t threshold) {
     if (pb_busy()) return 0;
 
     // Temporarily reconfigure I80 pins as GPIOs for analog touch
-    gpio_matrix_out(_dc_pin, 0x100, 0, 0);
+    gpio_matrix_out(cfg.dc_pin, 0x100, 0, 0);
 
-    pinMode(_data_pins_low[0], INPUT_PULLUP);
-    pinMode(_dc_pin, INPUT_PULLUP);
+    pinMode(cfg.data_pins_low[0], INPUT_PULLUP);
+    pinMode(cfg.dc_pin, INPUT_PULLUP);
 
-    pinMode(_cs_pin, OUTPUT);
-    pinMode(_data_pins_low[1], OUTPUT);
-    digitalWrite(_cs_pin, HIGH);
-    digitalWrite(_data_pins_low[1], LOW);
+    pinMode(cfg.cs_pin, OUTPUT);
+    pinMode(cfg.data_pins_low[1], OUTPUT);
+    digitalWrite(cfg.cs_pin, HIGH);
+    digitalWrite(cfg.data_pins_low[1], LOW);
 
-    xp = 4096 - analogRead(_data_pins_low[0]);
+    xp = 4096 - analogRead(cfg.data_pins_low[0]);
 
-    pinMode(_cs_pin, INPUT_PULLUP);
-    pinMode(_data_pins_low[1], INPUT_PULLUP);
+    pinMode(cfg.cs_pin, INPUT_PULLUP);
+    pinMode(cfg.data_pins_low[1], INPUT_PULLUP);
 
-    pinMode(_data_pins_low[0], OUTPUT);
-    pinMode(_dc_pin, OUTPUT);
-    digitalWrite(_data_pins_low[0], HIGH);
-    digitalWrite(_dc_pin, LOW);
+    pinMode(cfg.data_pins_low[0], OUTPUT);
+    pinMode(cfg.dc_pin, OUTPUT);
+    digitalWrite(cfg.data_pins_low[0], HIGH);
+    digitalWrite(cfg.dc_pin, LOW);
 
-    yp = 4096 - analogRead(_data_pins_low[1]);
+    yp = 4096 - analogRead(cfg.data_pins_low[1]);
 
     aval = (xp << 16) | yp;
 
     // Restore pins to I80 function
-    pinMode(_dc_pin, OUTPUT);
-    pinMode(_cs_pin, OUTPUT);
-    pinMode(_data_pins_low[0], OUTPUT);
-    pinMode(_data_pins_low[1], OUTPUT);
-    digitalWrite(_dc_pin, HIGH);
-    digitalWrite(_cs_pin, HIGH);
+    pinMode(cfg.dc_pin, OUTPUT);
+    pinMode(cfg.cs_pin, OUTPUT);
+    pinMode(cfg.data_pins_low[0], OUTPUT);
+    pinMode(cfg.data_pins_low[1], OUTPUT);
+    digitalWrite(cfg.dc_pin, HIGH);
+    digitalWrite(cfg.cs_pin, HIGH);
 
-    gpio_matrix_out(_dc_pin, LCD_DC_IDX, 0, 0);
+    gpio_matrix_out(cfg.dc_pin, LCD_DC_IDX, 0, 0);
 
     return aval;
 }
 
 // Color mode helper
 void I80Panel::writeColor(uint16_t color) {
-    if (_color_mode == 18) {
+    if (cfg.color_mode == 18) {
         uint8_t r = (color & 0xF800) >> 11;
         uint8_t g = (color & 0x07E0) >> 5;
         uint8_t b = color & 0x001F;
@@ -385,8 +359,8 @@ void I80Panel::writeColor(uint16_t color) {
 
 void I80Panel::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
     // Apply rotation-specific offsets
-    uint16_t x_offset = _x_offsets[_rotation];
-    uint16_t y_offset = _y_offsets[_rotation];
+    uint16_t x_offset = cfg.x_addr_offset[_rotation];
+    uint16_t y_offset = cfg.y_addr_offset[_rotation];
     
     uint16_t x2 = x + w - 1 + x_offset;
     uint16_t y2 = y + h - 1 + y_offset;
@@ -394,17 +368,17 @@ void I80Panel::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
     y += y_offset;
     
     // Set column address range
-    pb_writeCommand(_col_cmd, 8);
+    pb_writeCommand(cfg.cmd_set_addr_x, 8);
     pb_writeData(x, 16);
     pb_writeData(x2, 16);
     
     // Set row address range  
-    pb_writeCommand(_row_cmd, 8);
+    pb_writeCommand(cfg.cmd_set_addr_y, 8);
     pb_writeData(y, 16);
     pb_writeData(y2, 16);
     
     // Start memory write
-    pb_writeCommand(_write_cmd, 8);
+    pb_writeCommand(cfg.cmd_write_ram, 8);
     
     // Store for push operations
     _addr_x0 = x;
@@ -495,30 +469,30 @@ bool I80Panel::pb_busy(void) {
 
 void I80Panel::_pb_init_pin(bool read) {
     if (read) {
-        if (_bus_width == 8) {
+        if (cfg.bus_width == 8) {
             for (size_t i = 0; i < 8; ++i) {
-                gpio_ll_output_disable(&GPIO, (gpio_num_t)_data_pins_low[i]);
+                gpio_ll_output_disable(&GPIO, (gpio_num_t)cfg.data_pins_low[i]);
             }
         } else {
             for (size_t i = 0; i < 8; ++i) {
-                gpio_ll_output_disable(&GPIO, (gpio_num_t)_data_pins_low[i]);
+                gpio_ll_output_disable(&GPIO, (gpio_num_t)cfg.data_pins_low[i]);
             }
             for (size_t i = 0; i < 8; ++i) {
-                gpio_ll_output_disable(&GPIO, (gpio_num_t)_data_pins_high[i]);
+                gpio_ll_output_disable(&GPIO, (gpio_num_t)cfg.data_pins_high[i]);
             }
         }
     } else {
         auto idx_base = LCD_DATA_OUT0_IDX;
-        if (_bus_width == 8) {
+        if (cfg.bus_width == 8) {
             for (size_t i = 0; i < 8; ++i) {
-                gpio_matrix_out(_data_pins_low[i], idx_base + i, 0, 0);
+                gpio_matrix_out(cfg.data_pins_low[i], idx_base + i, 0, 0);
             }
         } else {
             for (size_t i = 0; i < 8; ++i) {
-                gpio_matrix_out(_data_pins_low[i], idx_base + i, 0, 0);
+                gpio_matrix_out(cfg.data_pins_low[i], idx_base + i, 0, 0);
             }
             for (size_t i = 0; i < 8; ++i) {
-                gpio_matrix_out(_data_pins_high[i], idx_base + 8 + i, 0, 0);
+                gpio_matrix_out(cfg.data_pins_high[i], idx_base + 8 + i, 0, 0);
             }
         }
     }
@@ -529,7 +503,7 @@ bool I80Panel::pb_writeCommand(uint32_t data, uint_fast8_t bit_length) {
     auto reg_lcd_user = &(dev->lcd_user.val);
     dev->lcd_misc.val = LCD_CAM_LCD_CD_IDLE_EDGE | LCD_CAM_LCD_CD_CMD_SET;
 
-    if (_bus_width == 8) {
+    if (cfg.bus_width == 8) {
         auto bytes = bit_length >> 3;
         do {
             dev->lcd_cmd_val.lcd_cmd_value = data;
@@ -552,7 +526,7 @@ void I80Panel::pb_writeData(uint32_t data, uint_fast8_t bit_length) {
     dev->lcd_misc.val = LCD_CAM_LCD_CD_IDLE_EDGE;
     auto bytes = bit_length >> 3;
 
-    if (_bus_width == 8) {
+    if (cfg.bus_width == 8) {
         uint8_t shift = (bytes - 1) * 8;
         for (uint32_t cnt = 0; cnt < bytes; cnt++) {
             dev->lcd_cmd_val.lcd_cmd_value = (data >> shift) & 0xff;
@@ -627,7 +601,7 @@ void I80Panel::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
     auto reg_lcd_user = &(dev->lcd_user.val);
     dev->lcd_misc.val = LCD_CAM_LCD_CD_IDLE_EDGE;
 
-    if (_bus_width == 8) {
+    if (cfg.bus_width == 8) {
         if (swap_bytes) {
             // FIXED: High byte first, then low byte
             for (uint32_t cnt = 0; cnt < length; cnt++) {
@@ -672,7 +646,7 @@ void I80Panel::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
 }
 
 void I80Panel::cs_control(bool level) {
-    auto pin = _cs_pin;
+    auto pin = cfg.cs_pin;
     if (pin < 0) return;
     if (level) {
         gpio_hi(pin);

@@ -29,16 +29,46 @@
 #include "esp_rom_lldesc.h"
 #include <rom/gpio.h>
 
+/**
+ * Configuration for I80 (8080/6800) parallel displays
+ */
+struct I80PanelConfig {
+    // ===== Display Dimensions =====
+    uint16_t width;
+    uint16_t height;
+    uint8_t bpp;              // bits per pixel (typically 16)
+    uint8_t color_mode;       // color mode (16, 18, etc.)
+
+    // ===== Bus Configuration =====
+    int8_t cs_pin;            // Chip select
+    int8_t dc_pin;            // Data/Command
+    int8_t wr_pin;            // Write strobe
+    int8_t rd_pin;            // Read strobe (-1 if not used)
+    int8_t data_pins_low[8];  // D0-D7 pins
+    int8_t data_pins_high[8]; // D8-D15 pins (for 16-bit bus)
+    uint8_t bus_width;        // 8 or 16
+    uint32_t clock_speed_hz;  // Bus clock speed
+
+    // ===== Display Commands =====
+    uint8_t cmd_set_addr_x;   // Column address command
+    uint8_t cmd_set_addr_y;   // Row/page address command
+    uint8_t cmd_write_ram;    // Write to RAM command
+
+    // ===== Per-Rotation Configuration =====
+    uint16_t x_addr_offset[4]; // Address offset per rotation
+    uint16_t y_addr_offset[4];
+
+    // ===== Initialization =====
+    uint8_t* init_commands;
+    uint16_t init_commands_count;
+};
+
 class I80Panel : public UniversalPanel {
 public:
-    I80Panel(int16_t width, int16_t height, 
-            int8_t cs_pin, int8_t dc_pin, int8_t wr_pin, int8_t rd_pin,
-            int8_t* data_pins_low, int8_t* data_pins_high, uint8_t bus_width,
-            uint32_t clock_speed_hz,
-            uint8_t col_cmd, uint8_t row_cmd, uint8_t write_cmd,
-            uint8_t color_mode = 16,
-            uint16_t* x_offsets = nullptr, uint16_t* y_offsets = nullptr,
-            uint8_t* init_commands = nullptr, uint16_t init_commands_count = 0);
+    /**
+     * Constructor - receives configuration struct
+     */
+    I80Panel(const I80PanelConfig& config);
     virtual ~I80Panel();
 
     // UniversalPanel interface
@@ -63,23 +93,12 @@ public:
     void dmaWait();
 
 private:
-    // I80 configuration
-    int8_t _cs_pin, _dc_pin, _wr_pin, _rd_pin;
-    int8_t _data_pins_low[8];
-    int8_t _data_pins_high[8];
-    uint8_t _bus_width;
-    uint32_t _clock_speed;
-    int16_t _orig_width, _orig_height;
+    // ===== Hardware & Configuration =====
+    I80PanelConfig cfg;        // Copy of config
+    
+    // ===== Display State =====
     int16_t _width, _height;
     uint8_t _rotation;
-    uint8_t _color_mode;
-    
-    // Display commands
-    uint8_t _col_cmd, _row_cmd, _write_cmd;
-    
-    // Rotation offsets
-    uint16_t _x_offsets[4];
-    uint16_t _y_offsets[4];
     
     // I80 hardware handles
     esp_lcd_i80_bus_handle_t _i80_bus;
