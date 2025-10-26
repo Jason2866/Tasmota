@@ -17,7 +17,6 @@
   #include "uDisplay_i80_panel.h"
 #endif
 
-#define USE_UNIVERSAL_PANEL
 #if defined(SOC_LCD_RGB_SUPPORTED)
   #include "uDisplay_rgb_panel.h"
 #endif
@@ -30,13 +29,31 @@
 #endif
 #include "soc/gpio_periph.h"
 #include <rom/gpio.h>
-#include "driver/spi_master.h"
+// #include "driver/spi_master.h"
 #endif
 
 #include "uDisplay_SPI_controller.h"
 #include "uDisplay_i2c_panel.h"
 #include "uDisplay_epd_panel.h"
 #include "uDisplay_spi_panel.h"
+
+// ===== Panel Config Union =====
+// Union to hold any panel configuration type
+// Only one config is active at a time based on interface type
+union PanelConfigUnion {
+    SPIPanelConfig spi;
+    I2CPanelConfig i2c;
+    EPDPanelConfig epd;
+#ifdef UDISPLAY_I80
+    I80PanelConfig i80;
+#endif
+#if SOC_LCD_RGB_SUPPORTED
+    esp_lcd_rgb_panel_config_t rgb;  // ESP-IDF native config
+#endif
+#if SOC_MIPI_DSI_SUPPORTED
+    DSIPanelConfig dsi;
+#endif
+};
 
 enum {
   UT_RD,UT_RDM,UT_CP,UT_RTF,UT_MV,UT_MVB,UT_RT,UT_RTT,UT_RDW,UT_RDWM,UT_WR,UT_WRW,UT_CPR,UT_AND,UT_SCALE,UT_LIM,UT_DBG,UT_GSRT,UT_XPT,UT_CPM,UT_END
@@ -53,9 +70,9 @@ enum {
 #define SIMPLERS_YM par_dbl[0]
 
 
-#ifdef ESP32
-#include "esp8266toEsp32.h" // must rename LCD_CAM_LCD_UPDATE_REG after include #include <soc/lcd_cam_reg.h> !!!!
-#endif
+// #ifdef ESP32
+// #include "esp8266toEsp32.h" // must rename LCD_CAM_LCD_UPDATE_REG after include #include <soc/lcd_cam_reg.h> !!!!
+// #endif
 
 #define _UDSP_I2C 1
 #define _UDSP_SPI 2
@@ -121,6 +138,11 @@ private:
     SPIController *spiController;
     TwoWire *wire;
     UniversalPanel* universal_panel = nullptr;
+    
+    // ===== Panel Configuration Union =====
+    // Heap-allocated union holding the active panel config
+    // Allocated after parsing :H line, populated during INI parsing
+    PanelConfigUnion* panel_config = nullptr;
 
 
     uint16_t x_addr_offs[4];
@@ -240,12 +262,8 @@ private:
 
 
 #if SOC_LCD_RGB_SUPPORTED
-   esp_lcd_rgb_panel_config_t *_panel_config;
+   esp_lcd_rgb_panel_config_t *_panel_config;  // TODO: migrate to panel_config->rgb
 #endif // SOC_LCD_RGB_SUPPORTED
-
-#if SOC_MIPI_DSI_SUPPORTED
-   DSIPanelConfig dsi_panel_config = {0};
-#endif
 
 // ===== Common ESP32-S3 Features =====
 #if defined(UDISPLAY_I80) || SOC_LCD_RGB_SUPPORTED

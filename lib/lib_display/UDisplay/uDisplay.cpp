@@ -52,6 +52,12 @@ uDisplay::~uDisplay(void) {
       free(lut_array[cnt]);
     }
   }
+  
+  // Free panel config union
+  if (panel_config) {
+    free(panel_config);
+    panel_config = nullptr;
+  }
 
 #ifdef USE_UNIVERSAL_TOUCH
   if (ut_init_code) {
@@ -207,18 +213,30 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             lut_siz[lut_num - 1] = next_val(&lp1);
             lut_array[lut_num - 1] = (uint8_t*)malloc(lut_siz[lut_num - 1]);
             lut_cmd[lut_num - 1] = next_hex(&lp1);
+            // Copy LUT command to EPD config
+            if (interface == _UDSP_SPI && ep_mode) {
+              panel_config->epd.lut_cmd[lut_num - 1] = lut_cmd[lut_num - 1];
+            }
           } else {
             lut_num = 0;
             lp1++;
             lut_siz_full = next_val(&lp1);
             lut_full = (uint8_t*)malloc(lut_siz_full);
             lut_cmd[0] = next_hex(&lp1);
+            // Copy LUT command to EPD config
+            if (interface == _UDSP_SPI && ep_mode) {
+              panel_config->epd.lut_cmd[0] = lut_cmd[0];
+            }
           }
         } else if (section == 'l') {
           lp1++;
           lut_siz_partial = next_val(&lp1);
           lut_partial = (uint8_t*)malloc(lut_siz_partial);
           lut_cmd[0] = next_hex(&lp1);
+          // Copy LUT command to EPD config
+          if (interface == _UDSP_SPI && ep_mode) {
+            panel_config->epd.lut_cmd[0] = lut_cmd[0];
+          }
         }
         if (*lp1 == ',') lp1++;
         
@@ -248,6 +266,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             str2c(&lp1, ibuff, sizeof(ibuff));
             if (!strncmp(ibuff, "I2C", 3)) {
               interface = _UDSP_I2C;
+              // Allocate panel config union for I2C
+              panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
               wire_n = 0;
               if (!strncmp(ibuff, "I2C2", 4)) {
                wire_n = 1;
@@ -259,6 +279,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               section = 0;
             } else if (!strncmp(ibuff, "SPI", 3)) {
               interface = _UDSP_SPI;
+              // Allocate panel config union for SPI (could be SPI or EPD)
+              panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
               SPIControllerConfig spi_cfg = {
                   .bus_nr = (uint8_t)next_val(&lp1),
                   .cs = (int8_t)next_val(&lp1),
@@ -280,6 +302,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               } else {
                 interface = _UDSP_PAR16;
               }
+              // Allocate panel config union for I80
+              panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
               reset = next_val(&lp1);
               par_cs = next_val(&lp1);
               par_rs = next_val(&lp1);
@@ -302,52 +326,53 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             }  else if (!strncmp(ibuff, "RGB", 3)) {
 #ifdef SOC_LCD_RGB_SUPPORTED
               interface = _UDSP_RGB;
-              // Set pin configuration directly in _panel_config
-              _panel_config = (esp_lcd_rgb_panel_config_t *)heap_caps_calloc(1, sizeof(esp_lcd_rgb_panel_config_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-              _panel_config->de_gpio_num = (gpio_num_t)next_val(&lp1);
-              _panel_config->vsync_gpio_num = (gpio_num_t)next_val(&lp1);
-              _panel_config->hsync_gpio_num = (gpio_num_t)next_val(&lp1);
-              _panel_config->pclk_gpio_num = (gpio_num_t)next_val(&lp1);
+              // Allocate panel config union for RGB with DMA-capable memory
+              panel_config = (PanelConfigUnion*)heap_caps_calloc(1, sizeof(PanelConfigUnion), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+              // Parse pin configuration directly into union
+              panel_config->rgb.de_gpio_num = (gpio_num_t)next_val(&lp1);
+              panel_config->rgb.vsync_gpio_num = (gpio_num_t)next_val(&lp1);
+              panel_config->rgb.hsync_gpio_num = (gpio_num_t)next_val(&lp1);
+              panel_config->rgb.pclk_gpio_num = (gpio_num_t)next_val(&lp1);
               bpanel = next_val(&lp1);
-              // Set data pins in _panel_config
+              // Parse data pins directly into union
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
                   par_dbl[cnt] = next_val(&lp1);
-                  _panel_config->data_gpio_nums[cnt] = (gpio_num_t)par_dbl[cnt];
               }
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
                   par_dbh[cnt] = next_val(&lp1);
-                  _panel_config->data_gpio_nums[cnt + 8] = (gpio_num_t)par_dbh[cnt];
               }
               spi_speed = next_val(&lp1);
 #endif //SOC_LCD_RGB_SUPPORTED
             } else if (!strncmp(ibuff, "DSI", 3)) {
 #ifdef SOC_MIPI_DSI_SUPPORTED
               interface = _UDSP_DSI;
+              // Allocate panel config union for DSI
+              panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
               
-              // Parse DSI-specific parameters directly into member variable
-              dsi_panel_config.dsi_lanes = next_val(&lp1);
-              dsi_panel_config.te_pin = next_val(&lp1);
-              dsi_panel_config.backlight_pin = next_val(&lp1);
-              dsi_panel_config.reset_pin = next_val(&lp1);
-              dsi_panel_config.ldo_channel = next_val(&lp1);
-              dsi_panel_config.ldo_voltage_mv = next_val(&lp1);
-              dsi_panel_config.pixel_clock_hz = next_val(&lp1);
-              dsi_panel_config.lane_speed_mbps = next_val(&lp1);
-              dsi_panel_config.rgb_order = next_val(&lp1);
-              dsi_panel_config.data_endian = next_val(&lp1);
+              // Parse DSI-specific parameters directly into union
+              panel_config->dsi.dsi_lanes = next_val(&lp1);
+              panel_config->dsi.te_pin = next_val(&lp1);
+              panel_config->dsi.backlight_pin = next_val(&lp1);
+              panel_config->dsi.reset_pin = next_val(&lp1);
+              panel_config->dsi.ldo_channel = next_val(&lp1);
+              panel_config->dsi.ldo_voltage_mv = next_val(&lp1);
+              panel_config->dsi.pixel_clock_hz = next_val(&lp1);
+              panel_config->dsi.lane_speed_mbps = next_val(&lp1);
+              panel_config->dsi.rgb_order = next_val(&lp1);
+              panel_config->dsi.data_endian = next_val(&lp1);
               
               // Set display dimensions
-              dsi_panel_config.width = gxs;
-              dsi_panel_config.height = gys;
-              dsi_panel_config.bpp = bpp;
+              panel_config->dsi.width = gxs;
+              panel_config->dsi.height = gys;
+              panel_config->dsi.bpp = bpp;
               
               section = 0;
 #ifdef UDSP_DEBUG
               AddLog(LOG_LEVEL_DEBUG, "UDisplay: DSI interface - Lanes:%d TE:%d BL:%d LDO:%d@%dmV Clock:%dHz Speed:%dMbps RGB_Order:%d Endian:%d",
-                    dsi_panel_config.dsi_lanes, dsi_panel_config.te_pin, dsi_panel_config.backlight_pin,
-                    dsi_panel_config.ldo_channel, dsi_panel_config.ldo_voltage_mv,
-                    dsi_panel_config.pixel_clock_hz, dsi_panel_config.lane_speed_mbps,
-                    dsi_panel_config.rgb_order, dsi_panel_config.data_endian);
+                    panel_config->dsi.dsi_lanes, panel_config->dsi.te_pin, panel_config->dsi.backlight_pin,
+                    panel_config->dsi.ldo_channel, panel_config->dsi.ldo_voltage_mv,
+                    panel_config->dsi.pixel_clock_hz, panel_config->dsi.lane_speed_mbps,
+                    panel_config->dsi.rgb_order, panel_config->dsi.data_endian);
 #endif
 #endif //SOC_MIPI_DSI_SUPPORTED
 }
@@ -466,33 +491,34 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
           case 'V':
 #if SOC_LCD_RGB_SUPPORTED
           if (interface == _UDSP_RGB){
-            _panel_config->timings.flags.hsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
-            _panel_config->timings.hsync_front_porch = next_val(&lp1);
-            _panel_config->timings.hsync_pulse_width = next_val(&lp1);
-            _panel_config->timings.hsync_back_porch = next_val(&lp1);
-            _panel_config->timings.flags.vsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
-            _panel_config->timings.vsync_front_porch = next_val(&lp1);
-            _panel_config->timings.vsync_pulse_width = next_val(&lp1);
-            _panel_config->timings.vsync_back_porch = next_val(&lp1);
-            _panel_config->timings.flags.pclk_active_neg = next_val(&lp1);
+            // Parse timing directly into union
+            panel_config->rgb.timings.flags.hsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
+            panel_config->rgb.timings.hsync_front_porch = next_val(&lp1);
+            panel_config->rgb.timings.hsync_pulse_width = next_val(&lp1);
+            panel_config->rgb.timings.hsync_back_porch = next_val(&lp1);
+            panel_config->rgb.timings.flags.vsync_idle_low = (next_val(&lp1) == 0) ? 1 : 0;
+            panel_config->rgb.timings.vsync_front_porch = next_val(&lp1);
+            panel_config->rgb.timings.vsync_pulse_width = next_val(&lp1);
+            panel_config->rgb.timings.vsync_back_porch = next_val(&lp1);
+            panel_config->rgb.timings.flags.pclk_active_neg = next_val(&lp1);
             // Set fixed flags (not in descriptor)
-            _panel_config->timings.flags.de_idle_high = 0;
-            _panel_config->timings.flags.pclk_idle_high = 0;
+            panel_config->rgb.timings.flags.de_idle_high = 0;
+            panel_config->rgb.timings.flags.pclk_idle_high = 0;
           }
 #endif // SOC_LCD_RGB_SUPPORTED
 #if SOC_MIPI_DSI_SUPPORTED
-          if (interface == _UDSP_DSI && dsi_panel_config.timing.h_front_porch == 0) {
+          if (interface == _UDSP_DSI && panel_config->dsi.timing.h_front_porch == 0) {
             AddLog(1, "DSI: Parsing :V timing line");
-            dsi_panel_config.timing.h_front_porch = next_val(&lp1);
-            dsi_panel_config.timing.v_front_porch = next_val(&lp1);
-            dsi_panel_config.timing.h_back_porch = next_val(&lp1);
-            dsi_panel_config.timing.h_sync_pulse = next_val(&lp1);
-            dsi_panel_config.timing.v_sync_pulse = next_val(&lp1);
-            dsi_panel_config.timing.v_back_porch = next_val(&lp1);
+            panel_config->dsi.timing.h_front_porch = next_val(&lp1);
+            panel_config->dsi.timing.v_front_porch = next_val(&lp1);
+            panel_config->dsi.timing.h_back_porch = next_val(&lp1);
+            panel_config->dsi.timing.h_sync_pulse = next_val(&lp1);
+            panel_config->dsi.timing.v_sync_pulse = next_val(&lp1);
+            panel_config->dsi.timing.v_back_porch = next_val(&lp1);
             AddLog(1, "DSI: Parsed timing - HFP:%d VFP:%d HBP:%d HSW:%d VSW:%d VBP:%d",
-                  dsi_panel_config.timing.h_front_porch, dsi_panel_config.timing.v_front_porch,
-                  dsi_panel_config.timing.h_back_porch, dsi_panel_config.timing.h_sync_pulse,
-                  dsi_panel_config.timing.v_sync_pulse, dsi_panel_config.timing.v_back_porch);
+                  panel_config->dsi.timing.h_front_porch, panel_config->dsi.timing.v_front_porch,
+                  panel_config->dsi.timing.h_back_porch, panel_config->dsi.timing.h_sync_pulse,
+                  panel_config->dsi.timing.v_sync_pulse, panel_config->dsi.timing.v_back_porch);
           }
 #endif //SOC_MIPI_DSI_SUPPORTED
             break;
@@ -504,50 +530,150 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             dsp_on = next_hex(&lp1);
             break;
           case 'R':
-            madctrl = next_hex(&lp1);
-            startline = next_hex(&lp1);
+            // Parse directly into SPI config (used by SPI panels only)
+            if (interface == _UDSP_SPI) {
+              panel_config->spi.cmd_memory_access = next_hex(&lp1);
+              panel_config->spi.cmd_startline = next_hex(&lp1);
+            } else {
+              madctrl = next_hex(&lp1);
+              startline = next_hex(&lp1);
+            }
             break;
           case '0':
             if (interface != _UDSP_RGB) {
-              rot[0] = next_hex(&lp1);
-              x_addr_offs[0] = next_hex(&lp1);
-              y_addr_offs[0] = next_hex(&lp1);
+              if (interface == _UDSP_SPI) {
+                // Parse directly into SPI config
+                panel_config->spi.rot_cmd[0] = next_hex(&lp1);
+                panel_config->spi.x_addr_offset[0] = next_hex(&lp1);
+                panel_config->spi.y_addr_offset[0] = next_hex(&lp1);
+              } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+#ifdef UDISPLAY_I80
+                // Parse directly into I80 config
+                panel_config->i80.x_addr_offset[0] = next_hex(&lp1);
+                panel_config->i80.y_addr_offset[0] = next_hex(&lp1);
+                next_hex(&lp1); // Skip third value for I80
+#else
+                rot[0] = next_hex(&lp1);
+                x_addr_offs[0] = next_hex(&lp1);
+                y_addr_offs[0] = next_hex(&lp1);
+#endif
+              } else {
+                rot[0] = next_hex(&lp1);
+                x_addr_offs[0] = next_hex(&lp1);
+                y_addr_offs[0] = next_hex(&lp1);
+              }
             }
             rot_t[0] = next_hex(&lp1);
             break;
           case '1':
             if (interface != _UDSP_RGB) {
-              rot[1] = next_hex(&lp1);
-              x_addr_offs[1] = next_hex(&lp1);
-              y_addr_offs[1] = next_hex(&lp1);
+              if (interface == _UDSP_SPI) {
+                panel_config->spi.rot_cmd[1] = next_hex(&lp1);
+                panel_config->spi.x_addr_offset[1] = next_hex(&lp1);
+                panel_config->spi.y_addr_offset[1] = next_hex(&lp1);
+              } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+#ifdef UDISPLAY_I80
+                panel_config->i80.x_addr_offset[1] = next_hex(&lp1);
+                panel_config->i80.y_addr_offset[1] = next_hex(&lp1);
+                next_hex(&lp1); // Skip third value for I80
+#else
+                rot[1] = next_hex(&lp1);
+                x_addr_offs[1] = next_hex(&lp1);
+                y_addr_offs[1] = next_hex(&lp1);
+#endif
+              } else {
+                rot[1] = next_hex(&lp1);
+                x_addr_offs[1] = next_hex(&lp1);
+                y_addr_offs[1] = next_hex(&lp1);
+              }
             }
             rot_t[1] = next_hex(&lp1);
             break;
           case '2':
             if (interface != _UDSP_RGB) {
-              rot[2] = next_hex(&lp1);
-              x_addr_offs[2] = next_hex(&lp1);
-              y_addr_offs[2] = next_hex(&lp1);
+              if (interface == _UDSP_SPI) {
+                panel_config->spi.rot_cmd[2] = next_hex(&lp1);
+                panel_config->spi.x_addr_offset[2] = next_hex(&lp1);
+                panel_config->spi.y_addr_offset[2] = next_hex(&lp1);
+              } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+#ifdef UDISPLAY_I80
+                panel_config->i80.x_addr_offset[2] = next_hex(&lp1);
+                panel_config->i80.y_addr_offset[2] = next_hex(&lp1);
+                next_hex(&lp1); // Skip third value for I80
+#else
+                rot[2] = next_hex(&lp1);
+                x_addr_offs[2] = next_hex(&lp1);
+                y_addr_offs[2] = next_hex(&lp1);
+#endif
+              } else {
+                rot[2] = next_hex(&lp1);
+                x_addr_offs[2] = next_hex(&lp1);
+                y_addr_offs[2] = next_hex(&lp1);
+              }
             }
             rot_t[2] = next_hex(&lp1);
             break;
           case '3':
             if (interface != _UDSP_RGB) {
-              rot[3] = next_hex(&lp1);
-              x_addr_offs[3] = next_hex(&lp1);
-              y_addr_offs[3] = next_hex(&lp1);
+              if (interface == _UDSP_SPI) {
+                panel_config->spi.rot_cmd[3] = next_hex(&lp1);
+                panel_config->spi.x_addr_offset[3] = next_hex(&lp1);
+                panel_config->spi.y_addr_offset[3] = next_hex(&lp1);
+              } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+#ifdef UDISPLAY_I80
+                panel_config->i80.x_addr_offset[3] = next_hex(&lp1);
+                panel_config->i80.y_addr_offset[3] = next_hex(&lp1);
+                next_hex(&lp1); // Skip third value for I80
+#else
+                rot[3] = next_hex(&lp1);
+                x_addr_offs[3] = next_hex(&lp1);
+                y_addr_offs[3] = next_hex(&lp1);
+#endif
+              } else {
+                rot[3] = next_hex(&lp1);
+                x_addr_offs[3] = next_hex(&lp1);
+                y_addr_offs[3] = next_hex(&lp1);
+              }
             }
             rot_t[3] = next_hex(&lp1);
             break;
           case 'A':
             if (interface == _UDSP_I2C || bpp == 1) {
+              // Parse directly into I2C config
+              panel_config->i2c.cmd_set_addr_x = next_hex(&lp1);
+              panel_config->i2c.page_start = next_hex(&lp1);
+              panel_config->i2c.page_end = next_hex(&lp1);
+              panel_config->i2c.cmd_set_addr_y = next_hex(&lp1);
+              panel_config->i2c.col_start = next_hex(&lp1);
+              panel_config->i2c.col_end = next_hex(&lp1);
+              panel_config->i2c.cmd_write_ram = next_hex(&lp1);
+              // Also keep in legacy vars for now
+              saw_1 = panel_config->i2c.cmd_set_addr_x;
+              i2c_page_start = panel_config->i2c.page_start;
+              i2c_page_end = panel_config->i2c.page_end;
+              saw_2 = panel_config->i2c.cmd_set_addr_y;
+              i2c_col_start = panel_config->i2c.col_start;
+              i2c_col_end = panel_config->i2c.col_end;
+              saw_3 = panel_config->i2c.cmd_write_ram;
+            } else if (interface == _UDSP_SPI) {
+              // Parse directly into SPI config
+              panel_config->spi.cmd_set_addr_x = next_hex(&lp1);
+              panel_config->spi.cmd_set_addr_y = next_hex(&lp1);
+              panel_config->spi.cmd_write_ram = next_hex(&lp1);
+              panel_config->spi.address_mode = next_val(&lp1);
+            } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+#ifdef UDISPLAY_I80
+              // Parse directly into I80 config
+              panel_config->i80.cmd_set_addr_x = next_hex(&lp1);
+              panel_config->i80.cmd_set_addr_y = next_hex(&lp1);
+              panel_config->i80.cmd_write_ram = next_hex(&lp1);
+              next_val(&lp1); // Skip address mode for I80
+#else
               saw_1 = next_hex(&lp1);
-              i2c_page_start = next_hex(&lp1);
-              i2c_page_end = next_hex(&lp1);
               saw_2 = next_hex(&lp1);
-              i2c_col_start = next_hex(&lp1);
-              i2c_col_end = next_hex(&lp1);
               saw_3 = next_hex(&lp1);
+              sa_mode = next_val(&lp1);
+#endif
             } else {
               saw_1 = next_hex(&lp1);
               saw_2 = next_hex(&lp1);
@@ -556,16 +682,37 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             }
             break;
           case 'a':
-            saw_1 = next_hex(&lp1);
-            saw_2 = next_hex(&lp1);
-            saw_3 = next_hex(&lp1);
+            if (interface == _UDSP_SPI) {
+              // Parse directly into SPI config
+              panel_config->spi.cmd_set_addr_x = next_hex(&lp1);
+              panel_config->spi.cmd_set_addr_y = next_hex(&lp1);
+              panel_config->spi.cmd_write_ram = next_hex(&lp1);
+            } else {
+              saw_1 = next_hex(&lp1);
+              saw_2 = next_hex(&lp1);
+              saw_3 = next_hex(&lp1);
+            }
             break;
           case 'P':
-            col_mode = next_val(&lp1);
+            col_mode = next_val(&lp1);  // Keep for legacy code
+            if (interface == _UDSP_SPI) {
+              panel_config->spi.col_mode = col_mode;
+            } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+#ifdef UDISPLAY_I80
+              panel_config->i80.color_mode = col_mode;
+#endif
+            }
             break;
           case 'i':
             inv_off = next_hex(&lp1);
             inv_on = next_hex(&lp1);
+            if (interface == _UDSP_SPI) {
+              panel_config->spi.cmd_invert_off = inv_off;
+              panel_config->spi.cmd_invert_on = inv_on;
+            } else if (interface == _UDSP_I2C) {
+              panel_config->i2c.cmd_invert_off = inv_off;
+              panel_config->i2c.cmd_invert_on = inv_on;
+            }
             break;
           case 'D':
             dim_op = next_hex(&lp1);
@@ -583,6 +730,11 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 }
                 if (lutfsize >= lut_siz_full) break;
               }
+              // Copy to EPD config
+              if (interface == _UDSP_SPI && ep_mode) {
+                panel_config->epd.lut_full = lut_full;
+                panel_config->epd.lut_full_len = lutfsize;
+              }
             } else {
               uint8_t index = lut_num - 1;
               if (!lut_array[index]) {
@@ -595,6 +747,11 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                   break;
                 }
                 if (lut_cnt[index] >= lut_siz[index]) break;
+              }
+              // Copy to EPD config
+              if (interface == _UDSP_SPI && ep_mode) {
+                panel_config->epd.lut_array = (const uint8_t**)lut_array;
+                panel_config->epd.lut_cnt = lut_cnt;
               }
             }
             break;
@@ -609,6 +766,11 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 break;
               }
               if (lutpsize >= lut_siz_partial) break;
+            }
+            // Copy to EPD config
+            if (interface == _UDSP_SPI && ep_mode) {
+              panel_config->epd.lut_partial = lut_partial;
+              panel_config->epd.lut_partial_len = lutpsize;
             }
             break;
           case 'T':
@@ -1021,27 +1183,18 @@ Renderer *uDisplay::Init(void) {
 #endif // ESP32
 
     if (wire) {
-      I2CPanelConfig i2c_config = {
-        .width = gxs,
-        .height = gys,
-        .bpp = bpp,
-        .i2c_address = i2caddr,
-        .wire = wire,
-        .cmd_set_addr_x = saw_1,
-        .cmd_set_addr_y = saw_2,
-        .cmd_write_ram = saw_3,
-        .cmd_display_on = dsp_on,
-        .cmd_display_off = dsp_off,
-        .cmd_invert_on = inv_on,
-        .cmd_invert_off = inv_off,
-        .page_start = i2c_page_start,
-        .page_end = i2c_page_end,
-        .col_start = i2c_col_start,
-        .col_end = i2c_col_end,
-        .init_commands = dsp_cmds,
-        .init_commands_count = dsp_ncmds
-      };
-      universal_panel = new i2c_panel(i2c_config, frame_buffer);
+      // Populate remaining I2C config fields (most already parsed directly into union)
+      panel_config->i2c.width = gxs;
+      panel_config->i2c.height = gys;
+      panel_config->i2c.bpp = bpp;
+      panel_config->i2c.i2c_address = i2caddr;
+      panel_config->i2c.wire = wire;
+      panel_config->i2c.cmd_display_on = dsp_on;
+      panel_config->i2c.cmd_display_off = dsp_off;
+      panel_config->i2c.init_commands = dsp_cmds;
+      panel_config->i2c.init_commands_count = dsp_ncmds;
+      
+      universal_panel = new i2c_panel(panel_config->i2c, frame_buffer);
     }
   }
 
@@ -1067,58 +1220,39 @@ if (interface == _UDSP_SPI) {
     }
     
     if (ep_mode) {
-        EPDPanelConfig epd_config = {
-            .width = gxs,
-            .height = gys,
-            .bpp = bpp,
-            .ep_mode = ep_mode,
-            .lut_full_time = lutftime,
-            .lut_partial_time = lutptime,
-            .update_time = lut3time,
-            .reset_pin = reset,
-            .busy_pin = busy_pin,
-            .invert_colors = false,  // Will be set from descriptor
-            .invert_framebuffer = true, // Most EPDs need this
-            .busy_invert = (bool)lvgl_param.busy_invert
-        };
+        // Populate remaining EPD config fields (LUT data already parsed into union)
+        panel_config->epd.width = gxs;
+        panel_config->epd.height = gys;
+        panel_config->epd.bpp = bpp;
+        panel_config->epd.ep_mode = ep_mode;
+        panel_config->epd.lut_full_time = lutftime;
+        panel_config->epd.lut_partial_time = lutptime;
+        panel_config->epd.update_time = lut3time;
+        panel_config->epd.reset_pin = reset;
+        panel_config->epd.busy_pin = busy_pin;
+        panel_config->epd.invert_colors = false;
+        panel_config->epd.invert_framebuffer = true;
+        panel_config->epd.busy_invert = (bool)lvgl_param.busy_invert;
+        
         send_spi_cmds(0, dsp_ncmds);
-        universal_panel = new EPDPanel(epd_config, spiController, frame_buffer,
-                                      lut_full, lutfsize, 
-                                      lut_partial, lutpsize);
+        universal_panel = new EPDPanel(panel_config->epd, spiController, frame_buffer);
     } else {   
         AddLog(2,"SPI Panel!");
-        SPIPanelConfig spi_config = {
-            .width = gxs,
-            .height = gys,
-            .bpp = bpp,
-            .col_mode = col_mode,
-            .cmd_set_addr_x = saw_1,
-            .cmd_set_addr_y = saw_2,
-            .cmd_write_ram = saw_3,
-            .cmd_display_on = dsp_on,
-            .cmd_display_off = dsp_off,
-            .cmd_invert_on = inv_on,
-            .cmd_invert_off = inv_off,
-            .cmd_memory_access = madctrl,
-            .cmd_startline = startline,
-            .reset_pin = reset,
-            .busy_pin = busy_pin,
-            .bpanel = bpanel
-        };
+        // Populate remaining SPI config fields (most already parsed directly into union)
+        panel_config->spi.width = gxs;
+        panel_config->spi.height = gys;
+        panel_config->spi.bpp = bpp;
+        panel_config->spi.cmd_display_on = dsp_on;
+        panel_config->spi.cmd_display_off = dsp_off;
+        panel_config->spi.reset_pin = reset;
+        panel_config->spi.busy_pin = busy_pin;
+        panel_config->spi.bpanel = bpanel;
+        panel_config->spi.all_commands_mode = allcmd_mode;
         
-        // Copy rotation configuration
-        for (int i = 0; i < 4; i++) {
-            spi_config.rot_cmd[i] = rot[i];
-            spi_config.x_addr_offset[i] = x_addr_offs[i];
-            spi_config.y_addr_offset[i] = y_addr_offs[i];
-        }
-        
-        spi_config.all_commands_mode = allcmd_mode;
-        spi_config.address_mode = sa_mode;
         send_spi_cmds(0, dsp_ncmds);  // Send init commands for regular SPI
-        universal_panel = new SPIPanel(spi_config, spiController, frame_buffer);
+        universal_panel = new SPIPanel(panel_config->spi, spiController, frame_buffer);
 #ifdef ESP32
-        spiController->initDMA(spi_config.width, lvgl_param.flushlines, lvgl_param.data);
+        spiController->initDMA(panel_config->spi.width, lvgl_param.flushlines, lvgl_param.data);
 #endif
         universal_panel->fillRect(0, 0, 100, 100, 0xFF00);  // Yellow
         delay(2000);  // Hold for 2 seconds before anything else runs
@@ -1143,34 +1277,33 @@ if (interface == _UDSP_SPI) {
       analogWrite(bpanel, 32);
     }
 
-    _panel_config->clk_src = LCD_CLK_SRC_PLL160M;
-    _panel_config->timings.pclk_hz = spi_speed*1000000;
-    _panel_config->timings.h_res = gxs;
-    _panel_config->timings.v_res = gys;
-    _panel_config->data_width = 16; // RGB565 in parallel mode, thus 16bit in width
-    _panel_config->sram_trans_align = 8;
-    _panel_config->psram_trans_align = 64;
+    panel_config->rgb.clk_src = LCD_CLK_SRC_PLL160M;
+    panel_config->rgb.timings.pclk_hz = spi_speed*1000000;
+    panel_config->rgb.timings.h_res = gxs;
+    panel_config->rgb.timings.v_res = gys;
+    panel_config->rgb.data_width = 16; // RGB565 in parallel mode, thus 16bit in width
+    panel_config->rgb.sram_trans_align = 8;
+    panel_config->rgb.psram_trans_align = 64;
 
-    // assume that byte swapping of 16-bit color is done only upon request
-    // via display.ini and not by callers of pushColor()
-    // -> swap bytes by swapping GPIO numbers
+    // Set data GPIO pins (already parsed into par_dbl/par_dbh)
+    // Byte swapping can be done by swapping pin order if needed
     int8_t *par_db8 = lvgl_param.swap_color ? par_dbl : par_dbh;
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      _panel_config->data_gpio_nums[cnt] = par_db8[cnt];
+      panel_config->rgb.data_gpio_nums[cnt] = par_db8[cnt];
     }
     par_db8 = lvgl_param.swap_color ? par_dbh : par_dbl;
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      _panel_config->data_gpio_nums[cnt + 8] = par_db8[cnt];
+      panel_config->rgb.data_gpio_nums[cnt + 8] = par_db8[cnt];
     }
     lvgl_param.swap_color = 0;
 
-    _panel_config->disp_gpio_num = GPIO_NUM_NC;
+    panel_config->rgb.disp_gpio_num = GPIO_NUM_NC;
 
-    _panel_config->flags.disp_active_low = 0;
-    _panel_config->flags.refresh_on_demand = 0;
-    _panel_config->flags.fb_in_psram = 1;             // allocate frame buffer in PSRAM
+    panel_config->rgb.flags.disp_active_low = 0;
+    panel_config->rgb.flags.refresh_on_demand = 0;
+    panel_config->rgb.flags.fb_in_psram = 1;             // allocate frame buffer in PSRAM
 
-    universal_panel = new RGBPanel(_panel_config);
+    universal_panel = new RGBPanel(&panel_config->rgb);
     rgb_fb = universal_panel->framebuffer;
 
   }
@@ -1178,55 +1311,44 @@ if (interface == _UDSP_SPI) {
 #if SOC_MIPI_DSI_SUPPORTED
      if (interface == _UDSP_DSI) {
         // Pass init commands to DSI panel config
-        dsi_panel_config.init_commands = dsp_cmds;
-        dsi_panel_config.init_commands_count = dsp_ncmds;
+        panel_config->dsi.init_commands = dsp_cmds;
+        panel_config->dsi.init_commands_count = dsp_ncmds;
                
         // Pass display on/off commands from descriptor
-        dsi_panel_config.cmd_display_on = dsp_on;
-        dsi_panel_config.cmd_display_off = dsp_off;
+        panel_config->dsi.cmd_display_on = dsp_on;
+        panel_config->dsi.cmd_display_off = dsp_off;
         
-        universal_panel = new DSIPanel(dsi_panel_config);
+        universal_panel = new DSIPanel(panel_config->dsi);
         rgb_fb = universal_panel->framebuffer;
                 
-        if (dsi_panel_config.backlight_pin >= 0) {
-          analogWrite(dsi_panel_config.backlight_pin, 32);
+        if (panel_config->dsi.backlight_pin >= 0) {
+          analogWrite(panel_config->dsi.backlight_pin, 32);
         }   
      }
 #endif
 
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
   #ifdef UDISPLAY_I80
-      I80PanelConfig i80_config = {
-        .width = gxs,
-        .height = gys,
-        .bpp = bpp,
-        .color_mode = col_mode,
-        .cs_pin = par_cs,
-        .dc_pin = par_rs,
-        .wr_pin = par_wr,
-        .rd_pin = par_rd,
-        .bus_width = (uint8_t)((interface == _UDSP_PAR16) ? 16 : 8),
-        .clock_speed_hz = (uint32_t)spi_speed * 1000000,
-        .cmd_set_addr_x = saw_1,
-        .cmd_set_addr_y = saw_2,
-        .cmd_write_ram = saw_3,
-        .init_commands = dsp_cmds,
-        .init_commands_count = dsp_ncmds
-      };
+      // Populate remaining I80 config fields (most already parsed directly into union)
+      panel_config->i80.width = gxs;
+      panel_config->i80.height = gys;
+      panel_config->i80.bpp = bpp;
+      panel_config->i80.cs_pin = par_cs;
+      panel_config->i80.dc_pin = par_rs;
+      panel_config->i80.wr_pin = par_wr;
+      panel_config->i80.rd_pin = par_rd;
+      panel_config->i80.bus_width = (uint8_t)((interface == _UDSP_PAR16) ? 16 : 8);
+      panel_config->i80.clock_speed_hz = (uint32_t)spi_speed * 1000000;
+      panel_config->i80.init_commands = dsp_cmds;
+      panel_config->i80.init_commands_count = dsp_ncmds;
       
       // Copy data pins
       for (int i = 0; i < 8; i++) {
-        i80_config.data_pins_low[i] = par_dbl[i];
-        i80_config.data_pins_high[i] = par_dbh[i];
+        panel_config->i80.data_pins_low[i] = par_dbl[i];
+        panel_config->i80.data_pins_high[i] = par_dbh[i];
       }
       
-      // Copy rotation offsets
-      for (int i = 0; i < 4; i++) {
-        i80_config.x_addr_offset[i] = x_addr_offs[i];
-        i80_config.y_addr_offset[i] = y_addr_offs[i];
-      }
-      
-      universal_panel = new I80Panel(i80_config);
+      universal_panel = new I80Panel(panel_config->i80);
 
       // Reset handling
       if (reset >= 0) {

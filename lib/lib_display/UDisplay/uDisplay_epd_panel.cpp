@@ -30,29 +30,15 @@ static constexpr uint8_t TERMINATE_FRAME_READ_WRITE           = 0xFF;
 
 EPDPanel::EPDPanel(const EPDPanelConfig& config,
                    SPIController* spi_ctrl,
-                   uint8_t* framebuffer,
-                   const uint8_t* lut_full,
-                   uint16_t lut_full_len,
-                   const uint8_t* lut_partial,
-                   uint16_t lut_partial_len,
-                   const uint8_t** lut_array,
-                   const uint8_t* lut_cnt)
-    : spi(spi_ctrl), cfg(config), fb_buffer(framebuffer), update_mode(0),
-      lut_full(lut_full), lut_partial(lut_partial),
-      lut_full_len(lut_full_len), lut_partial_len(lut_partial_len),
-      lut_array(lut_array), lut_cnt(lut_cnt)
+                   uint8_t* framebuffer)
+    : spi(spi_ctrl), cfg(config), fb_buffer(framebuffer), update_mode(0)
 {
-    // Set EPD-specific defaults
-    if (!cfg.invert_framebuffer) {
-        cfg.invert_framebuffer = true; // Most EPDs need inversion
-    }
-    
     // Reset display
     resetDisplay();
     
     // Set initial LUT
-    if (lut_full && lut_full_len > 0) {
-        setLut(lut_full, lut_full_len);
+    if (cfg.lut_full && cfg.lut_full_len > 0) {
+        setLut(cfg.lut_full, cfg.lut_full_len);
     }
     
     // Clear display
@@ -325,16 +311,16 @@ bool EPDPanel::updateFrame() {
 // ===== ep_mode 2 Support (5-LUT mode) =====
 
 void EPDPanel::setLuts() {
-    if (!lut_array || !lut_cnt) return;
+    if (!cfg.lut_array || !cfg.lut_cnt) return;
     
     for (uint8_t index = 0; index < 5; index++) {
-        if (cfg.lut_cmd[index] == 0 || !lut_array[index]) continue;
+        if (cfg.lut_cmd[index] == 0 || !cfg.lut_array[index]) continue;
         
         spi->beginTransaction();
         spi->csLow();
         spi->writeCommand(cfg.lut_cmd[index]);
-        for (uint8_t count = 0; count < lut_cnt[index]; count++) {
-            spi->writeData8(lut_array[index][count]);
+        for (uint8_t count = 0; count < cfg.lut_cnt[index]; count++) {
+            spi->writeData8(cfg.lut_array[index][count]);
         }
         spi->csHigh();
         spi->endTransaction();

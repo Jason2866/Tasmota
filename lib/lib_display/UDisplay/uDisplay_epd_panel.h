@@ -38,21 +38,23 @@ struct EPDPanelConfig {
     uint8_t saw_2 = 0;  // Second command for frame update
     uint8_t saw_3 = 0;  // Third command for frame update
     
-    // LUT commands (for ep_mode 2 - 5-LUT mode)
-    uint8_t lut_cmd[5] = {0};  // Commands for each LUT
+    // LUT data (for ep_mode 1 - 2-LUT mode)
+    const uint8_t* lut_full = nullptr;
+    uint16_t lut_full_len = 0;
+    const uint8_t* lut_partial = nullptr;
+    uint16_t lut_partial_len = 0;
+    
+    // LUT data (for ep_mode 2 - 5-LUT mode)
+    const uint8_t** lut_array = nullptr;  // Array of 5 LUTs
+    const uint8_t* lut_cnt = nullptr;     // Size of each LUT
+    uint8_t lut_cmd[5] = {0};             // Commands for each LUT
 };
 
 class EPDPanel : public UniversalPanel {
 public:
     EPDPanel(const EPDPanelConfig& config,
              SPIController* spi_ctrl,
-             uint8_t* framebuffer,  // REQUIRED for EPD
-             const uint8_t* lut_full = nullptr,
-             uint16_t lut_full_len = 0,
-             const uint8_t* lut_partial = nullptr, 
-             uint16_t lut_partial_len = 0,
-             const uint8_t** lut_array = nullptr,  // For ep_mode 2 (5-LUT)
-             const uint8_t* lut_cnt = nullptr);    // LUT sizes for ep_mode 2
+             uint8_t* framebuffer);  // REQUIRED for EPD
 
     ~EPDPanel();
 
@@ -92,16 +94,6 @@ private:
     EPDPanelConfig cfg;
     uint8_t* fb_buffer;  // Framebuffer (always used)
     uint8_t update_mode; // 0=full, 1=partial
-    
-    // LUT data (ep_mode 1)
-    const uint8_t* lut_full;
-    const uint8_t* lut_partial;
-    uint16_t lut_full_len;
-    uint16_t lut_partial_len;
-    
-    // LUT data (ep_mode 2 - 5-LUT mode)
-    const uint8_t** lut_array;  // Array of 5 LUTs
-    const uint8_t* lut_cnt;     // Size of each LUT
 
     // Private helpers
     void resetDisplay();
