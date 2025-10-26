@@ -213,34 +213,8 @@ private:
 
     void i2c_command(uint8_t val);
 
-    void ulcd_command_one(uint8_t val);
-    void ulcd_command(uint8_t val);
-    void ulcd_data8(uint8_t val);
-    void ulcd_data16(uint16_t val);
-    void ulcd_data32(uint32_t val);
-    void WriteColor(uint16_t color);
-
-    // EPD - needs to be removed latwer
-    void SetLut(const unsigned char* lut);
-    void SetLuts(void);
-    void DisplayFrame_29(void);
     void Updateframe_EPD();
-    void SetFrameMemory(const unsigned char* image_buffer);
-    void SetFrameMemory(const unsigned char* image_buffer, uint16_t x, uint16_t y, uint16_t image_width, uint16_t image_height);
-    void SetMemoryArea(int x_start, int y_start, int x_end, int y_end);
-    void SetMemoryPointer(int x, int y);
-    void DrawAbsolutePixel(int x, int y, int16_t color);
-    void drawPixel_EPD(int16_t x, int16_t y, uint16_t color);
-    void fillRect_EPD(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
-    void drawFastVLine_EPD(int16_t x, int16_t y, int16_t h, uint16_t color);
-    void drawFastHLine_EPD(int16_t x, int16_t y, int16_t w, uint16_t color);
-    void Init_EPD(int8_t p);
-    void Send_EP_Data(void);
-    void spi_command_EPD(uint8_t val);
-    void spi_data8_EPD(uint8_t val);
-    void ClearFrameMemory(unsigned char color);
-    void ClearFrame_42(void);
-    void DisplayFrame_42(void);
+
 
     uint8_t strlen_ln(char *str);
     int32_t next_val(char **sp);
@@ -262,13 +236,6 @@ private:
    int8_t par_rs; 
    int8_t par_wr;
    int8_t par_rd;
-
-   // I80 Transaction state
-   uint32_t* _cache_flip;
-   static constexpr size_t CACHE_SIZE = 256;
-   uint32_t _cache[2][CACHE_SIZE / sizeof(uint32_t)];
-   bool _has_align_data;
-   uint8_t _align_data;
 #endif // UDISPLAY_I80
 
 

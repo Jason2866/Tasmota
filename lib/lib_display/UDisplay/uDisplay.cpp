@@ -1206,7 +1206,7 @@ if (interface == _UDSP_SPI) {
         .wr_pin = par_wr,
         .rd_pin = par_rd,
         .bus_width = (uint8_t)((interface == _UDSP_PAR16) ? 16 : 8),
-        .clock_speed_hz = spi_speed * 1000000,
+        .clock_speed_hz = (uint32_t)spi_speed * 1000000,
         .cmd_set_addr_x = saw_1,
         .cmd_set_addr_y = saw_2,
         .cmd_write_ram = saw_3,
