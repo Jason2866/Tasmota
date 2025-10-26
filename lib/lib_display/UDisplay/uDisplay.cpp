@@ -305,19 +305,22 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               // Allocate panel config union for I80
               panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
               reset = next_val(&lp1);
-              par_cs = next_val(&lp1);
-              par_rs = next_val(&lp1);
-              par_wr = next_val(&lp1);
-              par_rd = next_val(&lp1);
+              
+              // Parse control pins directly into I80 config
+              panel_config->i80.cs_pin = next_val(&lp1);
+              panel_config->i80.dc_pin = next_val(&lp1);
+              panel_config->i80.wr_pin = next_val(&lp1);
+              panel_config->i80.rd_pin = next_val(&lp1);
               bpanel = next_val(&lp1);
 
+              // Parse data pins directly into I80 config
               for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-                par_dbl[cnt] = next_val(&lp1);
+                panel_config->i80.data_pins_low[cnt] = next_val(&lp1);
               }
 
               if (interface == _UDSP_PAR16) {
                 for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-                  par_dbh[cnt] = next_val(&lp1);
+                  panel_config->i80.data_pins_high[cnt] = next_val(&lp1);
                 }
               }
               spi_speed = next_val(&lp1);
@@ -334,12 +337,13 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               panel_config->rgb.hsync_gpio_num = (gpio_num_t)next_val(&lp1);
               panel_config->rgb.pclk_gpio_num = (gpio_num_t)next_val(&lp1);
               bpanel = next_val(&lp1);
-              // Parse data pins directly into union
+              // Parse data pins directly into RGB config
+              // Note: byte order may be swapped later based on lvgl_param.swap_color
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
-                  par_dbl[cnt] = next_val(&lp1);
+                  panel_config->rgb.data_gpio_nums[cnt] = next_val(&lp1);
               }
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
-                  par_dbh[cnt] = next_val(&lp1);
+                  panel_config->rgb.data_gpio_nums[cnt + 8] = next_val(&lp1);
               }
               spi_speed = next_val(&lp1);
 #endif //SOC_LCD_RGB_SUPPORTED
@@ -932,15 +936,16 @@ void UfsCheckSDCardInit(void);
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
 #if defined(UDISPLAY_I80)
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: par mode:%d res:%d cs:%d rs:%d wr:%d rd:%d bp:%d", 
-       interface, reset, par_cs, par_rs, par_wr, par_rd, bpanel);
+       interface, reset, panel_config->i80.cs_pin, panel_config->i80.dc_pin, 
+       panel_config->i80.wr_pin, panel_config->i80.rd_pin, bpanel);
 
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      AddLog(LOG_LEVEL_DEBUG, "UDisplay: par d%d:%d", cnt, par_dbl[cnt]);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: par d%d:%d", cnt, panel_config->i80.data_pins_low[cnt]);
     }
 
     if (interface == _UDSP_PAR16) {
       for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-        AddLog(LOG_LEVEL_DEBUG, "UDisplay: par d%d:%d", cnt + 8, par_dbh[cnt]);
+        AddLog(LOG_LEVEL_DEBUG, "UDisplay: par d%d:%d", cnt + 8, panel_config->i80.data_pins_high[cnt]);
       }
     }
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: par freq:%d", spi_speed);
@@ -953,10 +958,10 @@ void UfsCheckSDCardInit(void);
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb de:%d vsync:%d hsync:%d pclk:%d bp:%d", de, vsync, hsync, pclk, bpanel);
 
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb d%d:%d", cnt, par_dbl[cnt]);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb d%d:%d", cnt, panel_config->rgb.data_gpio_nums[cnt]);
     }
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb d%d:%d", cnt + 8, par_dbh[cnt]);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb d%d:%d", cnt + 8, panel_config->rgb.data_gpio_nums[cnt + 8]);
     }
 
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb freq:%d hsync_pol:%d hsync_fp:%d hsync_pw:%d hsync_bp:%d vsync_pol:%d vsync_fp:%d vsync_pw:%d vsync_bp:%d pclk_neg:%d",
@@ -1285,17 +1290,15 @@ if (interface == _UDSP_SPI) {
     panel_config->rgb.sram_trans_align = 8;
     panel_config->rgb.psram_trans_align = 64;
 
-    // Set data GPIO pins (already parsed into par_dbl/par_dbh)
-    // Byte swapping can be done by swapping pin order if needed
-    int8_t *par_db8 = lvgl_param.swap_color ? par_dbl : par_dbh;
-    for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      panel_config->rgb.data_gpio_nums[cnt] = par_db8[cnt];
+    // Handle byte swapping by swapping the low and high byte pin assignments
+    if (lvgl_param.swap_color) {
+      for (uint32_t cnt = 0; cnt < 8; cnt++) {
+        int8_t temp = panel_config->rgb.data_gpio_nums[cnt];
+        panel_config->rgb.data_gpio_nums[cnt] = panel_config->rgb.data_gpio_nums[cnt + 8];
+        panel_config->rgb.data_gpio_nums[cnt + 8] = temp;
+      }
+      lvgl_param.swap_color = 0;
     }
-    par_db8 = lvgl_param.swap_color ? par_dbh : par_dbl;
-    for (uint32_t cnt = 0; cnt < 8; cnt ++) {
-      panel_config->rgb.data_gpio_nums[cnt + 8] = par_db8[cnt];
-    }
-    lvgl_param.swap_color = 0;
 
     panel_config->rgb.disp_gpio_num = GPIO_NUM_NC;
 
@@ -1330,23 +1333,14 @@ if (interface == _UDSP_SPI) {
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
   #ifdef UDISPLAY_I80
       // Populate remaining I80 config fields (most already parsed directly into union)
+      // Control and data pins already parsed directly into config during INI parsing
       panel_config->i80.width = gxs;
       panel_config->i80.height = gys;
       panel_config->i80.bpp = bpp;
-      panel_config->i80.cs_pin = par_cs;
-      panel_config->i80.dc_pin = par_rs;
-      panel_config->i80.wr_pin = par_wr;
-      panel_config->i80.rd_pin = par_rd;
       panel_config->i80.bus_width = (uint8_t)((interface == _UDSP_PAR16) ? 16 : 8);
       panel_config->i80.clock_speed_hz = (uint32_t)spi_speed * 1000000;
       panel_config->i80.init_commands = dsp_cmds;
       panel_config->i80.init_commands_count = dsp_ncmds;
-      
-      // Copy data pins
-      for (int i = 0; i < 8; i++) {
-        panel_config->i80.data_pins_low[i] = par_dbl[i];
-        panel_config->i80.data_pins_high[i] = par_dbh[i];
-      }
       
       universal_panel = new I80Panel(panel_config->i80);
 

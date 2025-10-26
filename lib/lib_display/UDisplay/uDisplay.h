@@ -64,15 +64,8 @@ enum {
 #define UDSP_READ_STATUS 0xf2
 
 
-#define SIMPLERS_XP par_dbl[1]
-#define SIMPLERS_XM par_cs
-#define SIMPLERS_YP par_rs
-#define SIMPLERS_YM par_dbl[0]
-
-
-// #ifdef ESP32
-// #include "esp8266toEsp32.h" // must rename LCD_CAM_LCD_UPDATE_REG after include #include <soc/lcd_cam_reg.h> !!!!
-// #endif
+// Simple resistive touch pin mapping (I80 only):
+// XP = data_pins_low[1], XM = cs_pin, YP = dc_pin, YM = data_pins_low[0]
 
 #define _UDSP_I2C 1
 #define _UDSP_SPI 2
@@ -250,27 +243,6 @@ private:
     void send_spi_cmds(uint16_t cmd_offset, uint16_t cmd_size);
     void send_spi_icmds(uint16_t cmd_size);
    
-
-// ===== I80 Parallel Interface Members =====
-#if defined(UDISPLAY_I80) // ESP32 has only support via I2S for I80
-   // I80 Bus control pins
-   int8_t par_cs;
-   int8_t par_rs; 
-   int8_t par_wr;
-   int8_t par_rd;
-#endif // UDISPLAY_I80
-
-
-#if SOC_LCD_RGB_SUPPORTED
-   esp_lcd_rgb_panel_config_t *_panel_config;  // TODO: migrate to panel_config->rgb
-#endif // SOC_LCD_RGB_SUPPORTED
-
-// ===== Common ESP32-S3 Features =====
-#if defined(UDISPLAY_I80) || SOC_LCD_RGB_SUPPORTED
-   // Shared between I80 and RGB interfaces
-   int8_t par_dbl[8];  // RGB data low byte or Data bus low byte (D0-D7)
-   int8_t par_dbh[8];  // RGB data high byte or Data bus high byte (D8-D15) for 16-bit
-#endif
 
 #ifdef USE_UNIVERSAL_TOUCH
 // universal touch driver

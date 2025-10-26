@@ -412,7 +412,11 @@ int16_t uDisplay::ut_execute(uint8_t *ut_code) {
       case UT_GSRT:
 #ifdef UDISPLAY_I80      
         { 
-          uint32_t val = get_sr_touch(SIMPLERS_XP, SIMPLERS_XM, SIMPLERS_YP, SIMPLERS_YM);
+          // Simple resistive touch using I80 data pins
+          uint32_t val = get_sr_touch(panel_config->i80.data_pins_low[1], // XP
+                                       panel_config->i80.cs_pin,            // XM
+                                       panel_config->i80.dc_pin,            // YP
+                                       panel_config->i80.data_pins_low[0]); // YM
           if (val == 0) {
             return false;
           }
