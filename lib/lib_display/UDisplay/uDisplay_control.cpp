@@ -27,7 +27,6 @@ void uDisplay::DisplayOnff(int8_t on) {
 #define AW_PWMRES 1024
 
     if (on) {
-        if (dsp_on != 0xff) ulcd_command_one(dsp_on);
         if (bpanel >= 0) {
 #ifdef ESP32
             if (!bpmode) {
@@ -44,7 +43,6 @@ void uDisplay::DisplayOnff(int8_t on) {
 #endif
         }
     } else {
-        if (dsp_off != 0xff) ulcd_command_one(dsp_off);
         if (bpanel >= 0) {
 #ifdef ESP32
             if (!bpmode) {
@@ -89,8 +87,8 @@ void uDisplay::dim10(uint8_t dim, uint16_t dim_gamma) {
         if (dim_op != 0xff) {
             spiController->beginTransaction();
             spiController->csLow();
-            ulcd_command(dim_op);
-            ulcd_data8(dimmer8);
+            spiController->writeCommand(dim_op);
+            spiController->writeData8(dimmer8);
             spiController->csHigh();
             spiController->endTransaction();
         }
@@ -100,16 +98,8 @@ void uDisplay::dim10(uint8_t dim, uint16_t dim_gamma) {
 // ===== Display Inversion =====
 
 void uDisplay::invertDisplay(boolean i) {
-    if (universal_panel && universal_panel->invertDisplay(i)) {
-        return;
-    }
-
-    if (interface == _UDSP_SPI) {
-        if (i) {
-            ulcd_command_one(inv_on);
-        } else {
-            ulcd_command_one(inv_off);
-        }
+    if (universal_panel) {
+        universal_panel->invertDisplay(i);
     }
 }
 

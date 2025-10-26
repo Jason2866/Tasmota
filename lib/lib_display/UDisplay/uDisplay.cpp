@@ -824,7 +824,7 @@ uint16_t cmd_offset = 0;
     spiController->csLow();
     iob = dsp_cmds[cmd_offset++];
     index++;
-    ulcd_command(iob);
+    spiController->writeCommand(iob);
     uint8_t args = dsp_cmds[cmd_offset++];
     index++;
 #ifdef UDSP_DEBUG
@@ -836,7 +836,7 @@ uint16_t cmd_offset = 0;
 #ifdef UDSP_DEBUG
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: %02x", iob);
 #endif
-      ulcd_data8(iob);
+      spiController->writeData8(iob);
     }
     spiController->csHigh();
     if (args & 0x80) {  // delay after the command
@@ -950,7 +950,7 @@ uint16_t index = 0;
             break;
         }
       }
-      ulcd_command(iob);
+      spiController->writeCommand(iob);
       uint8_t args = dsp_cmds[cmd_offset++];
       index++;
 #ifdef UDSP_DEBUG
@@ -963,9 +963,9 @@ uint16_t index = 0;
         AddLog(LOG_LEVEL_DEBUG, "%02x ", iob );
 #endif
         if (!allcmd_mode) {
-          ulcd_data8(iob);
+          spiController->writeData8(iob);
         } else {
-          ulcd_command(iob);
+          spiController->writeCommand(iob);
         }
       }
       spiController->csHigh();

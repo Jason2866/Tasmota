@@ -274,31 +274,35 @@ bool SPIPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 }
 
 bool SPIPanel::displayOnff(int8_t on) {
-    // From original uDisplay::DisplayOnff
     display_on = (on != 0);
     
-    // if (display_on && cfg.cmd_display_on != 0xFF) {
-    //     spi->writeCommand(cfg.cmd_display_on);
-    //     return true;
-    // } else if (!display_on && cfg.cmd_display_off != 0xFF) {
-    //     spi->writeCommand(cfg.cmd_display_off);
-    //     return true;
-    // }
-    return false;
+    spi->beginTransaction();
+    spi->csLow();
+    if (display_on && cfg.cmd_display_on != 0xFF) {
+        spi->writeCommand(cfg.cmd_display_on);
+    } else if (!display_on && cfg.cmd_display_off != 0xFF) {
+        spi->writeCommand(cfg.cmd_display_off);
+    }
+    spi->csHigh();
+    spi->endTransaction();
+    
+    return true;
 }
 
 bool SPIPanel::invertDisplay(bool invert) {
-    // From original uDisplay::invertDisplay
     inverted = invert;
     
-    // if (invert && cfg.cmd_invert_on != 0xFF) {
-    //     spi->writeCommand(cfg.cmd_invert_on);
-    //     return true;
-    // } else if (!invert && cfg.cmd_invert_off != 0xFF) {
-    //     spi->writeCommand(cfg.cmd_invert_off);
-    //     return true;
-    // }
-    return false;
+    spi->beginTransaction();
+    spi->csLow();
+    if (invert && cfg.cmd_invert_on != 0xFF) {
+        spi->writeCommand(cfg.cmd_invert_on);
+    } else if (!invert && cfg.cmd_invert_off != 0xFF) {
+        spi->writeCommand(cfg.cmd_invert_off);
+    }
+    spi->csHigh();
+    spi->endTransaction();
+    
+    return true;
 }
 
 bool SPIPanel::setRotation(uint8_t rot) {
