@@ -29,7 +29,6 @@ struct DSIPanelConfig {
     // DSI parameters (from :H line)
     uint8_t dsi_lanes;              // 2
     int8_t te_pin;                  // -1 (no TE)
-    int8_t backlight_pin;           // -1 (no backlight control)
     int8_t reset_pin;               // -1 (no reset control)
     int ldo_channel;                // 3  
     int ldo_voltage_mv;             // 2500
