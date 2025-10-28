@@ -356,7 +356,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               // Parse DSI-specific parameters directly into union
               panel_config->dsi.dsi_lanes = next_val(&lp1);
               panel_config->dsi.te_pin = next_val(&lp1);
-              panel_config->dsi.backlight_pin = next_val(&lp1);
+              bpanel = next_val(&lp1);
               panel_config->dsi.reset_pin = next_val(&lp1);
               panel_config->dsi.ldo_channel = next_val(&lp1);
               panel_config->dsi.ldo_voltage_mv = next_val(&lp1);
@@ -1324,9 +1324,9 @@ if (interface == _UDSP_SPI) {
         universal_panel = new DSIPanel(panel_config->dsi);
         rgb_fb = universal_panel->framebuffer;
                 
-        if (panel_config->dsi.backlight_pin >= 0) {
-          analogWrite(panel_config->dsi.backlight_pin, 32);
-        }   
+        if (bpanel >= 0) {
+          analogWrite(bpanel, 32);
+        }
      }
 #endif
 
