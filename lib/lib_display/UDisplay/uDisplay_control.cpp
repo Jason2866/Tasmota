@@ -110,7 +110,10 @@ void uDisplay::Splash(void) {
 
     if (ep_mode) {
         Updateframe();
-        delay_sync(lut3time * 10);
+        if (universal_panel) {
+            EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+            epd->delay_sync(panel_config->epd.update_time * 10);
+        }
     }
     
     setTextFont(splash_font);

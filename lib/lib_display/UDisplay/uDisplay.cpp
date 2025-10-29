@@ -39,20 +39,6 @@ uDisplay::~uDisplay(void) {
     free(frame_buffer);
   }
 
-  if (lut_full) {
-    free(lut_full);
-  }
-
-  if (lut_partial) {
-    free(lut_partial);
-  }
-
-  for (uint16_t cnt = 0; cnt < MAX_LUTS; cnt++ ) {
-    if (lut_array[cnt]) {
-      free(lut_array[cnt]);
-    }
-  }
-  
   // Free panel config union
   if (panel_config) {
     free(panel_config);
@@ -87,12 +73,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   bpmode = 0;
   dsp_off = 0xff;
   dsp_on = 0xff;
-  lutpsize = 0;
-  lutfsize = 0;
-  lutptime = 35;
-  lutftime = 350;
-  lut3time = 10;
-  busy_pin = -1;
+  // busy_pin = -1;  // MOVED to EPDPanelConfig.busy_pin
   spec_init = -1;
   ep_mode = 0;
   fg_col = 1;
@@ -104,8 +85,6 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   startline = 0xA1;
   uint8_t section = 0;
   dsp_ncmds = 0;
-  epc_part_cnt = 0;
-  epc_full_cnt = 0;
   lut_num = 0;
   lvgl_param.data = 0;
   lvgl_param.flushlines = 40;
@@ -113,18 +92,15 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   rot_t[1] = 1;
   rot_t[2] = 2;
   rot_t[3] = 3;
-  epcoffs_full = 0;
-  epcoffs_part = 0;
   interface = 0;
-
-  for (uint32_t cnt = 0; cnt < MAX_LUTS; cnt++) {
-    lut_cnt[cnt] = 0;
-    lut_cmd[cnt] = 0xff;
-    lut_array[cnt] = 0;
-  }
-
-  lut_partial = 0;
-  lut_full = 0;
+  
+  // Allocate panel_config once at the beginning
+  panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
+  // Set EPD timing defaults (will be used if EPD mode is detected)
+  panel_config->epd.lut_full_time = 350;
+  panel_config->epd.lut_partial_time = 35;
+  panel_config->epd.update_time = 10;
+  
   char linebuff[UDSP_LBSIZE];
   while (*lp) {
 
@@ -210,33 +186,33 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
           if (*lp1 >= '1' && *lp1 <= '5') {
             lut_num = (*lp1 & 0x07);
             lp1 += 2;
-            lut_siz[lut_num - 1] = next_val(&lp1);
-            lut_array[lut_num - 1] = (uint8_t*)malloc(lut_siz[lut_num - 1]);
-            lut_cmd[lut_num - 1] = next_hex(&lp1);
-            // Copy LUT command to EPD config
-            if (interface == _UDSP_SPI && ep_mode) {
-              panel_config->epd.lut_cmd[lut_num - 1] = lut_cmd[lut_num - 1];
-            }
+            uint8_t lut_size = next_val(&lp1);
+            uint8_t lut_cmd_val = next_hex(&lp1);
+            
+            // Store directly in EPD config
+            panel_config->epd.lut_siz[lut_num - 1] = lut_size;
+            panel_config->epd.lut_array_data[lut_num - 1] = (uint8_t*)malloc(lut_size);
+            panel_config->epd.lut_cmd[lut_num - 1] = lut_cmd_val;
           } else {
             lut_num = 0;
             lp1++;
-            lut_siz_full = next_val(&lp1);
-            lut_full = (uint8_t*)malloc(lut_siz_full);
-            lut_cmd[0] = next_hex(&lp1);
-            // Copy LUT command to EPD config
-            if (interface == _UDSP_SPI && ep_mode) {
-              panel_config->epd.lut_cmd[0] = lut_cmd[0];
-            }
+            uint16_t lut_size = next_val(&lp1);
+            uint8_t lut_cmd_val = next_hex(&lp1);
+            
+            // Store directly in EPD config
+            panel_config->epd.lut_full_data = (uint8_t*)malloc(lut_size);
+            panel_config->epd.lutfsize = 0;  // Will be filled during :L data parsing
+            panel_config->epd.lut_cmd[0] = lut_cmd_val;
           }
         } else if (section == 'l') {
           lp1++;
-          lut_siz_partial = next_val(&lp1);
-          lut_partial = (uint8_t*)malloc(lut_siz_partial);
-          lut_cmd[0] = next_hex(&lp1);
-          // Copy LUT command to EPD config
-          if (interface == _UDSP_SPI && ep_mode) {
-            panel_config->epd.lut_cmd[0] = lut_cmd[0];
-          }
+          uint16_t lut_size = next_val(&lp1);
+          uint8_t lut_cmd_val = next_hex(&lp1);
+          
+          // Store directly in EPD config
+          panel_config->epd.lut_partial_data = (uint8_t*)malloc(lut_size);
+          panel_config->epd.lutpsize = 0;  // Will be filled during :l data parsing
+          panel_config->epd.lut_cmd[0] = lut_cmd_val;
         }
         if (*lp1 == ',') lp1++;
         
@@ -266,8 +242,6 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             str2c(&lp1, ibuff, sizeof(ibuff));
             if (!strncmp(ibuff, "I2C", 3)) {
               interface = _UDSP_I2C;
-              // Allocate panel config union for I2C
-              panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
               wire_n = 0;
               if (!strncmp(ibuff, "I2C2", 4)) {
                wire_n = 1;
@@ -279,8 +253,6 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               section = 0;
             } else if (!strncmp(ibuff, "SPI", 3)) {
               interface = _UDSP_SPI;
-              // Allocate panel config union for SPI (could be SPI or EPD)
-              panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
               SPIControllerConfig spi_cfg = {
                   .bus_nr = (uint8_t)next_val(&lp1),
                   .cs = (int8_t)next_val(&lp1),
@@ -302,8 +274,6 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               } else {
                 interface = _UDSP_PAR16;
               }
-              // Allocate panel config union for I80
-              panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
               reset = next_val(&lp1);
               
               // Parse control pins directly into I80 config
@@ -329,7 +299,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             }  else if (!strncmp(ibuff, "RGB", 3)) {
 #ifdef SOC_LCD_RGB_SUPPORTED
               interface = _UDSP_RGB;
-              // Allocate panel config union for RGB with DMA-capable memory
+              // RGB needs DMA-capable memory - reallocate panel_config
+              free(panel_config);
               panel_config = (PanelConfigUnion*)heap_caps_calloc(1, sizeof(PanelConfigUnion), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
               // Parse pin configuration directly into union
               panel_config->rgb.de_gpio_num = (gpio_num_t)next_val(&lp1);
@@ -350,9 +321,6 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             } else if (!strncmp(ibuff, "DSI", 3)) {
 #ifdef SOC_MIPI_DSI_SUPPORTED
               interface = _UDSP_DSI;
-              // Allocate panel config union for DSI
-              panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
-              
               // Parse DSI-specific parameters directly into union
               panel_config->dsi.dsi_lanes = next_val(&lp1);
               panel_config->dsi.te_pin = next_val(&lp1);
@@ -373,7 +341,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               section = 0;
 #ifdef UDSP_DEBUG
               AddLog(LOG_LEVEL_DEBUG, "UDisplay: DSI interface - Lanes:%d TE:%d BL:%d LDO:%d@%dmV Clock:%dHz Speed:%dMbps RGB_Order:%d Endian:%d",
-                    panel_config->dsi.dsi_lanes, panel_config->dsi.te_pin, panel_config->dsi.backlight_pin,
+                    panel_config->dsi.dsi_lanes, panel_config->dsi.te_pin, bpanel,
                     panel_config->dsi.ldo_channel, panel_config->dsi.ldo_voltage_mv,
                     panel_config->dsi.pixel_clock_hz, panel_config->dsi.lane_speed_mbps,
                     panel_config->dsi.rgb_order, panel_config->dsi.data_endian);
@@ -463,14 +431,14 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             break;
           case 'f':
             // epaper full update cmds
-            if (!epcoffs_full) {
-              epcoffs_full = dsp_ncmds;
-              epc_full_cnt = 0;
+            if (!panel_config->epd.epcoffs_full) {
+              panel_config->epd.epcoffs_full = dsp_ncmds;
+              panel_config->epd.epc_full_cnt = 0;
             }
             while (1) {
-              if (epc_full_cnt >= sizeof(dsp_cmds)) break;
+              if (panel_config->epd.epc_full_cnt >= sizeof(dsp_cmds)) break;
               if (!str2c(&lp1, ibuff, sizeof(ibuff))) {
-                dsp_cmds[epcoffs_full + epc_full_cnt++] = strtol(ibuff, 0, 16);
+                dsp_cmds[panel_config->epd.epcoffs_full + panel_config->epd.epc_full_cnt++] = strtol(ibuff, 0, 16);
               } else {
                 break;
               }
@@ -478,14 +446,14 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             break;
           case 'p':
             // epaper partial update cmds
-            if (!epcoffs_part) {
-              epcoffs_part = dsp_ncmds + epc_full_cnt;
-              epc_part_cnt = 0;
+            if (!panel_config->epd.epcoffs_part) {
+              panel_config->epd.epcoffs_part = dsp_ncmds + panel_config->epd.epc_full_cnt;
+              panel_config->epd.epc_part_cnt = 0;
             }
             while (1) {
-              if (epc_part_cnt >= sizeof(dsp_cmds)) break;
+              if (panel_config->epd.epc_part_cnt >= sizeof(dsp_cmds)) break;
               if (!str2c(&lp1, ibuff, sizeof(ibuff))) {
-                dsp_cmds[epcoffs_part + epc_part_cnt++] = strtol(ibuff, 0, 16);
+                dsp_cmds[panel_config->epd.epcoffs_part + panel_config->epd.epc_part_cnt++] = strtol(ibuff, 0, 16);
               } else {
                 break;
               }
@@ -723,64 +691,64 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             break;
           case 'L':
             if (!lut_num) {
-              if (!lut_full) {
+              if (!panel_config->epd.lut_full_data) {
                 break;
               }
               while (1) {
                 if (!str2c(&lp1, ibuff, sizeof(ibuff))) {
-                  lut_full[lutfsize++] = strtol(ibuff, 0, 16);
+                  panel_config->epd.lut_full_data[panel_config->epd.lutfsize++] = strtol(ibuff, 0, 16);
                 } else {
                   break;
                 }
-                if (lutfsize >= lut_siz_full) break;
               }
-              // Copy to EPD config
-              if (interface == _UDSP_SPI && ep_mode) {
-                panel_config->epd.lut_full = lut_full;
-                panel_config->epd.lut_full_len = lutfsize;
-              }
+              // Set pointers for compatibility
+              panel_config->epd.lut_full = panel_config->epd.lut_full_data;
+              panel_config->epd.lut_full_len = panel_config->epd.lutfsize;
             } else {
               uint8_t index = lut_num - 1;
-              if (!lut_array[index]) {
+              if (!panel_config->epd.lut_array_data[index]) {
                 break;
               }
               while (1) {
                 if (!str2c(&lp1, ibuff, sizeof(ibuff))) {
-                  lut_array[index][lut_cnt[index]++] = strtol(ibuff, 0, 16);
+                  panel_config->epd.lut_array_data[index][panel_config->epd.lut_cnt_data[index]++] = strtol(ibuff, 0, 16);
                 } else {
                   break;
                 }
-                if (lut_cnt[index] >= lut_siz[index]) break;
+                if (panel_config->epd.lut_cnt_data[index] >= panel_config->epd.lut_siz[index]) break;
               }
-              // Copy to EPD config
-              if (interface == _UDSP_SPI && ep_mode) {
-                panel_config->epd.lut_array = (const uint8_t**)lut_array;
-                panel_config->epd.lut_cnt = lut_cnt;
-              }
+              // Set pointers for compatibility
+              panel_config->epd.lut_array = (const uint8_t**)panel_config->epd.lut_array_data;
+              panel_config->epd.lut_cnt = panel_config->epd.lut_cnt_data;
             }
             break;
           case 'l':
-            if (!lut_partial) {
+            if (!panel_config->epd.lut_partial_data) {
               break;
             }
             while (1) {
               if (!str2c(&lp1, ibuff, sizeof(ibuff))) {
-                lut_partial[lutpsize++] = strtol(ibuff, 0, 16);
+                panel_config->epd.lut_partial_data[panel_config->epd.lutpsize++] = strtol(ibuff, 0, 16);
               } else {
                 break;
               }
-              if (lutpsize >= lut_siz_partial) break;
             }
-            // Copy to EPD config
-            if (interface == _UDSP_SPI && ep_mode) {
-              panel_config->epd.lut_partial = lut_partial;
-              panel_config->epd.lut_partial_len = lutpsize;
-            }
+            // Set pointers for compatibility
+            panel_config->epd.lut_partial = panel_config->epd.lut_partial_data;
+            panel_config->epd.lut_partial_len = panel_config->epd.lutpsize;
             break;
           case 'T':
-            lutftime = next_val(&lp1);
-            lutptime = next_val(&lp1);
-            lut3time = next_val(&lp1);
+            // Parse timing directly into EPD config
+            if (panel_config) {
+              panel_config->epd.lut_full_time = next_val(&lp1);
+              panel_config->epd.lut_partial_time = next_val(&lp1);
+              panel_config->epd.update_time = next_val(&lp1);
+            } else {
+              // Skip values if panel_config not allocated yet
+              next_val(&lp1);
+              next_val(&lp1);
+              next_val(&lp1);
+            }
             break;
           case 'B':
             lvgl_param.flushlines = next_val(&lp1);
@@ -876,12 +844,15 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
     }
   }
 
-  if (lutfsize && lutpsize) {
+  if (panel_config && panel_config->epd.lutfsize && panel_config->epd.lutpsize) {
     // 2 table mode
     ep_mode = 1;
   }
 
-  if (lut_cnt[0] > 0 && lut_cnt[1] == lut_cnt[2] && lut_cnt[1] == lut_cnt[3] && lut_cnt[1] == lut_cnt[4]) {
+  if (panel_config && panel_config->epd.lut_cnt_data[0] > 0 && 
+      panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[2] && 
+      panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[3] && 
+      panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[4]) {
     // 5 table mode
     ep_mode = 2;
   }
@@ -899,7 +870,8 @@ void UfsCheckSDCardInit(void);
   }
 #endif
 
-  if ((epcoffs_full || epcoffs_part) && !(lutfsize || lutpsize)) {
+  if (panel_config && (panel_config->epd.epcoffs_full || panel_config->epd.epcoffs_part) && 
+      !(panel_config->epd.lutfsize || panel_config->epd.lutpsize)) {
     // no lutfsize or lutpsize, but epcoffs_full or epcoffs_part
     ep_mode = 3;
   }
@@ -914,14 +886,15 @@ void UfsCheckSDCardInit(void);
        bpanel, reset, spiController->spi_config.miso, spiController->spi_config.speed*1000000, col_mode, sa_mode, lvgl_param.use_dma, saw_3, dim_op, startline, saw_1, saw_2, saw_3);
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Rot 0: %x,%x - %d - %d", madctrl, rot[0], x_addr_offs[0], y_addr_offs[0]);
 
-    if (ep_mode == 1) {
-      AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_Partial:%d-%d-%x-%d-%d LUT_Full:%d-%d-%x-%d-%d", 
-       lut_siz_partial, lutpsize, panel_config->epd.lut_cmd[0], epcoffs_part, epc_part_cnt, 
-       lut_siz_full, lutfsize, panel_config->epd.lut_cmd[0], epcoffs_full, epc_full_cnt);
+    if (ep_mode == 1 && panel_config) {
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_Partial:%d-%x-%d-%d LUT_Full:%d-%x-%d-%d", 
+       panel_config->epd.lutpsize, panel_config->epd.lut_cmd[0], panel_config->epd.epcoffs_part, panel_config->epd.epc_part_cnt, 
+       panel_config->epd.lutfsize, panel_config->epd.lut_cmd[0], panel_config->epd.epcoffs_full, panel_config->epd.epc_full_cnt);
     }
-    if (ep_mode == 2) {
+    if (ep_mode == 2 && panel_config) {
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_SIZE 1:%d 2:%d 3:%d 4:%d 5:%d", 
-       lut_cnt[0], lut_cnt[1], lut_cnt[2], lut_cnt[3], lut_cnt[4]);
+       panel_config->epd.lut_cnt_data[0], panel_config->epd.lut_cnt_data[1], panel_config->epd.lut_cnt_data[2], 
+       panel_config->epd.lut_cnt_data[3], panel_config->epd.lut_cnt_data[4]);
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_CMDS %02x-%02x-%02x-%02x-%02x", 
        panel_config->epd.lut_cmd[0], panel_config->epd.lut_cmd[1], panel_config->epd.lut_cmd[2], 
        panel_config->epd.lut_cmd[3], panel_config->epd.lut_cmd[4]);
@@ -1049,11 +1022,11 @@ uint16_t index = 0;
           reset_pin(iob, iob);
           break;
         case EP_LUT_FULL:
-          epd->setLut(lut_full, lutfsize);
+          epd->setLut(epd->cfg.lut_full_data, epd->cfg.lutfsize);
           ep_update_mode = DISPLAY_INIT_FULL;
           break;
         case EP_LUT_PARTIAL:
-          epd->setLut(lut_partial, lutpsize);
+          epd->setLut(epd->cfg.lut_partial_data, epd->cfg.lutpsize);
           ep_update_mode = DISPLAY_INIT_PARTIAL;
           break;
         case EP_WAITIDLE:
@@ -1061,7 +1034,7 @@ uint16_t index = 0;
             iob = dsp_cmds[cmd_offset++];
             index++;
           }
-          delay_sync(iob * 10);
+          epd->delay_sync(iob * 10);
           break;
         case EP_SET_MEM_AREA:
           epd->setMemoryArea(0, 0, gxs - 1, gys - 1);
@@ -1215,8 +1188,6 @@ if (interface == _UDSP_SPI) {
         digitalWrite(bpanel, HIGH);
 #endif // ESP32
     }
-    busy_pin = spiController->spi_config.miso; // update for timing
-
     // spiController->beginTransaction();
 
     if (reset >= 0) {
@@ -1232,11 +1203,9 @@ if (interface == _UDSP_SPI) {
         panel_config->epd.height = gys;
         panel_config->epd.bpp = bpp;
         panel_config->epd.ep_mode = ep_mode;
-        panel_config->epd.lut_full_time = lutftime;
-        panel_config->epd.lut_partial_time = lutptime;
-        panel_config->epd.update_time = lut3time;
+        // Timing values already set in panel_config->epd (either defaults or from :T section)
         panel_config->epd.reset_pin = reset;
-        panel_config->epd.busy_pin = busy_pin;
+        panel_config->epd.busy_pin = spiController->spi_config.miso;
         panel_config->epd.invert_colors = false;
         panel_config->epd.invert_framebuffer = true;
         panel_config->epd.busy_invert = (bool)lvgl_param.busy_invert;
@@ -1244,6 +1213,15 @@ if (interface == _UDSP_SPI) {
         // Create EPD panel BEFORE sending init commands (send_spi_cmds needs universal_panel)
         universal_panel = new EPDPanel(panel_config->epd, spiController, frame_buffer);
         send_spi_cmds(0, dsp_ncmds);
+        
+        // After descriptor init commands, do initial EPD setup
+        EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+        epd->resetDisplay();
+        if (epd->cfg.lut_full && epd->cfg.lut_full_len > 0) {
+            epd->setLut(epd->cfg.lut_full, epd->cfg.lut_full_len);
+        }
+        epd->clearFrameMemory(0xFF);
+        epd->displayFrame();
     } else {   
         AddLog(2,"SPI Panel!");
         // Populate remaining SPI config fields (most already parsed directly into union)
@@ -1253,7 +1231,6 @@ if (interface == _UDSP_SPI) {
         panel_config->spi.cmd_display_on = dsp_on;
         panel_config->spi.cmd_display_off = dsp_off;
         panel_config->spi.reset_pin = reset;
-        panel_config->spi.busy_pin = busy_pin;
         panel_config->spi.bpanel = bpanel;
         panel_config->spi.all_commands_mode = allcmd_mode;
         
@@ -1375,13 +1352,13 @@ void uDisplay::Updateframe_EPD(void) {
     if (ep_mode == 1 || ep_mode == 3) {
         switch (ep_update_mode) {
             case DISPLAY_INIT_PARTIAL:
-                if (epc_part_cnt) {
-                    send_spi_cmds(epcoffs_part, epc_part_cnt);
+                if (epd->cfg.epc_part_cnt) {
+                    send_spi_cmds(epd->cfg.epcoffs_part, epd->cfg.epc_part_cnt);
                 }
                 break;
             case DISPLAY_INIT_FULL:
-                if (epc_full_cnt) {
-                    send_spi_cmds(epcoffs_full, epc_full_cnt);
+                if (epd->cfg.epc_full_cnt) {
+                    send_spi_cmds(epd->cfg.epcoffs_full, epd->cfg.epc_full_cnt);
                 }
                 break;
             default:
@@ -1397,33 +1374,34 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
   if (p != DISPLAY_INIT_MODE && ep_mode) {
     ep_update_mode = p;
     if (p == DISPLAY_INIT_PARTIAL) {
-      if (lutpsize) {
+      if (universal_panel) {
+        EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+        if (epd->cfg.lutpsize) {
 #ifdef UDSP_DEBUG
-        AddLog(LOG_LEVEL_DEBUG, "init partial epaper mode");
+          AddLog(LOG_LEVEL_DEBUG, "init partial epaper mode");
 #endif
-        if (universal_panel) {
-          EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
-          epd->setLut(lut_partial, lutpsize);
+          epd->setLut(epd->cfg.lut_partial_data, epd->cfg.lutpsize);
+          Updateframe_EPD();
+          epd->delay_sync(epd->cfg.lut_partial_time * 10);
         }
-        Updateframe_EPD();
-        delay_sync(lutptime * 10);
       }
       return;
     } else if (p == DISPLAY_INIT_FULL) {
 #ifdef UDSP_DEBUG
       AddLog(LOG_LEVEL_DEBUG, "init full epaper mode");
 #endif
-      if (lutfsize && universal_panel) {
+      if (universal_panel) {
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
-        epd->setLut(lut_full, lutfsize);
-        Updateframe_EPD();
+        if (epd->cfg.lutfsize) {
+          epd->setLut(epd->cfg.lut_full_data, epd->cfg.lutfsize);
+          Updateframe_EPD();
+        }
+        if (ep_mode == 2) {
+          epd->clearFrame_42();
+          epd->displayFrame_42();
+        }
+        epd->delay_sync(epd->cfg.lut_full_time * 10);
       }
-      if (ep_mode == 2 && universal_panel) {
-        EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
-        epd->clearFrame_42();
-        epd->displayFrame_42();
-      }
-      delay_sync(lutftime * 10);
       return;
     }
   } else {
