@@ -311,10 +311,10 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               // Parse data pins directly into RGB config
               // Note: byte order may be swapped later based on lvgl_param.swap_color
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
-                  panel_config->rgb.data_gpio_nums[cnt] = next_val(&lp1);
+                  panel_config->rgb.data_gpio_nums[cnt + 8] = next_val(&lp1);
               }
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
-                  panel_config->rgb.data_gpio_nums[cnt + 8] = next_val(&lp1);
+                  panel_config->rgb.data_gpio_nums[cnt] = next_val(&lp1);
               }
               spi_speed = next_val(&lp1);
 #endif //SOC_LCD_RGB_SUPPORTED
@@ -844,17 +844,26 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
     }
   }
 
-  if (panel_config && panel_config->epd.lutfsize && panel_config->epd.lutpsize) {
-    // 2 table mode
-    ep_mode = 1;
-  }
+  // EPD mode detection - only for SPI interface
+  if (interface == _UDSP_SPI) {
+    if (panel_config && panel_config->epd.lutfsize && panel_config->epd.lutpsize) {
+      // 2 table mode
+      ep_mode = 1;
+    }
 
-  if (panel_config && panel_config->epd.lut_cnt_data[0] > 0 && 
-      panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[2] && 
-      panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[3] && 
-      panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[4]) {
-    // 5 table mode
-    ep_mode = 2;
+    if (panel_config && panel_config->epd.lut_cnt_data[0] > 0 && 
+        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[2] && 
+        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[3] && 
+        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[4]) {
+      // 5 table mode
+      ep_mode = 2;
+    }
+
+    if (panel_config && (panel_config->epd.epcoffs_full || panel_config->epd.epcoffs_part) && 
+        !(panel_config->epd.lutfsize || panel_config->epd.lutpsize)) {
+      // no lutfsize or lutpsize, but epcoffs_full or epcoffs_part
+      ep_mode = 3;
+    }
   }
 
 
@@ -870,18 +879,12 @@ void UfsCheckSDCardInit(void);
   }
 #endif
 
-  if (panel_config && (panel_config->epd.epcoffs_full || panel_config->epd.epcoffs_part) && 
-      !(panel_config->epd.lutfsize || panel_config->epd.lutpsize)) {
-    // no lutfsize or lutpsize, but epcoffs_full or epcoffs_part
-    ep_mode = 3;
-  }
-
 #ifdef UDSP_DEBUG
   AddLog(LOG_LEVEL_DEBUG, "UDisplay: Device:%s xs:%d ys:%d bpp:%d", dname, gxs, gys, bpp);
 
   if (interface == _UDSP_SPI) {
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Nr:%d CS:%d CLK:%d MOSI:%d DC:%d TS_CS:%d TS_RST:%d TS_IRQ:%d", 
-       spiController->spi_config.bus_nr, spiController->spi_config.dc, spiController->spi_config.clk, spiController->spi_config.mosi, spiController->spi_config.dc, ut_spi_cs, ut_reset, ut_irq);
+       spiController->spi_config.bus_nr, spiController->spi_config.cs, spiController->spi_config.clk, spiController->spi_config.mosi, spiController->spi_config.dc, ut_spi_cs, ut_reset, ut_irq);
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: BPAN:%d RES:%d MISO:%d SPED:%d Pixels:%d SaMode:%d DMA-Mode:%d opts:%02x,%02x,%02x SetAddr:%x,%x,%x", 
        bpanel, reset, spiController->spi_config.miso, spiController->spi_config.speed*1000000, col_mode, sa_mode, lvgl_param.use_dma, saw_3, dim_op, startline, saw_1, saw_2, saw_3);
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Rot 0: %x,%x - %d - %d", madctrl, rot[0], x_addr_offs[0], y_addr_offs[0]);
