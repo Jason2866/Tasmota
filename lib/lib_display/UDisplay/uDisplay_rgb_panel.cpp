@@ -88,7 +88,7 @@ bool RGBPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 
 bool RGBPanel::displayOnff(int8_t on) {
     esp_lcd_panel_disp_on_off(panel_handle, on != 0);
-    return true; // Handled by RGB panel
+    return false; // bpanel is controlled from display class
 }
 
 bool RGBPanel::invertDisplay(bool invert) {

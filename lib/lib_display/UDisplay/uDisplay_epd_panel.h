@@ -48,6 +48,21 @@ struct EPDPanelConfig {
     const uint8_t** lut_array = nullptr;  // Array of 5 LUTs
     const uint8_t* lut_cnt = nullptr;     // Size of each LUT
     uint8_t lut_cmd[5] = {0};             // Commands for each LUT
+    
+    // Additional LUT management (owned by EPD panel)
+    uint8_t* lut_full_data = nullptr;     // Owned pointer to full LUT data
+    uint8_t* lut_partial_data = nullptr;  // Owned pointer to partial LUT data
+    uint8_t* lut_array_data[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};  // Owned pointers to LUT array data
+    uint16_t lutfsize = 0;                // Filled size of lut_full
+    uint16_t lutpsize = 0;                // Filled size of lut_partial
+    uint8_t lut_cnt_data[5] = {0};        // Filled sizes of each LUT in array
+    uint8_t lut_siz[5] = {0};             // Allocated sizes of each LUT in array
+    
+    // Command offsets for ep_mode 1 and 3
+    uint16_t epcoffs_full = 0;            // Offset to full update commands
+    uint16_t epcoffs_part = 0;            // Offset to partial update commands
+    uint8_t epc_full_cnt = 0;             // Count of full update commands
+    uint8_t epc_part_cnt = 0;             // Count of partial update commands
 };
 
 class EPDPanel : public UniversalPanel {
@@ -72,6 +87,7 @@ public:
     bool updateFrame() override;
 
     // EPD-specific public methods (for uDisplay wrapper compatibility)
+    void resetDisplay();
     void setLut(const uint8_t* lut, uint16_t len);
     void setLuts();  // For ep_mode 2 (5-LUT mode)
     void setMemoryArea(int x_start, int y_start, int x_end, int y_end);
@@ -97,7 +113,6 @@ private:
     uint8_t update_mode; // 0=full, 1=partial
 
     // Private helpers
-    void resetDisplay();
     void waitBusy();
     void drawAbsolutePixel(int x, int y, uint16_t color);
 };

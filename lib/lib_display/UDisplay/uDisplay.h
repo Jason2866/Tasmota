@@ -118,9 +118,9 @@ class uDisplay : public Renderer {
 
 private:
     uint8_t *frame_buffer;
-    uint8_t *lut_full;
-    uint8_t *lut_partial;
-    uint8_t *lut_array[MAX_LUTS];
+    // uint8_t *lut_full;  // MOVED to EPDPanelConfig.lut_full_data
+    // uint8_t *lut_partial;  // MOVED to EPDPanelConfig.lut_partial_data
+    // uint8_t *lut_array[MAX_LUTS];  // MOVED to EPDPanelConfig.lut_array_data
 #if SOC_MIPI_DSI_SUPPORTED
     uint8_t dsp_cmds[1024]; // for DSI, does not hurt for ESP32
 #else
@@ -151,8 +151,8 @@ private:
     uint16_t seta_xp2;
     uint16_t seta_yp1;
     uint16_t seta_yp2;
-    uint16_t lutptime;
-    uint16_t lut3time;
+    // uint16_t lutptime;  // MOVED to EPDPanelConfig.lut_partial_time
+    // uint16_t lut3time;  // MOVED to EPDPanelConfig.update_time
     uint16_t lut_num;
 
     uint8_t bpp;
@@ -184,17 +184,17 @@ private:
     uint8_t inv_off;
     uint8_t sa_mode;
     uint8_t dim_op;
-    uint8_t lutfsize;
-    uint8_t lutpsize;
-    uint8_t lut_siz_full;
-    uint8_t lut_siz_partial;
-    uint8_t epcoffs_full;
-    uint8_t epc_full_cnt;
-    uint8_t epcoffs_part;
-    uint8_t epc_part_cnt;
-    uint8_t lut_cnt[MAX_LUTS];
-    uint8_t lut_cmd[MAX_LUTS];
-    uint8_t lut_siz[MAX_LUTS];
+    // uint8_t lutfsize;  // MOVED to EPDPanelConfig.lutfsize
+    // uint8_t lutpsize;  // MOVED to EPDPanelConfig.lutpsize
+    // uint8_t lut_siz_full;  // Local variable only
+    // uint8_t lut_siz_partial;  // Local variable only
+    // uint8_t epcoffs_full;  // MOVED to EPDPanelConfig.epcoffs_full
+    // uint8_t epc_full_cnt;  // MOVED to EPDPanelConfig.epc_full_cnt
+    // uint8_t epcoffs_part;  // MOVED to EPDPanelConfig.epcoffs_part
+    // uint8_t epc_part_cnt;  // MOVED to EPDPanelConfig.epc_part_cnt
+    // uint8_t lut_cnt[MAX_LUTS];  // MOVED to EPDPanelConfig.lut_cnt_data
+    // uint8_t lut_cmd[MAX_LUTS];  // MOVED to EPDPanelConfig.lut_cmd
+    // uint8_t lut_siz[MAX_LUTS];  // MOVED to EPDPanelConfig.lut_siz
     uint8_t ep_mode;
     uint8_t ep_update_mode;
     uint8_t sspi;
@@ -212,9 +212,9 @@ private:
     // int8_t spi_dc;
     int8_t bpanel;
     // int8_t spi_miso;
-    int8_t busy_pin;
+    // int8_t busy_pin;  // MOVED to EPDPanelConfig.busy_pin (EPD-only)
 
-    int16_t lutftime;
+    // int16_t lutftime;  // MOVED to EPDPanelConfig.lut_full_time
     int16_t rotmap_xmin;
     int16_t rotmap_xmax;
     int16_t rotmap_ymin;

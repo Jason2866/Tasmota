@@ -60,7 +60,7 @@ struct SPIPanelConfig {
 
     // ===== Reset & Power Control =====
     int8_t reset_pin;          // GPIO for display reset (-1 if none)
-    int8_t busy_pin;           // GPIO for busy signal (-1 if none)
+    // int8_t busy_pin;        // REMOVED - busy_pin is EPD-only, moved to EPDPanelConfig
     int8_t bpanel;             // Backlight GPIO (-1 if none)
 };
 

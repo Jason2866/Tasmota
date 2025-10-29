@@ -40,6 +40,21 @@ EPDPanel::EPDPanel(const EPDPanelConfig& config,
 
 EPDPanel::~EPDPanel() {
     // Panel doesn't own framebuffer or SPI controller
+    
+    // Free owned LUT data
+    if (cfg.lut_full_data) {
+        free(cfg.lut_full_data);
+    }
+    
+    if (cfg.lut_partial_data) {
+        free(cfg.lut_partial_data);
+    }
+    
+    for (uint8_t i = 0; i < 5; i++) {
+        if (cfg.lut_array_data[i]) {
+            free(cfg.lut_array_data[i]);
+        }
+    }
 }
 
 void EPDPanel::delay_sync(int32_t ms) {
