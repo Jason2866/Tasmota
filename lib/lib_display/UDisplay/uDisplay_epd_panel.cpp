@@ -33,17 +33,9 @@ EPDPanel::EPDPanel(const EPDPanelConfig& config,
                    uint8_t* framebuffer)
     : spi(spi_ctrl), cfg(config), fb_buffer(framebuffer), update_mode(0)
 {
-    // Reset display
-    resetDisplay();
-    
-    // Set initial LUT
-    if (cfg.lut_full && cfg.lut_full_len > 0) {
-        setLut(cfg.lut_full, cfg.lut_full_len);
-    }
-    
-    // Clear display
-    clearFrameMemory(0xFF);
-    displayFrame();
+    // Don't do automatic initialization here - let the descriptor init commands handle it
+    // The uDisplay framework will call send_spi_cmds() after panel creation
+    // which will handle reset, LUT setup, and initial display state
 }
 
 EPDPanel::~EPDPanel() {
