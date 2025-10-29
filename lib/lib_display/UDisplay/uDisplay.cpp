@@ -916,14 +916,15 @@ void UfsCheckSDCardInit(void);
 
     if (ep_mode == 1) {
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_Partial:%d-%d-%x-%d-%d LUT_Full:%d-%d-%x-%d-%d", 
-       lut_siz_partial, lutpsize, lut_cmd[0], epcoffs_part, epc_part_cnt, 
-       lut_siz_full, lutfsize, lut_cmd[0], epcoffs_full, epc_full_cnt);
+       lut_siz_partial, lutpsize, panel_config->epd.lut_cmd[0], epcoffs_part, epc_part_cnt, 
+       lut_siz_full, lutfsize, panel_config->epd.lut_cmd[0], epcoffs_full, epc_full_cnt);
     }
     if (ep_mode == 2) {
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_SIZE 1:%d 2:%d 3:%d 4:%d 5:%d", 
        lut_cnt[0], lut_cnt[1], lut_cnt[2], lut_cnt[3], lut_cnt[4]);
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: LUT_CMDS %02x-%02x-%02x-%02x-%02x", 
-       lut_cmd[0], lut_cmd[1], lut_cmd[2], lut_cmd[3], lut_cmd[4]);
+       panel_config->epd.lut_cmd[0], panel_config->epd.lut_cmd[1], panel_config->epd.lut_cmd[2], 
+       panel_config->epd.lut_cmd[3], panel_config->epd.lut_cmd[4]);
     }
   }
   if (interface == _UDSP_I2C) {
