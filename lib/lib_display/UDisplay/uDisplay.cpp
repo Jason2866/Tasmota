@@ -1240,8 +1240,9 @@ if (interface == _UDSP_SPI) {
         panel_config->epd.invert_framebuffer = true;
         panel_config->epd.busy_invert = (bool)lvgl_param.busy_invert;
         
-        send_spi_cmds(0, dsp_ncmds);
+        // Create EPD panel BEFORE sending init commands (send_spi_cmds needs universal_panel)
         universal_panel = new EPDPanel(panel_config->epd, spiController, frame_buffer);
+        send_spi_cmds(0, dsp_ncmds);
     } else {   
         AddLog(2,"SPI Panel!");
         // Populate remaining SPI config fields (most already parsed directly into union)

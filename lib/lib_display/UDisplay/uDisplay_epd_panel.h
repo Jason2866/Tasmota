@@ -89,9 +89,10 @@ public:
     void setFrameMemory(const uint8_t* image_buffer, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
     void sendEPData();
 
+    EPDPanelConfig cfg;
+
 private:
     SPIController* spi;
-    EPDPanelConfig cfg;
     uint8_t* fb_buffer;  // Framebuffer (always used)
     uint8_t update_mode; // 0=full, 1=partial
 
