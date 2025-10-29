@@ -25,7 +25,7 @@
 #include "tasmota_options.h"
 
 
-//#define UDSP_DEBUG
+#define UDSP_DEBUG
 
 #ifndef UDSP_LBSIZE
 #define UDSP_LBSIZE 256
@@ -909,7 +909,7 @@ void UfsCheckSDCardInit(void);
 
   if (interface == _UDSP_SPI) {
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Nr:%d CS:%d CLK:%d MOSI:%d DC:%d TS_CS:%d TS_RST:%d TS_IRQ:%d", 
-       spi_nr, spiController->spi_config.dc, spiController->spi_config.clk, spiController->spi_config.mosi, spiController->spi_config.dc, ut_spi_cs, ut_reset, ut_irq);
+       spiController->spi_config.bus_nr, spiController->spi_config.dc, spiController->spi_config.clk, spiController->spi_config.mosi, spiController->spi_config.dc, ut_spi_cs, ut_reset, ut_irq);
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: BPAN:%d RES:%d MISO:%d SPED:%d Pixels:%d SaMode:%d DMA-Mode:%d opts:%02x,%02x,%02x SetAddr:%x,%x,%x", 
        bpanel, reset, spiController->spi_config.miso, spiController->spi_config.speed*1000000, col_mode, sa_mode, lvgl_param.use_dma, saw_3, dim_op, startline, saw_1, saw_2, saw_3);
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Rot 0: %x,%x - %d - %d", madctrl, rot[0], x_addr_offs[0], y_addr_offs[0]);
@@ -955,7 +955,7 @@ void UfsCheckSDCardInit(void);
   if (interface == _UDSP_RGB) {
 #ifdef SOC_LCD_RGB_SUPPORTED
 
-    AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb de:%d vsync:%d hsync:%d pclk:%d bp:%d", de, vsync, hsync, pclk, bpanel);
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb de:%d vsync:%d hsync:%d pclk:%d bp:%d", panel_config->rgb.de_gpio_num, panel_config->rgb.vsync_gpio_num, panel_config->rgb.hsync_gpio_num, panel_config->rgb.pclk_gpio_num, bpanel);
 
     for (uint32_t cnt = 0; cnt < 8; cnt ++) {
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb d%d:%d", cnt, panel_config->rgb.data_gpio_nums[cnt]);
@@ -964,9 +964,10 @@ void UfsCheckSDCardInit(void);
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb d%d:%d", cnt + 8, panel_config->rgb.data_gpio_nums[cnt + 8]);
     }
 
-    AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb freq:%d hsync_pol:%d hsync_fp:%d hsync_pw:%d hsync_bp:%d vsync_pol:%d vsync_fp:%d vsync_pw:%d vsync_bp:%d pclk_neg:%d",
-       spiController->spi_config.speed, hsync_polarity, hsync_front_porch, hsync_pulse_width, hsync_back_porch,
-       vsync_polarity, vsync_front_porch, vsync_pulse_width, vsync_back_porch, pclk_active_neg);
+      AddLog(LOG_LEVEL_DEBUG, "UDisplay: rgb freq:%d hsync_idle_low:%d hsync_fp:%d hsync_pw:%d hsync_bp:%d vsync_idle_low:%d vsync_fp:%d vsync_pw:%d vsync_bp:%d pclk_neg:%d",
+        spiController->spi_config.speed, panel_config->rgb.timings.flags.hsync_idle_low, panel_config->rgb.timings.hsync_front_porch, panel_config->rgb.timings.hsync_pulse_width, 
+        panel_config->rgb.timings.hsync_back_porch, panel_config->rgb.timings.flags.vsync_idle_low,  panel_config->rgb.timings.vsync_front_porch, 
+        panel_config->rgb.timings.vsync_pulse_width, panel_config->rgb.timings.vsync_back_porch, panel_config->rgb.timings.flags.pclk_active_neg);
 
 #endif // SOC_LCD_RGB_SUPPORTED
   }
