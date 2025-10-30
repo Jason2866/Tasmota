@@ -190,66 +190,123 @@ void EPDPanel::displayFrame() {
 }
 
 void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
-    if (x < 0 || x >= cfg.width || y < 0 || y >= cfg.height) {
+    // Get dimensions, swapping for rotation 1 and 3
+    int16_t w = cfg.width, h = cfg.height;
+    if (rotation == 1 || rotation == 3) {
+        std::swap(w, h);
+    }
+    
+    if (x < 0 || x >= w || y < 0 || y >= h) {
         return;
     }
     
-    uint16_t byte_pos = (x + y * cfg.width) / 8;
-    uint8_t bit_pos = 7 - (x % 8);
-    
-    if (color) {
-        fb_buffer[byte_pos] |= (1 << bit_pos);
+    if (cfg.invert_colors) {
+        if (color) {
+            fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
+        } else {
+            fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
+        }
     } else {
-        fb_buffer[byte_pos] &= ~(1 << bit_pos);
+        if (color) {
+            fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
+        } else {
+            fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
+        }
     }
 }
 
 // ===== UniversalPanel Interface Implementation =====
 
-bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
+bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {   
     if (!fb_buffer) return false;
     
-    // Convert color to monochrome with inversion support
-    uint16_t mono_color = (color != 0) ? 1 : 0;
-    if (cfg.invert_colors) {
-        mono_color = !mono_color;
+    // Get rotated dimensions for bounds check
+    int16_t w = cfg.width, h = cfg.height;
+    if (rotation == 1 || rotation == 3) {
+        std::swap(w, h);
     }
+    
+    // Bounds check with rotated dimensions
+    if ((x < 0) || (x >= w) || (y < 0) || (y >= h)) {
+        return true;
+    }
+    
+    // Apply rotation transformation (matching old drawPixel_EPD)
+    switch (rotation) {
+        case 1:
+            std::swap(x, y);
+            x = cfg.width - x - 1;
+            break;
+        case 2:
+            x = cfg.width - x - 1;
+            y = cfg.height - y - 1;
+            break;
+        case 3:
+            std::swap(x, y);
+            y = cfg.height - y - 1;
+            break;
+    }
+    
+    // Convert color to monochrome
+    uint16_t mono_color = (color != 0) ? 1 : 0;
     drawAbsolutePixel(x, y, mono_color);
     return true;
 }
 
-bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-    if (!fb_buffer) return false;
-    
-    uint16_t mono_color = (color != 0) ? 1 : 0;
-    if (cfg.invert_colors) {
-        mono_color = !mono_color;
-    }
-    
-    for (int16_t yy = y; yy < y + h; yy++) {
-        for (int16_t xx = x; xx < x + w; xx++) {
-            drawAbsolutePixel(xx, yy, mono_color);
+bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {   
+    // Use drawPixel to handle rotation properly
+    for (int16_t yp = y; yp < y + h; yp++) {
+        for (int16_t xp = x; xp < x + w; xp++) {
+            drawPixel(xp, yp, color);
         }
     }
     return true;
 }
 
 bool EPDPanel::pushColors(uint16_t *data, uint16_t len, bool first) {
-    // EPD doesn't support direct color pushing, only framebuffer
-    return false;
+    // Convert RGB565 to monochrome and write to framebuffer
+    // Pixel is white if at least one of the 3 RGB components is above 50%
+    static constexpr uint16_t RGB16_TO_MONO = 0x8410;
+    
+    if (!fb_buffer) return false;
+    
+    // Write pixels to framebuffer based on window coordinates
+    for (int16_t y = window_y1; y < window_y2 && len > 0; y++) {
+        for (int16_t x = window_x1; x < window_x2 && len > 0; x++, len--) {
+            uint16_t color = *data++;
+            // Convert to mono: white if any component > 50%
+            bool pixel = (color & RGB16_TO_MONO) ? true : false;
+            if (cfg.invert_colors) pixel = !pixel;
+            drawAbsolutePixel(x, y, pixel ? 1 : 0);
+        }
+    }
+    
+    return true; // Handled by EPD panel
 }
 
 bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
-    // EPD uses full framebuffer, address window not applicable
+    // Save window coordinates for pushColors
+    window_x1 = x0;
+    window_y1 = y0;
+    window_x2 = x1;
+    window_y2 = y1;
     return true;
 }
 
 bool EPDPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
-    return fillRect(x, y, w, 1, color);
+    while (w--) {
+        drawPixel(x, y, color);
+        x++;
+    }
+    return true;
 }
 
 bool EPDPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
-    return fillRect(x, y, 1, h, color);
+    while (h--) {
+        drawPixel(x, y, color);
+        y++;
+    }
+    return true;
 }
 
 bool EPDPanel::displayOnff(int8_t on) {
@@ -273,8 +330,8 @@ bool EPDPanel::invertDisplay(bool invert) {
     return true;
 }
 
-bool EPDPanel::setRotation(uint8_t rotation) {
-    // EPD rotation handled in uDisplay framebuffer
+bool EPDPanel::setRotation(uint8_t rot) {
+    rotation = rot & 3;  // Store rotation (0-3)
     return true;
 }
 
@@ -303,34 +360,6 @@ bool EPDPanel::updateFrame() {
     } else if (cfg.ep_mode == 2) {
         // Mode 2 (5-LUT / 4.2" displays): Use internal displayFrame_42
         displayFrame_42();
-    } else {
-        // Fallback: basic update
-        setMemoryArea(0, 0, cfg.width - 1, cfg.height - 1);
-        setMemoryPointer(0, 0);
-        
-        spi->beginTransaction();
-        spi->csLow();
-        spi->writeCommand(WRITE_RAM);
-        
-        uint32_t byte_count = (cfg.width * cfg.height) / 8;
-        for (uint32_t i = 0; i < byte_count; i++) {
-            uint8_t data = fb_buffer[i];
-            if (cfg.invert_framebuffer) {
-                data ^= 0xFF;
-            }
-            spi->writeData8(data);
-        }
-        
-        spi->csHigh();
-        spi->endTransaction();
-        
-        displayFrame();
-        
-        if (update_mode == 0) {
-            delay_sync(cfg.lut_full_time);
-        } else {
-            delay_sync(cfg.lut_partial_time);
-        }
     }
     
     return true;
