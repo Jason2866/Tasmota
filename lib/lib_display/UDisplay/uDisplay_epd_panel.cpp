@@ -219,8 +219,7 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
 bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {   
     if (!fb_buffer) return false;
     
-    // EXACT copy from development branch drawPixel_EPD:
-    // Bounds check uses ROTATED dimensions (width/height swap for rotation 1&3)
+    // Get rotated dimensions for bounds check
     int16_t w = cfg.width, h = cfg.height;
     if (rotation == 1 || rotation == 3) {
         std::swap(w, h);
