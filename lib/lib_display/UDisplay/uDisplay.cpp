@@ -1225,6 +1225,11 @@ if (interface == _UDSP_SPI) {
         }
         epd->clearFrameMemory(0xFF);
         epd->displayFrame();
+        
+        // Send full update command sequence if available
+        if (epd->cfg.epc_full_cnt) {
+            send_spi_cmds(epd->cfg.epcoffs_full, epd->cfg.epc_full_cnt);
+        }
     } else {   
         AddLog(2,"SPI Panel!");
         // Populate remaining SPI config fields (most already parsed directly into union)
