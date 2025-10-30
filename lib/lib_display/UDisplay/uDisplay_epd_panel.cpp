@@ -190,28 +190,20 @@ void EPDPanel::displayFrame() {
 }
 
 void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
-    // Get dimensions, swapping for rotation 1 and 3
-    int16_t w = cfg.width, h = cfg.height;
-    if (rotation == 1 || rotation == 3) {
-        std::swap(w, h);
-    }
-    
-    if (x < 0 || x >= w || y < 0 || y >= h) {
+    // x,y arrive here ALREADY transformed to physical display space by drawPixel()
+    // Bounds check uses physical dimensions
+    if (x < 0 || x >= cfg.width || y < 0 || y >= cfg.height) {
         return;
     }
     
-    if (cfg.invert_colors) {
-        if (color) {
-            fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
-        } else {
-            fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
-        }
+    // Framebuffer is ALWAYS laid out in physical dimensions (width x height)
+    // The index calculation MUST use physical width, not rotated width!
+    // NOTE: We do NOT use cfg.invert_colors here because XOR 0xff when 
+    // sending to display handles the inversion.
+    if (color) {
+        fb_buffer[(x + y * cfg.width) / 8] |= 0x80 >> (x % 8);
     } else {
-        if (color) {
-            fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
-        } else {
-            fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
-        }
+        fb_buffer[(x + y * cfg.width) / 8] &= ~(0x80 >> (x % 8));
     }
 }
 
@@ -235,7 +227,7 @@ bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
     switch (rotation) {
         case 1:
             std::swap(x, y);
-            x = cfg.width - x - 1;
+            x = cfg.height - x - 1;  // Use HEIGHT after swap!
             break;
         case 2:
             x = cfg.width - x - 1;
@@ -243,7 +235,7 @@ bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
             break;
         case 3:
             std::swap(x, y);
-            y = cfg.height - y - 1;
+            y = cfg.width - y - 1;  // Use WIDTH after swap!
             break;
     }
     
