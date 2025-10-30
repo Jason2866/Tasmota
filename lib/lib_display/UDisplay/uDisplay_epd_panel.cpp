@@ -31,7 +31,7 @@ static constexpr uint8_t TERMINATE_FRAME_READ_WRITE           = 0xFF;
 EPDPanel::EPDPanel(const EPDPanelConfig& config,
                    SPIController* spi_ctrl,
                    uint8_t* framebuffer)
-    : spi(spi_ctrl), cfg(config), fb_buffer(framebuffer), update_mode(0)
+    : spi(spi_ctrl), cfg(config), fb_buffer(framebuffer), update_mode(0), rotation(0)
 {
     // Don't do automatic initialization here - let the descriptor init commands handle it
     // The uDisplay framework will call send_spi_cmds() after panel creation
@@ -190,24 +190,26 @@ void EPDPanel::displayFrame() {
 }
 
 void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
-    // Get dimensions, swapping for rotation 1 and 3
-    int16_t w = cfg.width, h = cfg.height;
-    if (rotation == 1 || rotation == 3) {
-        std::swap(w, h);
-    }
-    
-    if (x < 0 || x >= w || y < 0 || y >= h) {
+    // Bounds check using physical dimensions
+    if (x < 0 || x >= cfg.width || y < 0 || y >= cfg.height) {
         return;
     }
     
-    // NOTE: We do NOT use cfg.invert_colors here because the XOR 0xff when 
-    // sending to display handles the inversion.
-    // color=1 (white) -> set bit in framebuffer -> XOR makes it 0 on display = white
-    // color=0 (black) -> clear bit in framebuffer -> XOR makes it 1 on display = black
+    // CRITICAL: Must match Renderer::drawPixel() layout!
+    // uDisplay inherits from Renderer, so DrawStringAt (Splash Screen) 
+    // calls Renderer::drawPixel() which uses Y-column-wise:
+    //   framebuffer[x + (y/8)*WIDTH] |= (1 << (y&7));
+    //
+    // Adafruit_GFX graphics (circles, etc.) call uDisplay::drawPixel()
+    // which routes to EPDPanel::drawPixel() → drawAbsolutePixel()
+    //
+    // BOTH write to the SAME framebuffer, so they MUST use the SAME layout!
+    // Y-column-wise: 8 vertical pixels per byte
+    
     if (color) {
-        fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
+        fb_buffer[x + (y / 8) * cfg.width] |= (1 << (y & 7));
     } else {
-        fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
+        fb_buffer[x + (y / 8) * cfg.width] &= ~(1 << (y & 7));
     }
 }
 
@@ -216,36 +218,35 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
 bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {   
     if (!fb_buffer) return false;
     
-    // Get rotated dimensions for bounds check
+    // EXACT copy from development branch drawPixel_EPD:
+    // Bounds check uses ROTATED dimensions (width/height swap for rotation 1&3)
     int16_t w = cfg.width, h = cfg.height;
     if (rotation == 1 || rotation == 3) {
         std::swap(w, h);
     }
     
-    // Bounds check with rotated dimensions
     if ((x < 0) || (x >= w) || (y < 0) || (y >= h)) {
-        return true;
+        return false;  // Out of bounds
     }
     
-    // Apply rotation transformation (matching old drawPixel_EPD)
+    // Apply rotation transformation using PHYSICAL dimensions (gxs/gys)
     switch (rotation) {
         case 1:
             std::swap(x, y);
-            x = cfg.width - x - 1;
+            x = cfg.width - x - 1;   // gxs
             break;
         case 2:
-            x = cfg.width - x - 1;
-            y = cfg.height - y - 1;
+            x = cfg.width - x - 1;   // gxs
+            y = cfg.height - y - 1;  // gys
             break;
         case 3:
             std::swap(x, y);
-            y = cfg.height - y - 1;
+            y = cfg.height - y - 1;  // gys
             break;
     }
     
-    // Convert color to monochrome
-    uint16_t mono_color = (color != 0) ? 1 : 0;
-    drawAbsolutePixel(x, y, mono_color);
+    // Convert color to monochrome and draw
+    drawAbsolutePixel(x, y, (color != 0) ? 1 : 0);
     return true;
 }
 
@@ -267,13 +268,15 @@ bool EPDPanel::pushColors(uint16_t *data, uint16_t len, bool first) {
     if (!fb_buffer) return false;
     
     // Write pixels to framebuffer based on window coordinates
+    // IMPORTANT: window coordinates are in LOGICAL (rotated) space,
+    // so we must use drawPixel (not drawAbsolutePixel) to apply rotation!
     for (int16_t y = window_y1; y < window_y2 && len > 0; y++) {
         for (int16_t x = window_x1; x < window_x2 && len > 0; x++, len--) {
             uint16_t color = *data++;
             // Convert to mono: white if any component > 50%
             bool pixel = (color & RGB16_TO_MONO) ? true : false;
             if (cfg.invert_colors) pixel = !pixel;
-            drawAbsolutePixel(x, y, pixel ? 1 : 0);
+            drawPixel(x, y, pixel ? 1 : 0);
         }
     }
     
@@ -448,9 +451,29 @@ void EPDPanel::setFrameMemory(const uint8_t* image_buffer) {
     spi->beginTransaction();
     spi->csLow();
     spi->writeCommand(WRITE_RAM);
-    for (int i = 0; i < cfg.width / 8 * cfg.height; i++) {
-        spi->writeData8(image_buffer[i] ^ 0xff);
+    
+    // CRITICAL: Convert Y-column framebuffer to X-row format for EPD hardware
+    // Framebuffer is Y-column-wise: fb[x + (y/8)*width] with bit (y&7)
+    // EPD expects X-row-wise: 8 horizontal pixels per byte
+    //
+    // For each row, we need to reorganize from vertical bytes to horizontal bytes
+    for (uint16_t y = 0; y < cfg.height; y++) {
+        for (uint16_t x_byte = 0; x_byte < cfg.width / 8; x_byte++) {
+            uint8_t byte_out = 0;
+            // Build one horizontal byte from 8 vertical bits
+            for (uint8_t bit = 0; bit < 8; bit++) {
+                uint16_t x = x_byte * 8 + bit;
+                // Read from Y-column layout
+                uint8_t pixel = (image_buffer[x + (y / 8) * cfg.width] >> (y & 7)) & 1;
+                // Write to X-row layout
+                if (pixel) {
+                    byte_out |= (0x80 >> bit);
+                }
+            }
+            spi->writeData8(byte_out ^ 0xff);
+        }
     }
+    
     spi->csHigh();
     spi->endTransaction();
 }
