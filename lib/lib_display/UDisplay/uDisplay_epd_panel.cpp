@@ -200,18 +200,14 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
         return;
     }
     
-    if (cfg.invert_colors) {
-        if (color) {
-            fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
-        } else {
-            fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
-        }
+    // NOTE: We do NOT use cfg.invert_colors here because the XOR 0xff when 
+    // sending to display handles the inversion.
+    // color=1 (white) -> set bit in framebuffer -> XOR makes it 0 on display = white
+    // color=0 (black) -> clear bit in framebuffer -> XOR makes it 1 on display = black
+    if (color) {
+        fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
     } else {
-        if (color) {
-            fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
-        } else {
-            fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
-        }
+        fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
     }
 }
 
