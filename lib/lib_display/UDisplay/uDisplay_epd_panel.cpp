@@ -196,15 +196,16 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
     }
     
     // CRITICAL: Must match Renderer::drawPixel() layout!
-    // uDisplay inherits from Renderer, so DrawStringAt (Splash Screen) 
-    // calls Renderer::drawPixel() which uses Y-column-wise:
-    //   framebuffer[x + (y/8)*WIDTH] |= (1 << (y&7));
+    // 
+    // Two rendering systems write to the SAME framebuffer:
+    // 1. Renderer::drawPixel() - used by DrawStringAt() for text (Splash Screen)
+    // 2. EPDPanel::drawPixel() - used by Adafruit_GFX for graphics (circles, lines)
     //
-    // Adafruit_GFX graphics (circles, etc.) call uDisplay::drawPixel()
-    // which routes to EPDPanel::drawPixel() → drawAbsolutePixel()
+    // Both MUST use the same framebuffer layout: Y-column-wise
+    // Layout: fb[x + (y/8)*width] with bit position (y&7)
+    // This means 8 vertical pixels are stored in one byte.
     //
-    // BOTH write to the SAME framebuffer, so they MUST use the SAME layout!
-    // Y-column-wise: 8 vertical pixels per byte
+    // setFrameMemory() will convert Y-column to X-row format when sending to hardware.
     
     if (color) {
         fb_buffer[x + (y / 8) * cfg.width] |= (1 << (y & 7));
@@ -453,19 +454,25 @@ void EPDPanel::setFrameMemory(const uint8_t* image_buffer) {
     spi->writeCommand(WRITE_RAM);
     
     // CRITICAL: Convert Y-column framebuffer to X-row format for EPD hardware
-    // Framebuffer is Y-column-wise: fb[x + (y/8)*width] with bit (y&7)
-    // EPD expects X-row-wise: 8 horizontal pixels per byte
+    // 
+    // Framebuffer layout (internal): Y-column-wise
+    //   - fb[x + (y/8)*width] stores 8 vertical pixels in one byte
+    //   - bit position (y&7) determines which of the 8 pixels
     //
-    // For each row, we need to reorganize from vertical bytes to horizontal bytes
+    // EPD hardware expects: X-row-wise  
+    //   - 8 horizontal pixels per byte
+    //   - MSB = leftmost pixel, LSB = rightmost pixel
+    //
+    // This loop reorganizes the data from Y-column to X-row format
     for (uint16_t y = 0; y < cfg.height; y++) {
         for (uint16_t x_byte = 0; x_byte < cfg.width / 8; x_byte++) {
             uint8_t byte_out = 0;
             // Build one horizontal byte from 8 vertical bits
             for (uint8_t bit = 0; bit < 8; bit++) {
                 uint16_t x = x_byte * 8 + bit;
-                // Read from Y-column layout
+                // Read pixel from Y-column layout
                 uint8_t pixel = (image_buffer[x + (y / 8) * cfg.width] >> (y & 7)) & 1;
-                // Write to X-row layout
+                // Write pixel to X-row layout (MSB first)
                 if (pixel) {
                     byte_out |= (0x80 >> bit);
                 }
