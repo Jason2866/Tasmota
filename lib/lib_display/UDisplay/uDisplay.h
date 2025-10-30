@@ -196,7 +196,7 @@ private:
     // uint8_t lut_cmd[MAX_LUTS];  // MOVED to EPDPanelConfig.lut_cmd
     // uint8_t lut_siz[MAX_LUTS];  // MOVED to EPDPanelConfig.lut_siz
     uint8_t ep_mode;
-    uint8_t ep_update_mode;
+    // uint8_t ep_update_mode;  // MOVED to EPDPanel.update_mode
     uint8_t sspi;
 
     int8_t spec_init;
@@ -227,8 +227,6 @@ private:
     uint32_t str2c(char **sp, char *vp, uint32_t len);
 
     void i2c_command(uint8_t val);
-
-    void Updateframe_EPD();
 
 
     uint8_t strlen_ln(char *str);
