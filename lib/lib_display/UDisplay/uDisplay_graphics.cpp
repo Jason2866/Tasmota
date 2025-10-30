@@ -7,13 +7,10 @@ static constexpr uint16_t RGB16_TO_MONO      = 0x8410;
 static constexpr uint16_t RGB16_SWAP_TO_MONO = 0x1084;
 
 void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
-    if (universal_panel) {
-        // Route through UniversalPanel - it handles panel-specific logic including bounds
-        universal_panel->drawPixel(x, y, color);
-        return; // Always return after universal_panel call, don't fall through to Renderer
+    if (universal_panel && universal_panel->drawPixel(x, y, color)) {
+        return; // Handled by universal panel
     }
 
-    // Fallback to Renderer for panels without UniversalPanel interface
     if (framebuffer) {
         Renderer::drawPixel(x, y, color);
         return;

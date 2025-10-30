@@ -444,6 +444,24 @@ void EPDPanel::displayFrame_42() {
 
 // ===== Frame Memory Management =====
 
+// Helper: Convert Y-column framebuffer to X-row format and send via SPI
+// Y-column: fb[x + (y/8)*width] with bit (y&7) - 8 vertical pixels per byte
+// X-row: 8 horizontal pixels per byte, MSB = leftmost pixel
+void EPDPanel::sendYColumnAsXRow(const uint8_t* y_column_buffer, uint16_t buffer_width,
+                                  uint16_t rows, uint16_t cols_bytes) {
+    for (uint16_t row = 0; row < rows; row++) {
+        for (uint16_t x_byte = 0; x_byte < cols_bytes; x_byte++) {
+            uint8_t byte_out = 0;
+            for (uint8_t bit = 0; bit < 8; bit++) {
+                uint16_t x = x_byte * 8 + bit;
+                uint8_t pixel = (y_column_buffer[x + (row / 8) * buffer_width] >> (row & 7)) & 1;
+                if (pixel) byte_out |= (0x80 >> bit);
+            }
+            spi->writeData8(byte_out ^ 0xff);
+        }
+    }
+}
+
 void EPDPanel::setFrameMemory(const uint8_t* image_buffer) {
     setMemoryArea(0, 0, cfg.width - 1, cfg.height - 1);
     setMemoryPointer(0, 0);
@@ -451,35 +469,7 @@ void EPDPanel::setFrameMemory(const uint8_t* image_buffer) {
     spi->beginTransaction();
     spi->csLow();
     spi->writeCommand(WRITE_RAM);
-    
-    // CRITICAL: Convert Y-column framebuffer to X-row format for EPD hardware
-    // 
-    // Framebuffer layout (internal): Y-column-wise
-    //   - fb[x + (y/8)*width] stores 8 vertical pixels in one byte
-    //   - bit position (y&7) determines which of the 8 pixels
-    //
-    // EPD hardware expects: X-row-wise  
-    //   - 8 horizontal pixels per byte
-    //   - MSB = leftmost pixel, LSB = rightmost pixel
-    //
-    // This loop reorganizes the data from Y-column to X-row format
-    for (uint16_t y = 0; y < cfg.height; y++) {
-        for (uint16_t x_byte = 0; x_byte < cfg.width / 8; x_byte++) {
-            uint8_t byte_out = 0;
-            // Build one horizontal byte from 8 vertical bits
-            for (uint8_t bit = 0; bit < 8; bit++) {
-                uint16_t x = x_byte * 8 + bit;
-                // Read pixel from Y-column layout
-                uint8_t pixel = (image_buffer[x + (y / 8) * cfg.width] >> (y & 7)) & 1;
-                // Write pixel to X-row layout (MSB first)
-                if (pixel) {
-                    byte_out |= (0x80 >> bit);
-                }
-            }
-            spi->writeData8(byte_out ^ 0xff);
-        }
-    }
-    
+    sendYColumnAsXRow(image_buffer, cfg.width, cfg.height, cfg.width / 8);
     spi->csHigh();
     spi->endTransaction();
 }
@@ -506,23 +496,15 @@ void EPDPanel::setFrameMemory(const uint8_t* image_buffer, uint16_t x, uint16_t 
     spi->beginTransaction();
     spi->csLow();
     spi->writeCommand(WRITE_RAM);
-    for (uint16_t j = 0; j < y_end - y + 1; j++) {
-        for (uint16_t i = 0; i < (x_end - x + 1) / 8; i++) {
-            spi->writeData8(image_buffer[i + j * (image_width / 8)] ^ 0xff);
-        }
-    }
+    sendYColumnAsXRow(image_buffer, image_width, y_end - y + 1, (x_end - x + 1) / 8);
     spi->csHigh();
     spi->endTransaction();
 }
 
 void EPDPanel::sendEPData() {
-    uint16_t image_width = cfg.width & 0xFFF8;
-    
-    for (uint16_t j = 0; j < cfg.height; j++) {
-        for (uint16_t i = 0; i < cfg.width / 8; i++) {
-            spi->writeData8(fb_buffer[i + j * (image_width / 8)] ^ 0xff);
-        }
-    }
+    // EP_SEND_DATA (0x66) - used by some display.ini files (e.g. v2)
+    // Must also convert Y-column to X-row format like setFrameMemory()
+    sendYColumnAsXRow(fb_buffer, cfg.width, cfg.height, cfg.width / 8);
 }
 
 // ===== Update Mode Control =====
