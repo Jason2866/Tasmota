@@ -202,15 +202,15 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
     
     if (cfg.invert_colors) {
         if (color) {
-            fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
-        } else {
             fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
+        } else {
+            fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
         }
     } else {
         if (color) {
-            fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
-        } else {
             fb_buffer[(x + y * w) / 8] |= 0x80 >> (x % 8);
+        } else {
+            fb_buffer[(x + y * w) / 8] &= ~(0x80 >> (x % 8));
         }
     }
 }
