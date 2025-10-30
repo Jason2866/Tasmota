@@ -1026,11 +1026,11 @@ uint16_t index = 0;
           break;
         case EP_LUT_FULL:
           epd->setLut(epd->cfg.lut_full_data, epd->cfg.lutfsize);
-          ep_update_mode = DISPLAY_INIT_FULL;
+          epd->setUpdateMode(DISPLAY_INIT_FULL);
           break;
         case EP_LUT_PARTIAL:
           epd->setLut(epd->cfg.lut_partial_data, epd->cfg.lutpsize);
-          ep_update_mode = DISPLAY_INIT_PARTIAL;
+          epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
           break;
         case EP_WAITIDLE:
           if (args & 1) {
@@ -1059,7 +1059,7 @@ uint16_t index = 0;
             iob = dsp_cmds[cmd_offset++];
             index++;
             if (iob == ESP_ResetInfoReason()) {
-              ep_update_mode = DISPLAY_INIT_PARTIAL;
+              epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
               goto exit;
             }
           }
@@ -1069,7 +1069,7 @@ uint16_t index = 0;
             iob = dsp_cmds[cmd_offset++];
             index++;
             if (iob != ESP_ResetInfoReason()) {
-              ep_update_mode = DISPLAY_INIT_PARTIAL;
+              epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
               goto exit;
             }
           }
@@ -1213,6 +1213,11 @@ if (interface == _UDSP_SPI) {
         panel_config->epd.invert_framebuffer = true;
         panel_config->epd.busy_invert = (bool)lvgl_param.busy_invert;
         
+        // Set callback for sending command sequences
+        panel_config->epd.send_cmds_callback = [this](uint16_t offset, uint16_t count) {
+            this->send_spi_cmds(offset, count);
+        };
+        
         // Create EPD panel BEFORE sending init commands (send_spi_cmds needs universal_panel)
         universal_panel = new EPDPanel(panel_config->epd, spiController, frame_buffer);
         send_spi_cmds(0, dsp_ncmds);
@@ -1230,6 +1235,9 @@ if (interface == _UDSP_SPI) {
         if (epd->cfg.epc_full_cnt) {
             send_spi_cmds(epd->cfg.epcoffs_full, epd->cfg.epc_full_cnt);
         }
+        
+        // Set update mode to partial for subsequent updates
+        epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
     } else {   
         AddLog(2,"SPI Panel!");
         // Populate remaining SPI config fields (most already parsed directly into union)
@@ -1352,44 +1360,18 @@ if (interface == _UDSP_SPI) {
   return this;
 }
 
-// EPD update coordinator - dispatches to appropriate EPD update method
-void uDisplay::Updateframe_EPD(void) {
-    if (!universal_panel) return;
-    EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
-    
-    if (ep_mode == 1 || ep_mode == 3) {
-        switch (ep_update_mode) {
-            case DISPLAY_INIT_PARTIAL:
-                if (epd->cfg.epc_part_cnt) {
-                    send_spi_cmds(epd->cfg.epcoffs_part, epd->cfg.epc_part_cnt);
-                }
-                break;
-            case DISPLAY_INIT_FULL:
-                if (epd->cfg.epc_full_cnt) {
-                    send_spi_cmds(epd->cfg.epcoffs_full, epd->cfg.epc_full_cnt);
-                }
-                break;
-            default:
-                epd->setFrameMemory(framebuffer, 0, 0, gxs, gys);
-                epd->displayFrame();
-        }
-    } else {
-        epd->displayFrame_42();
-    }
-}
-
 void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
   if (p != DISPLAY_INIT_MODE && ep_mode) {
-    ep_update_mode = p;
     if (p == DISPLAY_INIT_PARTIAL) {
       if (universal_panel) {
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+        epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
         if (epd->cfg.lutpsize) {
 #ifdef UDSP_DEBUG
           AddLog(LOG_LEVEL_DEBUG, "init partial epaper mode");
 #endif
           epd->setLut(epd->cfg.lut_partial_data, epd->cfg.lutpsize);
-          Updateframe_EPD();
+          epd->updateFrame();
           epd->delay_sync(epd->cfg.lut_partial_time * 10);
         }
       }
@@ -1400,9 +1382,10 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
 #endif
       if (universal_panel) {
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+        epd->setUpdateMode(DISPLAY_INIT_FULL);
         if (epd->cfg.lutfsize) {
           epd->setLut(epd->cfg.lut_full_data, epd->cfg.lutfsize);
-          Updateframe_EPD();
+          epd->updateFrame();
         }
         if (ep_mode == 2) {
           epd->clearFrame_42();

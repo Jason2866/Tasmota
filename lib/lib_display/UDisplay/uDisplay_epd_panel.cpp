@@ -281,35 +281,56 @@ bool EPDPanel::setRotation(uint8_t rotation) {
 bool EPDPanel::updateFrame() {
     if (!fb_buffer) return false;
     
-    // Set memory area to full screen
-    setMemoryArea(0, 0, cfg.width - 1, cfg.height - 1);
-    setMemoryPointer(0, 0);
-    
-    // Send framebuffer data with optional inversion
-    spi->beginTransaction();
-    spi->csLow();
-    spi->writeCommand(WRITE_RAM);
-    
-    uint32_t byte_count = (cfg.width * cfg.height) / 8;
-    for (uint32_t i = 0; i < byte_count; i++) {
-        uint8_t data = fb_buffer[i];
-        if (cfg.invert_framebuffer) {
-            data ^= 0xFF; // Invert for EPD display characteristics
+    // Handle different EPD modes
+    if (cfg.ep_mode == 1 || cfg.ep_mode == 3) {
+        // Mode 1 (2-LUT) or Mode 3 (command-based): Use descriptor command sequences
+        switch (update_mode) {
+            case 1: // DISPLAY_INIT_PARTIAL
+                if (cfg.epc_part_cnt && cfg.send_cmds_callback) {
+                    cfg.send_cmds_callback(cfg.epcoffs_part, cfg.epc_part_cnt);
+                }
+                break;
+            case 2: // DISPLAY_INIT_FULL
+                if (cfg.epc_full_cnt && cfg.send_cmds_callback) {
+                    cfg.send_cmds_callback(cfg.epcoffs_full, cfg.epc_full_cnt);
+                }
+                break;
+            default: // DISPLAY_INIT_MODE (0)
+                // Default: write framebuffer and display
+                setFrameMemory(fb_buffer, 0, 0, cfg.width, cfg.height);
+                displayFrame();
         }
-        spi->writeData8(data);
-    }
-    
-    spi->csHigh();
-    spi->endTransaction();
-    
-    // Update display
-    displayFrame();
-    
-    // Wait appropriate time based on update mode using delay_sync
-    if (update_mode == 0) {
-        delay_sync(cfg.lut_full_time);
+    } else if (cfg.ep_mode == 2) {
+        // Mode 2 (5-LUT / 4.2" displays): Use internal displayFrame_42
+        displayFrame_42();
     } else {
-        delay_sync(cfg.lut_partial_time);
+        // Fallback: basic update
+        setMemoryArea(0, 0, cfg.width - 1, cfg.height - 1);
+        setMemoryPointer(0, 0);
+        
+        spi->beginTransaction();
+        spi->csLow();
+        spi->writeCommand(WRITE_RAM);
+        
+        uint32_t byte_count = (cfg.width * cfg.height) / 8;
+        for (uint32_t i = 0; i < byte_count; i++) {
+            uint8_t data = fb_buffer[i];
+            if (cfg.invert_framebuffer) {
+                data ^= 0xFF;
+            }
+            spi->writeData8(data);
+        }
+        
+        spi->csHigh();
+        spi->endTransaction();
+        
+        displayFrame();
+        
+        if (update_mode == 0) {
+            delay_sync(cfg.lut_full_time);
+        } else {
+            delay_sync(cfg.lut_partial_time);
+        }
     }
     
     return true;
@@ -448,4 +469,10 @@ void EPDPanel::sendEPData() {
             spi->writeData8(fb_buffer[i + j * (image_width / 8)] ^ 0xff);
         }
     }
+}
+
+// ===== Update Mode Control =====
+
+void EPDPanel::setUpdateMode(uint8_t mode) {
+    update_mode = mode;
 }

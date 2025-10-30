@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <functional>
 #include "uDisplay_panel.h"
 #include "uDisplay_SPI_controller.h"
 
@@ -63,6 +64,9 @@ struct EPDPanelConfig {
     uint16_t epcoffs_part = 0;            // Offset to partial update commands
     uint8_t epc_full_cnt = 0;             // Count of full update commands
     uint8_t epc_part_cnt = 0;             // Count of partial update commands
+    
+    // Callback to send command sequences from descriptor
+    std::function<void(uint16_t offset, uint16_t count)> send_cmds_callback;
 };
 
 class EPDPanel : public UniversalPanel {
@@ -104,13 +108,16 @@ public:
     void setFrameMemory(const uint8_t* image_buffer);
     void setFrameMemory(const uint8_t* image_buffer, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
     void sendEPData();
+    
+    // Update mode control (for ep_mode 1 and 3)
+    void setUpdateMode(uint8_t mode); // 0=DISPLAY_INIT_MODE, 1=DISPLAY_INIT_PARTIAL, 2=DISPLAY_INIT_FULL
 
     EPDPanelConfig cfg;
 
 private:
     SPIController* spi;
     uint8_t* fb_buffer;  // Framebuffer (always used)
-    uint8_t update_mode; // 0=full, 1=partial
+    uint8_t update_mode; // 0=DISPLAY_INIT_MODE, 1=DISPLAY_INIT_PARTIAL, 2=DISPLAY_INIT_FULL
 
     // Private helpers
     void waitBusy();
