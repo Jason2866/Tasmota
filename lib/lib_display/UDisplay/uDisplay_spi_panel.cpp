@@ -3,7 +3,7 @@
 // uDisplay_spi_panel.cpp - SPI LCD Panel Implementation
 // ======================================================
 
-#include "uDisplay_spi_panel.h"
+#include "uDisplay_SPI_panel.h"
 #include <Arduino.h>
 extern void AddLog(uint32_t loglevel, const char* formatP, ...);
 

@@ -1210,7 +1210,7 @@ if (interface == _UDSP_SPI) {
         panel_config->epd.reset_pin = reset;
         panel_config->epd.busy_pin = spiController->spi_config.miso;
         panel_config->epd.invert_colors = true; // IF_INVERT_COLOR was hardcoded to 1
-        panel_config->epd.invert_framebuffer = true;
+        panel_config->epd.invert_framebuffer = true; // TODO: maybe use lvgl_param.invert_bw for per-display config?
         panel_config->epd.busy_invert = (bool)lvgl_param.busy_invert;
         
         // Set callback for sending command sequences

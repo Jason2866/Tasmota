@@ -1,7 +1,7 @@
 // ======================================================
 // panel/uDisplay_rgb_panel.cpp - RGB Panel Implementation
 // ======================================================
-#include "uDisplay_rgb_panel.h"
+#include "uDisplay_RGB_panel.h"
 
 #if SOC_LCD_RGB_SUPPORTED
 

@@ -2,7 +2,7 @@
 // uDisplay_epd_panel.cpp - E-Paper Display Panel Implementation
 // ======================================================
 
-#include "uDisplay_epd_panel.h"
+#include "uDisplay_EPD_panel.h"
 #include <Arduino.h>
 
 // EPD Command Definitions
