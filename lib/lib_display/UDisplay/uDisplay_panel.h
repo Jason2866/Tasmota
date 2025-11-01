@@ -5,7 +5,8 @@
 #pragma once
 
 #if CONFIG_IDF_TARGET_ESP32P4
-    #define CACHE_WRITEBACK_ADDR(addr, size) Cache_WriteBack_Addr(1, addr, size)
+#include "esp_cache.h"
+    #define CACHE_WRITEBACK_ADDR(addr, size) esp_cache_msync((void*)addr, size, ESP_CACHE_MSYNC_FLAG_DIR_C2M)
 #else
     #define CACHE_WRITEBACK_ADDR(addr, size) Cache_WriteBack_Addr(addr, size)
 #endif

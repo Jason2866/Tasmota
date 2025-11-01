@@ -20,7 +20,7 @@ void uDisplay::DisplayOnff(int8_t on) {
     if (pwr_cbp) {
         pwr_cbp(on);
     }
-    if (universal_panel && universal_panel->displayOnff(on)) {
+    if (universal_panel->displayOnff(on)) {
         return;
     }
 

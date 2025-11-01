@@ -1304,6 +1304,7 @@ if (interface == _UDSP_SPI) {
 
     universal_panel = new RGBPanel(&panel_config->rgb);
     rgb_fb = universal_panel->framebuffer;
+    // super->setDrawMode();
 
   }
 #endif // SOC_LCD_RGB_SUPPORTED
@@ -1352,6 +1353,10 @@ if (interface == _UDSP_SPI) {
           analogWrite(bpanel, 32);
       }
   #endif
+  }
+  
+  if(!universal_panel){
+    return NULL;
   }
 
 #ifdef UDSP_DEBUG

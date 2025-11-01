@@ -77,7 +77,7 @@ enum {
 #define UDISP1_WHITE 1
 #define UDISP1_BLACK 0
 
-#define MAX_LUTS 5
+// #define MAX_LUTS 5
 
 #define DISPLAY_INIT_MODE 0
 #define DISPLAY_INIT_PARTIAL 1
