@@ -47,6 +47,8 @@ private:
     int16_t window_y1 = 0; 
     int16_t window_x2 = 1;
     int16_t window_y2 = 1;
+    size_t framebuffer_size = 0;
+    uint32_t framebuffer_dirty = false;
 
 };
 
