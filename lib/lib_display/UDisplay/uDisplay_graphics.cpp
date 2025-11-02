@@ -7,7 +7,7 @@ static constexpr uint16_t RGB16_TO_MONO      = 0x8410;
 static constexpr uint16_t RGB16_SWAP_TO_MONO = 0x1084;
 
 void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
-    if (universal_panel && universal_panel->drawPixel(x, y, color)) {
+    if (universal_panel->drawPixel(x, y, color)) {
         return; // Handled by universal panel
     }
 
@@ -22,7 +22,7 @@ void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
     if((x >= _width) || (y >= _height)) return;
     if((x + w - 1) >= _width)  w = _width - x;
 
-    if (universal_panel && universal_panel->drawFastHLine(x, y, w, color)) {
+    if (universal_panel->drawFastHLine(x, y, w, color)) {
         return;
     }
 
@@ -43,7 +43,7 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
     if ((x >= _width) || (y >= _height)) return;
     if ((y + h - 1) >= _height) h = _height - y;
 
-    if (universal_panel && universal_panel->drawFastVLine(x, y, h, color)) {
+    if (universal_panel->drawFastVLine(x, y, h, color)) {
         return;
     }
 
@@ -51,7 +51,7 @@ void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 }
 
 void uDisplay::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-    if (universal_panel && universal_panel->fillRect(x, y, w, h, color)) {
+    if (universal_panel->fillRect(x, y, w, h, color)) {
         return;
     }
 
@@ -72,10 +72,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {  
     if (lvgl_param.swap_color) {
         not_swapped = !not_swapped;
     }
-    if (universal_panel && universal_panel->pushColors(data, len, not_swapped)) {
-        return;
-    }
-
+    universal_panel->pushColors(data, len, not_swapped);
 }
 
 // convert to mono, these are framebuffer based
@@ -107,14 +104,12 @@ void uDisplay::pushColorsMono(uint16_t *data, uint16_t len, bool rgb16_swap) {
 }
 
 void uDisplay::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
-    if (universal_panel && universal_panel->setAddrWindow(x0, y0, x1, y1)) {
-        return;
-    }
+    universal_panel->setAddrWindow(x0, y0, x1, y1);
 }
 
 void uDisplay::setRotation(uint8_t rotation) {
     cur_rot = rotation;
-    if (universal_panel && universal_panel->setRotation(rotation)) {
+    if (universal_panel->setRotation(rotation)) {
         return;
     }
 
@@ -125,7 +120,5 @@ void uDisplay::setRotation(uint8_t rotation) {
 }
 
 void uDisplay::Updateframe(void) {
-  if (universal_panel && universal_panel->updateFrame()) {
-      return;
-  }
+    universal_panel && universal_panel->updateFrame();
 }

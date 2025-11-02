@@ -118,7 +118,7 @@ private:
     SPIController* spi;
     uint8_t* fb_buffer;  // Framebuffer (always used)
     uint8_t update_mode; // 0=DISPLAY_INIT_MODE, 1=DISPLAY_INIT_PARTIAL, 2=DISPLAY_INIT_FULL
-    uint8_t rotation = 0; // Current rotation (0-3)
+    uint8_t rotation; // Current rotation (0-3)
     
     // Address window for pushColors
     int16_t window_x1 = 0;

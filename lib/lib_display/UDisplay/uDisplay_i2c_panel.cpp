@@ -1,4 +1,4 @@
-#include "uDisplay_i2c_panel.h"
+#include "uDisplay_I2C_panel.h"
 
 i2c_panel::i2c_panel(const I2CPanelConfig& config, uint8_t* framebuffer)
     : cfg(config), framebuffer(framebuffer) {

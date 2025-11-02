@@ -14,11 +14,11 @@
 #endif
 #if (SOC_LCDCAM_I80_NUM_BUSES && !SOC_PARLIO_GROUPS)
   #define UDISPLAY_I80
-  #include "uDisplay_i80_panel.h"
+  #include "uDisplay_I80_panel.h"
 #endif
 
 #if defined(SOC_LCD_RGB_SUPPORTED)
-  #include "uDisplay_rgb_panel.h"
+  #include "uDisplay_RGB_panel.h"
 #endif
 #if SOC_MIPI_DSI_SUPPORTED
     #include "uDisplay_DSI_panel.h"
@@ -33,9 +33,9 @@
 #endif
 
 #include "uDisplay_SPI_controller.h"
-#include "uDisplay_i2c_panel.h"
-#include "uDisplay_epd_panel.h"
-#include "uDisplay_spi_panel.h"
+#include "uDisplay_I2C_panel.h"
+#include "uDisplay_EPD_panel.h"
+#include "uDisplay_SPI_panel.h"
 
 // ===== Panel Config Union =====
 // Union to hold any panel configuration type
@@ -77,7 +77,7 @@ enum {
 #define UDISP1_WHITE 1
 #define UDISP1_BLACK 0
 
-#define MAX_LUTS 5
+// #define MAX_LUTS 5
 
 #define DISPLAY_INIT_MODE 0
 #define DISPLAY_INIT_PARTIAL 1

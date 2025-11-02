@@ -16,6 +16,9 @@ extern void AddLog(uint32_t loglevel, const char* formatP, ...);
 DSIPanel::DSIPanel(const DSIPanelConfig& config)
     : cfg(config), rotation(0)
 {
+
+    framebuffer_size = cfg.width * cfg.height * 2;
+
     esp_err_t ret;
 
     // Step 1: Initialize LDO for display power (from config)
@@ -93,18 +96,7 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
     }
     AddLog(3, "DSI: DPI panel created");
 
-    // Step 6: Get framebuffer
-    void* fb_ptr = nullptr;
-    ret = esp_lcd_dpi_panel_get_frame_buffer(panel_handle, 1, &fb_ptr);
-    if (ret == ESP_OK && fb_ptr != nullptr) {
-        framebuffer = (uint16_t*)fb_ptr;
-        AddLog(3, "DSI: Framebuffer at %p", framebuffer);
-    } else {
-        framebuffer = nullptr;
-        AddLog(3, "DSI: No framebuffer, using draw_bitmap");
-    }
-
-    // Step 7: Reset via GPIO (from config)
+    // Step 6: Reset via GPIO (from config)
     if (cfg.reset_pin >= 0) {
         gpio_config_t gpio_conf = {
             .pin_bit_mask = 1ULL << cfg.reset_pin,
@@ -122,13 +114,24 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
         AddLog(3, "DSI: No reset pin configured");
     }
 
-    // Step 8: Initialize DPI panel
+    // Step 7: Initialize DPI panel
     ret = esp_lcd_panel_init(panel_handle);
     if (ret != ESP_OK) {
         AddLog(3, "DSI: Panel init failed: %d", ret);
         return;
     }
     AddLog(3, "DSI: DPI panel initialized");
+
+    // Step 8: Get framebuffer
+    void* fb_ptr = nullptr;
+    ret = esp_lcd_dpi_panel_get_frame_buffer(panel_handle, 1, &fb_ptr);
+    if (ret == ESP_OK && fb_ptr != nullptr) {
+        framebuffer = (uint16_t*)fb_ptr;
+        AddLog(3, "DSI: Framebuffer at %p", framebuffer);
+    } else {
+        framebuffer = nullptr;
+        AddLog(3, "DSI: No framebuffer, using draw_bitmap");
+    }
 
     // Step 9: Send init commands from INI file
     if (cfg.init_commands && cfg.init_commands_count > 0) {
@@ -176,27 +179,32 @@ DSIPanel::~DSIPanel() {
 }
 
 bool DSIPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
-    if ((x < 0) || (x >= cfg.width) || (y < 0) || (y >= cfg.height)) return true;
-    esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, x, y, x + 1, y + 1, &color);
-    return (ret == ESP_OK);
+    if (!framebuffer || x < 0 || y < 0 || x >= cfg.width || y >= cfg.height) return true;
+
+    int16_t w = cfg.width, h = cfg.height;
+    switch (rotation) {
+        case 1: std::swap(w, h); std::swap(x, y); x = w - x - 1; break;
+        case 2: x = w - x - 1; y = h - y - 1; break;
+        case 3: std::swap(w, h); std::swap(x, y); y = h - y - 1; break;
+    }
+
+    uint16_t* p = &framebuffer[y * cfg.width + x];
+    *p = color;
+    framebuffer_dirty = true;
+
+    return true;
 }
 
 bool DSIPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-    if (x < 0) { w += x; x = 0; }
-    if (y < 0) { h += y; y = 0; }
-    if (x + w > cfg.width) w = cfg.width - x;
-    if (y + h > cfg.height) h = cfg.height - y;
-    if (w <= 0 || h <= 0) return true;
-    
-    uint16_t* buf = (uint16_t*)malloc(w * h * sizeof(uint16_t));
-    if (!buf) return false;
-    
-    for (int i = 0; i < w * h; i++) {
-        buf[i] = color;
+    for (int16_t yp = y; yp < y + h; yp++) {
+        uint16_t* line_start = &framebuffer[yp * cfg.width + x];
+        for (int16_t i = 0; i < w; i++) {
+            line_start[i] = color;
+        }
+        // CACHE_WRITEBACK_ADDR((uint32_t)line_start, w * 2);
     }
-    esp_err_t ret = esp_lcd_panel_draw_bitmap(panel_handle, x, y, x + w, y + h, buf);
-    free(buf);
-    return (ret == ESP_OK);
+    framebuffer_dirty = true;
+    return true;
 }
 
 bool DSIPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
@@ -269,6 +277,12 @@ bool DSIPanel::setRotation(uint8_t rot) {
 }
 
 bool DSIPanel::updateFrame() {
+    if (!framebuffer_dirty) {
+        return true;
+    }
+    CACHE_WRITEBACK_ADDR((uint32_t)framebuffer, framebuffer_size); //KISS and fast enough!
+    framebuffer_dirty = false;  // ← RESET
+
     return true;
 }
 

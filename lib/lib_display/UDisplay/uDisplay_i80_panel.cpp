@@ -1,4 +1,4 @@
-#include "uDisplay_i80_panel.h"
+#include "uDisplay_I80_panel.h"
 
 #if (SOC_LCD_I80_SUPPORTED && SOC_LCDCAM_I80_NUM_BUSES && !SOC_PARLIO_GROUPS )
 

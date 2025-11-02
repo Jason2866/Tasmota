@@ -1210,7 +1210,7 @@ if (interface == _UDSP_SPI) {
         panel_config->epd.reset_pin = reset;
         panel_config->epd.busy_pin = spiController->spi_config.miso;
         panel_config->epd.invert_colors = true; // IF_INVERT_COLOR was hardcoded to 1
-        panel_config->epd.invert_framebuffer = true;
+        panel_config->epd.invert_framebuffer = true; // TODO: maybe use lvgl_param.invert_bw for per-display config?
         panel_config->epd.busy_invert = (bool)lvgl_param.busy_invert;
         
         // Set callback for sending command sequences
@@ -1304,6 +1304,7 @@ if (interface == _UDSP_SPI) {
 
     universal_panel = new RGBPanel(&panel_config->rgb);
     rgb_fb = universal_panel->framebuffer;
+    // super->setDrawMode();
 
   }
 #endif // SOC_LCD_RGB_SUPPORTED
@@ -1352,6 +1353,10 @@ if (interface == _UDSP_SPI) {
           analogWrite(bpanel, 32);
       }
   #endif
+  }
+  
+  if(!universal_panel){
+    return NULL;
   }
 
 #ifdef UDSP_DEBUG

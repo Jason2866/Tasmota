@@ -95,6 +95,8 @@ private:
     int16_t window_y0 = 0;
     int16_t window_x1 = 0;
     int16_t window_y1 = 0;
+    size_t framebuffer_size = 0;
+    uint32_t framebuffer_dirty = false;
 };
 
 #endif // SOC_MIPI_DSI_SUPPORTED
