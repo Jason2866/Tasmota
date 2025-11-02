@@ -17,6 +17,7 @@ RGBPanel::RGBPanel(const esp_lcd_rgb_panel_config_t *config) {
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
     width = config->timings.h_res;
     height = config->timings.v_res;
+    framebuffer_size = width * height * 2; // 16 bpp
     void* buf = NULL;
     esp_lcd_rgb_panel_get_frame_buffer(panel_handle, 1, &buf);
     framebuffer = (uint16_t*)buf;
@@ -41,7 +42,7 @@ bool RGBPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
     if ((x < 0) || (x >= w) || (y < 0) || (y >= h)) return true; // Handled (out of bounds)
     
     framebuffer[y * w + x] = color;
-    CACHE_WRITEBACK_ADDR((uint32_t)&framebuffer[y * w + x], 2);
+    framebuffer_dirty = true;
     return true; // Handled by RGB panel
 }
 
@@ -51,8 +52,8 @@ bool RGBPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
         for (int16_t i = 0; i < w; i++) {
             line_start[i] = color;
         }
-        CACHE_WRITEBACK_ADDR((uint32_t)line_start, w * 2);
     }
+    framebuffer_dirty = true;
     return true; // Handled by RGB panel
 }
 
@@ -104,7 +105,12 @@ bool RGBPanel::setRotation(uint8_t rotation) {
 }
 
 bool RGBPanel::updateFrame() {
-    // RGB doesn't need explicit frame updates - handled by hardware
+    if (!framebuffer_dirty) {
+        return true;
+    }
+    CACHE_WRITEBACK_ADDR((uint32_t)framebuffer, framebuffer_size); //KISS and fast enough!
+    framebuffer_dirty = false;
+
     return true; // Handled (no-op is still handled)
 }
 
