@@ -2,6 +2,11 @@
 
 #if (SOC_LCD_I80_SUPPORTED && SOC_LCDCAM_I80_NUM_BUSES && !SOC_PARLIO_GROUPS )
 
+#ifdef UDSP_DEBUG
+extern void AddLog(uint32_t loglevel, const char *formatP, ...);
+#define LOG_LEVEL_DEBUG 3
+#endif
+
 #define WAIT_LCD_NOT_BUSY while (*reg_lcd_user & LCD_CAM_LCD_START) {}
 
 // Pin control helpers
@@ -101,8 +106,15 @@ I80Panel::I80Panel(const I80PanelConfig& config)
                 uint8_t args = cfg.init_commands[index++];
                 uint8_t arg_count = args & 0x1f;
                 
+#ifdef UDSP_DEBUG
+                AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd, args %02x, %d", cmd, arg_count);
+#endif
+                
                 for (uint32_t cnt = 0; cnt < arg_count && index < cfg.init_commands_count; cnt++) {
                     uint8_t arg_data = cfg.init_commands[index++];
+#ifdef UDSP_DEBUG
+                    AddLog(LOG_LEVEL_DEBUG, "%02x ", arg_data);
+#endif
                     pb_writeData(arg_data, 8);
                 }
                 
@@ -117,6 +129,9 @@ I80Panel::I80Panel(const I80PanelConfig& config)
                         case 0xE0:  delay_ms = 500; break;
                     }
                     if (delay_ms > 0) {
+#ifdef UDSP_DEBUG
+                        AddLog(LOG_LEVEL_DEBUG, "UDisplay: delay %d ms", delay_ms);
+#endif
                         delay(delay_ms);
                     }
                 }
