@@ -83,6 +83,9 @@ I80Panel::I80Panel(const I80PanelConfig& config)
     _alloc_dmadesc(1);
     _dev = &LCD_CAM;
 
+    // Initialize GPIO matrix routing for data pins
+    _pb_init_pin(false);
+
     // EXECUTE INITIALIZATION COMMANDS (from original uDisplay code)
     if (cfg.init_commands && cfg.init_commands_count > 0) {
         uint16_t index = 0;
