@@ -518,18 +518,16 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[0] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[0] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[0] = next_hex(&lp1);
-              } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+              } 
 #ifdef UDISPLAY_I80
-                // Parse directly into I80 config
+              else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+                // Parse directly into I80 config (rotation handled by panel)
+                next_hex(&lp1); // Skip rotation command (not used by I80)
                 panel_config->i80.x_addr_offset[0] = next_hex(&lp1);
                 panel_config->i80.y_addr_offset[0] = next_hex(&lp1);
-                next_hex(&lp1); // Skip third value for I80
-#else
-                rot[0] = next_hex(&lp1);
-                x_addr_offs[0] = next_hex(&lp1);
-                y_addr_offs[0] = next_hex(&lp1);
+              }
 #endif
-              } else {
+              else {
                 rot[0] = next_hex(&lp1);
                 x_addr_offs[0] = next_hex(&lp1);
                 y_addr_offs[0] = next_hex(&lp1);
@@ -543,17 +541,16 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[1] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[1] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[1] = next_hex(&lp1);
-              } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+              } 
 #ifdef UDISPLAY_I80
+              else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+                // Parse directly into I80 config (rotation handled by panel)
+                next_hex(&lp1); // Skip rotation command (not used by I80)
                 panel_config->i80.x_addr_offset[1] = next_hex(&lp1);
                 panel_config->i80.y_addr_offset[1] = next_hex(&lp1);
-                next_hex(&lp1); // Skip third value for I80
-#else
-                rot[1] = next_hex(&lp1);
-                x_addr_offs[1] = next_hex(&lp1);
-                y_addr_offs[1] = next_hex(&lp1);
+              }
 #endif
-              } else {
+              else {
                 rot[1] = next_hex(&lp1);
                 x_addr_offs[1] = next_hex(&lp1);
                 y_addr_offs[1] = next_hex(&lp1);
@@ -567,17 +564,16 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[2] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[2] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[2] = next_hex(&lp1);
-              } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+              } 
 #ifdef UDISPLAY_I80
+              else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+                // Parse directly into I80 config (rotation handled by panel)
+                next_hex(&lp1); // Skip rotation command (not used by I80)
                 panel_config->i80.x_addr_offset[2] = next_hex(&lp1);
                 panel_config->i80.y_addr_offset[2] = next_hex(&lp1);
-                next_hex(&lp1); // Skip third value for I80
-#else
-                rot[2] = next_hex(&lp1);
-                x_addr_offs[2] = next_hex(&lp1);
-                y_addr_offs[2] = next_hex(&lp1);
+              }
 #endif
-              } else {
+              else {
                 rot[2] = next_hex(&lp1);
                 x_addr_offs[2] = next_hex(&lp1);
                 y_addr_offs[2] = next_hex(&lp1);
@@ -591,17 +587,16 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[3] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[3] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[3] = next_hex(&lp1);
-              } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+              } 
 #ifdef UDISPLAY_I80
+              else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+                // Parse directly into I80 config (rotation handled by panel)
+                next_hex(&lp1); // Skip rotation command (not used by I80)
                 panel_config->i80.x_addr_offset[3] = next_hex(&lp1);
                 panel_config->i80.y_addr_offset[3] = next_hex(&lp1);
-                next_hex(&lp1); // Skip third value for I80
-#else
-                rot[3] = next_hex(&lp1);
-                x_addr_offs[3] = next_hex(&lp1);
-                y_addr_offs[3] = next_hex(&lp1);
+              }
 #endif
-              } else {
+              else {
                 rot[3] = next_hex(&lp1);
                 x_addr_offs[3] = next_hex(&lp1);
                 y_addr_offs[3] = next_hex(&lp1);
@@ -633,20 +628,17 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               panel_config->spi.cmd_set_addr_y = next_hex(&lp1);
               panel_config->spi.cmd_write_ram = next_hex(&lp1);
               panel_config->spi.address_mode = next_val(&lp1);
-            } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+            }
 #ifdef UDISPLAY_I80
+            else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
               // Parse directly into I80 config
               panel_config->i80.cmd_set_addr_x = next_hex(&lp1);
               panel_config->i80.cmd_set_addr_y = next_hex(&lp1);
               panel_config->i80.cmd_write_ram = next_hex(&lp1);
               next_val(&lp1); // Skip address mode for I80
-#else
-              saw_1 = next_hex(&lp1);
-              saw_2 = next_hex(&lp1);
-              saw_3 = next_hex(&lp1);
-              sa_mode = next_val(&lp1);
+            }
 #endif
-            } else {
+            else {
               saw_1 = next_hex(&lp1);
               saw_2 = next_hex(&lp1);
               saw_3 = next_hex(&lp1);
@@ -669,11 +661,12 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             col_mode = next_val(&lp1);  // Keep for legacy code
             if (interface == _UDSP_SPI) {
               panel_config->spi.col_mode = col_mode;
-            } else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-#ifdef UDISPLAY_I80
-              panel_config->i80.color_mode = col_mode;
-#endif
             }
+#ifdef UDISPLAY_I80
+            else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+              panel_config->i80.color_mode = col_mode;
+            }
+#endif
             break;
           case 'i':
             inv_off = next_hex(&lp1);
