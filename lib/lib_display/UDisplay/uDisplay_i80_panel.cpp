@@ -88,9 +88,6 @@ I80Panel::I80Panel(const I80PanelConfig& config)
     _alloc_dmadesc(1);
     _dev = &LCD_CAM;
 
-    // Initialize GPIO matrix routing for data pins
-    _pb_init_pin(false);
-
     // EXECUTE INITIALIZATION COMMANDS (from original uDisplay code)
     if (cfg.init_commands && cfg.init_commands_count > 0) {
         uint16_t index = 0;
@@ -267,6 +264,13 @@ bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
     
     if (first) {
         setAddrWindow_int(_addr_x0, _addr_y0, _addr_x1 - _addr_x0 + 1, _addr_y1 - _addr_y0 + 1);
+#ifdef UDSP_DEBUG
+        static uint8_t log_count = 0;
+        if (log_count++ < 3) {  // Log first 3 calls only
+            AddLog(LOG_LEVEL_DEBUG, "I80: pushColors first=1 window=(%d,%d)-(%d,%d) len=%d data[0]=0x%04X", 
+                   _addr_x0, _addr_y0, _addr_x1, _addr_y1, len, data[0]);
+        }
+#endif
     }
     
     pb_pushPixels(data, len, false, false);
@@ -319,6 +323,9 @@ uint32_t I80Panel::getSimpleResistiveTouch(uint32_t threshold) {
     uint16_t xp, yp;
     if (pb_busy()) return 0;
 
+    // Disable GPIO matrix routing to use pins as GPIOs
+    _pb_init_pin(true);
+    
     // Temporarily reconfigure I80 pins as GPIOs for analog touch
     gpio_matrix_out(cfg.dc_pin, 0x100, 0, 0);
 
@@ -352,6 +359,8 @@ uint32_t I80Panel::getSimpleResistiveTouch(uint32_t threshold) {
     digitalWrite(cfg.dc_pin, HIGH);
     digitalWrite(cfg.cs_pin, HIGH);
 
+    // Re-enable GPIO matrix routing for I80
+    _pb_init_pin(false);
     gpio_matrix_out(cfg.dc_pin, LCD_DC_IDX, 0, 0);
 
     return aval;
@@ -621,7 +630,6 @@ void I80Panel::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
 
     if (cfg.bus_width == 8) {
         if (swap_bytes) {
-            // FIXED: High byte first, then low byte
             for (uint32_t cnt = 0; cnt < length; cnt++) {
                 dev->lcd_cmd_val.lcd_cmd_value = *data >> 8;  // High byte first
                 while (*reg_lcd_user & LCD_CAM_LCD_START) {}
@@ -632,7 +640,6 @@ void I80Panel::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
                 data++;
             }
         } else {
-            // Low byte first, then high byte
             for (uint32_t cnt = 0; cnt < length; cnt++) {
                 dev->lcd_cmd_val.lcd_cmd_value = *data;       // Low byte first
                 while (*reg_lcd_user & LCD_CAM_LCD_START) {}
