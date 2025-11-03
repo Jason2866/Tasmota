@@ -1322,6 +1322,14 @@ if (interface == _UDSP_SPI) {
 
   if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
   #ifdef UDISPLAY_I80
+        // Reset handling
+      if (reset >= 0) {
+          pinMode(reset, OUTPUT);
+          digitalWrite(reset, HIGH);
+          delay(50);
+          reset_pin(50, 200);
+      }
+      
       // Populate remaining I80 config fields (most already parsed directly into union)
       // Control and data pins already parsed directly into config during INI parsing
       panel_config->i80.width = gxs;
@@ -1333,14 +1341,6 @@ if (interface == _UDSP_SPI) {
       panel_config->i80.init_commands_count = dsp_ncmds;
       
       universal_panel = new I80Panel(panel_config->i80);
-
-      // Reset handling
-      if (reset >= 0) {
-          pinMode(reset, OUTPUT);
-          digitalWrite(reset, HIGH);
-          delay(50);
-          reset_pin(50, 200);
-      }
 
       if (bpanel >= 0) {
           analogWrite(bpanel, 32);
