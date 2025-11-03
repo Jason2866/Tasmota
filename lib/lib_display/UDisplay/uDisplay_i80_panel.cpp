@@ -394,6 +394,10 @@ void I80Panel::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
     x += x_offset;
     y += y_offset;
     
+    // Clamp to display bounds (fix for LVGL off-by-one errors)
+    if (x2 >= cfg.width) x2 = cfg.width - 1;
+    if (y2 >= cfg.height) y2 = cfg.height - 1;
+    
 #ifdef UDSP_DEBUG
     static uint8_t log_count2 = 0;
     if (log_count2++ < 3) {
