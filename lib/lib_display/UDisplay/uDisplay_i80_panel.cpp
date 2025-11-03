@@ -263,7 +263,9 @@ bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
     cs_control(false);
     
     if (first) {
-        setAddrWindow_int(_addr_x0, _addr_y0, _addr_x1 - _addr_x0 + 1, _addr_y1 - _addr_y0 + 1);
+        // _addr_x1 and _addr_y1 are already exclusive end coordinates (x+width, y+height)
+        // so width = x1 - x0, not x1 - x0 + 1
+        setAddrWindow_int(_addr_x0, _addr_y0, _addr_x1 - _addr_x0, _addr_y1 - _addr_y0);
 #ifdef UDSP_DEBUG
         static uint8_t log_count = 0;
         if (log_count++ < 3) {  // Log first 3 calls only
@@ -273,7 +275,7 @@ bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
 #endif
     }
     
-    pb_pushPixels(data, len, false, false);
+    pb_pushPixels(data, len, true, false);  // swap_bytes=true to match old driver
     
     cs_control(true);
     pb_endTransaction();
@@ -385,24 +387,18 @@ void I80Panel::writeColor(uint16_t color) {
 }
 
 void I80Panel::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
-    // Apply rotation-specific offsets
-    uint16_t x_offset = cfg.x_addr_offset[_rotation];
-    uint16_t y_offset = cfg.y_addr_offset[_rotation];
+    // Apply rotation-specific offsets (matches old code logic)
+    x += cfg.x_addr_offset[_rotation];
+    y += cfg.y_addr_offset[_rotation];
     
-    uint16_t x2 = x + w - 1 + x_offset;
-    uint16_t y2 = y + h - 1 + y_offset;
-    x += x_offset;
-    y += y_offset;
-    
-    // Clamp to display bounds (fix for LVGL off-by-one errors)
-    if (x2 >= cfg.width) x2 = cfg.width - 1;
-    if (y2 >= cfg.height) y2 = cfg.height - 1;
+    uint16_t x2 = x + w - 1;
+    uint16_t y2 = y + h - 1;
     
 #ifdef UDSP_DEBUG
     static uint8_t log_count2 = 0;
     if (log_count2++ < 3) {
         AddLog(LOG_LEVEL_DEBUG, "I80: setAddrWindow_int x=%d y=%d w=%d h=%d -> x=%d-%d y=%d-%d", 
-               x-x_offset, y-y_offset, w, h, x, x2, y, y2);
+               x-cfg.x_addr_offset[_rotation], y-cfg.y_addr_offset[_rotation], w, h, x, x2, y, y2);
     }
 #endif
     
