@@ -394,6 +394,14 @@ void I80Panel::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
     x += x_offset;
     y += y_offset;
     
+#ifdef UDSP_DEBUG
+    static uint8_t log_count2 = 0;
+    if (log_count2++ < 3) {
+        AddLog(LOG_LEVEL_DEBUG, "I80: setAddrWindow_int x=%d y=%d w=%d h=%d -> x=%d-%d y=%d-%d", 
+               x-x_offset, y-y_offset, w, h, x, x2, y, y2);
+    }
+#endif
+    
     // Set column address range
     pb_writeCommand(cfg.cmd_set_addr_x, 8);
     pb_writeData(x, 16);
