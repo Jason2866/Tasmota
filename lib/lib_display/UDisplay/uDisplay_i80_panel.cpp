@@ -251,8 +251,20 @@ bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
     
     if (first) {
         // setAddrWindow was called with raw coordinates, compute window size
+        // CRITICAL FIX: LVGL has off-by-one bug - x1/y1 are INCLUSIVE end coordinates
+        // So width should be (x1 - x0 + 1), but sometimes LVGL passes x1=width instead of width-1
+        // We need to clip to actual display dimensions
         uint16_t w = _addr_x1 - _addr_x0 + 1;
         uint16_t h = _addr_y1 - _addr_y0 + 1;
+        
+        // Clip to display dimensions (critical for LVGL off-by-one)
+        if (_addr_x0 + w > _width) {
+            w = _width - _addr_x0;
+        }
+        if (_addr_y0 + h > _height) {
+            h = _height - _addr_y0;
+        }
+        
         setAddrWindow_int(_addr_x0, _addr_y0, w, h);
 #ifdef UDSP_DEBUG
         static uint8_t log_count = 0;
