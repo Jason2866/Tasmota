@@ -24,42 +24,20 @@ I80Panel::I80Panel(const I80PanelConfig& config)
     
     framebuffer = nullptr;
 
-    // Initialize I80 bus using ESP LCD API
-    esp_lcd_i80_bus_config_t bus_config = {
-        .dc_gpio_num = cfg.dc_pin,
-        .wr_gpio_num = cfg.wr_pin,
-        .clk_src = LCD_CLK_SRC_DEFAULT,
-        .bus_width = cfg.bus_width,
-        .max_transfer_bytes = (size_t)cfg.width * cfg.height * 2
-    };
-    
-    // Set data pins
-    if (cfg.bus_width == 8) {
-        for (int i = 0; i < 8; i++) {
-            bus_config.data_gpio_nums[i] = cfg.data_pins_low[i];
-        }
-    } else {
-        for (int i = 0; i < 8; i++) {
-            bus_config.data_gpio_nums[i] = cfg.data_pins_low[i];
-            bus_config.data_gpio_nums[i + 8] = cfg.data_pins_high[i];
-        }
-    }
-    
-    // Create I80 bus
-    esp_lcd_new_i80_bus(&bus_config, &_i80_bus);
-
-    // Initialize pins manually
-    pinMode(cfg.cs_pin, OUTPUT);
-    digitalWrite(cfg.cs_pin, HIGH);
+    // Match Arduino_GFX: Manual pin configuration (NO esp_lcd API!)
+    // We use direct LCD_CAM register access like Arduino_GFX, not ESP-IDF LCD API
     pinMode(cfg.dc_pin, OUTPUT);
-    digitalWrite(cfg.dc_pin, HIGH);
+    digitalWrite(cfg.dc_pin, HIGH);  // Data mode
+    pinMode(cfg.cs_pin, OUTPUT);
+    digitalWrite(cfg.cs_pin, HIGH);  // CS HIGH = inactive
     pinMode(cfg.wr_pin, OUTPUT);
-    digitalWrite(cfg.wr_pin, HIGH);
+    digitalWrite(cfg.wr_pin, HIGH);  // WR HIGH = inactive
     if (cfg.rd_pin >= 0) {
         pinMode(cfg.rd_pin, OUTPUT);
-        digitalWrite(cfg.rd_pin, HIGH);
+        digitalWrite(cfg.rd_pin, HIGH);  // RD HIGH = inactive
     }
 
+    // Data pins
     for (int i = 0; i < 8; i++) {
         pinMode(cfg.data_pins_low[i], OUTPUT);
     }
@@ -87,14 +65,34 @@ I80Panel::I80Panel(const I80PanelConfig& config)
 
     _alloc_dmadesc(1);
     _dev = &LCD_CAM;
+    
+    // Configure LCD_CAM clock (like Arduino_GFX but set once here)
+    _dev->lcd_clock.val = _clock_reg_value;
+    
+    // Configure GPIO matrix for I80 pins (CRITICAL! Like Arduino_GFX)
+    // Connect physical GPIO pins to LCD peripheral signals
+    _pb_init_pin(false);  // Configure data pins D0-D7 (or D0-D15) via GPIO matrix
+    
+    // DC and WR pins are controlled by LCD_CAM peripheral:
+    // - DC: Hardware-controlled via LCD_CAM.lcd_misc.lcd_cd_cmd_set register bit
+    // - WR: Hardware-controlled, toggled automatically on LCD_CAM_LCD_START
+    // GPIO matrix routing for DC/WR is done by Arduino_GFX in its begin(), but
+    // we skip it here since direct register control via LCD_CAM works without it
+    // (the peripheral uses internal signals)
+    
+    // CS is controlled manually via cs_control() function (digitalWrite)
 
     // EXECUTE INITIALIZATION COMMANDS (from original uDisplay code)
+    // Match Arduino_GFX: CS LOW once for entire init sequence
     if (cfg.init_commands && cfg.init_commands_count > 0) {
-        uint16_t index = 0;
+#ifdef UDSP_DEBUG
+        AddLog(LOG_LEVEL_DEBUG, "UDisplay: I80 executing %d init command bytes", cfg.init_commands_count);
+#endif
+        pb_beginTransaction();  // CS LOW once for entire init sequence
         
+        uint16_t index = 0;
+        uint16_t cmd_num = 0;
         while (index < cfg.init_commands_count) {
-            pb_beginTransaction();  // This handles CS LOW
-            
             uint8_t cmd = cfg.init_commands[index++];
             pb_writeCommand(cmd, 8);
             
@@ -104,7 +102,7 @@ I80Panel::I80Panel(const I80PanelConfig& config)
                 uint8_t arg_count = args & 0x1f;
                 
 #ifdef UDSP_DEBUG
-                AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd, args %02x, %d", cmd, arg_count);
+                AddLog(LOG_LEVEL_DEBUG, "UDisplay: cmd %d: %02x, args %02x (count=%d)", cmd_num++, cmd, args, arg_count);
 #endif
                 
                 for (uint32_t cnt = 0; cnt < arg_count && index < cfg.init_commands_count; cnt++) {
@@ -116,9 +114,7 @@ I80Panel::I80Panel(const I80PanelConfig& config)
                 }
             }
             
-            pb_endTransaction();  // This handles CS HIGH
-            
-            // Handle delay after command
+            // Handle delay after command (CS stays LOW during delays!)
             if (args & 0x80) {
                 uint32_t delay_ms = 0;
                 switch (args & 0xE0) {
@@ -130,10 +126,13 @@ I80Panel::I80Panel(const I80PanelConfig& config)
 #ifdef UDSP_DEBUG
                     AddLog(LOG_LEVEL_DEBUG, "UDisplay: delay %d ms", delay_ms);
 #endif
+                    pb_wait();  // Wait for completion before delay
                     delay(delay_ms);
                 }
             }
         }
+        
+        pb_endTransaction();  // CS HIGH once after all init commands
     }
 }
 
@@ -143,9 +142,7 @@ I80Panel::~I80Panel() {
         heap_caps_free(_dmadesc);
         _dmadesc = nullptr;
     }
-    if (_i80_bus) {
-        esp_lcd_del_i80_bus(_i80_bus);
-    }
+    // Note: No need to delete _i80_bus since we don't use esp_lcd API
 }
 
 // DMA Implementation
