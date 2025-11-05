@@ -73,12 +73,15 @@ I80Panel::I80Panel(const I80PanelConfig& config)
     // Connect physical GPIO pins to LCD peripheral signals
     _pb_init_pin(false);  // Configure data pins D0-D7 (or D0-D15) via GPIO matrix
     
-    // DC and WR pins are controlled by LCD_CAM peripheral:
-    // - DC: Hardware-controlled via LCD_CAM.lcd_misc.lcd_cd_cmd_set register bit
-    // - WR: Hardware-controlled, toggled automatically on LCD_CAM_LCD_START
-    // GPIO matrix routing for DC/WR is done by Arduino_GFX in its begin(), but
-    // we skip it here since direct register control via LCD_CAM works without it
-    // (the peripheral uses internal signals)
+    // CRITICAL: Connect DC and WR pins to LCD_CAM peripheral via GPIO matrix
+    // Arduino_GFX does this in begin() - we MUST do it too!
+    gpio_matrix_out(cfg.dc_pin, LCD_DC_IDX, false, false);
+    gpio_matrix_out(cfg.wr_pin, LCD_PCLK_IDX, false, false);
+    
+#ifdef UDSP_DEBUG
+    AddLog(LOG_LEVEL_DEBUG, "UDisplay: I80 GPIO matrix configured: DC=%d->LCD_DC, WR=%d->LCD_PCLK", 
+           cfg.dc_pin, cfg.wr_pin);
+#endif
     
     // CS is controlled manually via cs_control() function (digitalWrite)
 
