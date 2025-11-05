@@ -72,10 +72,7 @@ void uDisplay::pushColors(uint16_t *data, uint16_t len, boolean not_swapped) {  
     if (lvgl_param.swap_color) {
         not_swapped = !not_swapped;
     }
-    
-    // CRITICAL FIX: The third parameter for Panel->pushColors() is "first" (bool first call in sequence),
-    // NOT "not_swapped"! Always pass true to set address window on each call from LVGL.
-    universal_panel->pushColors(data, len, true);  // Always first=true for LVGL calls
+    universal_panel->pushColors(data, len, not_swapped);
 }
 
 // convert to mono, these are framebuffer based

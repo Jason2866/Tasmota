@@ -1340,15 +1340,6 @@ if (interface == _UDSP_SPI) {
       panel_config->i80.init_commands = dsp_cmds;
       panel_config->i80.init_commands_count = dsp_ncmds;
       
-#ifdef UDSP_DEBUG
-      AddLog(LOG_LEVEL_DEBUG, "UDisplay: I80 init with %d command bytes", dsp_ncmds);
-      // Log first few bytes for verification
-      if (dsp_ncmds > 0) {
-          AddLog(LOG_LEVEL_DEBUG, "UDisplay: First commands: %02x %02x %02x %02x %02x %02x", 
-                 dsp_cmds[0], dsp_cmds[1], dsp_cmds[2], dsp_cmds[3], dsp_cmds[4], dsp_cmds[5]);
-      }
-#endif
-      
       universal_panel = new I80Panel(panel_config->i80);
 
       if (bpanel >= 0) {
