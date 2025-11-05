@@ -248,50 +248,7 @@ bool I80Panel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 
 bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
     pb_beginTransaction();
-    
-    if (first) {
-        // CRITICAL: _addr_x0/_y0/_x1/_y1 come from setAddrWindow() with DISPLAY coordinates (0-319, 0-169)
-        // These are ALREADY in display space, NOT hardware space!
-        // We must send them DIRECTLY to hardware with offsets applied here, NOT in setAddrWindow_int()
-        
-        uint16_t w = _addr_x1 - _addr_x0 + 1;
-        uint16_t h = _addr_y1 - _addr_y0 + 1;
-        
-        // Clip to display dimensions
-        if (_addr_x0 + w > _width) {
-            w = _width - _addr_x0;
-        }
-        if (_addr_y0 + h > _height) {
-            h = _height - _addr_y0;
-        }
-        
-        // Apply hardware offsets HERE (not in setAddrWindow_int to avoid double-offset!)
-        uint16_t hw_x = _addr_x0 + cfg.x_addr_offset[_rotation];
-        uint16_t hw_y = _addr_y0 + cfg.y_addr_offset[_rotation];
-        uint16_t hw_x2 = hw_x + w - 1;
-        uint16_t hw_y2 = hw_y + h - 1;
-        
-        // Send commands directly (no offset in setAddrWindow_int!)
-        pb_writeCommand(cfg.cmd_set_addr_x, 8);
-        pb_writeData(hw_x, 16);
-        pb_writeData(hw_x2, 16);
-        
-        pb_writeCommand(cfg.cmd_set_addr_y, 8);
-        pb_writeData(hw_y, 16);
-        pb_writeData(hw_y2, 16);
-        
-        pb_writeCommand(cfg.cmd_write_ram, 8);
-#ifdef UDSP_DEBUG
-        static uint8_t log_count = 0;
-        if (log_count++ < 3) {  // Log first 3 calls only
-            AddLog(LOG_LEVEL_DEBUG, "I80: pushColors first=1 raw=(%d,%d)-(%d,%d) w=%d h=%d len=%d data[0]=0x%04X", 
-                   _addr_x0, _addr_y0, _addr_x1, _addr_y1, w, h, len, data[0]);
-        }
-#endif
-    }
-    
-    pb_pushPixels(data, len, false, false);  // NO swap - standard RGB565, HIGH byte first
-    
+    pb_pushPixels(data, len, false, false);  // NO swap - colors are correct (blue background)
     pb_endTransaction();
     return true;
 }
