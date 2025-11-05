@@ -91,16 +91,16 @@ I80Panel::I80Panel(const I80PanelConfig& config)
     // EXECUTE INITIALIZATION COMMANDS (from original uDisplay code)
     if (cfg.init_commands && cfg.init_commands_count > 0) {
         uint16_t index = 0;
-        pb_beginTransaction();
         
         while (index < cfg.init_commands_count) {
-            cs_control(false);
+            pb_beginTransaction();  // This handles CS LOW
             
             uint8_t cmd = cfg.init_commands[index++];
             pb_writeCommand(cmd, 8);
             
+            uint8_t args = 0;
             if (index < cfg.init_commands_count) {
-                uint8_t args = cfg.init_commands[index++];
+                args = cfg.init_commands[index++];
                 uint8_t arg_count = args & 0x1f;
                 
 #ifdef UDSP_DEBUG
@@ -114,30 +114,26 @@ I80Panel::I80Panel(const I80PanelConfig& config)
 #endif
                     pb_writeData(arg_data, 8);
                 }
-                
-                cs_control(true);
-                
-                // Handle delay after command
-                if (args & 0x80) {
-                    uint32_t delay_ms = 0;
-                    switch (args & 0xE0) {
-                        case 0x80:  delay_ms = 150; break;
-                        case 0xA0:  delay_ms =  10; break;
-                        case 0xE0:  delay_ms = 500; break;
-                    }
-                    if (delay_ms > 0) {
-#ifdef UDSP_DEBUG
-                        AddLog(LOG_LEVEL_DEBUG, "UDisplay: delay %d ms", delay_ms);
-#endif
-                        delay(delay_ms);
-                    }
+            }
+            
+            pb_endTransaction();  // This handles CS HIGH
+            
+            // Handle delay after command
+            if (args & 0x80) {
+                uint32_t delay_ms = 0;
+                switch (args & 0xE0) {
+                    case 0x80:  delay_ms = 150; break;
+                    case 0xA0:  delay_ms =  10; break;
+                    case 0xE0:  delay_ms = 500; break;
                 }
-            } else {
-                cs_control(true);
+                if (delay_ms > 0) {
+#ifdef UDSP_DEBUG
+                    AddLog(LOG_LEVEL_DEBUG, "UDisplay: delay %d ms", delay_ms);
+#endif
+                    delay(delay_ms);
+                }
             }
         }
-        
-        pb_endTransaction();
     }
 }
 
@@ -196,10 +192,8 @@ bool I80Panel::drawPixel(int16_t x, int16_t y, uint16_t color) {
     if ((x < 0) || (x >= _width) || (y < 0) || (y >= _height)) return true;
     
     pb_beginTransaction();
-    cs_control(false);
     setAddrWindow_int(x, y, 1, 1);
     writeColor(color);
-    cs_control(true);
     pb_endTransaction();
     return true;
 }
@@ -210,7 +204,6 @@ bool I80Panel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
     if((y + h - 1) >= _height) h = _height - y;
 
     pb_beginTransaction();
-    cs_control(false);
     setAddrWindow_int(x, y, w, h);
     
     for (int16_t yp = h; yp > 0; yp--) {
@@ -219,7 +212,6 @@ bool I80Panel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
         }
     }
     
-    cs_control(true);
     pb_endTransaction();
     return true;
 }
@@ -229,14 +221,12 @@ bool I80Panel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
     if((x + w - 1) >= _width)  w = _width - x;
 
     pb_beginTransaction();
-    cs_control(false);
     setAddrWindow_int(x, y, w, 1);
     
     while (w--) {
         writeColor(color);
     }
     
-    cs_control(true);
     pb_endTransaction();
     return true;
 }
@@ -246,38 +236,35 @@ bool I80Panel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
     if ((y + h - 1) >= _height) h = _height - y;
 
     pb_beginTransaction();
-    cs_control(false);
     setAddrWindow_int(x, y, 1, h);
     
     while (h--) {
         writeColor(color);
     }
     
-    cs_control(true);
     pb_endTransaction();
     return true;
 }
 
 bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
     pb_beginTransaction();
-    cs_control(false);
     
     if (first) {
-        // _addr_x1 and _addr_y1 are already exclusive end coordinates (x+width, y+height)
-        // so width = x1 - x0, not x1 - x0 + 1
-        setAddrWindow_int(_addr_x0, _addr_y0, _addr_x1 - _addr_x0, _addr_y1 - _addr_y0);
+        // setAddrWindow was called with raw coordinates, compute window size
+        uint16_t w = _addr_x1 - _addr_x0 + 1;
+        uint16_t h = _addr_y1 - _addr_y0 + 1;
+        setAddrWindow_int(_addr_x0, _addr_y0, w, h);
 #ifdef UDSP_DEBUG
         static uint8_t log_count = 0;
         if (log_count++ < 3) {  // Log first 3 calls only
-            AddLog(LOG_LEVEL_DEBUG, "I80: pushColors first=1 window=(%d,%d)-(%d,%d) len=%d data[0]=0x%04X", 
-                   _addr_x0, _addr_y0, _addr_x1, _addr_y1, len, data[0]);
+            AddLog(LOG_LEVEL_DEBUG, "I80: pushColors first=1 raw=(%d,%d)-(%d,%d) w=%d h=%d len=%d data[0]=0x%04X", 
+                   _addr_x0, _addr_y0, _addr_x1, _addr_y1, w, h, len, data[0]);
         }
 #endif
     }
     
-    pb_pushPixels(data, len, true, false);  // swap_bytes=true to match old driver
+    pb_pushPixels(data, len, false, false);  // NO swap - standard RGB565, HIGH byte first
     
-    cs_control(true);
     pb_endTransaction();
     return true;
 }
@@ -481,15 +468,18 @@ void I80Panel::_setup_dma_desc_links(const uint8_t *data, int32_t len) {
 }
 
 void I80Panel::pb_beginTransaction(void) {
+    cs_control(false);  // CS LOW first (like Arduino_GFX)
     auto dev = _dev;
     dev->lcd_clock.val = _clock_reg_value;
     dev->lcd_misc.val = LCD_CAM_LCD_CD_IDLE_EDGE;
+    dev->lcd_user.val = 0;  // Clear first (like Arduino_GFX)
     dev->lcd_user.val = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M;
 }
 
 void I80Panel::pb_endTransaction(void) {
     auto dev = _dev;
     while (dev->lcd_user.val & LCD_CAM_LCD_START) {}
+    cs_control(true);  // CS HIGH after all transfers complete (like Arduino_GFX)
 }
 
 void I80Panel::pb_wait(void) {
@@ -546,11 +536,13 @@ bool I80Panel::pb_writeCommand(uint32_t data, uint_fast8_t bit_length) {
             WAIT_LCD_NOT_BUSY
             *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
         } while (--bytes);
+        dev->lcd_misc.val = LCD_CAM_LCD_CD_IDLE_EDGE;  // Reset DC to data mode (like Arduino_GFX)
         return true;
     } else {
         dev->lcd_cmd_val.val = data;
         WAIT_LCD_NOT_BUSY
         *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        dev->lcd_misc.val = LCD_CAM_LCD_CD_IDLE_EDGE;  // Reset DC to data mode
         return true;
     }
 }
@@ -630,33 +622,28 @@ void I80Panel::pb_writeBytes(const uint8_t* data, uint32_t length, bool use_dma)
 */
 }
 
-// FIXED: Byte swap logic was backwards in 8-bit mode
+// FIXED: Match Arduino_GFX byte order (HIGH byte first, then LOW byte)
 void I80Panel::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, bool use_dma) {
     auto dev = _dev;
     auto reg_lcd_user = &(dev->lcd_user.val);
     dev->lcd_misc.val = LCD_CAM_LCD_CD_IDLE_EDGE;
 
     if (cfg.bus_width == 8) {
-        if (swap_bytes) {
-            for (uint32_t cnt = 0; cnt < length; cnt++) {
-                dev->lcd_cmd_val.lcd_cmd_value = *data >> 8;  // High byte first
-                while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-                *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
-                dev->lcd_cmd_val.lcd_cmd_value = *data;       // Low byte second
-                WAIT_LCD_NOT_BUSY
-                *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
-                data++;
+        // Arduino_GFX always sends HIGH byte first, then LOW byte
+        // swap_bytes parameter swaps the pixel value itself, not the byte order
+        for (uint32_t cnt = 0; cnt < length; cnt++) {
+            uint16_t pixel = *data++;
+            if (swap_bytes) {
+                pixel = (pixel >> 8) | (pixel << 8);  // Swap bytes in pixel
             }
-        } else {
-            for (uint32_t cnt = 0; cnt < length; cnt++) {
-                dev->lcd_cmd_val.lcd_cmd_value = *data;       // Low byte first
-                while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-                *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
-                dev->lcd_cmd_val.lcd_cmd_value = *data >> 8;  // High byte second
-                WAIT_LCD_NOT_BUSY
-                *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
-                data++;
-            }
+            // Send HIGH byte first (like Arduino_GFX _data16.msb)
+            dev->lcd_cmd_val.lcd_cmd_value = pixel >> 8;
+            WAIT_LCD_NOT_BUSY
+            *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+            // Send LOW byte second (like Arduino_GFX _data16.lsb)
+            dev->lcd_cmd_val.lcd_cmd_value = pixel & 0xFF;
+            WAIT_LCD_NOT_BUSY
+            *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
         }
     } else {
         if (swap_bytes) {
