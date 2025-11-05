@@ -250,14 +250,14 @@ bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
     pb_beginTransaction();
     
     if (first) {
-        // setAddrWindow was called with raw coordinates, compute window size
-        // CRITICAL FIX: LVGL has off-by-one bug - x1/y1 are INCLUSIVE end coordinates
-        // So width should be (x1 - x0 + 1), but sometimes LVGL passes x1=width instead of width-1
-        // We need to clip to actual display dimensions
+        // CRITICAL: _addr_x0/_y0/_x1/_y1 come from setAddrWindow() with DISPLAY coordinates (0-319, 0-169)
+        // These are ALREADY in display space, NOT hardware space!
+        // We must send them DIRECTLY to hardware with offsets applied here, NOT in setAddrWindow_int()
+        
         uint16_t w = _addr_x1 - _addr_x0 + 1;
         uint16_t h = _addr_y1 - _addr_y0 + 1;
         
-        // Clip to display dimensions (critical for LVGL off-by-one)
+        // Clip to display dimensions
         if (_addr_x0 + w > _width) {
             w = _width - _addr_x0;
         }
@@ -265,7 +265,22 @@ bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
             h = _height - _addr_y0;
         }
         
-        setAddrWindow_int(_addr_x0, _addr_y0, w, h);
+        // Apply hardware offsets HERE (not in setAddrWindow_int to avoid double-offset!)
+        uint16_t hw_x = _addr_x0 + cfg.x_addr_offset[_rotation];
+        uint16_t hw_y = _addr_y0 + cfg.y_addr_offset[_rotation];
+        uint16_t hw_x2 = hw_x + w - 1;
+        uint16_t hw_y2 = hw_y + h - 1;
+        
+        // Send commands directly (no offset in setAddrWindow_int!)
+        pb_writeCommand(cfg.cmd_set_addr_x, 8);
+        pb_writeData(hw_x, 16);
+        pb_writeData(hw_x2, 16);
+        
+        pb_writeCommand(cfg.cmd_set_addr_y, 8);
+        pb_writeData(hw_y, 16);
+        pb_writeData(hw_y2, 16);
+        
+        pb_writeCommand(cfg.cmd_write_ram, 8);
 #ifdef UDSP_DEBUG
         static uint8_t log_count = 0;
         if (log_count++ < 3) {  // Log first 3 calls only
@@ -414,6 +429,13 @@ void I80Panel::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
     // Start memory write
     pb_writeCommand(cfg.cmd_write_ram, 8);
     
+#ifdef UDSP_DEBUG
+    if (log_count2 < 2) {
+        AddLog(LOG_LEVEL_DEBUG, "I80: Sent CASET(0x%02X): %d-%d, RASET(0x%02X): %d-%d, RAMWR(0x%02X)", 
+               cfg.cmd_set_addr_x, x, x2, cfg.cmd_set_addr_y, y, y2, cfg.cmd_write_ram);
+    }
+#endif
+    
     // Store for push operations
     _addr_x0 = x;
     _addr_y0 = y;
@@ -484,8 +506,7 @@ void I80Panel::pb_beginTransaction(void) {
     auto dev = _dev;
     dev->lcd_clock.val = _clock_reg_value;
     dev->lcd_misc.val = LCD_CAM_LCD_CD_IDLE_EDGE;
-    dev->lcd_user.val = 0;  // Clear first (like Arduino_GFX)
-    dev->lcd_user.val = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M;
+    dev->lcd_user.val = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M;  // Match development branch - NO clear first!
 }
 
 void I80Panel::pb_endTransaction(void) {
@@ -641,21 +662,27 @@ void I80Panel::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
     dev->lcd_misc.val = LCD_CAM_LCD_CD_IDLE_EDGE;
 
     if (cfg.bus_width == 8) {
-        // Arduino_GFX always sends HIGH byte first, then LOW byte
-        // swap_bytes parameter swaps the pixel value itself, not the byte order
-        for (uint32_t cnt = 0; cnt < length; cnt++) {
-            uint16_t pixel = *data++;
-            if (swap_bytes) {
-                pixel = (pixel >> 8) | (pixel << 8);  // Swap bytes in pixel
+        // Match development branch EXACTLY - NO swap (swap_bytes=false path)
+        if (swap_bytes) {
+            for (uint32_t cnt = 0; cnt < length; cnt++) {
+                dev->lcd_cmd_val.lcd_cmd_value = *data;  // LOW byte first when swapping
+                while (*reg_lcd_user & LCD_CAM_LCD_START) {}
+                *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+                dev->lcd_cmd_val.lcd_cmd_value = *data >> 8;  // HIGH byte second when swapping
+                WAIT_LCD_NOT_BUSY
+                *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+                data++;
             }
-            // Send HIGH byte first (like Arduino_GFX _data16.msb)
-            dev->lcd_cmd_val.lcd_cmd_value = pixel >> 8;
-            WAIT_LCD_NOT_BUSY
-            *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
-            // Send LOW byte second (like Arduino_GFX _data16.lsb)
-            dev->lcd_cmd_val.lcd_cmd_value = pixel & 0xFF;
-            WAIT_LCD_NOT_BUSY
-            *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+        } else {
+            for (uint32_t cnt = 0; cnt < length; cnt++) {
+                dev->lcd_cmd_val.lcd_cmd_value = *data >> 8;  // HIGH byte first (no swap)
+                while (*reg_lcd_user & LCD_CAM_LCD_START) {}
+                *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+                dev->lcd_cmd_val.lcd_cmd_value = *data;  // LOW byte second (no mask!)
+                WAIT_LCD_NOT_BUSY
+                *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
+                data++;
+            }
         }
     } else {
         if (swap_bytes) {
