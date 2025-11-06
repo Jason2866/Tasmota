@@ -7,8 +7,6 @@ extern void AddLog(uint32_t loglevel, const char *formatP, ...);
 #define LOG_LEVEL_DEBUG 3
 #endif
 
-#define WAIT_LCD_NOT_BUSY while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-
 // Pin control helpers
 static inline volatile uint32_t* get_gpio_hi_reg(int_fast8_t pin) { return (pin & 32) ? &GPIO.out1_w1ts.val : &GPIO.out_w1ts; }
 static inline volatile uint32_t* get_gpio_lo_reg(int_fast8_t pin) { return (pin & 32) ? &GPIO.out1_w1tc.val : &GPIO.out_w1tc; }
@@ -24,7 +22,28 @@ I80Panel::I80Panel(const I80PanelConfig& config)
     
     framebuffer = nullptr;
 
-    // Initialize I80 bus using ESP LCD API
+    // Initialize pins manually FIRST (matching old code order)
+    pinMode(cfg.cs_pin, OUTPUT);
+    digitalWrite(cfg.cs_pin, HIGH);
+    pinMode(cfg.dc_pin, OUTPUT);
+    digitalWrite(cfg.dc_pin, HIGH);
+    pinMode(cfg.wr_pin, OUTPUT);
+    digitalWrite(cfg.wr_pin, HIGH);
+    if (cfg.rd_pin >= 0) {
+        pinMode(cfg.rd_pin, OUTPUT);
+        digitalWrite(cfg.rd_pin, HIGH);
+    }
+
+    for (int i = 0; i < 8; i++) {
+        pinMode(cfg.data_pins_low[i], OUTPUT);
+    }
+    if (cfg.bus_width == 16) {
+        for (int i = 0; i < 8; i++) {
+            pinMode(cfg.data_pins_high[i], OUTPUT);
+        }
+    }
+
+    // Now create I80 bus config
     esp_lcd_i80_bus_config_t bus_config = {
         .dc_gpio_num = cfg.dc_pin,
         .wr_gpio_num = cfg.wr_pin,
@@ -45,29 +64,8 @@ I80Panel::I80Panel(const I80PanelConfig& config)
         }
     }
     
-    // Create I80 bus
+    // Create I80 bus (this will take over GPIO matrix for DC, WR, and data pins)
     esp_lcd_new_i80_bus(&bus_config, &_i80_bus);
-
-    // Initialize pins manually
-    pinMode(cfg.cs_pin, OUTPUT);
-    digitalWrite(cfg.cs_pin, HIGH);
-    pinMode(cfg.dc_pin, OUTPUT);
-    digitalWrite(cfg.dc_pin, HIGH);
-    pinMode(cfg.wr_pin, OUTPUT);
-    digitalWrite(cfg.wr_pin, HIGH);
-    if (cfg.rd_pin >= 0) {
-        pinMode(cfg.rd_pin, OUTPUT);
-        digitalWrite(cfg.rd_pin, HIGH);
-    }
-
-    for (int i = 0; i < 8; i++) {
-        pinMode(cfg.data_pins_low[i], OUTPUT);
-    }
-    if (cfg.bus_width == 16) {
-        for (int i = 0; i < 8; i++) {
-            pinMode(cfg.data_pins_high[i], OUTPUT);
-        }
-    }
 
     // Calculate clock using original algorithm
     uint32_t div_a, div_b, div_n, clkcnt;
@@ -543,13 +541,13 @@ bool I80Panel::pb_writeCommand(uint32_t data, uint_fast8_t bit_length) {
         do {
             dev->lcd_cmd_val.lcd_cmd_value = data;
             data >>= 8;
-            WAIT_LCD_NOT_BUSY
+            while (*reg_lcd_user & LCD_CAM_LCD_START) {}
             *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
         } while (--bytes);
         return true;
     } else {
         dev->lcd_cmd_val.val = data;
-        WAIT_LCD_NOT_BUSY
+        while (*reg_lcd_user & LCD_CAM_LCD_START) {}
         *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
         return true;
     }
@@ -566,7 +564,7 @@ void I80Panel::pb_writeData(uint32_t data, uint_fast8_t bit_length) {
         for (uint32_t cnt = 0; cnt < bytes; cnt++) {
             dev->lcd_cmd_val.lcd_cmd_value = (data >> shift) & 0xff;
             shift -= 8;
-            WAIT_LCD_NOT_BUSY
+            while (*reg_lcd_user & LCD_CAM_LCD_START) {}
             *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
         }
         return;
@@ -576,14 +574,14 @@ void I80Panel::pb_writeData(uint32_t data, uint_fast8_t bit_length) {
             for (uint32_t cnt = 0; cnt < bytes; cnt++) {
                 dev->lcd_cmd_val.lcd_cmd_value = (data >> shift) & 0xff;
                 shift -= 8;
-                WAIT_LCD_NOT_BUSY
+                while (*reg_lcd_user & LCD_CAM_LCD_START) {}
                 *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
             }
             return;
         }
 
         dev->lcd_cmd_val.val = data;
-        WAIT_LCD_NOT_BUSY
+        while (*reg_lcd_user & LCD_CAM_LCD_START) {}
         *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
         return;
     }
@@ -643,7 +641,7 @@ void I80Panel::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
                 while (*reg_lcd_user & LCD_CAM_LCD_START) {}
                 *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
                 dev->lcd_cmd_val.lcd_cmd_value = *data;       // Low byte second
-                WAIT_LCD_NOT_BUSY
+                while (*reg_lcd_user & LCD_CAM_LCD_START) {}
                 *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
                 data++;
             }
@@ -653,7 +651,7 @@ void I80Panel::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
                 while (*reg_lcd_user & LCD_CAM_LCD_START) {}
                 *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
                 dev->lcd_cmd_val.lcd_cmd_value = *data >> 8;  // High byte second
-                WAIT_LCD_NOT_BUSY
+                while (*reg_lcd_user & LCD_CAM_LCD_START) {}
                 *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
                 data++;
             }
@@ -665,13 +663,13 @@ void I80Panel::pb_pushPixels(uint16_t* data, uint32_t length, bool swap_bytes, b
                 iob = *data++;
                 iob = (iob << 8) | (iob >> 8);
                 dev->lcd_cmd_val.lcd_cmd_value = iob;
-                WAIT_LCD_NOT_BUSY
+                while (*reg_lcd_user & LCD_CAM_LCD_START) {}
                 *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
             }
         } else {
             for (uint32_t cnt = 0; cnt < length; cnt++) {
                 dev->lcd_cmd_val.lcd_cmd_value = *data++;
-                WAIT_LCD_NOT_BUSY
+                while (*reg_lcd_user & LCD_CAM_LCD_START) {}
                 *reg_lcd_user = LCD_CAM_LCD_2BYTE_EN | LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_M | LCD_CAM_LCD_START;
             }
         }
