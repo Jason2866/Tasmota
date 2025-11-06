@@ -151,7 +151,14 @@ I80Panel::I80Panel(const I80PanelConfig& config)
                 }
             }
         }
-        
+        // Set MADCTL after all init commands, before transaction end
+        if (cfg.cmd_madctl != 0xFF) {
+            pb_writeCommand(cfg.cmd_madctl, 8);
+            pb_writeData(cfg.madctl_rot[_rotation], 8); // use current rotation from display.ini
+#ifdef UDSP_DEBUG
+            AddLog(LOG_LEVEL_DEBUG, "I80: INIT sent MADCTL(0x%02X) = 0x%02X", cfg.cmd_madctl, cfg.madctl_rot[_rotation]);
+#endif
+        }
         pb_endTransaction();
     }
 }
@@ -299,12 +306,22 @@ bool I80Panel::invertDisplay(bool invert) {
 }
 
 bool I80Panel::setRotation(uint8_t rotation) {
-        _rotation = rotation & 3;
-        // Always use panel width/height, since only one MADCTL value is used
-        _width = cfg.width;
-        _height = cfg.height;
+    _rotation = rotation & 3;
     
-    // Use MADCTL value from config (filled from display.ini)
+    // Update dimensions based on rotation
+    switch (_rotation) {
+        case 0:
+        case 2:
+            _width = cfg.width;
+            _height = cfg.height;
+            break;
+        case 1:
+        case 3:
+            _width = cfg.height;
+            _height = cfg.width;
+            break;
+    }
+    // Always use MADCTL value from index 0 (single-value INI)
     if (cfg.cmd_madctl != 0xFF) {
         uint8_t madctl = cfg.madctl_rot[_rotation];
         pb_beginTransaction();
