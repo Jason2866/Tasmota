@@ -24,6 +24,30 @@ I80Panel::I80Panel(const I80PanelConfig& config)
     
     framebuffer = nullptr;
 
+    // Initialize I80 bus using ESP LCD API
+    esp_lcd_i80_bus_config_t bus_config = {
+        .dc_gpio_num = cfg.dc_pin,
+        .wr_gpio_num = cfg.wr_pin,
+        .clk_src = LCD_CLK_SRC_DEFAULT,
+        .bus_width = cfg.bus_width,
+        .max_transfer_bytes = (size_t)cfg.width * cfg.height * 2
+    };
+    
+    // Set data pins
+    if (cfg.bus_width == 8) {
+        for (int i = 0; i < 8; i++) {
+            bus_config.data_gpio_nums[i] = cfg.data_pins_low[i];
+        }
+    } else {
+        for (int i = 0; i < 8; i++) {
+            bus_config.data_gpio_nums[i] = cfg.data_pins_low[i];
+            bus_config.data_gpio_nums[i + 8] = cfg.data_pins_high[i];
+        }
+    }
+    
+    // Create I80 bus
+    esp_lcd_new_i80_bus(&bus_config, &_i80_bus);
+
     // Match Arduino_GFX: Manual pin configuration (NO esp_lcd API!)
     // We use direct LCD_CAM register access like Arduino_GFX, not ESP-IDF LCD API
     pinMode(cfg.dc_pin, OUTPUT);
@@ -145,7 +169,9 @@ I80Panel::~I80Panel() {
         heap_caps_free(_dmadesc);
         _dmadesc = nullptr;
     }
-    // Note: No need to delete _i80_bus since we don't use esp_lcd API
+    if (_i80_bus) {
+        esp_lcd_del_i80_bus(_i80_bus);
+    }
 }
 
 // DMA Implementation
