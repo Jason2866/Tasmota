@@ -299,33 +299,21 @@ bool I80Panel::invertDisplay(bool invert) {
 }
 
 bool I80Panel::setRotation(uint8_t rotation) {
-    _rotation = rotation & 3;
+        _rotation = rotation & 3;
+        // Always use panel width/height, since only one MADCTL value is used
+        _width = cfg.width;
+        _height = cfg.height;
     
-    // Update dimensions based on rotation
-    switch (_rotation) {
-        case 0:
-        case 2:
-            _width = cfg.width;
-            _height = cfg.height;
-            break;
-        case 1:
-        case 3:
-            _width = cfg.height;
-            _height = cfg.width;
-            break;
-    }
-    
-    // CRITICAL: Send MADCTL command to set rotation
-    // This was missing and caused pixel positioning errors!
+    // Use MADCTL value from config (filled from display.ini)
     if (cfg.cmd_madctl != 0xFF) {
+        uint8_t madctl = cfg.madctl_rot[_rotation];
         pb_beginTransaction();
         pb_writeCommand(cfg.cmd_madctl, 8);
-        pb_writeData(cfg.madctl_rot[_rotation], 8);
+        pb_writeData(madctl, 8);
         pb_endTransaction();
-        
 #ifdef UDSP_DEBUG
         AddLog(LOG_LEVEL_DEBUG, "I80: setRotation(%d) sent MADCTL(0x%02X) = 0x%02X", 
-               _rotation, cfg.cmd_madctl, cfg.madctl_rot[_rotation]);
+               _rotation, cfg.cmd_madctl, madctl);
 #endif
     }
     

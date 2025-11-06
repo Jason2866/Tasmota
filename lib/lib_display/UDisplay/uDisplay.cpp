@@ -502,7 +502,18 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             dsp_on = next_hex(&lp1);
             break;
           case 'R':
-            // Parse directly into SPI config (used by SPI panels only)
+            // Parse MADCTL command and values for I80 parallel panels
+            #ifdef UDISPLAY_I80
+            if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+              panel_config->i80.cmd_madctl = next_hex(&lp1); // e.g. 0x36
+              uint8_t madctl_count = next_hex(&lp1); // e.g. 0x81 (count=1)
+              panel_config->i80.madctl_rot[0] = next_hex(&lp1); // rotation 0 value
+              // If more values are present, parse them
+              for (int i = 1; i < 4 && *lp1 != '\0' && *lp1 != ',' && *lp1 != '\n'; i++) {
+                panel_config->i80.madctl_rot[i] = next_hex(&lp1);
+              }
+            } else
+            #endif
             if (interface == _UDSP_SPI) {
               panel_config->spi.cmd_memory_access = next_hex(&lp1);
               panel_config->spi.cmd_startline = next_hex(&lp1);
