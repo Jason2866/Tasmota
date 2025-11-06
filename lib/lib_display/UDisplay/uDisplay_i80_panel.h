@@ -53,6 +53,8 @@ struct I80PanelConfig {
     uint8_t cmd_set_addr_x;   // Column address command
     uint8_t cmd_set_addr_y;   // Row/page address command
     uint8_t cmd_write_ram;    // Write to RAM command
+    uint8_t cmd_madctl;       // Rotation/mirror control command
+    uint8_t madctl_rot[4];    // MADCTL values for rotations 0-3
 
     // ===== Per-Rotation Configuration =====
     uint16_t x_addr_offset[4]; // Address offset per rotation

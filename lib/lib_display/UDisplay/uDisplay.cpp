@@ -1340,6 +1340,12 @@ if (interface == _UDSP_SPI) {
       panel_config->i80.init_commands = dsp_cmds;
       panel_config->i80.init_commands_count = dsp_ncmds;
       
+      // CRITICAL: Pass MADCTL values for rotation support
+      panel_config->i80.cmd_madctl = madctrl;
+      for (int i = 0; i < 4; i++) {
+        panel_config->i80.madctl_rot[i] = rot[i];
+      }
+      
       universal_panel = new I80Panel(panel_config->i80);
 
       if (bpanel >= 0) {

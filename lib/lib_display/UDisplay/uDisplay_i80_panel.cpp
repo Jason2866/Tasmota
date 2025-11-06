@@ -265,16 +265,28 @@ bool I80Panel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
     return true;
 }
 
-bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
-    pb_beginTransaction();
-    pb_pushPixels(data, len, false, false);  // NO swap - colors are correct (blue background)
-    pb_endTransaction();
+bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool not_swapped) {
+    // Each LVGL flush must be ONE complete transaction
+    pb_pushPixels(data, len, !not_swapped, false);
+    pb_endTransaction();  // CS HIGH - complete the transaction
     return true;
 }
 
 bool I80Panel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+    // setAddrWindow sends CASET/RASET/RAMWR with CS LOW
+    // pushColors sends pixels and ends transaction with CS HIGH
+    if (x0 == 0 && y0 == 0 && x1 == 0 && y1 == 0) {
+        // No-op: pushColors already ended transaction
+        return true;
+    }
+    
     _addr_x0 = x0; _addr_y0 = y0;
     _addr_x1 = x1; _addr_y1 = y1;
+    
+    pb_beginTransaction();  // CS LOW
+    setAddrWindow_int(x0, y0, x1 - x0, y1 - y0);  // CASET/RASET/RAMWR
+    // CS stays LOW for pushColors
+    
     return true;
 }
 
@@ -301,6 +313,20 @@ bool I80Panel::setRotation(uint8_t rotation) {
             _width = cfg.height;
             _height = cfg.width;
             break;
+    }
+    
+    // CRITICAL: Send MADCTL command to set rotation
+    // This was missing and caused pixel positioning errors!
+    if (cfg.cmd_madctl != 0xFF) {
+        pb_beginTransaction();
+        pb_writeCommand(cfg.cmd_madctl, 8);
+        pb_writeData(cfg.madctl_rot[_rotation], 8);
+        pb_endTransaction();
+        
+#ifdef UDSP_DEBUG
+        AddLog(LOG_LEVEL_DEBUG, "I80: setRotation(%d) sent MADCTL(0x%02X) = 0x%02X", 
+               _rotation, cfg.cmd_madctl, cfg.madctl_rot[_rotation]);
+#endif
     }
     
     return true;

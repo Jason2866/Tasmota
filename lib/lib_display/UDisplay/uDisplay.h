@@ -108,6 +108,11 @@ class uDisplay : public Renderer {
   void invertDisplay(boolean i);
   void SetPwrCB(pwr_cb cb) { pwr_cbp = cb; };
   void SetDimCB(dim_cb cb) { dim_cbp = cb; };
+  
+  // Helper for panels to get MADCTL values
+  uint8_t getMadctlCmd() const { return madctrl; }
+  uint8_t getMadctlValue(uint8_t rotation) const { return (rotation < 4) ? rot[rotation] : 0; }
+  
 #ifdef USE_UNIVERSAL_TOUCH
 // universal touch driver
   bool utouch_Init(char **name);
