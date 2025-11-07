@@ -23,8 +23,10 @@ I80Panel::I80Panel(const I80PanelConfig& config)
     framebuffer = nullptr;
 
     // Initialize pins manually FIRST (matching old code order)
-    pinMode(cfg.cs_pin, OUTPUT);
-    digitalWrite(cfg.cs_pin, HIGH);
+    if (cfg.cs_pin >= 0) {
+        pinMode(cfg.cs_pin, OUTPUT);
+        digitalWrite(cfg.cs_pin, HIGH);
+    }
     pinMode(cfg.dc_pin, OUTPUT);
     digitalWrite(cfg.dc_pin, HIGH);
     pinMode(cfg.wr_pin, OUTPUT);
