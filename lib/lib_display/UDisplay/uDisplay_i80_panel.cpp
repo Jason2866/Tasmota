@@ -297,6 +297,27 @@ bool I80Panel::invertDisplay(bool invert) {
 bool I80Panel::setRotation(uint8_t rotation) {
     _rotation = rotation & 3;
     
+    // Send MADCTL rotation command to display
+    pb_beginTransaction();
+    cs_control(false);
+    
+    // Send rotation command (matches old code behavior)
+    pb_writeCommand(cfg.cmd_madctl, 8);
+    if (!cfg.allcmd_mode) {
+        pb_writeData(cfg.rot_cmd[_rotation], 8);
+    } else {
+        pb_writeCommand(cfg.rot_cmd[_rotation], 8);
+    }
+    
+    // For sa_mode == 8, also send startline command
+    if (cfg.sa_mode == 8 && !cfg.allcmd_mode) {
+        pb_writeCommand(cfg.cmd_startline, 8);
+        pb_writeData((_rotation < 2) ? _height : 0, 8);
+    }
+    
+    cs_control(true);
+    pb_endTransaction();
+    
     // Update dimensions based on rotation
     switch (_rotation) {
         case 0:
@@ -400,18 +421,49 @@ void I80Panel::setAddrWindow_int(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
     }
 #endif
     
-    // Set column address range
-    pb_writeCommand(cfg.cmd_set_addr_x, 8);
-    pb_writeData(x, 16);
-    pb_writeData(x2, 16);
-    
-    // Set row address range  
-    pb_writeCommand(cfg.cmd_set_addr_y, 8);
-    pb_writeData(y, 16);
-    pb_writeData(y2, 16);
-    
-    // Start memory write
-    pb_writeCommand(cfg.cmd_write_ram, 8);
+    if (cfg.sa_mode != 8) {
+        // Normal mode: send 32-bit packed coordinates
+        uint32_t xa = ((uint32_t)x << 16) | x2;
+        uint32_t ya = ((uint32_t)y << 16) | y2;
+        
+        pb_writeCommand(cfg.cmd_set_addr_x, 8);
+        pb_writeData(xa, 32);
+        pb_writeCommand(cfg.cmd_set_addr_y, 8);
+        pb_writeData(ya, 32);
+        
+        if (cfg.cmd_write_ram != 0xff) {
+            pb_writeCommand(cfg.cmd_write_ram, 8);
+        }
+    } else {
+        // Special mode 8: swap coordinates if rotation is odd
+        if (_rotation & 1) {
+            uint16_t tmp;
+            tmp = x; x = y; y = tmp;
+            tmp = x2; x2 = y2; y2 = tmp;
+        }
+        
+        pb_writeCommand(cfg.cmd_set_addr_x, 8);
+        if (cfg.allcmd_mode) {
+            pb_writeCommand(x, 8);
+            pb_writeCommand(x2, 8);
+        } else {
+            pb_writeData(x, 8);
+            pb_writeData(x2, 8);
+        }
+        
+        pb_writeCommand(cfg.cmd_set_addr_y, 8);
+        if (cfg.allcmd_mode) {
+            pb_writeCommand(y, 8);
+            pb_writeCommand(y2, 8);
+        } else {
+            pb_writeData(y, 8);
+            pb_writeData(y2, 8);
+        }
+        
+        if (cfg.cmd_write_ram != 0xff) {
+            pb_writeCommand(cfg.cmd_write_ram, 8);
+        }
+    }
     
     // Store for push operations
     _addr_x0 = x;

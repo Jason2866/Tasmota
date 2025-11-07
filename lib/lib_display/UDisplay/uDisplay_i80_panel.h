@@ -53,8 +53,15 @@ struct I80PanelConfig {
     uint8_t cmd_set_addr_x;   // Column address command
     uint8_t cmd_set_addr_y;   // Row/page address command
     uint8_t cmd_write_ram;    // Write to RAM command
+    uint8_t cmd_madctl;       // Memory access control command (typically 0x36)
+    uint8_t cmd_startline;    // Start line command (for sa_mode == 8)
+
+    // ===== Display Modes =====
+    uint8_t sa_mode;          // Set address mode (8 = special, 16 = normal)
+    uint8_t allcmd_mode;      // If true, send data as commands
 
     // ===== Per-Rotation Configuration =====
+    uint8_t rot_cmd[4];        // MADCTL rotation command value per rotation
     uint16_t x_addr_offset[4]; // Address offset per rotation
     uint16_t y_addr_offset[4];
 

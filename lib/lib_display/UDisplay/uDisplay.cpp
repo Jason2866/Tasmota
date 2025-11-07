@@ -506,7 +506,14 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             if (interface == _UDSP_SPI) {
               panel_config->spi.cmd_memory_access = next_hex(&lp1);
               panel_config->spi.cmd_startline = next_hex(&lp1);
-            } else {
+            } 
+#ifdef UDISPLAY_I80
+            else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
+              panel_config->i80.cmd_madctl = next_hex(&lp1);
+              panel_config->i80.cmd_startline = next_hex(&lp1);
+            }
+#endif
+            else {
               madctrl = next_hex(&lp1);
               startline = next_hex(&lp1);
             }
@@ -521,8 +528,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               } 
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-                // Parse directly into I80 config (rotation handled by panel)
-                next_hex(&lp1); // Skip rotation command (not used by I80)
+                // Parse directly into I80 config
+                panel_config->i80.rot_cmd[0] = next_hex(&lp1);
                 panel_config->i80.x_addr_offset[0] = next_hex(&lp1);
                 panel_config->i80.y_addr_offset[0] = next_hex(&lp1);
               }
@@ -544,8 +551,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               } 
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-                // Parse directly into I80 config (rotation handled by panel)
-                next_hex(&lp1); // Skip rotation command (not used by I80)
+                // Parse directly into I80 config
+                panel_config->i80.rot_cmd[1] = next_hex(&lp1);
                 panel_config->i80.x_addr_offset[1] = next_hex(&lp1);
                 panel_config->i80.y_addr_offset[1] = next_hex(&lp1);
               }
@@ -567,8 +574,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               } 
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-                // Parse directly into I80 config (rotation handled by panel)
-                next_hex(&lp1); // Skip rotation command (not used by I80)
+                // Parse directly into I80 config
+                panel_config->i80.rot_cmd[2] = next_hex(&lp1);
                 panel_config->i80.x_addr_offset[2] = next_hex(&lp1);
                 panel_config->i80.y_addr_offset[2] = next_hex(&lp1);
               }
@@ -590,8 +597,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               } 
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
-                // Parse directly into I80 config (rotation handled by panel)
-                next_hex(&lp1); // Skip rotation command (not used by I80)
+                // Parse directly into I80 config
+                panel_config->i80.rot_cmd[3] = next_hex(&lp1);
                 panel_config->i80.x_addr_offset[3] = next_hex(&lp1);
                 panel_config->i80.y_addr_offset[3] = next_hex(&lp1);
               }
@@ -635,7 +642,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               panel_config->i80.cmd_set_addr_x = next_hex(&lp1);
               panel_config->i80.cmd_set_addr_y = next_hex(&lp1);
               panel_config->i80.cmd_write_ram = next_hex(&lp1);
-              next_val(&lp1); // Skip address mode for I80
+              panel_config->i80.sa_mode = next_val(&lp1);
             }
 #endif
             else {
@@ -1335,8 +1342,14 @@ if (interface == _UDSP_SPI) {
       panel_config->i80.width = gxs;
       panel_config->i80.height = gys;
       panel_config->i80.bpp = bpp;
+      panel_config->i80.color_mode = col_mode;
       panel_config->i80.bus_width = (uint8_t)((interface == _UDSP_PAR16) ? 16 : 8);
       panel_config->i80.clock_speed_hz = (uint32_t)spi_speed * 1000000;
+      panel_config->i80.allcmd_mode = allcmd_mode;
+      // Set sa_mode default if not parsed (old descriptors may not have it)
+      if (panel_config->i80.sa_mode == 0) {
+        panel_config->i80.sa_mode = sa_mode;  // Use global default (16)
+      }
       panel_config->i80.init_commands = dsp_cmds;
       panel_config->i80.init_commands_count = dsp_ncmds;
       
