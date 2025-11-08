@@ -283,6 +283,7 @@ bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
 }
 
 bool I80Panel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+    // Just store coordinates - pushColors will use them
     _addr_x0 = x0; _addr_y0 = y0;
     _addr_x1 = x1; _addr_y1 = y1;
     return true;
@@ -299,6 +300,21 @@ bool I80Panel::invertDisplay(bool invert) {
 bool I80Panel::setRotation(uint8_t rotation) {
     _rotation = rotation & 3;
     
+    // Calculate new dimensions based on rotation FIRST
+    uint16_t new_width, new_height;
+    switch (_rotation) {
+        case 0:
+        case 2:
+            new_width = cfg.width;
+            new_height = cfg.height;
+            break;
+        case 1:
+        case 3:
+            new_width = cfg.height;
+            new_height = cfg.width;
+            break;
+    }
+    
     // Send MADCTL rotation command to display
     pb_beginTransaction();
     cs_control(false);
@@ -314,25 +330,15 @@ bool I80Panel::setRotation(uint8_t rotation) {
     // For sa_mode == 8, also send startline command
     if (cfg.sa_mode == 8 && !cfg.allcmd_mode) {
         pb_writeCommand(cfg.cmd_startline, 8);
-        pb_writeData((_rotation < 2) ? _height : 0, 8);
+        pb_writeData((_rotation < 2) ? new_height : 0, 8);
     }
     
     cs_control(true);
     pb_endTransaction();
     
-    // Update dimensions based on rotation
-    switch (_rotation) {
-        case 0:
-        case 2:
-            _width = cfg.width;
-            _height = cfg.height;
-            break;
-        case 1:
-        case 3:
-            _width = cfg.height;
-            _height = cfg.width;
-            break;
-    }
+    // Update dimensions
+    _width = new_width;
+    _height = new_height;
     
     return true;
 }
