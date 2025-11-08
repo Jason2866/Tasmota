@@ -262,18 +262,18 @@ bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
     pb_beginTransaction();
     cs_control(false);
     
-    if (first) {
-        // _addr_x1 and _addr_y1 are already exclusive end coordinates (x+width, y+height)
-        // so width = x1 - x0, not x1 - x0 + 1
-        setAddrWindow_int(_addr_x0, _addr_y0, _addr_x1 - _addr_x0, _addr_y1 - _addr_y0);
-#ifdef UDSP_DEBUG
-        static uint8_t log_count = 0;
-        if (log_count++ < 3) {  // Log first 3 calls only
-            AddLog(LOG_LEVEL_DEBUG, "I80: pushColors first=1 window=(%d,%d)-(%d,%d) len=%d data[0]=0x%04X", 
-                   _addr_x0, _addr_y0, _addr_x1, _addr_y1, len, data[0]);
-        }
-#endif
-    }
+//     if (first) {
+//         // _addr_x1 and _addr_y1 are already exclusive end coordinates (x+width, y+height)
+//         // so width = x1 - x0, not x1 - x0 + 1
+//         setAddrWindow_int(_addr_x0, _addr_y0, _addr_x1 - _addr_x0, _addr_y1 - _addr_y0);
+// #ifdef UDSP_DEBUG
+//         static uint8_t log_count = 0;
+//         if (log_count++ < 3) {  // Log first 3 calls only
+//             AddLog(LOG_LEVEL_DEBUG, "I80: pushColors first=1 window=(%d,%d)-(%d,%d) len=%d data[0]=0x%04X", 
+//                    _addr_x0, _addr_y0, _addr_x1, _addr_y1, len, data[0]);
+//         }
+// #endif
+//     }
     
     pb_pushPixels(data, len, true, false);  // swap_bytes=true to match old driver
     
