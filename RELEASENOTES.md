@@ -114,13 +114,16 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 
 ## Changelog v15.1.0.1
 ### Added
+- Commands `DaliSend` and `DaliQuery` allow extended commands with prefix for DeviceType defaulting to DT6
 - ESP8266 GPIOViewer memory map if enabled with `#define GV_USE_ESPINFO`
 - HostedMCU file update using command `HostedLoad <version>|<filename>`
 - Scripter array transfer via UFS [#24060](https://github.com/arendst/Tasmota/issues/24060)
+- NeoPool command `NPReadLSB`, `NPReadMSB`, `NPWriteLSB`, `NWriteMSB` for directly read/write LSB/MSB of 16-bit register [#24083](https://github.com/arendst/Tasmota/issues/24083)
 - TLS enabled ECDSA by default for ESP8266 [#24009](https://github.com/arendst/Tasmota/issues/24009)
 - Berry `cb.free_cb` for extension manager [#24014](https://github.com/arendst/Tasmota/issues/24014)
 - Berry `light.get()` direct access to values [#24033](https://github.com/arendst/Tasmota/issues/24033)
 - Berry `gc_heap` and `gc_time` to `tasmota.memory()` [#24054](https://github.com/arendst/Tasmota/issues/24054)
+- Berry `tcp.write()` add `offset` and `len` [#24076](https://github.com/arendst/Tasmota/issues/24076)
 
 ### Breaking Changed
 
@@ -138,5 +141,6 @@ The latter links can be used for OTA upgrades too like ``OtaUrl https://ota.tasm
 - Extension Manager exception when `OtaUrl` is not defined or invalid
 - Extension Manager Light Theme support and Extensions input field control
 - HASPmota exception in `cpicker` (colorwheel) [#24010](https://github.com/arendst/Tasmota/issues/24010)
+- HASPmota `scale` and `angle` for images (#24089)[#24089](https://github.com/arendst/Tasmota/issues/24089)
 
 ### Removed
