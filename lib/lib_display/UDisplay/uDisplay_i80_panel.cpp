@@ -259,33 +259,25 @@ bool I80Panel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 }
 
 bool I80Panel::pushColors(uint16_t *data, uint16_t len, bool first) {
-    pb_beginTransaction();
-    cs_control(false);
-    
-//     if (first) {
-//         // _addr_x1 and _addr_y1 are already exclusive end coordinates (x+width, y+height)
-//         // so width = x1 - x0, not x1 - x0 + 1
-//         setAddrWindow_int(_addr_x0, _addr_y0, _addr_x1 - _addr_x0, _addr_y1 - _addr_y0);
-// #ifdef UDSP_DEBUG
-//         static uint8_t log_count = 0;
-//         if (log_count++ < 3) {  // Log first 3 calls only
-//             AddLog(LOG_LEVEL_DEBUG, "I80: pushColors first=1 window=(%d,%d)-(%d,%d) len=%d data[0]=0x%04X", 
-//                    _addr_x0, _addr_y0, _addr_x1, _addr_y1, len, data[0]);
-//         }
-// #endif
-//     }
-    
+    // Match old code: just push pixels, no transaction management
+    // Transaction is managed by setAddrWindow()
     pb_pushPixels(data, len, true, false);  // swap_bytes=true to match old driver
-    
-    cs_control(true);
-    pb_endTransaction();
     return true;
 }
 
 bool I80Panel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
-    // Just store coordinates - pushColors will use them
-    _addr_x0 = x0; _addr_y0 = y0;
-    _addr_x1 = x1; _addr_y1 = y1;
+    // Match old code behavior exactly
+    if (!x0 && !y0 && !x1 && !y1) {
+        // End transaction signal
+        cs_control(true);
+        pb_endTransaction();
+    } else {
+        // Begin transaction and send address window commands
+        pb_beginTransaction();
+        cs_control(false);
+        setAddrWindow_int(x0, y0, x1 - x0, y1 - y0);
+        // Leave transaction open for pushColors
+    }
     return true;
 }
 

@@ -110,6 +110,19 @@ void uDisplay::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 void uDisplay::setRotation(uint8_t rotation) {
     cur_rot = rotation;
     if (universal_panel->setRotation(rotation)) {
+        // Update Renderer dimensions based on rotation
+        switch (rotation) {
+            case 0:
+            case 2:
+                _width = gxs;
+                _height = gys;
+                break;
+            case 1:
+            case 3:
+                _width = gys;
+                _height = gxs;
+                break;
+        }
         return;
     }
 
