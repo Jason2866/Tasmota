@@ -24,7 +24,10 @@
         "+<*>",
         "+<src/*>"
     ],
-    "flags": [ "-I$PROJECT_DIR/include" ],
+    "flags": [ 
+      "-I$PROJECT_DIR/include",
+      "-I$PROJECT_DIR/tasmota/include"
+    ],
     "includeDir": "include"
   }
 }
