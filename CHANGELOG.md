@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Vid6608 library from v1.0.2 to v1.0.3 (#24218)
+- IRremoteESP8266 library from v2.8.6 to v2.8.6-ca474a6 (#24226)
+- Update Zigbee WebUI (#24224)
 
 ### Fixed
 - DALI watchdog exception
