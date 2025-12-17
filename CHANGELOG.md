@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## [15.2.0.1]
 ### Added
+- Support for TCA9554 8-bit I/O expander mutually exclusive with PCA9557
 
 ### Breaking Changed
 
