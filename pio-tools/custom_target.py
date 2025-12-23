@@ -1,7 +1,7 @@
 # Written by Maximilian Gerhardt <maximilian.gerhardt@rub.de>
 # 29th December 2020
 # and Christian Baars, Johann Obermeier
-# 2023 / 2024
+# 2023 - 2025
 # License: Apache
 # Expanded from functionality provided by PlatformIO's espressif32 and espressif8266 platforms, credited below.
 # This script provides functions to download the filesystem (LittleFS) from a running ESP32 / ESP8266
@@ -300,8 +300,6 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
         return (True, unpack_dir)
     except Exception as exc:
         print("Unpacking filesystem with littlefs-python failed with " + str(exc))
-        import traceback
-        traceback.print_exc()
         return (False, "")
 
 def display_fs(extracted_dir):
