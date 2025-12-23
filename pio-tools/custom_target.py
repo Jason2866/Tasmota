@@ -144,15 +144,11 @@ switch_off_ldf()
 ## Script interface functions
 def parse_partition_table(content):
     entries = [e for e in content.split(b'\xaaP') if len(e) > 0]
-    #print("Partition data:")
     for entry in entries:
         type = entry[1]
         if type in [0x82,0x83]: # SPIFFS or LITTLEFS
-            offset = int.from_bytes(entry[2:5], byteorder='little', signed=False)
-            size = int.from_bytes(entry[6:9], byteorder='little', signed=False)
-            #print("type:",hex(type))
-            #print("address:",hex(offset))
-            #print("size:",hex(size))
+            offset = int.from_bytes(entry[2:6], byteorder='little', signed=False)
+            size = int.from_bytes(entry[6:10], byteorder='little', signed=False)
             env["FS_START"] = offset
             env["FS_SIZE"] = size
             env["FS_PAGE"] = int("0x100", 16)
