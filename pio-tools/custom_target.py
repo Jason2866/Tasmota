@@ -12,7 +12,6 @@
 # this folder can be changed by writing 'custom_unpack_dir = some_other_dir' in the corresponding platformio.ini
 # environment.
 import re
-import sys
 from os.path import isfile, join
 from enum import Enum
 import os
