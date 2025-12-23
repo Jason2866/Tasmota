@@ -14,13 +14,7 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-
-try:
-    from littlefs import LittleFS
-except ImportError:
-    print("Error: littlefs-python is not installed.")
-    print("Install it with: pip install littlefs-python")
-    sys.exit(1)
+from littlefs import LittleFS
 
 
 def parse_size(size_str):

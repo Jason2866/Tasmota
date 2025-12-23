@@ -22,17 +22,9 @@ import shutil
 import json
 from pathlib import Path
 from colorama import Fore, Back, Style
+from littlefs import LittleFS
 from platformio.compat import IS_WINDOWS
 from platformio.project.config import ProjectConfig
-
-# Import littlefs-python
-try:
-    from littlefs import LittleFS
-    LITTLEFS_PYTHON_AVAILABLE = True
-except ImportError:
-    LITTLEFS_PYTHON_AVAILABLE = False
-    print(Fore.YELLOW + "Warning: littlefs-python not installed. Install with: pip install littlefs-python")
-    print(Fore.YELLOW + "Falling back to mklittlefs tool if available.")
 
 Import("env")
 platform = env["PIOPLATFORM"]
@@ -52,26 +44,12 @@ class FSInfo:
         self.block_size = block_size
     def __repr__(self):
         return f"FS type {self.fs_type} Start {hex(self.start)} Len {self.length} Page size {self.page_size} Block size {self.block_size}"
-    # extract command supposed to be implemented by subclasses
-    def get_extract_cmd(self, input_file, output_dir):
-        raise NotImplementedError()
 
 class FS_Info(FSInfo):
     def __init__(self, start, length, page_size, block_size):
-        # Try to use littlefs-python first, fallback to mklittlefs tool
-        self.use_python = LITTLEFS_PYTHON_AVAILABLE
-        if not self.use_python:
-            self.tool = env["MKFSTOOL"]
-            self.tool = os.path.join(ProjectConfig.get_instance().get("platformio", "packages_dir"), "tool-mklittlefs", self.tool)
         super().__init__(FSType.LITTLEFS, start, length, page_size, block_size)
     def __repr__(self):
         return f"{self.fs_type} Start {hex(self.start)} Len {hex(self.length)} Page size {hex(self.page_size)} Block size {hex(self.block_size)}"
-    def get_extract_cmd(self, input_file, output_dir):
-        if self.use_python:
-            # Return None to indicate Python-based extraction should be used
-            return None
-        else:
-            return f'"{self.tool}" -b {self.block_size} -s {self.length} -p {self.page_size} --unpack "{output_dir}" "{input_file}"'
 
 def _parse_size(value):
     if isinstance(value, int):
@@ -283,62 +261,49 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
     if not os.path.exists(unpack_dir):
         os.makedirs(unpack_dir)
 
-    cmd = fs_info.get_extract_cmd(downloaded_file, unpack_dir)
-    
-    # Use littlefs-python if available and cmd is None
-    if cmd is None and LITTLEFS_PYTHON_AVAILABLE:
-        print("Unpack files from filesystem image using littlefs-python")
-        try:
-            # Read the downloaded filesystem image
-            with open(downloaded_file, 'rb') as f:
-                fs_data = f.read()
-            
-            # Calculate block count
-            block_count = fs_info.length // fs_info.block_size
-            
-            # Create LittleFS instance and mount the image
-            fs = LittleFS(
-                block_size=fs_info.block_size,
-                block_count=block_count,
-                mount=False
-            )
-            fs.context.buffer = bytearray(fs_data)
-            fs.mount()
-            
-            # Extract all files
-            unpack_path = Path(unpack_dir)
-            for root, dirs, files in fs.walk("/"):
-                if not root.endswith("/"):
-                    root += "/"
-                # Create directories
-                for dir_name in dirs:
-                    src_path = root + dir_name
-                    dst_path = unpack_path / src_path[1:]  # Remove leading '/'
-                    dst_path.mkdir(parents=True, exist_ok=True)
-                # Extract files
-                for file_name in files:
-                    src_path = root + file_name
-                    dst_path = unpack_path / src_path[1:]  # Remove leading '/'
-                    dst_path.parent.mkdir(parents=True, exist_ok=True)
-                    with fs.open(src_path, "rb") as src:
-                        dst_path.write_bytes(src.read())
-            
-            fs.unmount()
-            return (True, unpack_dir)
-        except Exception as exc:
-            print("Unpacking filesystem with littlefs-python failed with " + str(exc))
-            import traceback
-            traceback.print_exc()
-            return (False, "")
-    else:
-        # Fallback to mklittlefs tool
-        print("Unpack files from filesystem image using mklittlefs")
-        try:
-            returncode = subprocess.call(cmd, shell=True)
-            return (True, unpack_dir)
-        except subprocess.CalledProcessError as exc:
-            print("Unpacking filesystem failed with " + str(exc))
-            return (False, "")
+    print("Unpack files from filesystem image using littlefs-python")
+    try:
+        # Read the downloaded filesystem image
+        with open(downloaded_file, 'rb') as f:
+            fs_data = f.read()
+        
+        # Calculate block count
+        block_count = fs_info.length // fs_info.block_size
+        
+        # Create LittleFS instance and mount the image
+        fs = LittleFS(
+            block_size=fs_info.block_size,
+            block_count=block_count,
+            mount=False
+        )
+        fs.context.buffer = bytearray(fs_data)
+        fs.mount()
+        
+        # Extract all files
+        unpack_path = Path(unpack_dir)
+        for root, dirs, files in fs.walk("/"):
+            if not root.endswith("/"):
+                root += "/"
+            # Create directories
+            for dir_name in dirs:
+                src_path = root + dir_name
+                dst_path = unpack_path / src_path[1:]  # Remove leading '/'
+                dst_path.mkdir(parents=True, exist_ok=True)
+            # Extract files
+            for file_name in files:
+                src_path = root + file_name
+                dst_path = unpack_path / src_path[1:]  # Remove leading '/'
+                dst_path.parent.mkdir(parents=True, exist_ok=True)
+                with fs.open(src_path, "rb") as src:
+                    dst_path.write_bytes(src.read())
+        
+        fs.unmount()
+        return (True, unpack_dir)
+    except Exception as exc:
+        print("Unpacking filesystem with littlefs-python failed with " + str(exc))
+        import traceback
+        traceback.print_exc()
+        return (False, "")
 
 def display_fs(extracted_dir):
     # extract command already nicely lists all extracted files.
