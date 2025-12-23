@@ -136,7 +136,7 @@ def esp32_build_filesystem(fs_size):
         os.makedirs(filesystem_dir)
     if num_entries > 1:
         print()
-        print(Fore.GREEN + "Will create filesystem with the following files:")
+        print(Fore.GREEN + "Will create filesystem with the following file(s):")
         print()
     for file in files:
         if "no_files" in file:
@@ -148,13 +148,17 @@ def esp32_build_filesystem(fs_size):
                 if len(file.split(" ")) > 1:
                     target = os.path.normpath(join(filesystem_dir, file.split(" ")[1]))
                     print("Renaming",(file.split(os.path.sep)[-1]).split(" ")[0],"to",file.split(" ")[1])
+                else:
+                    print(file.split(os.path.sep)[-1])
                 open(target, "wb").write(response.content)
             else:
                 print(Fore.RED + "Failed to download: ",file)
             continue
         if os.path.isdir(file):
+            print(f"{file}/ (directory)")
             shutil.copytree(file, filesystem_dir, dirs_exist_ok=True)
         else:
+            print(file)
             shutil.copy(file, filesystem_dir)
     if not os.listdir(filesystem_dir):
         #print("No files added -> will NOT create littlefs.bin and NOT overwrite fs partition!")
@@ -162,9 +166,7 @@ def esp32_build_filesystem(fs_size):
     
     # Use littlefs-python
     output_file = join(env.subst("$BUILD_DIR"), "littlefs.bin")
-    
-    print(Fore.GREEN + "Creating LittleFS image using littlefs-python")
-    
+
     # Parse fs_size (can be hex string like "0x2f0000")
     if isinstance(fs_size, str):
         if fs_size.startswith("0x"):
@@ -182,7 +184,7 @@ def esp32_build_filesystem(fs_size):
     fs = LittleFS(
         block_size=block_size,
         block_count=block_count,
-        disk_version=(2, 0),
+        disk_version=0x00020000,
         mount=True
     )
     
@@ -204,6 +206,7 @@ def esp32_build_filesystem(fs_size):
     with open(output_file, "wb") as f:
         f.write(fs.context.buffer)
     
+    print()
     print(Fore.GREEN + f"LittleFS image created: {output_file}")
     return True
 

@@ -261,7 +261,7 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
     if not os.path.exists(unpack_dir):
         os.makedirs(unpack_dir)
 
-    print("Unpack files from filesystem image using littlefs-python")
+    print()
     try:
         # Read the downloaded filesystem image
         with open(downloaded_file, 'rb') as f:
@@ -306,10 +306,24 @@ def unpack_fs(fs_info: FSInfo, downloaded_file: str):
         return (False, "")
 
 def display_fs(extracted_dir):
-    # extract command already nicely lists all extracted files.
-    # no need to display that ourselves. just display a summary
-    file_count = sum([len(files) for r, d, files in os.walk(extracted_dir)])
-    print("Extracted " + str(file_count) + " file(s) from filesystem.")
+    # List all extracted files
+    file_count = 0
+    print(Fore.GREEN + "Extracted files from filesystem image:")
+    print()
+    for root, dirs, files in os.walk(extracted_dir):
+        # Display directories
+        for dir_name in dirs:
+            dir_path = os.path.join(root, dir_name)
+            rel_path = os.path.relpath(dir_path, extracted_dir)
+            print(f"  [DIR]  {rel_path}/")
+        # Display files
+        for file_name in files:
+            file_path = os.path.join(root, file_name)
+            rel_path = os.path.relpath(file_path, extracted_dir)
+            file_size = os.path.getsize(file_path)
+            print(f"  [FILE] {rel_path} ({file_size} bytes)")
+            file_count += 1
+    print(f"\nExtracted {file_count} file(s) from filesystem.")
 
 def command_download_fs(*args, **kwargs):
     info = get_fs_type_start_and_length()
