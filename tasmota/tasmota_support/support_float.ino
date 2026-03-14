@@ -17,6 +17,10 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef ESP32
+#include "sdkconfig.h"
+#endif
+
 float fmodf(float x, float y)
 {
   // https://github.com/micropython/micropython/blob/master/lib/libm/fmodf.c
@@ -154,7 +158,9 @@ inline float tanf(float x) { return tan_56(x); }
 inline float atanf(float x) { return atan_66(x); }
 inline float asinf(float x) { return asinf1(x); }
 inline float acosf(float x) { return acosf1(x); }
-inline float sqrtf(float x) { return sqrt1(x); }
+#ifndef CONFIG_LIBC_PICOLIBC
+#define float sqrtf(x) sqrt1(x)
+#endif
 
 // Math constants we'll use
 double const f_pi           = 3.1415926535897932384626433;  // f_pi
