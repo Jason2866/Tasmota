@@ -154,7 +154,7 @@ inline float tanf(float x) { return tan_56(x); }
 inline float atanf(float x) { return atan_66(x); }
 inline float asinf(float x) { return asinf1(x); }
 inline float acosf(float x) { return acosf1(x); }
-inline float sqrtf(float x) { return sqrt1(x); }
+//inline float sqrtf(float x) { return sqrt1(x); }
 
 // Math constants we'll use
 double const f_pi           = 3.1415926535897932384626433;  // f_pi
