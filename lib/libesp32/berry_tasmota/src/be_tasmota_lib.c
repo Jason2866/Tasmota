@@ -21,6 +21,7 @@ extern int l_publish_rule(bvm *vm);
 extern int l_cmd(bvm *vm);
 extern int l_getoption(bvm *vm);
 extern int l_millis(bvm *vm);
+extern int l_micros(bvm *vm);
 extern int l_timereached(bvm *vm);
 extern int l_rtc(bvm *vm);
 extern int l_rtc_utc(bvm *vm);
@@ -72,9 +73,6 @@ extern int tasm_apply_str_op(bvm *vm);
 extern int32_t be_Tasmota_version(void);
 BE_FUNC_CTYPE_DECLARE(be_Tasmota_version, "i", "-");
 
-extern bbool BerryBECLoader(const char * url);
-BE_FUNC_CTYPE_DECLARE(BerryBECLoader, "b", "s")
-
 #include "solidify/solidified_tasmota_class.h"
 #include "solidify/solidified_rule_matcher.h"
 #include "solidify/solidified_trigger_class.h"
@@ -90,6 +88,7 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     _crons, var                         // list of active crons
     _ccmd, var                          // list of active Tasmota commands implemented in Berry
     _drivers, var                       // list of active drivers
+    _ext, var                           // list of active extensions
     _wnu, var                           // list of closures to call when network is connected
     wire1, var                          // Tasmota I2C Wire1
     wire2, var                          // Tasmota I2C Wire2
@@ -113,7 +112,8 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     publish_rule, func(l_publish_rule)
     _cmd, func(l_cmd)
     get_option, func(l_getoption)
-    millis, func(l_millis)
+    millis, static_func(l_millis)
+    micros, static_func(l_micros)
     time_reached, func(l_timereached)
     rtc, static_func(l_rtc)
     rtc_utc, func(l_rtc_utc)
@@ -189,13 +189,15 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     run_network_up, closure(class_Tasmota_run_network_up_closure)
     add_driver, closure(class_Tasmota_add_driver_closure)
     remove_driver, closure(class_Tasmota_remove_driver_closure)
+    add_extension, closure(class_Tasmota_add_extension_closure)
+    read_extension_manifest, closure(class_Tasmota_read_extension_manifest_closure)
+    unload_extension, closure(class_Tasmota_unload_extension_closure)
     load, closure(class_Tasmota_load_closure)
     compile, closure(class_Tasmota_compile_closure)
     wire_scan, closure(class_Tasmota_wire_scan_closure)
     time_str, closure(class_Tasmota_time_str_closure)
     urlfetch, closure(class_Tasmota_urlfetch_closure)
     urlfetch_cmd, closure(class_Tasmota_urlfetch_cmd_closure)
-    urlbecload, static_ctype_func(BerryBECLoader)
 
     add_cron, closure(class_Tasmota_add_cron_closure)
     run_cron, closure(class_Tasmota_run_cron_closure)

@@ -13,11 +13,11 @@ var engine = animation.init_strip()
 var strip_len_ = animation.strip_length(engine)
 var palette_olivary_ = bytes("FFFF0000" "FFFFA500" "FFFFFF00" "FF008000" "FF0000FF" "FF4B0082" "FFEE82EE" "FFFFFFFF")
 var olivary_ = animation.color_cycle(engine)
-olivary_.palette = palette_olivary_
-olivary_.cycle_period = 0
+olivary_.colors = palette_olivary_
+olivary_.period = 0
 var swipe_animation_ = animation.solid(engine)
 swipe_animation_.color = olivary_
-var slide_colors_ = animation.SequenceManager(engine)
+var slide_colors_ = animation.sequence_manager(engine)
   .push_play_step(swipe_animation_, 1000)
   .push_closure_step(def (engine) olivary_.next = 1 end)
 engine.add(slide_colors_)
@@ -40,7 +40,7 @@ palette palette_olivary = [
  white
 ]
 
-color olivary = color_cycle(palette=palette_olivary, cycle_period=0)
+color olivary = color_cycle(colors=palette_olivary, period=0)
 
 animation swipe_animation = solid(
   color = olivary

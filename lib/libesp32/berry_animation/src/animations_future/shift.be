@@ -3,7 +3,8 @@
 # This animation shifts/scrolls patterns horizontally across the LED strip
 # with configurable speed, direction, and wrapping behavior.
 
-#@ solidify:ShiftAnimation,weak
+import "./core/param_encoder" as encode_constraints
+
 class ShiftAnimation : animation.animation
   # Non-parameter instance variables only
   var current_offset     # Current shift offset in 1/256th pixels
@@ -11,12 +12,12 @@ class ShiftAnimation : animation.animation
   var current_colors     # Array of current colors for each pixel
   
   # Parameter definitions with constraints
-  static var PARAMS = {
+  static var PARAMS = animation.enc_params({
     "source_animation": {"type": "instance", "default": nil},
     "shift_speed": {"min": 0, "max": 255, "default": 128},
     "direction": {"min": -1, "max": 1, "default": 1},
     "wrap_around": {"type": "bool", "default": true}
-  }
+  })
   
   # Initialize a new Shift animation
   def init(engine)
@@ -30,7 +31,7 @@ class ShiftAnimation : animation.animation
   
   # Initialize buffers based on current strip length
   def _initialize_buffers()
-    var current_strip_length = self.engine.get_strip_length()
+    var current_strip_length = self.engine.strip_length
     self.source_frame = animation.frame_buffer(current_strip_length)
     self.current_colors = []
     self.current_colors.resize(current_strip_length)
@@ -54,16 +55,14 @@ class ShiftAnimation : animation.animation
   
   # Update animation state
   def update(time_ms)
-    if !super(self).update(time_ms)
-      return false
-    end
+    super(self).update(time_ms)
     
     # Cache parameter values for performance
     var current_shift_speed = self.shift_speed
     var current_direction = self.direction
     var current_wrap_around = self.wrap_around
     var current_source_animation = self.source_animation
-    var current_strip_length = self.engine.get_strip_length()
+    var current_strip_length = self.engine.strip_length
     
     # Update shift offset based on speed
     if current_shift_speed > 0
@@ -93,14 +92,12 @@ class ShiftAnimation : animation.animation
     
     # Calculate shifted colors
     self._calculate_shift()
-    
-    return true
   end
   
   # Calculate shifted colors for all pixels
   def _calculate_shift()
     # Get current strip length and ensure buffers are correct size
-    var current_strip_length = self.engine.get_strip_length()
+    var current_strip_length = self.engine.strip_length
     if size(self.current_colors) != current_strip_length
       self._initialize_buffers()
     end
@@ -150,17 +147,9 @@ class ShiftAnimation : animation.animation
   end
   
   # Render shift to frame buffer
-  def render(frame, time_ms)
-    if !self.is_running || frame == nil
-      return false
-    end
-    
-    # Auto-fix time_ms and start_time
-    time_ms = self._fix_time_ms(time_ms)
-    
-    var current_strip_length = self.engine.get_strip_length()
+  def render(frame, time_ms, strip_length)
     var i = 0
-    while i < current_strip_length
+    while i < strip_length
       if i < frame.width
         frame.set_pixel_color(i, self.current_colors[i])
       end
@@ -168,16 +157,6 @@ class ShiftAnimation : animation.animation
     end
     
     return true
-  end
-  
-  # String representation
-  def tostring()
-    var current_direction = self.direction
-    var current_shift_speed = self.shift_speed
-    var current_wrap_around = self.wrap_around
-    var current_priority = self.priority
-    var dir_str = current_direction > 0 ? "right" : "left"
-    return f"ShiftAnimation({dir_str}, speed={current_shift_speed}, wrap={current_wrap_around}, priority={current_priority}, running={self.is_running})"
   end
 end
 

@@ -220,6 +220,22 @@ class lwdecode_cls
     return hash
   end
 
+  static def cleanString(s)
+   # cleans string to include only chars [a-zA-Z0-9_-]
+   # alphanumerics, underscore and hyphen
+   var cs=""
+   var c=''
+   for i : 0..size(s)-1
+    c = s[i]
+    if !((c=='-')||(c=='_')||(c>='a' && c<='z')||(c>='A' && c<='Z')||(c>='0' && c<='9'))
+     cs += '_'
+    else 
+     cs += c
+    end
+   end
+   return cs
+  end
+
   def lw_decode(data)
     import json
 
@@ -239,10 +255,60 @@ class lwdecode_cls
         load(decoder)
         if LwDeco
           self.lw_decoders[decoder] = LwDeco
-        else
-          log("LwD: Unable to load decoder",1)
-          return true
-        end
+
+          if tasmota.get_option(19) == 0          
+            #  Send Single Component HA Discovery message
+            #  Reference: https://www.home-assistant.io/integrations/mqtt/#single-component-discovery-payload
+
+            try
+              var sensors = LwDeco.HAssSensors()    # Ask decoder for details of this device ...
+              var deviceInfo = LwDeco.deviceInfo()
+              var tasDeviceName  = tasmota.cmd('_Status',true)['Status']['DeviceName']
+              var MAC=string.replace(tasmota.wifi('mac'),':','')
+              var devEUI = device_data[device_name]['DevEUIh'] + device_data[device_name]['DevEUIl']
+              var LwPrefix = tasmota.get_option(83) == 0?"['LwDecoded']":""   
+ 
+              for k : sensors.keys()
+                var sensName  = k    
+                var stateClass= sensors[sensName][0]
+                var HAName    = sensors[sensName][1]
+                var sensUnit  = sensors[sensName][2]
+                var devClass  = sensors[sensName][3]
+                var icon      = sensors[sensName][4]
+                var sensNameClean=self.cleanString(sensName)
+                var val_tpl = f"{{{{value_json{LwPrefix}['{device_name}']['{sensNameClean}']}}}}"
+                var topic = f"homeassistant/sensor/tasmota_{MAC}_{sensNameClean}/config"
+                var pl = {
+                  "dev":{"ids":MAC[6..],
+                  "name":tasDeviceName,
+                  "mf":deviceInfo['manufacturer'],
+                  "mdl":deviceInfo['model']
+                  },
+                  "o":{"name":tasDeviceName},
+                  "name":HAName,
+                  "device_cla":devClass,
+                  "state_cla":stateClass,
+                  "unit_of_meas":sensUnit,
+                  "ic":icon,
+                  "val_tpl":val_tpl,
+                  "uniq_id":f"tasmota_{MAC}_{sensNameClean}",
+                  "stat_t":f"{self.topic_cached}/{devEUI}",
+                  "avty_t":string.replace(self.topic_cached, 'SENSOR','LWT'),  
+                  "pl_avail":"Online",
+                  "pl_not_avail":"Offline"
+                }
+                mqtt.publish(topic, json.dump(pl),true) #Retain
+              end #for each sensor
+
+            except .. as e, m
+              log(format("LwD: HA Discovery warning: %s", m),1)
+            end # try
+          end # if SO19
+
+      else
+        log("LwD: Unable to load decoder",1)
+        return true
+      end
       except .. as e, m
         log(format("LwD: Decoder load error: %s", m),1)
         return true
@@ -426,6 +492,11 @@ class webPageLoRaWAN : Driver
     if !webserver.check_privileged_access() return nil end
 
     var inode = 1
+    if webserver.has_arg('add')
+      inode = int(webserver.arg('nextnode'))
+      tasmota.cmd(format('LoRaWanappkey%i', inode), true)
+    end 
+
     var cmdArg
     if webserver.has_arg('save')
       inode = int(webserver.arg('node'))
@@ -452,6 +523,12 @@ class webPageLoRaWAN : Driver
     var arg = 'LoRaWanNode'
     var enables = string.split(tasmota.cmd(arg, true).find(arg), ',') # [1,!2,!3,!4,5,6]
     var maxnode = enables.size()
+    var maxnodes
+    try
+      maxnodes = tasmota.cmd('_LoRaWan',true)['LoRaWan']['MaxNodes']  # Tasmota >= v15.2.0.2
+    except ..  as e, m
+      maxnodes = 16                              #- is TAS_LORAWAN_ENDNODES = 16 -#
+    end
 
     webserver.content_start("LoRaWAN")           #- title of the web page -#
     webserver.content_send_style()               #- send standard Tasmota styles -#
@@ -489,6 +566,24 @@ class webPageLoRaWAN : Driver
     for node:1 .. maxnode
      webserver.content_send(format("<button type='button' onclick='selNode(%i)' id='n%i' class='tl inactive'>%i</button>", node, node, node))
     end
+
+    if maxnode < maxnodes
+      var add_tab = (maxnode == 0)               #- No tabs visible -#
+      if !add_tab
+        arg = format('LoRaWanName%i', maxnode)
+        name = tasmota.cmd(arg, true).find(arg)
+        add_tab = (size(name) > 0)               #- Last tab is not empty -#
+      end
+      if add_tab
+        webserver.content_send(
+        format(
+        "<form action='' method='post'>"
+         "<button name='add' class='bl'>+</button>"
+         "<input type='hidden' name='nextnode' value='%i'>"
+        "</form>", maxnode +1))
+       end
+    end
+
     webserver.content_send("</div><br><br><br><br>")    #- Terminate indent and add space -#
 
     for node:1 .. maxnode
@@ -526,7 +621,6 @@ class webPageLoRaWAN : Driver
     end
 
     webserver.content_send("</fieldset>")
-
 
     webserver.content_button(webserver.BUTTON_CONFIGURATION) #- button back to conf page -#
     webserver.content_stop()                                 #- end of web page -#

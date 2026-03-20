@@ -6,20 +6,21 @@
 # The comet uses sub-pixel positioning (1/256th pixels) for smooth movement and supports
 # both wrapping around the strip and bouncing off the ends.
 
-#@ solidify:CometAnimation,weak
-class CometAnimation : animation.animation
+import "./core/param_encoder" as encode_constraints
+
+class comet : animation.animation
   # Non-parameter instance variables only
   var head_position    # Current position of the comet head (in 1/256th pixels for smooth movement)
   
   # Parameter definitions following parameterized class specification
-  static var PARAMS = {
+  static var PARAMS = animation.enc_params({
     # 'color' for the comet head (32-bit ARGB value), inherited from animation class
     "tail_length": {"min": 1, "max": 50, "default": 5}, # Length of the comet tail in pixels
     "speed": {"min": 1, "max": 25600, "default": 2560}, # Movement speed in 1/256th pixels per second
     "direction": {"enum": [-1, 1], "default": 1},       # Direction of movement (1 = forward, -1 = backward)
     "wrap_around": {"min": 0, "max": 1, "default": 1},  # Whether comet wraps around the strip (bool)
     "fade_factor": {"min": 0, "max": 255, "default": 179} # How quickly the tail fades (0-255, 255 = no fade)
-  }
+  })
   
   # Initialize a new Comet animation
   # Following parameterized class specification - engine parameter only
@@ -39,11 +40,13 @@ class CometAnimation : animation.animation
     super(self).on_param_changed(name, value)
     if name == "direction"
       # Reset position when direction changes
-      var strip_length = self.engine.get_strip_length()
-      if value > 0
-        self.head_position = 0  # Start at beginning for forward movement
-      else
-        self.head_position = (strip_length - 1) * 256  # Start at end for backward movement
+      var strip_length = self.engine.strip_length
+      if type(value) == 'int'
+        if value > 0
+          self.head_position = 0  # Start at beginning for forward movement
+        else
+          self.head_position = (strip_length - 1) * 256  # Start at end for backward movement
+        end
       end
     end
   end
@@ -51,21 +54,12 @@ class CometAnimation : animation.animation
   # Update animation state based on current time
   #
   # @param time_ms: int - current time in milliseconds
-  # @return bool - True if animation is still running, false if completed
   def update(time_ms)
-    # Call parent update method first
-    if !super(self).update(time_ms)
-      return false
-    end
-    
-    # Auto-fix time_ms and start_time
-    time_ms = self._fix_time_ms(time_ms)
-
     # Cache parameter values for performance (read once, use multiple times)
     var current_speed = self.speed
     var current_direction = self.direction
     var current_wrap_around = self.wrap_around
-    var strip_length = self.engine.get_strip_length()
+    var strip_length = self.engine.strip_length
     
     # Calculate elapsed time since animation started
     var elapsed = time_ms - self.start_time
@@ -104,30 +98,24 @@ class CometAnimation : animation.animation
         self.direction = -current_direction
       end
     end
-    
-    return true
   end
   
   # Render the comet to the provided frame buffer
   #
-  # @param frame: FrameBuffer - The frame buffer to render to
+  # @param frame: frame_buffer - The frame buffer to render to
   # @param time_ms: int - Current time in milliseconds
+  # @param strip_length: int - Length of the LED strip in pixels
   # @return bool - True if frame was modified, false otherwise
-  def render(frame, time_ms)
-    if !self.is_running || frame == nil
-      return false
-    end
-    
+  def render(frame, time_ms, strip_length)
     # Get the integer position of the head (convert from 1/256th pixels to pixels)
     var head_pixel = self.head_position / 256
     
-    # Get current parameter values using virtual member access (resolves ValueProviders automatically)
+    # Get current parameter values using virtual member access (resolves value_providers automatically)
     var current_color = self.color
     var tail_length = self.tail_length
     var direction = self.direction
     var wrap_around = self.wrap_around
     var fade_factor = self.fade_factor
-    var strip_length = self.engine.get_strip_length()
     
     # Extract color components from current color (ARGB format)
     var head_a = (current_color >> 24) & 0xFF
@@ -181,17 +169,6 @@ class CometAnimation : animation.animation
     
     return true
   end
-  
-  # String representation of the animation
-  def tostring()
-    var color_str
-    if animation.is_value_provider(self.color)
-      color_str = str(self.color)
-    else
-      color_str = f"0x{self.color :08x}"
-    end
-    return f"CometAnimation(color={color_str}, head_pos={self.head_position / 256:.1f}, tail_length={self.tail_length}, speed={self.speed}, direction={self.direction}, priority={self.priority}, running={self.is_running})"
-  end
 end
 
-return {'comet_animation': CometAnimation}
+return {'comet': comet}

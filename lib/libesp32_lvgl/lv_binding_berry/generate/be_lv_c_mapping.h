@@ -16,6 +16,7 @@ const be_ntv_func_def_t lv_style_func[] = {
   { "copy", { (const void*) &lv_style_copy, "", "(lv.style)(lv.style)" } },
   { "is_const", { (const void*) &lv_style_is_const, "b", "(lv.style)" } },
   { "is_empty", { (const void*) &lv_style_is_empty, "b", "(lv.style)" } },
+  { "merge", { (const void*) &lv_style_merge, "", "(lv.style)(lv.style)" } },
   { "remove_prop", { (const void*) &lv_style_remove_prop, "b", "(lv.style)i" } },
   { "reset", { (const void*) &lv_style_reset, "", "(lv.style)" } },
   { "set_align", { (const void*) &lv_style_set_align, "", "(lv.style)i" } },
@@ -73,6 +74,7 @@ const be_ntv_func_def_t lv_style_func[] = {
   { "set_grid_row_align", { (const void*) &lv_style_set_grid_row_align, "", "(lv.style)i" } },
   { "set_grid_row_dsc_array", { (const void*) &lv_style_set_grid_row_dsc_array, "", "(lv.style)(lv.int_arr)" } },
   { "set_height", { (const void*) &lv_style_set_height, "", "(lv.style)i" } },
+  { "set_image_colorkey", { (const void*) &lv_style_set_image_colorkey, "", "(lv.style)c" } },
   { "set_image_opa", { (const void*) &lv_style_set_image_opa, "", "(lv.style)i" } },
   { "set_image_recolor", { (const void*) &lv_style_set_image_recolor, "", "(lv.style)(lv.color)" } },
   { "set_image_recolor_opa", { (const void*) &lv_style_set_image_recolor_opa, "", "(lv.style)i" } },
@@ -188,6 +190,7 @@ const be_ntv_func_def_t lv_group_func[] = {
   { "get_focused", { (const void*) &lv_group_get_focused, "lv.obj", "(lv.group)" } },
   { "get_obj_by_index", { (const void*) &lv_group_get_obj_by_index, "lv.obj", "(lv.group)i" } },
   { "get_obj_count", { (const void*) &lv_group_get_obj_count, "i", "(lv.group)" } },
+  { "get_user_data", { (const void*) &lv_group_get_user_data, "c", "(lv.group)" } },
   { "get_wrap", { (const void*) &lv_group_get_wrap, "b", "(lv.group)" } },
   { "remove", { (const void*) &lv_group_delete, "", "(lv.group)" } },
   { "remove_all_objs", { (const void*) &lv_group_remove_all_objs, "", "(lv.group)" } },
@@ -197,6 +200,7 @@ const be_ntv_func_def_t lv_group_func[] = {
   { "set_editing", { (const void*) &lv_group_set_editing, "", "(lv.group)b" } },
   { "set_focus_cb", { (const void*) &lv_group_set_focus_cb, "", "(lv.group)^lv_group_focus_cb^" } },
   { "set_refocus_policy", { (const void*) &lv_group_set_refocus_policy, "", "(lv.group)i" } },
+  { "set_user_data", { (const void*) &lv_group_set_user_data, "", "(lv.group)." } },
   { "set_wrap", { (const void*) &lv_group_set_wrap, "", "(lv.group)b" } },
   { "swap_obj", { (const void*) &lv_group_swap_obj, "", "(lv.obj)(lv.obj)" } },
 };
@@ -206,12 +210,16 @@ const be_ntv_func_def_t lv_group_func[] = {
 const be_ntv_func_def_t lv_obj_func[] = {
   { "add_event_cb", { (const void*) &lv_obj_add_event_cb, "lv.event_dsc", "(lv.obj)^lv_event_cb^i." } },
   { "add_flag", { (const void*) &lv_obj_add_flag, "", "(lv.obj)i" } },
+  { "add_play_timeline_event", { (const void*) &lv_obj_add_play_timeline_event, "", "(lv.obj)i(lv.anim_timeline_dsc)ib" } },
+  { "add_screen_load_event", { (const void*) &lv_obj_add_screen_load_event, "", "(lv.obj)i(lv.obj)iii" } },
   { "add_state", { (const void*) &lv_obj_add_state, "", "(lv.obj)i" } },
   { "add_style", { (const void*) &lv_obj_add_style, "", "(lv.obj)(lv.style)i" } },
   { "align", { (const void*) &lv_obj_align, "", "(lv.obj)iii" } },
   { "align_to", { (const void*) &lv_obj_align_to, "", "(lv.obj)(lv.obj)iii" } },
   { "allocate_spec_attr", { (const void*) &lv_obj_allocate_spec_attr, "", "(lv.obj)" } },
   { "area_is_visible", { (const void*) &lv_obj_area_is_visible, "b", "(lv.obj)(lv.area)" } },
+  { "calc_dynamic_height", { (const void*) &lv_obj_calc_dynamic_height, "i", "(lv.obj)i" } },
+  { "calc_dynamic_width", { (const void*) &lv_obj_calc_dynamic_width, "i", "(lv.obj)i" } },
   { "calculate_ext_draw_size", { (const void*) &lv_obj_calculate_ext_draw_size, "i", "(lv.obj)i" } },
   { "calculate_style_text_align", { (const void*) &lv_obj_calculate_style_text_align, "i", "(lv.obj)is" } },
   { "center", { (const void*) &lv_obj_center, "", "(lv.obj)" } },
@@ -305,6 +313,8 @@ const be_ntv_func_def_t lv_obj_func[] = {
   { "get_style_border_post", { (const void*) &lv_obj_get_style_border_post, "b", "(lv.obj)i" } },
   { "get_style_border_side", { (const void*) &lv_obj_get_style_border_side, "i", "(lv.obj)i" } },
   { "get_style_border_width", { (const void*) &lv_obj_get_style_border_width, "i", "(lv.obj)i" } },
+  { "get_style_clamped_height", { (const void*) &lv_obj_get_style_clamped_height, "i", "(lv.obj)" } },
+  { "get_style_clamped_width", { (const void*) &lv_obj_get_style_clamped_width, "i", "(lv.obj)" } },
   { "get_style_clip_corner", { (const void*) &lv_obj_get_style_clip_corner, "b", "(lv.obj)i" } },
   { "get_style_color_filter_dsc", { (const void*) &lv_obj_get_style_color_filter_dsc, "lv.color_filter_dsc", "(lv.obj)i" } },
   { "get_style_color_filter_opa", { (const void*) &lv_obj_get_style_color_filter_opa, "i", "(lv.obj)i" } },
@@ -324,6 +334,7 @@ const be_ntv_func_def_t lv_obj_func[] = {
   { "get_style_grid_row_align", { (const void*) &lv_obj_get_style_grid_row_align, "i", "(lv.obj)i" } },
   { "get_style_grid_row_dsc_array", { (const void*) &lv_obj_get_style_grid_row_dsc_array, "lv.int_arr", "(lv.obj)i" } },
   { "get_style_height", { (const void*) &lv_obj_get_style_height, "i", "(lv.obj)i" } },
+  { "get_style_image_colorkey", { (const void*) &lv_obj_get_style_image_colorkey, "c", "(lv.obj)i" } },
   { "get_style_image_opa", { (const void*) &lv_obj_get_style_image_opa, "i", "(lv.obj)i" } },
   { "get_style_image_recolor", { (const void*) &lv_obj_get_style_image_recolor, "lv.color", "(lv.obj)i" } },
   { "get_style_image_recolor_filtered", { (const void*) &lv_obj_get_style_image_recolor_filtered, "lv.color", "(lv.obj)i" } },
@@ -435,14 +446,19 @@ const be_ntv_func_def_t lv_obj_func[] = {
   { "init_draw_label_dsc", { (const void*) &lv_obj_init_draw_label_dsc, "", "(lv.obj)i(lv.draw_label_dsc)" } },
   { "init_draw_line_dsc", { (const void*) &lv_obj_init_draw_line_dsc, "", "(lv.obj)i(lv.draw_line_dsc)" } },
   { "init_draw_rect_dsc", { (const void*) &lv_obj_init_draw_rect_dsc, "", "(lv.obj)i(lv.draw_rect_dsc)" } },
-  { "invalidate", { (const void*) &lv_obj_invalidate, "", "(lv.obj)" } },
-  { "invalidate_area", { (const void*) &lv_obj_invalidate_area, "", "(lv.obj)(lv.area)" } },
+  { "invalidate", { (const void*) &lv_obj_invalidate, "i", "(lv.obj)" } },
+  { "invalidate_area", { (const void*) &lv_obj_invalidate_area, "i", "(lv.obj)(lv.area)" } },
   { "is_editable", { (const void*) &lv_obj_is_editable, "b", "(lv.obj)" } },
   { "is_group_def", { (const void*) &lv_obj_is_group_def, "b", "(lv.obj)" } },
+  { "is_height_max", { (const void*) &lv_obj_is_height_max, "b", "(lv.obj)" } },
+  { "is_height_min", { (const void*) &lv_obj_is_height_min, "b", "(lv.obj)" } },
   { "is_layout_positioned", { (const void*) &lv_obj_is_layout_positioned, "b", "(lv.obj)" } },
+  { "is_radio_button", { (const void*) &lv_obj_is_radio_button, "b", "(lv.obj)" } },
   { "is_scrolling", { (const void*) &lv_obj_is_scrolling, "b", "(lv.obj)" } },
   { "is_valid", { (const void*) &lv_obj_is_valid, "b", "(lv.obj)" } },
   { "is_visible", { (const void*) &lv_obj_is_visible, "b", "(lv.obj)" } },
+  { "is_width_max", { (const void*) &lv_obj_is_width_max, "b", "(lv.obj)" } },
+  { "is_width_min", { (const void*) &lv_obj_is_width_min, "b", "(lv.obj)" } },
   { "mark_layout_as_dirty", { (const void*) &lv_obj_mark_layout_as_dirty, "", "(lv.obj)" } },
   { "move_background", { (const void*) &lv_obj_move_background, "", "(lv.obj)" } },
   { "move_children_by", { (const void*) &lv_obj_move_children_by, "", "(lv.obj)iib" } },
@@ -465,6 +481,7 @@ const be_ntv_func_def_t lv_obj_func[] = {
   { "remove_state", { (const void*) &lv_obj_remove_state, "", "(lv.obj)i" } },
   { "remove_style", { (const void*) &lv_obj_remove_style, "", "(lv.obj)(lv.style)i" } },
   { "remove_style_all", { (const void*) &lv_obj_remove_style_all, "", "(lv.obj)" } },
+  { "remove_theme", { (const void*) &lv_obj_remove_theme, "", "(lv.obj)i" } },
   { "replace_style", { (const void*) &lv_obj_replace_style, "b", "(lv.obj)(lv.style)(lv.style)i" } },
   { "reset_transform", { (const void*) &lv_obj_reset_transform, "", "(lv.obj)" } },
   { "scroll_by", { (const void*) &lv_obj_scroll_by, "", "(lv.obj)iii" } },
@@ -493,6 +510,7 @@ const be_ntv_func_def_t lv_obj_func[] = {
   { "set_local_style_prop", { (const void*) &lv_obj_set_local_style_prop, "", "(lv.obj)iii" } },
   { "set_parent", { (const void*) &lv_obj_set_parent, "", "(lv.obj)(lv.obj)" } },
   { "set_pos", { (const void*) &lv_obj_set_pos, "", "(lv.obj)ii" } },
+  { "set_radio_button", { (const void*) &lv_obj_set_radio_button, "", "(lv.obj)b" } },
   { "set_scroll_dir", { (const void*) &lv_obj_set_scroll_dir, "", "(lv.obj)i" } },
   { "set_scroll_snap_x", { (const void*) &lv_obj_set_scroll_snap_x, "", "(lv.obj)i" } },
   { "set_scroll_snap_y", { (const void*) &lv_obj_set_scroll_snap_y, "", "(lv.obj)i" } },
@@ -549,6 +567,7 @@ const be_ntv_func_def_t lv_obj_func[] = {
   { "set_style_grid_row_align", { (const void*) &lv_obj_set_style_grid_row_align, "", "(lv.obj)ii" } },
   { "set_style_grid_row_dsc_array", { (const void*) &lv_obj_set_style_grid_row_dsc_array, "", "(lv.obj)(lv.int_arr)i" } },
   { "set_style_height", { (const void*) &lv_obj_set_style_height, "", "(lv.obj)ii" } },
+  { "set_style_image_colorkey", { (const void*) &lv_obj_set_style_image_colorkey, "", "(lv.obj)ci" } },
   { "set_style_image_opa", { (const void*) &lv_obj_set_style_image_opa, "", "(lv.obj)ii" } },
   { "set_style_image_recolor", { (const void*) &lv_obj_set_style_image_recolor, "", "(lv.obj)(lv.color)i" } },
   { "set_style_image_recolor_opa", { (const void*) &lv_obj_set_style_image_recolor_opa, "", "(lv.obj)ii" } },
@@ -642,6 +661,8 @@ const be_ntv_func_def_t lv_obj_func[] = {
   { "stringify_id", { (const void*) &lv_obj_stringify_id, "s", "(lv.obj)ci" } },
   { "style_apply_color_filter", { (const void*) &lv_obj_style_apply_color_filter, "i", "(lv.obj)ii" } },
   { "style_apply_recolor", { (const void*) &lv_obj_style_apply_recolor, "i", "(lv.obj)ii" } },
+  { "style_get_disabled", { (const void*) &lv_obj_style_get_disabled, "b", "(lv.obj)(lv.style)i" } },
+  { "style_set_disabled", { (const void*) &lv_obj_style_set_disabled, "", "(lv.obj)(lv.style)ib" } },
   { "swap", { (const void*) &lv_obj_swap, "", "(lv.obj)(lv.obj)" } },
   { "transform_point", { (const void*) &lv_obj_transform_point, "", "(lv.obj)ci" } },
   { "transform_point_array", { (const void*) &lv_obj_transform_point_array, "", "(lv.obj)(lv.point_arr)ii" } },
@@ -652,6 +673,7 @@ const be_ntv_func_def_t lv_obj_func[] = {
 
 /* `lv_event` methods */
 const be_ntv_func_def_t lv_event_func[] = {
+  { "free_user_data_cb", { (const void*) &lv_event_free_user_data_cb, "", "(lv.event)" } },
   { "get_code", { (const void*) &lv_event_get_code, "i", "(lv.event)" } },
   { "get_cover_area", { (const void*) &lv_event_get_cover_area, "lv.area", "(lv.event)" } },
   { "get_current_target", { (const void*) &lv_event_get_current_target, "c", "(lv.event)" } },
@@ -663,6 +685,7 @@ const be_ntv_func_def_t lv_event_func[] = {
   { "get_layer", { (const void*) &lv_event_get_layer, "lv.layer", "(lv.event)" } },
   { "get_old_size", { (const void*) &lv_event_get_old_size, "lv.area", "(lv.event)" } },
   { "get_param", { (const void*) &lv_event_get_param, "c", "(lv.event)" } },
+  { "get_prev_state", { (const void*) &lv_event_get_prev_state, "i", "(lv.event)" } },
   { "get_rotary_diff", { (const void*) &lv_event_get_rotary_diff, "i", "(lv.event)" } },
   { "get_scroll_anim", { (const void*) &lv_event_get_scroll_anim, "lv.anim", "(lv.event)" } },
   { "get_self_size_info", { (const void*) &lv_event_get_self_size_info, "c", "(lv.event)" } },
@@ -673,6 +696,7 @@ const be_ntv_func_def_t lv_event_func[] = {
   { "set_ext_draw_size", { (const void*) &lv_event_set_ext_draw_size, "", "(lv.event)i" } },
   { "stop_bubbling", { (const void*) &lv_event_stop_bubbling, "", "(lv.event)" } },
   { "stop_processing", { (const void*) &lv_event_stop_processing, "", "(lv.event)" } },
+  { "stop_trickling", { (const void*) &lv_event_stop_trickling, "", "(lv.event)" } },
 };
 
 /* `lv_display` methods */
@@ -710,10 +734,12 @@ const be_ntv_func_def_t lv_display_func[] = {
   { "get_physical_ver_res", { (const void*) &lv_display_get_physical_vertical_resolution, "i", "(lv.display)" } },
   { "get_physical_vertical_resolution", { (const void*) &lv_display_get_physical_vertical_resolution, "i", "(lv.display)" } },
   { "get_refr_timer", { (const void*) &lv_display_get_refr_timer, "lv.timer", "(lv.display)" } },
+  { "get_render_mode", { (const void*) &lv_display_get_render_mode, "i", "(lv.display)" } },
   { "get_rotation", { (const void*) &lv_display_get_rotation, "i", "(lv.display)" } },
   { "get_scr_act", { (const void*) &lv_display_get_screen_active, "lv.obj", "(lv.display)" } },
   { "get_scr_prev", { (const void*) &lv_display_get_screen_prev, "lv.obj", "(lv.display)" } },
   { "get_screen_active", { (const void*) &lv_display_get_screen_active, "lv.obj", "(lv.display)" } },
+  { "get_screen_loading", { (const void*) &lv_display_get_screen_loading, "lv.obj", "(lv.display)" } },
   { "get_screen_prev", { (const void*) &lv_display_get_screen_prev, "lv.obj", "(lv.display)" } },
   { "get_theme", { (const void*) &lv_display_get_theme, "lv.theme", "(lv.display)" } },
   { "get_tile_cnt", { (const void*) &lv_display_get_tile_cnt, "i", "(lv.display)" } },
@@ -726,6 +752,7 @@ const be_ntv_func_def_t lv_display_func[] = {
   { "remove", { (const void*) &lv_display_delete, "", "(lv.display)" } },
   { "remove_event_cb_with_user_data", { (const void*) &lv_display_remove_event_cb_with_user_data, "i", "(lv.display).." } },
   { "rotate_area", { (const void*) &lv_display_rotate_area, "", "(lv.display)(lv.area)" } },
+  { "rotate_point", { (const void*) &lv_display_rotate_point, "", "(lv.display)c" } },
   { "send_event", { (const void*) &lv_display_send_event, "i", "(lv.display)i." } },
   { "send_vsync_event", { (const void*) &lv_display_send_vsync_event, "i", "(lv.display)." } },
   { "set_angle", { (const void*) &lv_display_set_rotation, "", "(lv.display)i" } },
@@ -806,7 +833,9 @@ const be_ntv_func_def_t lv_indev_func[] = {
 #ifdef BE_LV_WIDGET_QRCODE
 const be_ntv_func_def_t lv_qrcode_func[] = {
   { "set_dark_color", { (const void*) &lv_qrcode_set_dark_color, "", "(lv.obj)(lv.color)" } },
+  { "set_data", { (const void*) &lv_qrcode_set_data, "", "(lv.obj)s" } },
   { "set_light_color", { (const void*) &lv_qrcode_set_light_color, "", "(lv.obj)(lv.color)" } },
+  { "set_quiet_zone", { (const void*) &lv_qrcode_set_quiet_zone, "", "(lv.obj)b" } },
   { "set_size", { (const void*) &lv_qrcode_set_size, "", "(lv.obj)i" } },
   { "update", { (const void*) &lv_qrcode_update, "i", "(lv.obj).i" } },
 };
@@ -899,6 +928,7 @@ const be_ntv_func_def_t lv_arc_func[] = {
   { "get_angle_start", { (const void*) &lv_arc_get_angle_start, "i", "(lv.obj)" } },
   { "get_bg_angle_end", { (const void*) &lv_arc_get_bg_angle_end, "i", "(lv.obj)" } },
   { "get_bg_angle_start", { (const void*) &lv_arc_get_bg_angle_start, "i", "(lv.obj)" } },
+  { "get_change_rate", { (const void*) &lv_arc_get_change_rate, "i", "(lv.obj)" } },
   { "get_knob_offset", { (const void*) &lv_arc_get_knob_offset, "i", "(lv.obj)" } },
   { "get_max_value", { (const void*) &lv_arc_get_max_value, "i", "(lv.obj)" } },
   { "get_min_value", { (const void*) &lv_arc_get_min_value, "i", "(lv.obj)" } },
@@ -914,6 +944,8 @@ const be_ntv_func_def_t lv_arc_func[] = {
   { "set_change_rate", { (const void*) &lv_arc_set_change_rate, "", "(lv.obj)i" } },
   { "set_end_angle", { (const void*) &lv_arc_set_end_angle, "", "(lv.obj)i" } },
   { "set_knob_offset", { (const void*) &lv_arc_set_knob_offset, "", "(lv.obj)i" } },
+  { "set_max_value", { (const void*) &lv_arc_set_max_value, "", "(lv.obj)i" } },
+  { "set_min_value", { (const void*) &lv_arc_set_min_value, "", "(lv.obj)i" } },
   { "set_mode", { (const void*) &lv_arc_set_mode, "", "(lv.obj)i" } },
   { "set_range", { (const void*) &lv_arc_set_range, "", "(lv.obj)ii" } },
   { "set_rotation", { (const void*) &lv_arc_set_rotation, "", "(lv.obj)i" } },
@@ -921,6 +953,39 @@ const be_ntv_func_def_t lv_arc_func[] = {
   { "set_value", { (const void*) &lv_arc_set_value, "", "(lv.obj)i" } },
 };
 #endif // BE_LV_WIDGET_ARC
+
+/* `lv_arclabel` methods */
+#ifdef BE_LV_WIDGET_ARCLABEL
+const be_ntv_func_def_t lv_arclabel_func[] = {
+  { "get_angle_size", { (const void*) &lv_arclabel_get_angle_size, "i", "(lv.obj)" } },
+  { "get_angle_start", { (const void*) &lv_arclabel_get_angle_start, "i", "(lv.obj)" } },
+  { "get_center_offset_x", { (const void*) &lv_arclabel_get_center_offset_x, "i", "(lv.obj)" } },
+  { "get_center_offset_y", { (const void*) &lv_arclabel_get_center_offset_y, "i", "(lv.obj)" } },
+  { "get_dir", { (const void*) &lv_arclabel_get_dir, "i", "(lv.obj)" } },
+  { "get_end_overlap", { (const void*) &lv_arclabel_get_end_overlap, "b", "(lv.obj)" } },
+  { "get_overflow", { (const void*) &lv_arclabel_get_overflow, "i", "(lv.obj)" } },
+  { "get_radius", { (const void*) &lv_arclabel_get_radius, "i", "(lv.obj)" } },
+  { "get_recolor", { (const void*) &lv_arclabel_get_recolor, "b", "(lv.obj)" } },
+  { "get_text_angle", { (const void*) &lv_arclabel_get_text_angle, "i", "(lv.obj)" } },
+  { "get_text_horizontal_align", { (const void*) &lv_arclabel_get_text_horizontal_align, "i", "(lv.obj)" } },
+  { "get_text_vertical_align", { (const void*) &lv_arclabel_get_text_vertical_align, "i", "(lv.obj)" } },
+  { "set_angle_size", { (const void*) &lv_arclabel_set_angle_size, "", "(lv.obj)i" } },
+  { "set_angle_start", { (const void*) &lv_arclabel_set_angle_start, "", "(lv.obj)i" } },
+  { "set_center_offset_x", { (const void*) &lv_arclabel_set_center_offset_x, "", "(lv.obj)i" } },
+  { "set_center_offset_y", { (const void*) &lv_arclabel_set_center_offset_y, "", "(lv.obj)i" } },
+  { "set_dir", { (const void*) &lv_arclabel_set_dir, "", "(lv.obj)i" } },
+  { "set_end_overlap", { (const void*) &lv_arclabel_set_end_overlap, "", "(lv.obj)b" } },
+  { "set_offset", { (const void*) &lv_arclabel_set_offset, "", "(lv.obj)i" } },
+  { "set_overflow", { (const void*) &lv_arclabel_set_overflow, "", "(lv.obj)i" } },
+  { "set_radius", { (const void*) &lv_arclabel_set_radius, "", "(lv.obj)i" } },
+  { "set_recolor", { (const void*) &lv_arclabel_set_recolor, "", "(lv.obj)b" } },
+  { "set_text", { (const void*) &lv_arclabel_set_text, "", "(lv.obj)s" } },
+  { "set_text_fmt", { (const void*) &lv_arclabel_set_text_fmt, "", "(lv.obj)s[......]" } },
+  { "set_text_horizontal_align", { (const void*) &lv_arclabel_set_text_horizontal_align, "", "(lv.obj)i" } },
+  { "set_text_static", { (const void*) &lv_arclabel_set_text_static, "", "(lv.obj)s" } },
+  { "set_text_vertical_align", { (const void*) &lv_arclabel_set_text_vertical_align, "", "(lv.obj)i" } },
+};
+#endif // BE_LV_WIDGET_ARCLABEL
 
 /* `lv_bar` methods */
 #ifdef BE_LV_WIDGET_BAR
@@ -933,6 +998,8 @@ const be_ntv_func_def_t lv_bar_func[] = {
   { "get_start_value", { (const void*) &lv_bar_get_start_value, "i", "(lv.obj)" } },
   { "get_value", { (const void*) &lv_bar_get_value, "i", "(lv.obj)" } },
   { "is_symmetrical", { (const void*) &lv_bar_is_symmetrical, "b", "(lv.obj)" } },
+  { "set_max_value", { (const void*) &lv_bar_set_max_value, "", "(lv.obj)i" } },
+  { "set_min_value", { (const void*) &lv_bar_set_min_value, "", "(lv.obj)i" } },
   { "set_mode", { (const void*) &lv_bar_set_mode, "", "(lv.obj)i" } },
   { "set_orientation", { (const void*) &lv_bar_set_orientation, "", "(lv.obj)i" } },
   { "set_range", { (const void*) &lv_bar_set_range, "", "(lv.obj)ii" } },
@@ -978,7 +1045,12 @@ const be_ntv_func_def_t lv_calendar_func[] = {
   { "set_chinese_mode", { (const void*) &lv_calendar_set_chinese_mode, "", "(lv.obj)b" } },
   { "set_day_names", { (const void*) &lv_calendar_set_day_names, "", "(lv.obj)c" } },
   { "set_month_shown", { (const void*) &lv_calendar_set_month_shown, "", "(lv.obj)ii" } },
+  { "set_shown_month", { (const void*) &lv_calendar_set_shown_month, "", "(lv.obj)i" } },
+  { "set_shown_year", { (const void*) &lv_calendar_set_shown_year, "", "(lv.obj)i" } },
   { "set_today_date", { (const void*) &lv_calendar_set_today_date, "", "(lv.obj)iii" } },
+  { "set_today_day", { (const void*) &lv_calendar_set_today_day, "", "(lv.obj)i" } },
+  { "set_today_month", { (const void*) &lv_calendar_set_today_month, "", "(lv.obj)i" } },
+  { "set_today_year", { (const void*) &lv_calendar_set_today_year, "", "(lv.obj)i" } },
 };
 #endif // BE_LV_WIDGET_CALENDAR
 
@@ -1004,6 +1076,7 @@ const be_ntv_func_def_t lv_chart_func[] = {
   { "add_series", { (const void*) &lv_chart_add_series, "lv.chart_series", "(lv.obj)(lv.color)i" } },
   { "get_cursor_point", { (const void*) &lv_chart_get_cursor_point, "i", "(lv.obj)(lv.chart_cursor)" } },
   { "get_first_point_center_offset", { (const void*) &lv_chart_get_first_point_center_offset, "i", "(lv.obj)" } },
+  { "get_hor_div_line_count", { (const void*) &lv_chart_get_hor_div_line_count, "i", "(lv.obj)" } },
   { "get_point_count", { (const void*) &lv_chart_get_point_count, "i", "(lv.obj)" } },
   { "get_point_pos_by_id", { (const void*) &lv_chart_get_point_pos_by_id, "", "(lv.obj)(lv.chart_series)ic" } },
   { "get_pressed_point", { (const void*) &lv_chart_get_pressed_point, "i", "(lv.obj)" } },
@@ -1012,17 +1085,23 @@ const be_ntv_func_def_t lv_chart_func[] = {
   { "get_series_x_array", { (const void*) &lv_chart_get_series_x_array, "lv.int_arr", "(lv.obj)(lv.chart_series)" } },
   { "get_series_y_array", { (const void*) &lv_chart_get_series_y_array, "lv.int_arr", "(lv.obj)(lv.chart_series)" } },
   { "get_type", { (const void*) &lv_chart_get_type, "i", "(lv.obj)" } },
+  { "get_update_mode", { (const void*) &lv_chart_get_update_mode, "i", "(lv.obj)" } },
+  { "get_ver_div_line_count", { (const void*) &lv_chart_get_ver_div_line_count, "i", "(lv.obj)" } },
   { "get_x_start_point", { (const void*) &lv_chart_get_x_start_point, "i", "(lv.obj)(lv.chart_series)" } },
   { "hide_series", { (const void*) &lv_chart_hide_series, "", "(lv.obj)(lv.chart_series)b" } },
   { "refresh", { (const void*) &lv_chart_refresh, "", "(lv.obj)" } },
+  { "remove_cursor", { (const void*) &lv_chart_remove_cursor, "", "(lv.obj)(lv.chart_cursor)" } },
   { "remove_series", { (const void*) &lv_chart_remove_series, "", "(lv.obj)(lv.chart_series)" } },
   { "set_all_values", { (const void*) &lv_chart_set_all_values, "", "(lv.obj)(lv.chart_series)i" } },
+  { "set_axis_max_value", { (const void*) &lv_chart_set_axis_max_value, "", "(lv.obj)ii" } },
+  { "set_axis_min_value", { (const void*) &lv_chart_set_axis_min_value, "", "(lv.obj)ii" } },
   { "set_axis_range", { (const void*) &lv_chart_set_axis_range, "", "(lv.obj)iii" } },
   { "set_cursor_point", { (const void*) &lv_chart_set_cursor_point, "", "(lv.obj)(lv.chart_cursor)(lv.chart_series)i" } },
   { "set_cursor_pos", { (const void*) &lv_chart_set_cursor_pos, "", "(lv.obj)(lv.chart_cursor)c" } },
   { "set_cursor_pos_x", { (const void*) &lv_chart_set_cursor_pos_x, "", "(lv.obj)(lv.chart_cursor)i" } },
   { "set_cursor_pos_y", { (const void*) &lv_chart_set_cursor_pos_y, "", "(lv.obj)(lv.chart_cursor)i" } },
   { "set_div_line_count", { (const void*) &lv_chart_set_div_line_count, "", "(lv.obj)ii" } },
+  { "set_hor_div_line_count", { (const void*) &lv_chart_set_hor_div_line_count, "", "(lv.obj)i" } },
   { "set_next_value", { (const void*) &lv_chart_set_next_value, "", "(lv.obj)(lv.chart_series)i" } },
   { "set_next_value2", { (const void*) &lv_chart_set_next_value2, "", "(lv.obj)(lv.chart_series)ii" } },
   { "set_point_count", { (const void*) &lv_chart_set_point_count, "", "(lv.obj)i" } },
@@ -1036,6 +1115,7 @@ const be_ntv_func_def_t lv_chart_func[] = {
   { "set_series_values2", { (const void*) &lv_chart_set_series_values2, "", "(lv.obj)(lv.chart_series)(lv.int_arr)(lv.int_arr)i" } },
   { "set_type", { (const void*) &lv_chart_set_type, "", "(lv.obj)i" } },
   { "set_update_mode", { (const void*) &lv_chart_set_update_mode, "", "(lv.obj)i" } },
+  { "set_ver_div_line_count", { (const void*) &lv_chart_set_ver_div_line_count, "", "(lv.obj)i" } },
   { "set_x_start_point", { (const void*) &lv_chart_set_x_start_point, "", "(lv.obj)(lv.chart_series)i" } },
 };
 #endif // BE_LV_WIDGET_CHART
@@ -1075,6 +1155,7 @@ const be_ntv_func_def_t lv_dropdown_func[] = {
   { "set_selected_highlight", { (const void*) &lv_dropdown_set_selected_highlight, "", "(lv.obj)b" } },
   { "set_symbol", { (const void*) &lv_dropdown_set_symbol, "", "(lv.obj)." } },
   { "set_text", { (const void*) &lv_dropdown_set_text, "", "(lv.obj)s" } },
+  { "set_text_static", { (const void*) &lv_dropdown_set_text_static, "", "(lv.obj)s" } },
 };
 #endif // BE_LV_WIDGET_DROPDOWN
 
@@ -1107,6 +1188,8 @@ const be_ntv_func_def_t lv_image_func[] = {
   { "set_offset_x", { (const void*) &lv_image_set_offset_x, "", "(lv.obj)i" } },
   { "set_offset_y", { (const void*) &lv_image_set_offset_y, "", "(lv.obj)i" } },
   { "set_pivot", { (const void*) &lv_image_set_pivot, "", "(lv.obj)ii" } },
+  { "set_pivot_x", { (const void*) &lv_image_set_pivot_x, "", "(lv.obj)i" } },
+  { "set_pivot_y", { (const void*) &lv_image_set_pivot_y, "", "(lv.obj)i" } },
   { "set_rotation", { (const void*) &lv_image_set_rotation, "", "(lv.obj)i" } },
   { "set_scale", { (const void*) &lv_image_set_scale, "", "(lv.obj)i" } },
   { "set_scale_x", { (const void*) &lv_image_set_scale_x, "", "(lv.obj)i" } },
@@ -1122,6 +1205,9 @@ const be_ntv_func_def_t lv_image_func[] = {
 #ifdef BE_LV_WIDGET_IMAGEBUTTON
 const be_ntv_func_def_t lv_imagebutton_func[] = {
   { "set_src", { (const void*) &lv_imagebutton_set_src, "", "(lv.obj)i..." } },
+  { "set_src_left", { (const void*) &lv_imagebutton_set_src_left, "", "(lv.obj)i." } },
+  { "set_src_mid", { (const void*) &lv_imagebutton_set_src_mid, "", "(lv.obj)i." } },
+  { "set_src_right", { (const void*) &lv_imagebutton_set_src_right, "", "(lv.obj)i." } },
   { "set_state", { (const void*) &lv_imagebutton_set_state, "", "(lv.obj)i" } },
 };
 #endif // BE_LV_WIDGET_IMAGEBUTTON
@@ -1169,6 +1255,7 @@ const be_ntv_func_def_t lv_label_func[] = {
 #ifdef BE_LV_WIDGET_LED
 const be_ntv_func_def_t lv_led_func[] = {
   { "get_brightness", { (const void*) &lv_led_get_brightness, "i", "(lv.obj)" } },
+  { "get_color", { (const void*) &lv_led_get_color, "lv.color", "(lv.obj)" } },
   { "off", { (const void*) &lv_led_off, "", "(lv.obj)" } },
   { "on", { (const void*) &lv_led_on, "", "(lv.obj)" } },
   { "set_brightness", { (const void*) &lv_led_set_brightness, "", "(lv.obj)i" } },
@@ -1213,6 +1300,8 @@ const be_ntv_func_def_t lv_menu_func[] = {
   { "get_cur_sidebar_page", { (const void*) &lv_menu_get_cur_sidebar_page, "lv.obj", "(lv.obj)" } },
   { "get_main_header", { (const void*) &lv_menu_get_main_header, "lv.obj", "(lv.obj)" } },
   { "get_main_header_back_button", { (const void*) &lv_menu_get_main_header_back_button, "lv.obj", "(lv.obj)" } },
+  { "get_mode_header", { (const void*) &lv_menu_get_mode_header, "i", "(lv.obj)" } },
+  { "get_mode_root_back_button", { (const void*) &lv_menu_get_mode_root_back_button, "i", "(lv.obj)" } },
   { "get_sidebar_header", { (const void*) &lv_menu_get_sidebar_header, "lv.obj", "(lv.obj)" } },
   { "get_sidebar_header_back_button", { (const void*) &lv_menu_get_sidebar_header_back_button, "lv.obj", "(lv.obj)" } },
   { "set_load_page_event", { (const void*) &lv_menu_set_load_page_event, "", "(lv.obj)(lv.obj)(lv.obj)" } },
@@ -1256,6 +1345,7 @@ const be_ntv_func_def_t lv_msgbox_func[] = {
   { "add_footer_button", { (const void*) &lv_msgbox_add_footer_button, "lv.obj", "(lv.obj)s" } },
   { "add_header_button", { (const void*) &lv_msgbox_add_header_button, "lv.obj", "(lv.obj)." } },
   { "add_text", { (const void*) &lv_msgbox_add_text, "lv.obj", "(lv.obj)s" } },
+  { "add_text_fmt", { (const void*) &lv_msgbox_add_text_fmt, "lv.obj", "(lv.obj)s[......]" } },
   { "add_title", { (const void*) &lv_msgbox_add_title, "lv.obj", "(lv.obj)s" } },
   { "close", { (const void*) &lv_msgbox_close, "", "(lv.obj)" } },
   { "close_async", { (const void*) &lv_msgbox_close_async, "", "(lv.obj)" } },
@@ -1271,6 +1361,7 @@ const be_ntv_func_def_t lv_msgbox_func[] = {
 const be_ntv_func_def_t lv_roller_func[] = {
   { "get_option_cnt", { (const void*) &lv_roller_get_option_count, "i", "(lv.obj)" } },
   { "get_option_count", { (const void*) &lv_roller_get_option_count, "i", "(lv.obj)" } },
+  { "get_option_str", { (const void*) &lv_roller_get_option_str, "i", "(lv.obj)ici" } },
   { "get_options", { (const void*) &lv_roller_get_options, "s", "(lv.obj)" } },
   { "get_selected", { (const void*) &lv_roller_get_selected, "i", "(lv.obj)" } },
   { "get_selected_str", { (const void*) &lv_roller_get_selected_str, "", "(lv.obj)ci" } },
@@ -1302,10 +1393,14 @@ const be_ntv_func_def_t lv_scale_func[] = {
   { "set_label_show", { (const void*) &lv_scale_set_label_show, "", "(lv.obj)b" } },
   { "set_line_needle_value", { (const void*) &lv_scale_set_line_needle_value, "", "(lv.obj)(lv.obj)ii" } },
   { "set_major_tick_every", { (const void*) &lv_scale_set_major_tick_every, "", "(lv.obj)i" } },
+  { "set_max_value", { (const void*) &lv_scale_set_max_value, "", "(lv.obj)i" } },
+  { "set_min_value", { (const void*) &lv_scale_set_min_value, "", "(lv.obj)i" } },
   { "set_mode", { (const void*) &lv_scale_set_mode, "", "(lv.obj)i" } },
   { "set_post_draw", { (const void*) &lv_scale_set_post_draw, "", "(lv.obj)b" } },
   { "set_range", { (const void*) &lv_scale_set_range, "", "(lv.obj)ii" } },
   { "set_rotation", { (const void*) &lv_scale_set_rotation, "", "(lv.obj)i" } },
+  { "set_section_max_value", { (const void*) &lv_scale_set_section_max_value, "", "(lv.obj)(lv.scale_section)i" } },
+  { "set_section_min_value", { (const void*) &lv_scale_set_section_min_value, "", "(lv.obj)(lv.scale_section)i" } },
   { "set_section_range", { (const void*) &lv_scale_set_section_range, "", "(lv.obj)(lv.scale_section)ii" } },
   { "set_section_style_indicator", { (const void*) &lv_scale_set_section_style_indicator, "", "(lv.obj)(lv.scale_section)(lv.style)" } },
   { "set_section_style_items", { (const void*) &lv_scale_set_section_style_items, "", "(lv.obj)(lv.scale_section)(lv.style)" } },
@@ -1334,6 +1429,8 @@ const be_ntv_func_def_t lv_slider_func[] = {
   { "get_value", { (const void*) &lv_slider_get_value, "i", "(lv.obj)" } },
   { "is_dragged", { (const void*) &lv_slider_is_dragged, "b", "(lv.obj)" } },
   { "is_symmetrical", { (const void*) &lv_slider_is_symmetrical, "b", "(lv.obj)" } },
+  { "set_max_value", { (const void*) &lv_slider_set_max_value, "", "(lv.obj)i" } },
+  { "set_min_value", { (const void*) &lv_slider_set_min_value, "", "(lv.obj)i" } },
   { "set_mode", { (const void*) &lv_slider_set_mode, "", "(lv.obj)i" } },
   { "set_orientation", { (const void*) &lv_slider_set_orientation, "", "(lv.obj)i" } },
   { "set_range", { (const void*) &lv_slider_set_range, "", "(lv.obj)ii" } },
@@ -1348,6 +1445,7 @@ const be_ntv_func_def_t lv_span_func[] = {
   { "get_style", { (const void*) &lv_span_get_style, "lv.style", "(lv.span)" } },
   { "get_text", { (const void*) &lv_span_get_text, "s", "(lv.span)" } },
   { "set_text", { (const void*) &lv_span_set_text, "", "(lv.span)s" } },
+  { "set_text_fmt", { (const void*) &lv_span_set_text_fmt, "", "(lv.span)s[......]" } },
   { "set_text_static", { (const void*) &lv_span_set_text_static, "", "(lv.span)s" } },
 };
 #endif // BE_LV_WIDGET_SPAN
@@ -1377,6 +1475,7 @@ const be_ntv_func_def_t lv_spangroup_func[] = {
   { "set_overflow", { (const void*) &lv_spangroup_set_overflow, "", "(lv.obj)i" } },
   { "set_span_style", { (const void*) &lv_spangroup_set_span_style, "", "(lv.obj)(lv.span)(lv.style)" } },
   { "set_span_text", { (const void*) &lv_spangroup_set_span_text, "", "(lv.obj)(lv.span)s" } },
+  { "set_span_text_fmt", { (const void*) &lv_spangroup_set_span_text_fmt, "", "(lv.obj)(lv.span)s[......]" } },
   { "set_span_text_static", { (const void*) &lv_spangroup_set_span_text_static, "", "(lv.obj)(lv.span)s" } },
 };
 #endif // BE_LV_WIDGET_SPANGROUP
@@ -1385,13 +1484,22 @@ const be_ntv_func_def_t lv_spangroup_func[] = {
 #ifdef BE_LV_WIDGET_SPINBOX
 const be_ntv_func_def_t lv_spinbox_func[] = {
   { "decrement", { (const void*) &lv_spinbox_decrement, "", "(lv.obj)" } },
+  { "get_dec_point_pos", { (const void*) &lv_spinbox_get_dec_point_pos, "i", "(lv.obj)" } },
+  { "get_digit_count", { (const void*) &lv_spinbox_get_digit_count, "i", "(lv.obj)" } },
+  { "get_digit_step_direction", { (const void*) &lv_spinbox_get_digit_step_direction, "i", "(lv.obj)" } },
+  { "get_max_value", { (const void*) &lv_spinbox_get_max_value, "i", "(lv.obj)" } },
+  { "get_min_value", { (const void*) &lv_spinbox_get_min_value, "i", "(lv.obj)" } },
   { "get_rollover", { (const void*) &lv_spinbox_get_rollover, "b", "(lv.obj)" } },
   { "get_step", { (const void*) &lv_spinbox_get_step, "i", "(lv.obj)" } },
   { "get_value", { (const void*) &lv_spinbox_get_value, "i", "(lv.obj)" } },
   { "increment", { (const void*) &lv_spinbox_increment, "", "(lv.obj)" } },
   { "set_cursor_pos", { (const void*) &lv_spinbox_set_cursor_pos, "", "(lv.obj)i" } },
+  { "set_dec_point_pos", { (const void*) &lv_spinbox_set_dec_point_pos, "", "(lv.obj)i" } },
+  { "set_digit_count", { (const void*) &lv_spinbox_set_digit_count, "", "(lv.obj)i" } },
   { "set_digit_format", { (const void*) &lv_spinbox_set_digit_format, "", "(lv.obj)ii" } },
   { "set_digit_step_direction", { (const void*) &lv_spinbox_set_digit_step_direction, "", "(lv.obj)i" } },
+  { "set_max_value", { (const void*) &lv_spinbox_set_max_value, "", "(lv.obj)i" } },
+  { "set_min_value", { (const void*) &lv_spinbox_set_min_value, "", "(lv.obj)i" } },
   { "set_range", { (const void*) &lv_spinbox_set_range, "", "(lv.obj)ii" } },
   { "set_rollover", { (const void*) &lv_spinbox_set_rollover, "", "(lv.obj)b" } },
   { "set_step", { (const void*) &lv_spinbox_set_step, "", "(lv.obj)i" } },
@@ -1404,7 +1512,12 @@ const be_ntv_func_def_t lv_spinbox_func[] = {
 /* `lv_spinner` methods */
 #ifdef BE_LV_WIDGET_SPINNER
 const be_ntv_func_def_t lv_spinner_func[] = {
+  { "get_anim_duration", { (const void*) &lv_spinner_get_anim_duration, "i", "(lv.obj)" } },
+  { "get_arc_sweep", { (const void*) &lv_spinner_get_arc_sweep, "i", "(lv.obj)" } },
+  { "set_anim_duration", { (const void*) &lv_spinner_set_anim_duration, "", "(lv.obj)i" } },
   { "set_anim_params", { (const void*) &lv_spinner_set_anim_params, "", "(lv.obj)ii" } },
+  { "set_anim_time", { (const void*) &lv_spinner_set_anim_duration, "", "(lv.obj)i" } },
+  { "set_arc_sweep", { (const void*) &lv_spinner_set_arc_sweep, "", "(lv.obj)i" } },
 };
 #endif // BE_LV_WIDGET_SPINNER
 
@@ -1452,13 +1565,15 @@ const be_ntv_func_def_t lv_tabview_func[] = {
   { "get_tab_act", { (const void*) &lv_tabview_get_tab_active, "i", "(lv.obj)" } },
   { "get_tab_active", { (const void*) &lv_tabview_get_tab_active, "i", "(lv.obj)" } },
   { "get_tab_bar", { (const void*) &lv_tabview_get_tab_bar, "lv.obj", "(lv.obj)" } },
+  { "get_tab_bar_position", { (const void*) &lv_tabview_get_tab_bar_position, "i", "(lv.obj)" } },
   { "get_tab_btns", { (const void*) &lv_tabview_get_tab_bar, "lv.obj", "(lv.obj)" } },
+  { "get_tab_button", { (const void*) &lv_tabview_get_tab_button, "lv.obj", "(lv.obj)i" } },
   { "get_tab_count", { (const void*) &lv_tabview_get_tab_count, "i", "(lv.obj)" } },
-  { "rename_tab", { (const void*) &lv_tabview_rename_tab, "", "(lv.obj)is" } },
   { "set_act", { (const void*) &lv_tabview_set_active, "", "(lv.obj)ii" } },
   { "set_active", { (const void*) &lv_tabview_set_active, "", "(lv.obj)ii" } },
   { "set_tab_bar_position", { (const void*) &lv_tabview_set_tab_bar_position, "", "(lv.obj)i" } },
   { "set_tab_bar_size", { (const void*) &lv_tabview_set_tab_bar_size, "", "(lv.obj)i" } },
+  { "set_tab_text", { (const void*) &lv_tabview_set_tab_text, "", "(lv.obj)is" } },
 };
 #endif // BE_LV_WIDGET_TABVIEW
 
@@ -1488,6 +1603,7 @@ const be_ntv_func_def_t lv_textarea_func[] = {
   { "get_text", { (const void*) &lv_textarea_get_text, "s", "(lv.obj)" } },
   { "get_text_selection", { (const void*) &lv_textarea_get_text_selection, "b", "(lv.obj)" } },
   { "set_accepted_chars", { (const void*) &lv_textarea_set_accepted_chars, "", "(lv.obj)s" } },
+  { "set_accepted_chars_static", { (const void*) &lv_textarea_set_accepted_chars_static, "", "(lv.obj)s" } },
   { "set_align", { (const void*) &lv_textarea_set_align, "", "(lv.obj)i" } },
   { "set_cursor_click_pos", { (const void*) &lv_textarea_set_cursor_click_pos, "", "(lv.obj)b" } },
   { "set_cursor_pos", { (const void*) &lv_textarea_set_cursor_pos, "", "(lv.obj)i" } },
@@ -1533,6 +1649,7 @@ const be_ntv_func_def_t lv_colorwheel_func[] = {
 extern const bclass be_class_lv_anim;
 extern const bclass be_class_lv_animimg;
 extern const bclass be_class_lv_arc;
+extern const bclass be_class_lv_arclabel;
 extern const bclass be_class_lv_bar;
 extern const bclass be_class_lv_button;
 extern const bclass be_class_lv_buttonmatrix;
@@ -1590,6 +1707,9 @@ const be_ntv_class_def_t lv_classes[] = {
 #ifdef BE_LV_WIDGET_ARC
   { "lv_arc", &be_class_lv_arc, lv_arc_func, sizeof(lv_arc_func) / sizeof(lv_arc_func[0]) },
 #endif // BE_LV_WIDGET_ARC
+#ifdef BE_LV_WIDGET_ARCLABEL
+  { "lv_arclabel", &be_class_lv_arclabel, lv_arclabel_func, sizeof(lv_arclabel_func) / sizeof(lv_arclabel_func[0]) },
+#endif // BE_LV_WIDGET_ARCLABEL
 #ifdef BE_LV_WIDGET_BAR
   { "lv_bar", &be_class_lv_bar, lv_bar_func, sizeof(lv_bar_func) / sizeof(lv_bar_func[0]) },
 #endif // BE_LV_WIDGET_BAR
@@ -1740,6 +1860,10 @@ const size_t lv_classes_size = sizeof(lv_classes) / sizeof(lv_classes[0]);
 #ifdef BE_LV_WIDGET_ARC
   int be_ntv_lv_arc_init(bvm *vm)       { return be_call_c_func(vm, (void*) &lv_arc_create, "+_p", "(lv.obj)"); }
 #endif // BE_LV_WIDGET_ARC
+  /* `lv_arclabel` methods */
+#ifdef BE_LV_WIDGET_ARCLABEL
+  int be_ntv_lv_arclabel_init(bvm *vm)       { return be_call_c_func(vm, (void*) &lv_arclabel_create, "+_p", "(lv.obj)"); }
+#endif // BE_LV_WIDGET_ARCLABEL
   /* `lv_bar` methods */
 #ifdef BE_LV_WIDGET_BAR
   int be_ntv_lv_bar_init(bvm *vm)       { return be_call_c_func(vm, (void*) &lv_bar_create, "+_p", "(lv.obj)"); }

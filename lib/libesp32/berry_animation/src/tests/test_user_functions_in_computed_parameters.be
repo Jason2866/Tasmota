@@ -10,24 +10,12 @@ import "user_functions" as user_funcs
 def test_transpilation_case(dsl_code, expected_user_function, test_name)
   print(f"\n  Testing: {test_name}")
   
-  var lexer = animation_dsl.DSLLexer(dsl_code)
-  var tokens
-  
-  try
-    tokens = lexer.tokenize()
-  except "lexical_error" as e, msg
-    print(f"    ❌ Lexer error: {msg}")
-    return false
-  end
-  
-  var transpiler = animation_dsl.SimpleDSLTranspiler(tokens)
+  var lexer = animation_dsl.create_lexer(dsl_code)
+  var transpiler = animation_dsl.SimpleDSLTranspiler(lexer)
   var generated_code = transpiler.transpile()
   
   if generated_code == nil
     print("    ❌ Transpilation failed:")
-    for error : transpiler.errors
-      print(f"      {error}")
-    end
     return false
   end
   
@@ -70,7 +58,7 @@ def test_user_function_detection()
   end
   
   # Check that non-user functions are not detected as user functions
-  var non_user_functions = ["pulsating_animation", "solid", "abs", "min", "max", "breathing", "fire", "sparkle"]
+  var non_user_functions = ["breathe", "solid", "abs", "min", "max", "breathing", "fire", "sparkle"]
   
   for func_name : non_user_functions
     if animation.is_user_function(func_name)
@@ -91,7 +79,7 @@ def test_user_function_in_computed_parameter()
   var dsl_code1 = 
     "import user_functions\n"
     "set strip_len = strip_length()\n"
-    "animation test = pulsating_animation(color=red, period=2s)\n"
+    "animation test = breathe(color=red, period=2s)\n"
     "test.opacity = rand_demo()\n"
     "run test"
   

@@ -157,7 +157,7 @@ SemaphoreHandle_t WebcamMutex = nullptr;
 
 #ifndef USE_WEBCAM_SETUP_ONLY
 bool HttpCheckPriviledgedAccess(bool);
-extern ESP8266WebServer *Webserver;
+extern TasmotaWebServer *Webserver;
 
 // use mutex like:
 // TasAutoMutex localmutex(&WebcamMutex, "somename");
@@ -192,7 +192,7 @@ struct {
   uint8_t  stream_active;
 #ifndef USE_WEBCAM_SETUP_ONLY
   WiFiClient client;
-  ESP8266WebServer *CamServer;
+  TasmotaWebServer *CamServer;
   struct PICSTORE picstore[MAX_PICSTORE];
 #ifdef ENABLE_RTSPSERVER
   WiFiServer *rtspp;
@@ -467,8 +467,13 @@ uint32_t WcSetup(int32_t fsiz) {
   bool psram = UsePSRAM();
   if (psram) {
     config.frame_size = FRAMESIZE_UXGA;
+#ifndef USE_WEBCAM_SETUP_ONLY
     config.jpeg_quality = 10;
     config.fb_count = 2;
+#else
+    config.jpeg_quality = 4; // start on the quality side for post processing
+    config.fb_count = 1; // we do not really want to stream in pure Berry
+#endif
     AddLog(LOG_LEVEL_DEBUG, PSTR("CAM: PSRAM found"));
   } else {
     config.frame_size = FRAMESIZE_VGA;
@@ -1054,7 +1059,7 @@ uint32_t WcSetStreamserver(uint32_t flag) {
   if (flag) {
     if (!Wc.CamServer) {
       Wc.stream_active = 0;
-      Wc.CamServer = new ESP8266WebServer(81);
+      Wc.CamServer = new TasmotaWebServer(81);
       Wc.CamServer->on("/", HandleWebcamRoot);
       Wc.CamServer->on("/cam.mjpeg", HandleWebcamMjpeg);
       Wc.CamServer->on("/cam.jpg", HandleWebcamMjpeg);
@@ -1079,7 +1084,7 @@ void WcInterruptControl() {
 
   WcSetStreamserver(Settings->webcam_config.stream);
   if(Wc.up == 0) {
-    WcSetup(Settings->webcam_config.resolution);
+    WcSetup((int32_t)Settings->webcam_config.resolution);
   }
 
 }
@@ -1496,7 +1501,7 @@ void CmndWebcamClock(void){
 }
 
 void CmndWebcamInit(void) {
-  WcSetup(Settings->webcam_config.resolution);
+  WcSetup((int32_t)Settings->webcam_config.resolution);
   WcInterruptControl();
   ResponseCmndDone();
 }
@@ -1589,7 +1594,7 @@ bool Xdrv81(uint32_t function) {
       WcInit();
       break;
     case FUNC_INIT:
-      if(Wc.up == 0) WcSetup(Settings->webcam_config.resolution);
+      if(Wc.up == 0) WcSetup((int32_t)Settings->webcam_config.resolution);
       break;
     case FUNC_ACTIVE:
       result = true;

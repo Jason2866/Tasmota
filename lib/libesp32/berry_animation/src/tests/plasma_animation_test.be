@@ -12,11 +12,10 @@ def test_plasma_animation_basic()
   
   # Create LED strip and engine for testing
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Test with default parameters
   var plasma_anim = animation.plasma_animation(engine)
-  plasma_anim.name = "test_plasma"
   
   assert(plasma_anim != nil, "PlasmaAnimation should be created")
   assert(plasma_anim.freq_x == 32, "Default freq_x should be 32")
@@ -36,7 +35,7 @@ def test_plasma_animation_custom()
   
   # Create LED strip and engine for testing
   var strip = global.Leds(20)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Test with custom parameters using virtual member assignment
   var plasma_anim = animation.plasma_animation(engine)
@@ -50,7 +49,6 @@ def test_plasma_animation_custom()
   plasma_anim.priority = 15
   plasma_anim.duration = 5000
   plasma_anim.loop = false
-  plasma_anim.name = "custom_plasma"
   
   assert(plasma_anim.freq_x == 50, "Custom freq_x should be 50")
   assert(plasma_anim.freq_y == 40, "Custom freq_y should be 40")
@@ -71,10 +69,9 @@ def test_plasma_animation_parameters()
   
   # Create LED strip and engine for testing
   var strip = global.Leds(15)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   var plasma_anim = animation.plasma_animation(engine)
-  plasma_anim.name = "param_test"
   
   # Test parameter changes using virtual member assignment
   plasma_anim.freq_x = 60
@@ -102,14 +99,13 @@ def test_plasma_animation_update_render()
   
   # Create LED strip and engine for testing
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   var plasma_anim = animation.plasma_animation(engine)
   plasma_anim.color = 0xFFFF0000
   plasma_anim.freq_x = 40
   plasma_anim.freq_y = 30
   plasma_anim.time_speed = 60
-  plasma_anim.name = "update_test"
   
   var frame = animation.frame_buffer(10)
   
@@ -118,11 +114,11 @@ def test_plasma_animation_update_render()
   assert(plasma_anim.is_running == true, "Animation should be running after start")
   
   # Test update
-  var result = plasma_anim.update(1500)
-  assert(result == true, "Update should return true for running animation")
+  plasma_anim.update(1500)
+  assert(plasma_anim.is_running == true, "Animation should still be running after update")
   
   # Test render
-  result = plasma_anim.render(frame, 1500)
+  var result = plasma_anim.render(frame, 1500, engine.strip_length)
   assert(result == true, "Render should return true for running animation")
   
   # Check that colors were set (should not all be black)
@@ -146,13 +142,12 @@ def test_plasma_constructors()
   
   # Create LED strip and engine for testing
   var strip = global.Leds(15)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   # Test plasma_rainbow
   var rainbow_plasma = animation.plasma_rainbow(engine)
   assert(rainbow_plasma != nil, "plasma_rainbow should create animation")
   assert(rainbow_plasma.time_speed == 50, "Rainbow plasma should have correct time_speed")
-  assert(rainbow_plasma.name == "plasma_rainbow", "Rainbow plasma should have correct name")
   
   # Test plasma_fast
   var fast_plasma = animation.plasma_fast(engine)
@@ -170,7 +165,7 @@ def test_plasma_tostring()
   
   # Create LED strip and engine for testing
   var strip = global.Leds(12)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   
   var plasma_anim = animation.plasma_animation(engine)
   plasma_anim.freq_x = 55
@@ -179,7 +174,6 @@ def test_plasma_tostring()
   plasma_anim.phase_y = 70
   plasma_anim.time_speed = 85
   plasma_anim.blend_mode = 1
-  plasma_anim.name = "string_test"
   
   var str_repr = str(plasma_anim)
   

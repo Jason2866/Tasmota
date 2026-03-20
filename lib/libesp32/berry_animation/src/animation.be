@@ -33,16 +33,6 @@ global.animation = animation
 # Format: 0xAABBCCDD (AA=major, BB=minor, CC=patch, DD=build)
 animation.VERSION = 0x00010000
 
-# Convert version number to human-readable string format "major.minor.patch"
-def animation_version_string(version_num)
-  if version_num == nil version_num = animation.VERSION end
-  var major = (version_num >> 24) & 0xFF
-  var minor = (version_num >> 16) & 0xFF
-  var patch = (version_num >> 8) & 0xFF
-  return f"{major}.{minor}.{patch}"
-end
-animation.version_string = animation_version_string
-
 import sys
 
 # Helper function to register all exports from imported modules into the main animation object
@@ -57,11 +47,15 @@ end
 # Import core framework components
 # These provide the fundamental architecture for the animation system
 
+# Parameter constraint encoder for PARAMS definitions
+import "core/param_encoder" as param_encoder
+register_to_animation(param_encoder)
+
 # Mathematical functions for use in closures and throughout the framework
 import "core/math_functions" as math_functions
 register_to_animation(math_functions)
 
-# Base class for parameter management - shared by Animation and ValueProvider
+# Base class for parameter management and playable behavior - shared by Animation and ValueProvider
 import "core/parameterized_object" as parameterized_object
 register_to_animation(parameterized_object)
 
@@ -76,6 +70,10 @@ register_to_animation(animation_base)
 # Sequence manager for complex animation choreography
 import "core/sequence_manager" as sequence_manager
 register_to_animation(sequence_manager)
+
+# Engine proxy - combines rendering and orchestration
+import "core/engine_proxy" as engine_proxy
+register_to_animation(engine_proxy)
 
 # Unified animation engine - central engine for all animations
 # Provides priority-based layering, automatic blending, and performance optimization
@@ -117,10 +115,8 @@ import "providers/color_provider.be" as color_provider
 register_to_animation(color_provider)
 import "providers/color_cycle_color_provider.be" as color_cycle_color_provider
 register_to_animation(color_cycle_color_provider)
-import "providers/composite_color_provider.be" as composite_color_provider
-register_to_animation(composite_color_provider)
-import "providers/static_color_provider.be" as static_color_provider
-register_to_animation(static_color_provider)
+# import "providers/composite_color_provider.be" as composite_color_provider
+# register_to_animation(composite_color_provider)
 import "providers/rich_palette_color_provider.be" as rich_palette_color_provider
 register_to_animation(rich_palette_color_provider)
 import "providers/breathe_color_provider.be" as breathe_color_provider
@@ -129,30 +125,30 @@ register_to_animation(breathe_color_provider)
 # Import animations
 import "animations/solid" as solid_impl
 register_to_animation(solid_impl)
-import "animations/beacon" as beacon_animation
-register_to_animation(beacon_animation)
-import "animations/crenel_position" as crenel_position_animation
-register_to_animation(crenel_position_animation)
-import "animations/breathe" as breathe_animation
-register_to_animation(breathe_animation)
-import "animations/palette_pattern" as palette_pattern_animation
+import "animations/beacon" as beacon
+register_to_animation(beacon)
+import "animations/crenel" as crenel
+register_to_animation(crenel)
+import "animations/breathe" as breathe
+register_to_animation(breathe)
+import "animations/palette_gradient" as palette_pattern_animation
 register_to_animation(palette_pattern_animation)
-import "animations/comet" as comet_animation
-register_to_animation(comet_animation)
-import "animations/fire" as fire_animation
-register_to_animation(fire_animation)
-import "animations/twinkle" as twinkle_animation
-register_to_animation(twinkle_animation)
-import "animations/gradient" as gradient_animation
-register_to_animation(gradient_animation)
-import "animations/noise" as noise_animation
-register_to_animation(noise_animation)
+import "animations/comet" as comet
+register_to_animation(comet)
+# import "animations/fire" as fire
+# register_to_animation(fire)
+import "animations/twinkle" as twinkle
+register_to_animation(twinkle)
+import "animations/gradient" as gradient
+register_to_animation(gradient)
+import "animations/palette_meter" as palette_meter
+register_to_animation(palette_meter)
 # import "animations/plasma" as plasma_animation
 # register_to_animation(plasma_animation)
 # import "animations/sparkle" as sparkle_animation
 # register_to_animation(sparkle_animation)
-import "animations/wave" as wave_animation
-register_to_animation(wave_animation)
+# import "animations/wave" as wave
+# register_to_animation(wave)
 # import "animations/shift" as shift_animation
 # register_to_animation(shift_animation)
 # import "animations/bounce" as bounce_animation
@@ -165,12 +161,10 @@ register_to_animation(wave_animation)
 # Import palette examples
 import "animations/palettes" as palettes
 register_to_animation(palettes)
-# import "animations/all_wled_palettes" as all_wled_palettes
-# register_to_animation(all_wled_palettes)
 
 # Import specialized animation classes
-import "animations/rich_palette_animation" as rich_palette_animation
-register_to_animation(rich_palette_animation)
+import "animations/rich_palette" as rich_palette
+register_to_animation(rich_palette)
 
 # DSL components are now in separate animation_dsl module
 
@@ -178,6 +172,10 @@ register_to_animation(rich_palette_animation)
 #
 # It keeps track of previously created engines and strips to reuse
 # when called with the same arguments
+#
+# Animation brightness is scaled by the bri value saved in `Leds` that is set
+# when `Leds` is initialized. Use engine.strip.set_bri(value) [0-255] to change
+# the brightness scaling applied by `Leds`.
 #
 # Parameters:
 #   l - list of arguments (vararg)

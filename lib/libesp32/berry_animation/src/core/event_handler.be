@@ -46,18 +46,17 @@ class EventHandler
   end
   
   # Get handler info for debugging
-  def get_info()
-    return {
-      "event_name": self.event_name,
-      "priority": self.priority,
-      "is_active": self.is_active,
-      "has_condition": self.condition != nil,
-      "metadata": self.metadata
-    }
-  end
+  # def get_info()
+  #   return {
+  #     "event_name": self.event_name,
+  #     "priority": self.priority,
+  #     "is_active": self.is_active,
+  #     "has_condition": self.condition != nil,
+  #     "metadata": self.metadata
+  #   }
+  # end
 end
 
-#@ solidify:EventManager,weak
 class EventManager
   var handlers        # Map of event_name -> list of handlers
   var global_handlers # Handlers that respond to all events

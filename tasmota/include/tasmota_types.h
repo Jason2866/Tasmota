@@ -199,7 +199,7 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
     uint32_t no_export_energy_today : 1;   // bit 16 (v14.3.0.7) - SetOption162 - (Energy) Do not add export energy to energy today (1)
     uint32_t gui_device_name : 1;          // bit 17 (v14.4.1.1) - SetOption163 - GUI_NOSHOW_DEVICENAME - (GUI) Disable display of GUI device name (1)
     uint32_t wizmote_enabled : 1;          // bit 18 (v14.4.1.4) - SetOption164 - (WizMote) Enable WiZ Smart Remote support (1)
-    uint32_t spare19 : 1;                  // bit 19
+    uint32_t tls_use_ecdsa : 1;            // bit 19 (v15.0.1.0) - SetOption165 - (TLS) Enable ECDSA validation in addition to RSA
     uint32_t spare20 : 1;                  // bit 20
     uint32_t spare21 : 1;                  // bit 21
     uint32_t spare22 : 1;                  // bit 22
@@ -279,7 +279,7 @@ typedef union {
     uint32_t ex_serbridge_console : 1;     // bit 11 (v11.1.0.4) - (v14.1.0.2) Replaced by CMND_SSERIALMODE
     uint32_t telegram_disable_af : 1;      // bit 12 (v14.0.0.2) - CMND_TMSTATE 6/7 - Disable Telegram auto-fingerprint fix
     uint32_t dali_light : 1;               // bit 13 (v14.2.0.6) - CMND_DALILIGHT - Enable Tasmota light controls for DALI
-    uint32_t spare14 : 1;                  // bit 14
+    uint32_t dali_no_broadcast_slider : 1; // bit 14 (v15.1.0.3) - CMND_DALIBROADCASTSLIDER - Disable display of broadcast slider
     uint32_t spare15 : 1;                  // bit 15
     uint32_t spare16 : 1;                  // bit 16
     uint32_t spare17 : 1;                  // bit 17
@@ -889,10 +889,7 @@ typedef struct {
   uint8_t       hdmi_cec_device_type;      // F61  - v13.1.0.1 (was ex_modbus_sbaudrate v12.2.0.5)
   uint8_t       modbus_sconfig;            // F62
   uint8_t       windmeter_measure_intvl;   // F63
-
-  uint8_t       free_f64[8];               // F64 - Decrement if adding new Setting variables just above and below
-
-  // Only 32 bit boundary variables below
+  uint32_t      i2c_drivers2[2];           // F64
   float         ms5837_pressure_offset;    // F6C
   uint32_t      touch_threshold;           // F70
   SOBitfield6   flag6;                     // F74

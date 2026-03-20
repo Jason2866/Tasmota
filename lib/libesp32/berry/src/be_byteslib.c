@@ -806,7 +806,10 @@ static int m_asstring(bvm *vm)
 {
     buf_impl attr = bytes_check_data(vm, 0);
     check_ptr(vm, &attr);
-    size_t safe_len = strnlen((const char*) attr.bufptr, attr.len);
+    /* equivalent to strnlen() */
+    const char* str = (const char*) attr.bufptr;
+    const char* found = memchr(str, '\0', attr.len);
+    size_t safe_len = found ? (size_t)(found - str) : (size_t)attr.len;
     be_pushnstring(vm, (const char*) attr.bufptr, safe_len);
     be_return(vm);
 }
@@ -851,8 +854,12 @@ static int m_add(bvm *vm)
     if (argc >= 2 && be_isint(vm, 2)) {
         int32_t v = be_toint(vm, 2);
         int vsize = 1;
-        if (argc >= 3 && be_isint(vm, 3)) {
-            vsize = be_toint(vm, 3);
+        if (argc >= 3) {
+            if (be_isint(vm, 3)) {
+                vsize = be_toint(vm, 3);
+            } else {
+                goto type_error;
+            }
         }
         switch (vsize) {
             case 0:                               break;
@@ -870,6 +877,8 @@ static int m_add(bvm *vm)
         m_write_attributes(vm, 1, &attr);  /* update attributes */
         be_return(vm);
     }
+type_error:
+    be_raise(vm, "type_error", "operands must be int");
     be_return_nil(vm);
 }
 
@@ -925,6 +934,7 @@ static int m_get(bvm *vm, bbool sign)
         be_pushint(vm, ret);
         be_return(vm);
     }
+    be_raise(vm, "type_error", "operands must be int");
     be_return_nil(vm);
 }
 
@@ -955,6 +965,7 @@ static int m_getfloat(bvm *vm)
         be_pushreal(vm, ret_f);
         be_return(vm);
     }
+    be_raise(vm, "type_error", "operands must be int");
     be_return_nil(vm);
 }
 
@@ -987,8 +998,12 @@ static int m_set(bvm *vm)
         int32_t idx = be_toint(vm, 2);
         int32_t value = be_toint(vm, 3);
         int vsize = 1;
-        if (argc >= 4 && be_isint(vm, 4)) {
-            vsize = be_toint(vm, 4);
+        if (argc >= 4) {
+            if (be_isint(vm, 4)) {
+                vsize = be_toint(vm, 4);
+            } else {
+                goto type_error;
+            }
         }
         if (idx < 0) {
             idx = attr.len + idx;       /* if index is negative, count from end */
@@ -1012,6 +1027,8 @@ static int m_set(bvm *vm)
         // m_write_attributes(vm, 1, &attr);  /* update attributes */
         be_return_nil(vm);
     }
+type_error:
+    be_raise(vm, "type_error", "operands must be int");
     be_return_nil(vm);
 }
 
@@ -1043,6 +1060,7 @@ static int m_setfloat(bvm *vm)
         }
         be_return_nil(vm);
     }
+    be_raise(vm, "type_error", "operands must be int or float");
     be_return_nil(vm);
 }
 
@@ -1069,6 +1087,7 @@ static int m_addfloat(bvm *vm)
         m_write_attributes(vm, 1, &attr);  /* update attributes */
         be_return(vm);
     }
+    be_raise(vm, "type_error", "operands must be int or float");
     be_return_nil(vm);
 }
 
@@ -1114,6 +1133,8 @@ static int m_setbytes(bvm *vm)
         if (from_len > 0) {
             memmove(attr.bufptr + idx, buf_ptr + from_byte, from_len);
         }
+    } else {
+        be_raise(vm, "type_error", "operands must be int and bytes");
     }
     be_return_nil(vm);
 }
@@ -1884,61 +1905,6 @@ be_local_closure(setbits,   /* name */
 );
 /*******************************************************************/
 
-#if !BE_USE_PRECOMPILED_OBJECT
-void be_load_byteslib(bvm *vm)
-{
-    static const bnfuncinfo members[] = {
-        { ".p", NULL },
-        { ".len", NULL },
-        { ".size", NULL },
-        { "_buffer", m_buffer },
-        { "_change_buffer", m_change_buffer },
-        { "ismapped", m_is_mapped },
-        { "isreadonly", m_is_readonly },
-        { "init", m_init },
-        { "deinit", m_deinit },
-        { "tostring", m_tostring },
-        { "asstring", m_asstring },
-        { "tobool", m_tobool },
-        { "fromstring", m_fromstring },
-        { "tob64", m_tob64 },
-        { "fromb64", m_fromb64 },
-        { "fromhex", m_fromhex },
-        { "tohex", m_tohex },
-        { "add", m_add },
-        { "get", m_getu },
-        { "geti", m_geti },
-        { "set", m_set },
-        { "seti", m_set },      // setters for signed and unsigned are identical
-        { "setbytes", m_setbytes },
-        { "getfloat", m_getfloat },
-        { "setfloat", m_setfloat },
-        { "addfloat", m_addfloat },
-        { "item", m_item },
-        { "setitem", m_setitem },
-        { "size", m_size },
-        { "resize", m_resize },
-        { "clear", m_clear },
-        { "reverse", m_reverse },
-        { "copy", m_copy },
-        { "append", m_connect },
-        { "appendhex", m_appendhex },
-        { "appendb64", m_appendb64 },
-        { "+", m_merge },
-        { "..", m_connect },
-        { "==", m_equal },
-        { "!=", m_nequal },
-
-        { NULL, (bntvfunc) BE_CLOSURE }, /* mark section for berry closures */
-        { "getbits", (bntvfunc) &getbits_closure },
-        { "setbits", (bntvfunc) &setbits_closure },
-
-        { NULL, NULL }
-    };
-    be_regclass(vm, "bytes", members);
-}
-#else
-
 #include "../generate/be_const_bytes_def.h"
 
 /* @const_object_info_begin
@@ -1989,4 +1955,3 @@ class be_class_bytes (scope: global, name: bytes) {
 }
 @const_object_info_end */
 #include "../generate/be_fixed_be_class_bytes.h"
-#endif

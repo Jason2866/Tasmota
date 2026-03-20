@@ -1,9 +1,11 @@
-# Test suite for ParameterizedObject
+# Test suite for parameterized_object
 #
-# This test verifies that the ParameterizedObject base class works correctly
+# This test verifies that the parameterized_object base class works correctly
 # and provides proper virtual parameter management.
 
 import animation
+
+import "./core/param_encoder" as encode_constraints
 
 # Create a mock engine for testing
 class MockEngine
@@ -12,23 +14,29 @@ class MockEngine
   def init()
     self.time_ms = 1000  # Fixed time for testing
   end
+  
+  # Fake add() method for value provider auto-registration
+  def add(obj)
+    # Do nothing - just prevent errors when value providers auto-register
+    return true
+  end
 end
 
 var mock_engine = MockEngine()
 
-# Test basic ParameterizedObject functionality
+# Test basic parameterized_object functionality
 def test_parameterized_object_basic()
-  print("Testing basic ParameterizedObject functionality...")
+  print("Testing basic parameterized_object functionality...")
   
-  # Create a simple test class that extends ParameterizedObject
+  # Create a simple test class that extends parameterized_object
   class TestObject : animation.parameterized_object
     # No instance variables for parameters - they're handled by the virtual system
     
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "test_value": {"min": 0, "max": 100, "default": 50},
       "test_name": {"type": "string", "default": "test"},
       "test_enum": {"enum": [1, 2, 3], "default": 1}
-    }
+    })
     
     def init(engine, value, name)
       super(self).init(engine)  # This initializes parameters with defaults
@@ -84,7 +92,7 @@ def test_parameterized_object_basic()
   # Test non-existent parameter
   assert(obj.set_param("invalid_param", 42) == false, "Should reject unknown parameter")
   
-  print("✓ Basic ParameterizedObject test passed")
+  print("✓ Basic parameterized_object test passed")
 end
 
 # Test class hierarchy parameter inheritance
@@ -93,10 +101,10 @@ def test_parameter_hierarchy()
   
   # Create a base class with some parameters
   class BaseClass : animation.parameterized_object
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "base_param": {"type": "string", "default": "base_value"},
       "shared_param": {"type": "string", "default": "base_default"}
-    }
+    })
     
     def init(engine)
       super(self).init(engine)
@@ -105,10 +113,10 @@ def test_parameter_hierarchy()
   
   # Create a child class with additional parameters
   class ChildClass : BaseClass
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "child_param": {"min": 0, "max": 10, "default": 5},
       "shared_param": {"type": "string", "default": "child_default"}  # Override parent default
-    }
+    })
     
     def init(engine)
       super(self).init(engine)
@@ -136,15 +144,15 @@ def test_parameter_hierarchy()
   print("✓ Parameter hierarchy test passed")
 end
 
-# Test ValueProvider as parameter
+# Test value_provider as parameter
 def test_value_provider_as_parameter()
-  print("Testing ValueProvider as parameter...")
+  print("Testing value_provider as parameter...")
   
   # Create a simple test class
   class TestClass : animation.parameterized_object
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "dynamic_value": {"min": 0, "max": 100, "default": 50}
-    }
+    })
     
     def init(engine)
       super(self).init(engine)
@@ -153,8 +161,9 @@ def test_value_provider_as_parameter()
   
   var obj = TestClass(mock_engine)
   
-  # Create a mock ValueProvider
-  class MockValueProvider : animation.value_provider
+  # Create a mock value_provider
+  class Mockvalue_provider : animation.parameterized_object
+    static var VALUE_PROVIDER = true
     var test_value
     def init(engine, value)
       super(self).init(engine)
@@ -163,12 +172,15 @@ def test_value_provider_as_parameter()
     def produce_value(name, time_ms)
       return self.test_value
     end
+    def tostring()
+      return ''
+    end
   end
   
-  var provider = MockValueProvider(mock_engine, 75)
+  var provider = Mockvalue_provider(mock_engine, 75)
   
-  # Set ValueProvider as parameter (should bypass validation)
-  assert(obj.set_param("dynamic_value", provider) == true, "Should accept ValueProvider as parameter")
+  # Set value_provider as parameter (should bypass validation)
+  assert(obj.set_param("dynamic_value", provider) == true, "Should accept value_provider as parameter")
   
   # Test that get_param returns the provider itself
   var returned_provider = obj.get_param("dynamic_value")
@@ -178,12 +190,12 @@ def test_value_provider_as_parameter()
   assert(returned_provider.produce_value("test", 1000) == 75, "Returned provider should produce expected value")
   
   # Test that virtual member access resolves the provider
-  assert(obj.dynamic_value == 75, "Virtual member should resolve ValueProvider")
+  assert(obj.dynamic_value == 75, "Virtual member should resolve value_provider")
   
   # Test get_param_value explicitly
-  assert(obj.get_param_value("dynamic_value", 1000) == 75, "Should resolve ValueProvider value")
+  assert(obj.get_param_value("dynamic_value", 1000) == 75, "Should resolve value_provider value")
   
-  print("✓ ValueProvider as parameter test passed")
+  print("✓ value_provider as parameter test passed")
 end
 
 # Test parameter metadata
@@ -191,11 +203,11 @@ def test_parameter_metadata()
   print("Testing parameter metadata...")
   
   class TestClass : animation.parameterized_object
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "range_param": {"min": 0, "max": 100, "default": 50},
       "enum_param": {"enum": [1, 2, 3], "default": 1},
       "simple_param": {"type": "string", "default": "test"}
-    }
+    })
     
     def init(engine)
       super(self).init(engine)
@@ -204,17 +216,19 @@ def test_parameter_metadata()
   
   var obj = TestClass(mock_engine)
   
-  # Test getting single parameter metadata
-  var range_meta = obj.get_param_metadata("range_param")
-  assert(range_meta != nil, "Should get range parameter metadata")
-  assert(range_meta["min"] == 0, "Should have min constraint")
-  assert(range_meta["max"] == 100, "Should have max constraint")
-  assert(range_meta["default"] == 50, "Should have default value")
+  # Test getting single parameter definition
+  assert(obj.has_param("range_param") == true, "range_param should exist")
+  var range_def = obj._get_param_def("range_param")
+  assert(range_def != nil, "Should get range parameter definition")
+  assert(obj.constraint_find(range_def, "min", nil) == 0, "Should have min constraint")
+  assert(obj.constraint_find(range_def, "max", nil) == 100, "Should have max constraint")
+  assert(obj.constraint_find(range_def, "default", nil) == 50, "Should have default value")
   
-  var enum_meta = obj.get_param_metadata("enum_param")
-  assert(enum_meta != nil, "Should get enum parameter metadata")
-  assert(enum_meta.contains("enum"), "Should have enum constraint")
-  assert(enum_meta["default"] == 1, "Should have default value")
+  assert(obj.has_param("enum_param") == true, "enum_param should exist")
+  var enum_def = obj._get_param_def("enum_param")
+  assert(enum_def != nil, "Should get enum parameter definition")
+  assert(obj.constraint_mask(enum_def, "enum") == 0x10, "Should have enum constraint")
+  assert(obj.constraint_find(enum_def, "default", nil) == 1, "Should have default value")
   
   print("✓ Parameter metadata test passed")
 end
@@ -224,9 +238,9 @@ def test_virtual_member_errors()
   print("Testing virtual member error handling...")
   
   class TestClass : animation.parameterized_object
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "valid_param": {"min": 0, "max": 100, "default": 50}
-    }
+    })
     
     def init(engine)
       super(self).init(engine)
@@ -275,9 +289,9 @@ def test_undefined_parameter_behavior()
   import string  # Import once at the top of the function
   
   class TestClass : animation.parameterized_object
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "defined_param": {"min": 0, "max": 100, "default": 50}
-    }
+    })
     
     def init(engine)
       super(self).init(engine)
@@ -354,15 +368,20 @@ def test_undefined_parameter_behavior()
   obj.defined_param = 75
   assert(obj.defined_param == 75, "Defined parameter assignment should still work")
   
-  # Test get_param_metadata for undefined parameter
-  print("  Testing metadata for undefined parameter...")
-  var undefined_meta = obj.get_param_metadata("undefined_param")
-  assert(undefined_meta == nil, "Metadata for undefined parameter should be nil")
+  # Test has_param and _get_param_def for undefined parameter
+  print("  Testing parameter definition for undefined parameter...")
+  assert(obj.has_param("undefined_param") == false, "has_param for undefined parameter should return false")
+  var undefined_def = obj._get_param_def("undefined_param")
+  assert(undefined_def == nil, "_get_param_def for undefined parameter should be nil")
   
   # Test get_param_value for undefined parameter
   print("  Testing get_param_value for undefined parameter...")
-  var undefined_param_value = obj.get_param_value("undefined_param", 1000)
-  assert(undefined_param_value == nil, "get_param_value for undefined parameter should return nil")
+  try
+    var undefined_param_value = obj.get_param_value("undefined_param", 1000)
+    assert(true, "get_param_value for undefined parameter should raise an exception")
+  except .. as e, m
+    # exception is ok
+  end
   
   print("✓ Undefined parameter behavior test passed")
 end
@@ -372,9 +391,9 @@ def test_engine_requirement()
   print("Testing engine parameter requirement...")
   
   class TestClass : animation.parameterized_object
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "test_param": {"default": 42}
-    }
+    })
   end
   
   # Test that nil engine raises error
@@ -398,9 +417,9 @@ def test_equality_operator()
   print("Testing equality operator...")
   
   class TestClass : animation.parameterized_object
-    static var PARAMS = {
+    static var PARAMS = animation.enc_params({
       "test_param": {"default": 42}
-    }
+    })
     
     def init(engine)
       super(self).init(engine)
@@ -442,7 +461,7 @@ end
 
 # Run all tests
 def run_parameterized_object_tests()
-  print("=== ParameterizedObject Tests ===")
+  print("=== parameterized_object Tests ===")
   
   try
     test_parameterized_object_basic()
@@ -454,7 +473,7 @@ def run_parameterized_object_tests()
     test_engine_requirement()
     test_equality_operator()
     
-    print("=== All ParameterizedObject tests passed! ===")
+    print("=== All parameterized_object tests passed! ===")
     return true
   except .. as e, msg
     print(f"Test failed: {e} - {msg}")

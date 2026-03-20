@@ -1,4 +1,3 @@
-
 name: Build_development
 
 on:
@@ -21,9 +20,9 @@ jobs:
     if: github.repository == 'arendst/Tasmota' && github.ref_name == 'development'
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
@@ -35,7 +34,7 @@ jobs:
           ../berry/berry -s -g solidify_all.be
           cd ../berry_matter
           ../berry/berry -s -g solidify_all.be
-          cd ../berry_animate
+          cd ../berry_animation
           ../berry/berry -s -g solidify_all.be
           cd ../../libesp32_lvgl/lv_binding_berry
           ../../libesp32/berry/berry -s -g solidify_all.be
@@ -47,7 +46,7 @@ jobs:
           path: |
             ./lib/libesp32/berry_tasmota/src/solidify
             ./lib/libesp32/berry_matter/src/solidify
-            ./lib/libesp32/berry_animate/src/solidify
+            ./lib/libesp32/berry_animation/src/solidify
             ./lib/libesp32_lvgl/lv_binding_berry/src/solidify
             ./lib/libesp32_lvgl/lv_haspmota/src/solidify
             ./lib/libesp32/berry/generate
@@ -58,9 +57,9 @@ jobs:
     if: github.repository == 'arendst/Tasmota' && github.ref_name == 'development'
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - uses: actions/download-artifact@v4
@@ -72,7 +71,7 @@ jobs:
           ls -R ./berry
           mv berry/berry/libesp32/berry_tasmota/src/solidify/* ./lib/libesp32/berry_tasmota/src/solidify
           mv berry/berry/libesp32/berry_matter/src/solidify/* ./lib/libesp32/berry_matter/src/solidify
-          mv berry/berry/libesp32/berry_animate/src/solidify/* ./lib/libesp32/berry_animate/src/solidify
+          mv berry/berry/libesp32/berry_animation/src/solidify/* ./lib/libesp32/berry_animation/src/solidify
           mv berry/berry/libesp32_lvgl/lv_binding_berry/src/solidify/* ./lib/libesp32_lvgl/lv_binding_berry/src/solidify
           mv berry/berry/libesp32_lvgl/lv_haspmota/src/solidify/* ./lib/libesp32_lvgl/lv_haspmota/src/solidify
           mv berry/berry/libesp32/berry/generate/* ./lib/libesp32/berry/generate
@@ -104,21 +103,21 @@ jobs:
           - tasmota32p4-safeboot
           - tasmota32p4ser-safeboot
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: development
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
       - name: Install dependencies
         run: |
-          uv pip install --system platformio
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Add SHA to footer
         run: |
@@ -129,10 +128,7 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
           PYTHONUTF8: '1'
-        run: platformio run -e ${{ matrix.variant }}
-      #- name: Use esp32-solo1 safeboot for esp32 too
-        #run: |
-          #cp ./build_output/firmware/tasmota32solo1-safeboot.bin ./build_output/firmware/tasmota32-safeboot.bin 
+        run: platformio run -e ${{ matrix.variant }} 
       - name: Upload safeboot firmware artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -158,21 +154,21 @@ jobs:
           - tasmota-zbbridge
           - tasmota-zigbee
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: development
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
       - name: Install dependencies
         run: |
-          uv pip install --system platformio
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
       - name: Add SHA to footer
         run: |
           COMMIT_SHA_LONG=$(git rev-parse --short HEAD || echo "")
@@ -215,21 +211,21 @@ jobs:
           - tasmota32s3
           - tasmota32solo1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: development
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
       - name: Install dependencies
         run: |
-          uv pip install --system platformio
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v4
@@ -266,21 +262,21 @@ jobs:
         variant: [ tasmota, tasmota32 ]
         language: [ AD, AF, BG, BR, CN, CZ, DE, ES, FR, FY, GR, HE, HU, IT, KO, LT, NL, PL, PT, RO, RU, SE, SK, TR, TW, UK, VN ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: development
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
       - name: Install dependencies
         run: |
-          uv pip install --system platformio
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v4
@@ -310,10 +306,11 @@ jobs:
   Start_final_copy:
     needs: [base-images, base32-images, language-images]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.API_TOKEN_GITHUB }}
     steps:
     - name: Dispatch workflow in arendst/Tasmota-firmware
       run: |
-         curl -X POST https://api.github.com/repos/arendst/Tasmota-firmware/actions/workflows/fetch_deploy.yml/dispatches \
-         -H 'Accept: application/vnd.github.everest-preview+json' \
-         -u ${{ secrets.API_TOKEN_GITHUB }} \
-         --data '{"ref": "gh_actions"}'
+        gh api repos/arendst/Tasmota-firmware/actions/workflows/fetch_deploy.yml/dispatches \
+          --method POST \
+          -f ref='gh_actions'

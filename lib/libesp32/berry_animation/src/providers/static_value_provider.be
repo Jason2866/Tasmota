@@ -1,4 +1,4 @@
-# StaticValueProvider for Berry Animation Framework
+# static_value for Berry Animation Framework
 #
 # This value provider returns a single, static value for any parameter type.
 # It's a dummy implementation that serves as a wrapper for static values,
@@ -11,38 +11,16 @@
 # - Constructor takes only 'engine' parameter
 # - Value is set via virtual member assignment after creation
 
-#@ solidify:StaticValueProvider,weak
-class StaticValueProvider : animation.value_provider
+import "./core/param_encoder" as encode_constraints
+
+class static_value : animation.parameterized_object
+  static var VALUE_PROVIDER = true
   # Parameter definitions
-  static var PARAMS = {
+  static var PARAMS = animation.enc_params({
     "value": {"default": nil, "type": "any"}
-  }
+  })
   
-  # Comparison operators to make StaticValueProvider work with validation code
-  def <(other)
-    return self.value < int(other)
-  end
-  
-  def >(other)
-    return self.value > int(other)
-  end
-  
-  def <=(other)
-    return self.value <= int(other)
-  end
-  
-  def >=(other)
-    return self.value >= int(other)
-  end
-  
-  def ==(other)
-    return self.value == int(other)
-  end
-  
-  def !=(other)
-    return self.value != int(other)
-  end
-  
+
   # Produce the static value for any parameter name
   #
   # @param name: string - Parameter name being requested (ignored)
@@ -51,11 +29,6 @@ class StaticValueProvider : animation.value_provider
   def produce_value(name, time_ms)
     return self.value
   end
-  
-  # String representation of the provider
-  def tostring()
-    return f"StaticValueProvider(value={self.value})"
-  end
 end
 
-return {'static_value': StaticValueProvider}
+return {'static_value': static_value}

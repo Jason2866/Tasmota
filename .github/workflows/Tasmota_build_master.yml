@@ -38,21 +38,21 @@ jobs:
           - tasmota32p4-safeboot
           - tasmota32p4ser-safeboot
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: master
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
       - name: Install dependencies
         run: |
-          uv pip install --system platformio
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Add "release" to footer
         run: |
@@ -86,21 +86,21 @@ jobs:
           - tasmota-zbbridge
           - tasmota-zigbee
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: master
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
       - name: Install dependencies
         run: |
-          uv pip install --system platformio
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Add "release" to footer
         run: |
@@ -142,21 +142,21 @@ jobs:
           - tasmota32s3
           - tasmota32solo1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: master
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
       - name: Install dependencies
         run: |
-          uv pip install --system platformio
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v4
@@ -191,21 +191,21 @@ jobs:
         variant: [ tasmota, tasmota32 ]
         language: [ AD, AF, BG, BR, CN, CZ, DE, ES, FR, FY, GR, HE, HU, IT, KO, LT, NL, PL, PT, RO, RU, SE, SK, TR, TW, UK, VN ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: master
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           enable-cache: false
       - name: Install dependencies
         run: |
-          uv pip install --system platformio
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
           cp ./platformio_override_sample.ini ./platformio_override.ini
       - name: Download safeboot firmwares
         uses: actions/download-artifact@v4
@@ -235,7 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Download all Tasmota artifacts
       uses: actions/download-artifact@v4
       with:
@@ -249,7 +249,6 @@ jobs:
       run: ls -R ./release/
     - name: Release
       uses: jason2866/action-gh-release@v1.2
-      #if: startsWith(github.ref, 'refs/tags/')
       with:
         tag_name: ${{ github.run_number }}
         files: |
@@ -260,10 +259,11 @@ jobs:
   Start_final_copy:
     needs: Release
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.API_TOKEN_GITHUB }}
     steps:
     - name: Dispatch workflow in arendst/Tasmota-firmware
       run: |
-         curl -X POST https://api.github.com/repos/arendst/Tasmota-firmware/actions/workflows/fetch_deploy.yml/dispatches \
-         -H 'Accept: application/vnd.github.everest-preview+json' \
-         -u ${{ secrets.API_TOKEN_GITHUB }} \
-         --data '{"ref": "gh_actions"}'
+        gh api repos/arendst/Tasmota-firmware/actions/workflows/fetch_deploy.yml/dispatches \
+          --method POST \
+          -f ref='gh_actions'

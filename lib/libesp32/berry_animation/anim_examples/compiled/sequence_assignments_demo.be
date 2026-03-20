@@ -32,21 +32,21 @@ var brightness_low_ = 64
 # Create color palette and cycling color
 var eye_palette_ = bytes("FFFF0000" "FFFFFF00" "FF008000" "FFEE82EE")
 var eye_color_ = animation.color_cycle(engine)
-eye_color_.palette = eye_palette_
-eye_color_.cycle_period = 0
+eye_color_.colors = eye_palette_
+eye_color_.period = 0
 # Create animations
-var red_eye_ = animation.beacon_animation(engine)
+var red_eye_ = animation.beacon(engine)
 red_eye_.color = eye_color_
 red_eye_.pos = cosine_val_
 red_eye_.beacon_size = 3
 red_eye_.slew_size = 2
 red_eye_.priority = 10
-var pulse_demo_ = animation.pulsating_animation(engine)
+var pulse_demo_ = animation.breathe(engine)
 pulse_demo_.color = 0xFF0000FF
 pulse_demo_.period = 2000
 pulse_demo_.priority = 5
 # Sequence 1: Cylon Eye with Position Changes
-var cylon_eye_ = animation.SequenceManager(engine)
+var cylon_eye_ = animation.sequence_manager(engine)
   .push_play_step(red_eye_, 3000)
   .push_closure_step(def (engine) red_eye_.pos = triangle_val_ end)  # Change to triangle oscillator
   .push_play_step(red_eye_, 3000)
@@ -54,14 +54,14 @@ var cylon_eye_ = animation.SequenceManager(engine)
   .push_closure_step(def (engine) eye_color_.next = 1 end)  # Advance to next color
   .push_play_step(red_eye_, 2000)
 # Sequence 2: Brightness Control Demo
-var brightness_demo_ = animation.SequenceManager(engine)
+var brightness_demo_ = animation.sequence_manager(engine)
   .push_play_step(pulse_demo_, 2000)
   .push_closure_step(def (engine) pulse_demo_.opacity = brightness_low_ end)  # Dim the animation
   .push_play_step(pulse_demo_, 2000)
   .push_closure_step(def (engine) pulse_demo_.opacity = brightness_high_ end)  # Brighten again
   .push_play_step(pulse_demo_, 2000)
 # Sequence 3: Multiple Property Changes
-var multi_change_ = animation.SequenceManager(engine)
+var multi_change_ = animation.sequence_manager(engine)
   .push_play_step(pulse_demo_, 1000)
   .push_closure_step(def (engine) pulse_demo_.color = 0xFFFF0000 end)  # Change color
   .push_closure_step(def (engine) pulse_demo_.opacity = brightness_low_ end)  # And brightness
@@ -71,8 +71,8 @@ var multi_change_ = animation.SequenceManager(engine)
   .push_play_step(pulse_demo_, 1000)
   .push_closure_step(def (engine) pulse_demo_.color = 0xFF0000FF end)  # Back to blue
 # Sequence 4: Assignments in Repeat Blocks
-var repeat_demo_ = animation.SequenceManager(engine)
-  .push_repeat_subsequence(animation.SequenceManager(engine, 3)
+var repeat_demo_ = animation.sequence_manager(engine)
+  .push_repeat_subsequence(animation.sequence_manager(engine, 3)
     .push_play_step(red_eye_, 1000)
     .push_closure_step(def (engine) red_eye_.pos = triangle_val_ end)  # Change oscillator
     .push_play_step(red_eye_, 1000)
@@ -80,7 +80,7 @@ var repeat_demo_ = animation.SequenceManager(engine)
     .push_closure_step(def (engine) eye_color_.next = 1 end)  # Next color
     )
 # Main demo sequence combining all examples
-var main_demo_ = animation.SequenceManager(engine)
+var main_demo_ = animation.sequence_manager(engine)
   # Run cylon eye demo
   .push_play_step(red_eye_, 1000)
   .push_wait_step(500)
@@ -126,10 +126,10 @@ set brightness_low = 64
 
 # Create color palette and cycling color
 palette eye_palette = [red, yellow, green, violet]
-color eye_color = color_cycle(palette=eye_palette, cycle_period=0)
+color eye_color = color_cycle(colors=eye_palette, period=0)
 
 # Create animations
-animation red_eye = beacon_animation(
+animation red_eye = beacon(
   color=eye_color
   pos=cosine_val
   beacon_size=3
@@ -137,7 +137,7 @@ animation red_eye = beacon_animation(
   priority=10
 )
 
-animation pulse_demo = pulsating_animation(
+animation pulse_demo = breathe(
   color=blue
   period=2s
   priority=5

@@ -3,7 +3,8 @@
 # This animation creates bouncing effects where patterns bounce back and forth
 # across the LED strip with configurable physics and damping.
 
-#@ solidify:BounceAnimation,weak
+import "./core/param_encoder" as encode_constraints
+
 class BounceAnimation : animation.animation
   # Non-parameter instance variables only
   var current_position   # Current position in 1/256th pixels
@@ -14,13 +15,13 @@ class BounceAnimation : animation.animation
   var last_update_time   # Last update time for physics calculation
   
   # Parameter definitions following parameterized class specification
-  static var PARAMS = {
+  static var PARAMS = animation.enc_params({
     "source_animation": {"type": "instance", "default": nil},
     "bounce_speed": {"min": 0, "max": 255, "default": 128},
     "bounce_range": {"min": 0, "max": 1000, "default": 0},
     "damping": {"min": 0, "max": 255, "default": 250},
     "gravity": {"min": 0, "max": 255, "default": 0}
-  }
+  })
   
   # Initialize a new Bounce animation
   def init(engine)
@@ -41,7 +42,7 @@ class BounceAnimation : animation.animation
   
   # Initialize frame buffers and arrays
   def _initialize_buffers()
-    var current_strip_length = self.engine.get_strip_length()
+    var current_strip_length = self.engine.strip_length
     self.bounce_center = current_strip_length * 256 / 2  # Center in 1/256th pixels
     self.current_position = self.bounce_center
     
@@ -61,9 +62,9 @@ class BounceAnimation : animation.animation
     end
   end
   
-  # Override start method for timing control and ValueProvider propagation
+  # Override start method for timing control and value_provider propagation
   def start(time_ms)
-    # Call parent start first (handles ValueProvider propagation)
+    # Call parent start first (handles value_provider propagation)
     super(self).start(time_ms)
     
     # Reset physics state for fresh start/restart
@@ -100,9 +101,7 @@ class BounceAnimation : animation.animation
   
   # Update animation state
   def update(time_ms)
-    if !super(self).update(time_ms)
-      return false
-    end
+    super(self).update(time_ms)
     
     # Initialize last_update_time on first update
     if self.last_update_time == 0
@@ -112,7 +111,7 @@ class BounceAnimation : animation.animation
     # Calculate time delta
     var dt = time_ms - self.last_update_time
     if dt <= 0
-      return true
+      return
     end
     self.last_update_time = time_ms
     
@@ -130,8 +129,6 @@ class BounceAnimation : animation.animation
     
     # Calculate bounced colors
     self._calculate_bounce()
-    
-    return true
   end
   
   # Update bounce physics
@@ -139,7 +136,7 @@ class BounceAnimation : animation.animation
     # Cache parameter values for performance
     var current_gravity = self.gravity
     var current_bounce_range = self.bounce_range
-    var current_strip_length = self.engine.get_strip_length()
+    var current_strip_length = self.engine.strip_length
     var current_damping = self.damping
     
     # Use integer arithmetic for physics (dt in milliseconds)
@@ -196,7 +193,7 @@ class BounceAnimation : animation.animation
     end
     
     # Cache strip length for performance
-    var current_strip_length = self.engine.get_strip_length()
+    var current_strip_length = self.engine.strip_length
     
     # Apply bounce transformation
     var pixel_position = self.current_position / 256  # Convert to pixel units
@@ -218,14 +215,9 @@ class BounceAnimation : animation.animation
   end
   
   # Render bounce to frame buffer
-  def render(frame, time_ms)
-    if !self.is_running || frame == nil
-      return false
-    end
-    
-    var current_strip_length = self.engine.get_strip_length()
+  def render(frame, time_ms, strip_length)
     var i = 0
-    while i < current_strip_length
+    while i < strip_length
       if i < frame.width
         frame.set_pixel_color(i, self.current_colors[i])
       end
@@ -233,11 +225,6 @@ class BounceAnimation : animation.animation
     end
     
     return true
-  end
-  
-  # String representation
-  def tostring()
-    return f"BounceAnimation(speed={self.bounce_speed}, damping={self.damping}, gravity={self.gravity}, priority={self.priority}, running={self.is_running})"
   end
 end
 
@@ -253,7 +240,6 @@ def bounce_basic(engine)
   bounce.bounce_range = 0  # full strip range
   bounce.damping = 250
   bounce.gravity = 0
-  bounce.name = "bounce_basic"
   return bounce
 end
 
@@ -267,7 +253,6 @@ def bounce_gravity(engine)
   bounce.bounce_range = 0  # full strip range
   bounce.damping = 240
   bounce.gravity = 128
-  bounce.name = "bounce_gravity"
   return bounce
 end
 
@@ -281,7 +266,6 @@ def bounce_constrained(engine)
   bounce.bounce_range = 15  # constrained range
   bounce.damping = 250
   bounce.gravity = 0
-  bounce.name = "bounce_constrained"
   return bounce
 end
 

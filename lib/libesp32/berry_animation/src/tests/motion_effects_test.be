@@ -12,7 +12,7 @@ def test_bounce_animation_basic()
   
   # Create engine and source animation
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var source = animation.solid(engine)
   source.color = 0xFFFF0000
   
@@ -37,7 +37,7 @@ def test_scale_animation_basic()
   
   # Create engine and source animation
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var source = animation.solid(engine)
   source.color = 0xFF00FF00
   
@@ -62,7 +62,7 @@ def test_jitter_animation_basic()
   
   # Create engine and source animation
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var source = animation.solid(engine)
   source.color = 0xFF0000FF
   
@@ -87,7 +87,7 @@ def test_motion_effects_custom()
   print("Testing motion effects with custom parameters...")
   
   var strip = global.Leds(20)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var source = animation.solid(engine)
   source.color = 0xFFFFFF00
   
@@ -156,7 +156,7 @@ def test_motion_effects_update_render()
   print("Testing motion effects update and render...")
   
   var strip = global.Leds(10)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var source = animation.solid(engine)
   source.color = 0xFFFF00FF
   var frame = animation.frame_buffer(10)
@@ -172,10 +172,10 @@ def test_motion_effects_update_render()
   bounce_anim.start(1000)
   assert(bounce_anim.is_running == true, "Bounce animation should be running after start")
   
-  var result = bounce_anim.update(1500)
-  assert(result == true, "Bounce update should return true for running animation")
+  bounce_anim.update(1500)
+  assert(bounce_anim.is_running == true, "Bounce animation should still be running after update")
   
-  result = bounce_anim.render(frame, 1500)
+  var result = bounce_anim.render(frame, 1500, engine.strip_length)
   assert(result == true, "Bounce render should return true for running animation")
   
   # Test scale update/render
@@ -190,10 +190,10 @@ def test_motion_effects_update_render()
   scale_anim.start(2000)
   assert(scale_anim.is_running == true, "Scale animation should be running after start")
   
-  result = scale_anim.update(2500)
-  assert(result == true, "Scale update should return true for running animation")
+  scale_anim.update(2500)
+  assert(scale_anim.is_running == true, "Scale animation should still be running after update")
   
-  result = scale_anim.render(frame, 2500)
+  result = scale_anim.render(frame, 2500, engine.strip_length)
   assert(result == true, "Scale render should return true for running animation")
   
   # Test jitter update/render
@@ -209,10 +209,10 @@ def test_motion_effects_update_render()
   jitter_anim.start(3000)
   assert(jitter_anim.is_running == true, "Jitter animation should be running after start")
   
-  result = jitter_anim.update(3500)
-  assert(result == true, "Jitter update should return true for running animation")
+  jitter_anim.update(3500)
+  assert(jitter_anim.is_running == true, "Jitter animation should still be running after update")
   
-  result = jitter_anim.render(frame, 3500)
+  result = jitter_anim.render(frame, 3500, engine.strip_length)
   assert(result == true, "Jitter render should return true for running animation")
   
   print("✓ Motion effects update/render test passed")
@@ -223,7 +223,7 @@ def test_motion_effects_constructors()
   print("Testing motion effects constructor functions...")
   
   var strip = global.Leds(30)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var source = animation.solid(engine)
   source.color = 0xFF00FFFF
   
@@ -279,7 +279,7 @@ def test_motion_effects_tostring()
   print("Testing motion effects string representations...")
   
   var strip = global.Leds(12)
-  var engine = animation.animation_engine(strip)
+  var engine = animation.create_engine(strip)
   var source = animation.solid(engine)
   source.color = 0xFFFFFFFF
   

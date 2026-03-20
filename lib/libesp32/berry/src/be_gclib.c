@@ -13,11 +13,17 @@
 static int m_allocated(bvm *vm)
 {
     size_t count = be_gc_memcount(vm);
+#if BE_INTGER_TYPE >= 2
+    /* bint is 64-bit: can always represent the memory count as int */
+    be_pushint(vm, (bint)count);
+#else
+    /* bint is 32-bit: fall back to real if count >= 2GB */
     if (count < 0x80000000) {
         be_pushint(vm, (bint)count);
     } else {
         be_pushreal(vm, (breal)count);
     }
+#endif
     be_return(vm);
 }
 
@@ -27,14 +33,6 @@ static int m_collect(bvm *vm)
     be_return_nil(vm);
 }
 
-#if !BE_USE_PRECOMPILED_OBJECT
-be_native_module_attr_table(gc){
-    be_native_module_function("allocated", m_allocated),
-    be_native_module_function("collect", m_collect)
-};
-
-be_define_native_module(gc, NULL);
-#else
 /* @const_object_info_begin
 module gc (scope: global, depend: BE_USE_GC_MODULE) {
     allocated, func(m_allocated)
@@ -42,6 +40,5 @@ module gc (scope: global, depend: BE_USE_GC_MODULE) {
 }
 @const_object_info_end */
 #include "../generate/be_fixed_gc.h"
-#endif
 
 #endif /* BE_USE_SYS_MODULE */

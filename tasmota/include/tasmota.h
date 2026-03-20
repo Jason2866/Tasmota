@@ -386,6 +386,17 @@ enum EmulationOptions {EMUL_NONE, EMUL_WEMO, EMUL_HUE, EMUL_MAX};
 
 enum TopicOptions { CMND, STAT, TELE, nu1, RESULT_OR_CMND, RESULT_OR_STAT, RESULT_OR_TELE };
 
+// Upload type used by HandleUploadLoop() to route incoming data.
+// Value 0 is invalid/unset. Each upload endpoint must set the appropriate
+// type before HandleUploadLoop() processes the first data block.
+// UPL_TASMOTA        - OTA firmware update (/u2)
+// UPL_SETTINGS       - Settings backup restore (/u2)
+// UPL_EFM8BB1        - Sonoff RF bridge EFM8BB1 firmware
+// UPL_TASMOTACLIENT  - Tasmota client (Arduino) hex file
+// UPL_EFR32          - Zigbee EZSP (EFR32) firmware
+// UPL_SHD            - Shelly dimmer firmware
+// UPL_CCL            - CC2530 Zigbee firmware via CCLoader
+// UPL_UFSFILE        - Filesystem file upload (/ufsu)
 enum UploadTypes { UPL_TASMOTA = 1, UPL_SETTINGS, UPL_EFM8BB1, UPL_TASMOTACLIENT, UPL_EFR32, UPL_SHD, UPL_CCL, UPL_UFSFILE };
 
 enum ExecuteCommandPowerOptions { POWER_OFF, POWER_ON, POWER_TOGGLE, POWER_BLINK, POWER_BLINK_STOP, POWER_OFF_FORCE,
@@ -430,7 +441,7 @@ enum Ws2812Color { WS_RED, WS_GREEN, WS_BLUE };
 
 enum LightSubtypes { LST_NONE, LST_SINGLE, LST_COLDWARM, LST_RGB,   LST_RGBW, LST_RGBCW, LST_MAX=5 };   // Do not insert new fields
 enum LightTypes    { LT_BASIC, LT_PWM1,    LT_PWM2,      LT_PWM3,   LT_PWM4,  LT_PWM5,  LT_PWM6, LT_PWM7,
-                     LT_NU8,   LT_SERIAL1, LT_SERIAL2,   LT_RGB,    LT_RGBW,  LT_RGBWC, LT_NU14, LT_NU15 };  // Do not insert new fields
+                     LT_NU8,   LT_W,       LT_CW,        LT_RGB,    LT_RGBW,  LT_RGBWC, LT_NU14, LT_NU15 };  // Do not insert new fields
 
 enum XsnsFunctions { FUNC_SETTINGS_OVERRIDE, FUNC_SETUP_RING1, FUNC_SETUP_RING2, FUNC_PRE_INIT, FUNC_INIT, FUNC_ACTIVE, FUNC_ABOUT_TO_RESTART,
                      FUNC_LOOP, FUNC_SLEEP_LOOP, FUNC_EVERY_50_MSECOND, FUNC_EVERY_100_MSECOND, FUNC_EVERY_200_MSECOND, FUNC_EVERY_250_MSECOND, FUNC_EVERY_SECOND,

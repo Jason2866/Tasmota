@@ -16,9 +16,8 @@ def test_basic_symbol_registration()
     "animation solid_red = solid(color=custom_red)\n" +
     "animation red_anim = solid_red"
   
-  var lexer = animation_dsl.DSLLexer(dsl_source)
-  var tokens = lexer.tokenize()
-  var transpiler = animation_dsl.SimpleDSLTranspiler(tokens)
+  var lexer = animation_dsl.create_lexer(dsl_source)
+  var transpiler = animation_dsl.SimpleDSLTranspiler(lexer)
   
   # Process the DSL
   var berry_code = transpiler.transpile()
@@ -44,9 +43,8 @@ def test_proper_symbol_ordering()
   var dsl_source = "color custom_red = 0xFF0000\n" +
     "animation fire_pattern = solid(color=custom_red)"
   
-  var lexer = animation_dsl.DSLLexer(dsl_source)
-  var tokens = lexer.tokenize()
-  var transpiler = animation_dsl.SimpleDSLTranspiler(tokens)
+  var lexer = animation_dsl.create_lexer(dsl_source)
+  var transpiler = animation_dsl.SimpleDSLTranspiler(lexer)
   
   var berry_code = transpiler.transpile()
   
@@ -70,9 +68,8 @@ def test_undefined_reference_handling()
   # DSL with undefined reference
   var dsl_source = "animation test_pattern = solid(color=undefined_color)"
   
-  var lexer = animation_dsl.DSLLexer(dsl_source)
-  var tokens = lexer.tokenize()
-  var transpiler = animation_dsl.SimpleDSLTranspiler(tokens)
+  var lexer = animation_dsl.create_lexer(dsl_source)
+  var transpiler = animation_dsl.SimpleDSLTranspiler(lexer)
   
   # Should detect undefined reference at transpile time and raise exception
   try
@@ -94,11 +91,10 @@ def test_builtin_reference_handling()
   
   # DSL using built-in color names and animation functions
   var dsl_source = "animation red_pattern = solid(color=red)\n" +
-    "animation pulse_anim = pulsating_animation(color=red, period=2000)"
+    "animation pulse_anim = breathe(color=red, period=2000)"
   
-  var lexer = animation_dsl.DSLLexer(dsl_source)
-  var tokens = lexer.tokenize()
-  var transpiler = animation_dsl.SimpleDSLTranspiler(tokens)
+  var lexer = animation_dsl.create_lexer(dsl_source)
+  var transpiler = animation_dsl.SimpleDSLTranspiler(lexer)
   
   var berry_code = transpiler.transpile()
   
@@ -108,7 +104,7 @@ def test_builtin_reference_handling()
   
   # Check generated code
   assert(string.find(berry_code, "red_pattern_.color = 0xFFFF0000") >= 0, "Should use built-in red color")
-  assert(string.find(berry_code, "animation.pulsating_animation(engine)") >= 0, "Should use built-in pulsating_animation function")
+  assert(string.find(berry_code, "animation.breathe(engine)") >= 0, "Should use built-in breathe function")
   
   print("✓ Built-in reference handling test passed")
   return true
@@ -120,9 +116,8 @@ def test_definition_generation()
   
   var dsl_source = "color custom_blue = 0x0000FF"
   
-  var lexer = animation_dsl.DSLLexer(dsl_source)
-  var tokens = lexer.tokenize()
-  var transpiler = animation_dsl.SimpleDSLTranspiler(tokens)
+  var lexer = animation_dsl.create_lexer(dsl_source)
+  var transpiler = animation_dsl.SimpleDSLTranspiler(lexer)
   
   var berry_code = transpiler.transpile()
   
@@ -144,16 +139,15 @@ def test_complex_symbol_dependencies()
   
   # Complex DSL with proper symbol ordering (no forward references)
   var dsl_source = "color primary_color = 0xFF8000\n" +
-    "animation complex_anim = pulsating_animation(color=primary_color, period=3000)\n" +
+    "animation complex_anim = breathe(color=primary_color, period=3000)\n" +
     "animation gradient_pattern = solid(color=primary_color)\n" +
     "sequence demo {\n" +
     "  play complex_anim for 5s\n" +
     "}\n" +
     "run demo"
   
-  var lexer = animation_dsl.DSLLexer(dsl_source)
-  var tokens = lexer.tokenize()
-  var transpiler = animation_dsl.SimpleDSLTranspiler(tokens)
+  var lexer = animation_dsl.create_lexer(dsl_source)
+  var transpiler = animation_dsl.SimpleDSLTranspiler(lexer)
   
   var berry_code = transpiler.transpile()
   
@@ -165,7 +159,7 @@ def test_complex_symbol_dependencies()
   assert(string.find(berry_code, "var primary_color_") >= 0, "Should define primary color")
   assert(string.find(berry_code, "var gradient_pattern_") >= 0, "Should define gradient pattern")
   assert(string.find(berry_code, "var complex_anim_") >= 0, "Should define complex animation")
-  assert(string.find(berry_code, "var demo_ = animation.SequenceManager(engine)") >= 0, "Should define sequence")
+  assert(string.find(berry_code, "var demo_ = animation.sequence_manager(engine)") >= 0, "Should define sequence")
   
   print("✓ Complex symbol dependencies test passed")
   return true

@@ -2,7 +2,7 @@
 # Tests for restart functionality in sequences
 #
 # Command to run test is:
-#    ./berry -s -g -m lib/libesp32/berry_animation/src -e "import tasmota def log(x) print(x) end" lib/libesp32/berry_animation/src/tests/dsl_reset_restart_test.be
+#    ./berry -s -g -m lib/libesp32/berry_animation/src -e "import tasmota def log(x,l) tasmota.log(x,l) end" lib/libesp32/berry_animation/src/tests/dsl_reset_restart_test.be
 
 import animation
 import animation_dsl
@@ -82,7 +82,7 @@ def test_restart_animations()
   print("Testing restart with animations...")
   
   var dsl_source = "set osc_val = triangle(min_value=0, max_value=10, duration=2s)\n" +
-    "animation pulse_anim = pulsating_animation(color=red, period=3s)\n" +
+    "animation pulse_anim = breathe(color=red, period=3s)\n" +
     "animation solid_anim = solid(color=blue)\n" +
     "\n" +
     "sequence demo {\n" +
@@ -253,11 +253,11 @@ def test_complex_scenario()
   var dsl_source = "# Complex cylon eye with restart functionality\n" +
     "set strip_len = strip_length()\n" +
     "palette eye_palette = [ red, yellow, green, violet ]\n" +
-    "color eye_color = color_cycle(palette=eye_palette, cycle_period=0)\n" +
+    "color eye_color = color_cycle(colors=eye_palette, period=0)\n" +
     "set cosine_val = cosine_osc(min_value = 0, max_value = strip_len - 2, duration = 5s)\n" +
     "set triangle_val = triangle(min_value = 0, max_value = strip_len - 2, duration = 5s)\n" +
     "\n" +
-    "animation red_eye = beacon_animation(\n" +
+    "animation red_eye = beacon(\n" +
     "  color = eye_color\n" +
     "  pos = cosine_val\n" +
     "  beacon_size = 3\n" +

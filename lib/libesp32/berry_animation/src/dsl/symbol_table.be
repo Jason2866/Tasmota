@@ -2,7 +2,6 @@
 # Enhanced symbol caching and management for the Animation DSL
 
 # Symbol table entry class for enhanced symbol caching
-#@ solidify:SymbolEntry,weak
 class SymbolEntry
   # Type constants
   static var TYPE_PALETTE_CONSTANT = 1
@@ -262,7 +261,7 @@ class SymbolEntry
     return _class(name, _class.TYPE_VALUE_PROVIDER, instance, is_builtin)
   end
   
-  # Create a symbol entry for an animation constructor (built-in like solid, pulsating_animation)
+  # Create a symbol entry for an animation constructor (built-in like solid, breathe)
   static def create_animation_constructor(name, instance, is_builtin)
     return _class(name, _class.TYPE_ANIMATION_CONSTRUCTOR, instance, is_builtin)
   end
@@ -301,29 +300,36 @@ end
 # Mock engine class for parameter validation during transpilation
 class MockEngine
   var time_ms
+  var strip_length
   
   def init()
     self.time_ms = 0
+    self.strip_length = 30    # Default strip length for validation
   end
   
   def get_strip_length()
-    return 30  # Default strip length for validation
+    return self.strip_length
+  end
+
+  def add(obj)
+    return true
   end
 end
 
 # Enhanced symbol table class for holistic symbol management and caching
-#@ solidify:SymbolTable,weak
 class SymbolTable
   var entries        # Map of name -> SymbolEntry
   var mock_engine    # MockEngine for validation
   
   def init()
+    import animation_dsl
     self.entries = {}
     self.mock_engine = animation_dsl.MockEngine()
   end
   
   # Dynamically detect and cache symbol type when first encountered
   def _detect_and_cache_symbol(name)
+    import animation_dsl
     if self.entries.contains(name)
       return self.entries[name]  # Already cached
     end
@@ -388,7 +394,7 @@ class SymbolTable
               var entry = animation_dsl._symbol_entry.create_color_constructor(name, instance, true)
               self.entries[name] = entry
               return entry
-            elif isinstance(instance, animation.value_provider)
+            elif animation.is_value_provider(instance)
               var entry = animation_dsl._symbol_entry.create_value_provider_constructor(name, instance, true)
               self.entries[name] = entry
               return entry
@@ -459,12 +465,15 @@ class SymbolTable
   
   # Get symbol reference for code generation (with dynamic detection)
   def get_reference(name)
+    import animation_dsl
     # Try to get from cache or detect dynamically (includes named colors)
     var entry = self.get(name)
     if entry != nil
       # For builtin color entries, return the actual color value directly
-      if entry.is_builtin && entry.type == animation_dsl._symbol_entry.TYPE_COLOR
-        return animation_dsl.named_colors[name]
+      if entry.is_builtin && entry.type == 11 #-animation_dsl._symbol_entry.TYPE_COLOR-#
+        var color_value = animation_dsl.named_colors[name]
+        # Convert integer to hex string format for transpiler
+        return f"0x{color_value:08X}"
       end
       return entry.get_reference()
     end
@@ -481,42 +490,49 @@ class SymbolTable
   
   # Create and register a palette instance symbol (user-defined)
   def create_palette(name, instance)
+    import animation_dsl
     var entry = animation_dsl._symbol_entry.create_palette_instance(name, instance, false)
     return self.add(name, entry)
   end
   
   # Create and register a color instance symbol (user-defined)
   def create_color(name, instance)
+    import animation_dsl
     var entry = animation_dsl._symbol_entry.create_color_instance(name, instance, false)
     return self.add(name, entry)
   end
   
   # Create and register an animation instance symbol (user-defined)
   def create_animation(name, instance)
+    import animation_dsl
     var entry = animation_dsl._symbol_entry.create_animation_instance(name, instance, false)
     return self.add(name, entry)
   end
   
   # Create and register a value provider instance symbol (user-defined)
   def create_value_provider(name, instance)
+    import animation_dsl
     var entry = animation_dsl._symbol_entry.create_value_provider_instance(name, instance, false)
     return self.add(name, entry)
   end
   
   # Create and register a variable symbol (user-defined)
   def create_variable(name)
+    import animation_dsl
     var entry = animation_dsl._symbol_entry.create_variable(name, false)
     return self.add(name, entry)
   end
   
   # Create and register a sequence symbol (user-defined)
   def create_sequence(name)
+    import animation_dsl
     var entry = animation_dsl._symbol_entry.create_sequence(name, false)
     return self.add(name, entry)
   end
   
   # Create and register a template symbol (user-defined)
   def create_template(name, param_types)
+    import animation_dsl
     var entry = animation_dsl._symbol_entry.create_template(name, false)
     entry.set_param_types(param_types != nil ? param_types : {})
     return self.add(name, entry)
@@ -525,6 +541,7 @@ class SymbolTable
 
   # Register a user function (detected at runtime)
   def register_user_function(name)
+    import animation_dsl
     if !self.contains(name)
       var entry = animation_dsl._symbol_entry.create_user_function(name, false)
       self.add(name, entry)
@@ -533,6 +550,7 @@ class SymbolTable
   
   # Generic create function that can specify name/type/instance/builtin directly
   def create_generic(name, typ, instance, is_builtin)
+    import animation_dsl
     var entry = animation_dsl._symbol_entry(name, typ, instance, is_builtin != nil ? is_builtin : false)
     return self.add(name, entry)
   end
@@ -575,9 +593,12 @@ class SymbolTable
   
   # Helper method to get named color value (uses proper discovery)
   def _get_named_color_value(color_name)
+    import animation_dsl
     var entry = self.get(color_name)  # This will trigger _detect_and_cache_symbol if needed
-    if entry != nil && entry.is_builtin && entry.type == animation_dsl._symbol_entry.TYPE_COLOR
-      return animation_dsl.named_colors[color_name]
+    if entry != nil && entry.is_builtin && entry.type == 11 #-animation_dsl._symbol_entry.TYPE_COLOR-#
+      var color_value = animation_dsl.named_colors[color_name]
+      # Convert integer to hex string format for transpiler
+      return f"0x{color_value:08X}"
     end
     return "0xFFFFFFFF"  # Default fallback
   end

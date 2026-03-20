@@ -1,4 +1,4 @@
-# Black Frame Fix Test for SequenceManager
+# Black Frame Fix Test for sequence_manager
 # Tests the atomic transition functionality that eliminates black frames
 # between animation transitions with closure steps
 #
@@ -16,26 +16,24 @@ def test_atomic_closure_batch_execution()
   # Create strip and engine
   var strip = global.Leds(30)
   var engine = animation.create_engine(strip)
-  var seq_manager = animation.SequenceManager(engine)
+  var seq_manager = animation.sequence_manager(engine)
   
   # Create two test animations
-  var red_provider = animation.static_color(engine)
+  var red_provider = animation.color_provider(engine)
   red_provider.color = 0xFFFF0000
   var red_anim = animation.solid(engine)
   red_anim.color = red_provider
   red_anim.priority = 0
   red_anim.duration = 0
   red_anim.loop = true
-  red_anim.name = "red"
   
-  var blue_provider = animation.static_color(engine)
+  var blue_provider = animation.color_provider(engine)
   blue_provider.color = 0xFF0000FF
   var blue_anim = animation.solid(engine)
   blue_anim.color = blue_provider
   blue_anim.priority = 0
   blue_anim.duration = 0
   blue_anim.loop = true
-  blue_anim.name = "blue"
   
   # Simple test - just verify the basic functionality works
   # We'll check that closures execute and animations transition properly
@@ -86,26 +84,24 @@ def test_multiple_consecutive_closures()
   # Create strip and engine
   var strip = global.Leds(30)
   var engine = animation.create_engine(strip)
-  var seq_manager = animation.SequenceManager(engine)
+  var seq_manager = animation.sequence_manager(engine)
   
   # Create test animations
-  var green_provider = animation.static_color(engine)
+  var green_provider = animation.color_provider(engine)
   green_provider.color = 0xFF00FF00
   var green_anim = animation.solid(engine)
   green_anim.color = green_provider
   green_anim.priority = 0
   green_anim.duration = 0
   green_anim.loop = true
-  green_anim.name = "green"
   
-  var yellow_provider = animation.static_color(engine)
+  var yellow_provider = animation.color_provider(engine)
   yellow_provider.color = 0xFFFFFF00
   var yellow_anim = animation.solid(engine)
   yellow_anim.color = yellow_provider
   yellow_anim.priority = 0
   yellow_anim.duration = 0
   yellow_anim.loop = true
-  yellow_anim.name = "yellow"
   
   # Track closure execution order
   var closure_order = []
@@ -155,17 +151,16 @@ def test_closure_batch_at_sequence_start()
   # Create strip and engine
   var strip = global.Leds(30)
   var engine = animation.create_engine(strip)
-  var seq_manager = animation.SequenceManager(engine)
+  var seq_manager = animation.sequence_manager(engine)
   
   # Create test animation
-  var purple_provider = animation.static_color(engine)
+  var purple_provider = animation.color_provider(engine)
   purple_provider.color = 0xFF8000FF
   var purple_anim = animation.solid(engine)
   purple_anim.color = purple_provider
   purple_anim.priority = 0
   purple_anim.duration = 0
   purple_anim.loop = true
-  purple_anim.name = "purple"
   
   # Track initial closure execution
   var initial_setup_done = false
@@ -197,21 +192,20 @@ def test_repeat_sequence_closure_batching()
   var engine = animation.create_engine(strip)
   
   # Create test animation
-  var cyan_provider = animation.static_color(engine)
+  var cyan_provider = animation.color_provider(engine)
   cyan_provider.color = 0xFF00FFFF
   var cyan_anim = animation.solid(engine)
   cyan_anim.color = cyan_provider
   cyan_anim.priority = 0
   cyan_anim.duration = 0
   cyan_anim.loop = true
-  cyan_anim.name = "cyan"
   
   # Track iteration state
   var iteration_count = 0
   var iteration_closure = def (engine) iteration_count += 1 end
   
   # Create repeating sequence with closure
-  var seq_manager = animation.SequenceManager(engine, 3)  # Repeat 3 times
+  var seq_manager = animation.sequence_manager(engine, 3)  # Repeat 3 times
   seq_manager.push_closure_step(iteration_closure)
               .push_play_step(cyan_anim, 30)  # Very short for fast testing
   
@@ -268,14 +262,13 @@ def test_black_frame_fix_integration()
   var engine = animation.create_engine(strip)
   
   # Simulate shutter animation
-  var shutter_provider = animation.static_color(engine)
+  var shutter_provider = animation.color_provider(engine)
   shutter_provider.color = 0xFFFFFFFF
   var shutter_anim = animation.solid(engine)
   shutter_anim.color = shutter_provider
   shutter_anim.priority = 0
   shutter_anim.duration = 0
   shutter_anim.loop = true
-  shutter_anim.name = "shutter"
   
   # Simulate color cycle (like col1.next = 1)
   var color_index = 0
@@ -286,7 +279,7 @@ def test_black_frame_fix_integration()
   #   play shutter_animation for 200ms
   #   col1.next = 1
   # }
-  var seq_manager = animation.SequenceManager(engine, 5)
+  var seq_manager = animation.sequence_manager(engine, 5)
   seq_manager.push_play_step(shutter_anim, 200)
               .push_closure_step(advance_color)
   

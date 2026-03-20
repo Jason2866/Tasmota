@@ -34,6 +34,7 @@ be_extern_native_module(re);
 be_extern_native_module(mqtt);
 be_extern_native_module(persist);
 be_extern_native_module(autoconf);
+be_extern_native_module(extension_manager);
 be_extern_native_module(tapp);
 be_extern_native_module(light);
 be_extern_native_module(gpio);
@@ -83,6 +84,8 @@ be_extern_native_module(haspmota);
 #endif // USE_LVGL_HASPMOTA
 #endif // USE_LVGL
 #ifdef USE_MATTER_DEVICE
+be_extern_native_module(matter);
+#endif // USE_MATTER_DEVICE
 #ifdef USE_WS2812
 #ifdef USE_BERRY_ANIMATION
 be_extern_native_module(animation);
@@ -91,8 +94,6 @@ be_extern_native_module(animation_dsl);
 #endif // USE_BERRY_ANIMATION_DSL
 #endif // USE_BERRY_ANIMATION
 #endif // USE_WS2812
-be_extern_native_module(matter);
-#endif // USE_MATTER_DEVICE
 
 /* user-defined modules declare start */
 
@@ -153,6 +154,9 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 #ifdef USE_AUTOCONF
     &be_native_module(autoconf),
 #endif // USE_AUTOCONF
+#ifdef USE_EXTENSION_MANAGER
+    &be_native_module(extension_manager),
+#endif // USE_EXTENSION_MANAGER
     &be_native_module(tapp),
     &be_native_module(gpio),
 #ifdef USE_DISPLAY
@@ -170,12 +174,6 @@ BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 #ifdef USE_UNISHOX_COMPRESSION
     &be_native_module(unishox),
 #endif // USE_UNISHOX_COMPRESSION
-
-#if defined(USE_WS2812) && !defined(USE_WS2812_FORCE_NEOPIXELBUS)
-  #ifdef USE_BERRY_ANIMATE
-    &be_native_module(animate),
-  #endif // USE_BERRY_ANIMATE
-#endif // USE_WS2812
 
 #ifdef USE_LVGL
     &be_native_module(lv),
@@ -260,6 +258,7 @@ be_extern_native_class(AXP2102);
 be_extern_native_class(OneWire);
 be_extern_native_class(Leds_ntv);
 be_extern_native_class(Leds);
+be_extern_native_class(pixmat);
 be_extern_native_class(AudioGenerator);
 be_extern_native_class(AudioFileSource);
 be_extern_native_class(AudioOutputI2S);
@@ -273,6 +272,9 @@ be_extern_native_class(udp);
 be_extern_native_class(webclient);
 be_extern_native_class(tcpclient);
 be_extern_native_class(tcpclientasync);
+#ifdef USE_BERRY_MQTTCLIENT
+be_extern_native_class(mqttclient);
+#endif // USE_BERRY_MQTTCLIENT
 be_extern_native_class(webserver_async);
 be_extern_native_class(tcpserver);
 be_extern_native_class(energy_struct);
@@ -327,6 +329,9 @@ BERRY_LOCAL bclass_array be_class_table = {
     &be_native_class(webclient),
     &be_native_class(tcpclient),
     &be_native_class(tcpclientasync),
+#ifdef USE_BERRY_MQTTCLIENT
+    &be_native_class(mqttclient),
+#endif // USE_BERRY_MQTTCLIENT
 #ifdef USE_BERRY_DEBUG
     &be_native_class(webserver_async),  // include only when USE_BERRY_DEBUG is enabled
 #endif // USE_BERRY_DEBUG
@@ -336,6 +341,7 @@ BERRY_LOCAL bclass_array be_class_table = {
 #if defined(USE_WS2812) && !defined(USE_WS2812_FORCE_NEOPIXELBUS)
     &be_native_class(Leds_ntv),
     &be_native_class(Leds),
+    &be_native_class(pixmat),
 #endif // USE_WS2812
 #ifdef USE_ENERGY_SENSOR
     &be_native_class(energy_struct),
@@ -387,7 +393,4 @@ BERRY_API void be_load_custom_libs(bvm *vm)
     (void)vm;   /* prevent a compiler warning */
     
     /* add here custom libs */
-#if !BE_USE_PRECOMPILED_OBJECT
-    /* be_load_xxxlib(vm); */
-#endif
 }

@@ -116,8 +116,8 @@ def test_animation_processing()
   # Test pulse animations with named arguments
   var pulse_tests = [
     ["animation solid_red = solid(color=red)\n"
-     "animation pulse_red = pulsating_animation(color=red, period=2000)",
-     "var pulse_red_ = animation.pulsating_animation(engine)\npulse_red_.color = 0xFFFF0000\npulse_red_.period = 2000"]
+     "animation pulse_red = breathe(color=red, period=2000)",
+     "var pulse_red_ = animation.breathe(engine)\npulse_red_.color = 0xFFFF0000\npulse_red_.period = 2000"]
   ]
   
   for test : pulse_tests
@@ -200,7 +200,7 @@ def test_sequence_processing()
   var berry_code = animation_dsl.compile(basic_seq_dsl)
 
   assert(berry_code != nil, "Should compile basic sequence")
-  assert(string.find(berry_code, "var demo_ = animation.SequenceManager(engine)") >= 0, "Should define sequence manager")
+  assert(string.find(berry_code, "var demo_ = animation.sequence_manager(engine)") >= 0, "Should define sequence manager")
   assert(string.find(berry_code, "red_anim") >= 0, "Should reference animation")
   assert(string.find(berry_code, ".push_play_step(red_anim_, 2000)") >= 0, "Should create play step")
   assert(string.find(berry_code, "engine.add(demo_)") >= 0, "Should add sequence manager")
@@ -224,7 +224,7 @@ def test_sequence_processing()
   # print(berry_code)
   # print("==================================================")
   assert(berry_code != nil, "Should compile repeat sequence")
-  assert(string.find(berry_code, "animation.SequenceManager(engine, 3)") >= 0, "Should generate repeat subsequence")
+  assert(string.find(berry_code, "animation.sequence_manager(engine, 3)") >= 0, "Should generate repeat subsequence")
   assert(string.find(berry_code, ".push_wait_step(500)") >= 0, "Should generate wait step")
   
   print("✓ Sequence processing test passed")
@@ -282,7 +282,7 @@ def test_property_assignments()
      "red_anim_.priority = 15"],
     ["animation test_anim = solid(color=red)\ntest_anim.opacity = 128", 
      "test_anim_.opacity = 128"],
-    ["animation solid_red = solid(color=red)\nanimation pulse_anim = pulsating_animation(color=red, period=2000)\npulse_anim.priority = 5", 
+    ["animation solid_red = solid(color=red)\nanimation pulse_anim = breathe(color=red, period=2000)\npulse_anim.priority = 5", 
      "pulse_anim_.priority = 5"]
   ]
   

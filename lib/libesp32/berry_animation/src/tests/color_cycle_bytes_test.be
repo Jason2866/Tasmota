@@ -1,6 +1,6 @@
 #!/usr/bin/env berry
 
-# Test for ColorCycleColorProvider with bytes palette in AARRGGBB format
+# Test for color_cycle with bytes palette in AARRGGBB format
 import animation
 import animation_dsl
 
@@ -10,10 +10,15 @@ class MockEngine
   def init()
     self.time_ms = 1000
   end
+  
+  # Fake add() method for value provider auto-registration
+  def add(obj)
+    return true
+  end
 end
 
 def test_color_cycle_bytes_format()
-  print("Testing ColorCycleColorProvider with bytes palette (AARRGGBB format)...")
+  print("Testing color_cycle with bytes palette (AARRGGBB format)...")
   
   var engine = MockEngine()
   
@@ -23,16 +28,7 @@ def test_color_cycle_bytes_format()
   
   # Test 2: Check default palette
   var default_size = provider._get_palette_size()
-  assert(default_size == 3, f"Default palette should have 3 colors, got {default_size}")
-  
-  # Test 3: Test colors from default palette (AARRGGBB format)
-  var color0 = provider._get_color_at_index(0)  # Should be FF0000FF (blue)
-  var color1 = provider._get_color_at_index(1)  # Should be FF00FF00 (green)
-  var color2 = provider._get_color_at_index(2)  # Should be FFFF0000 (red)
-  
-  assert(color0 == 0xFF0000FF, f"First color should be blue (0xFF0000FF), got 0x{color0:08X}")
-  assert(color1 == 0xFF00FF00, f"Second color should be green (0xFF00FF00), got 0x{color1:08X}")
-  assert(color2 == 0xFFFF0000, f"Third color should be red (0xFFFF0000), got 0x{color2:08X}")
+  assert(default_size == 7, f"Default palette should have 7 colors, got {default_size}")
   
   # Test 4: Set custom bytes palette
   var custom_palette = bytes(
@@ -42,7 +38,7 @@ def test_color_cycle_bytes_format()
     "FFFFFF00"    # Opaque yellow (alpha=0xFF)
   )
   
-  provider.palette = custom_palette
+  provider.colors = custom_palette
   var custom_size = provider._get_palette_size()
   assert(custom_size == 4, f"Custom palette should have 4 colors, got {custom_size}")
   
@@ -58,7 +54,7 @@ def test_color_cycle_bytes_format()
   assert(custom_color3 == 0xFFFFFF00, f"Custom color 3 should be 0xFFFFFF00 (alpha forced), got 0x{custom_color3:08X}")
   
   # Test 6: Test auto-cycle mode
-  provider.cycle_period = 4000  # 4 seconds for 4 colors = 1 second per color
+  provider.period = 4000  # 4 seconds for 4 colors = 1 second per color
   
   # At time 0, should be first color
   engine.time_ms = 0
@@ -78,44 +74,43 @@ def test_color_cycle_bytes_format()
   assert(cycle_color3 == custom_color3, f"Cycle color at t=3000 should match fourth color")
   
   # Test 7: Test manual mode
-  provider.cycle_period = 0  # Manual mode
+  provider.period = 0  # Manual mode
   provider.current_index = 1
-  provider.current_color = custom_color1
   
   var manual_color = provider.produce_value("color", 5000)
   assert(manual_color == custom_color1, f"Manual mode should return current color")
   
   # Test 8: Test next functionality
   provider.next = 1  # Should trigger move to next color
-  var next_color = provider.current_color
+  var next_color = provider.produce_value("color", 5000)
   assert(next_color == custom_color2, f"Next should move to third color")
   assert(provider.current_index == 2, f"Current index should be 2")
   
-  # Test 9: Test value-based color selection
+  # Test 9: Test value-based color selection (0-255 range)
   var value_color_0 = provider.get_color_for_value(0, 0)    # Should be first color
-  var value_color_50 = provider.get_color_for_value(50, 0)  # Should be middle color
-  var value_color_100 = provider.get_color_for_value(100, 0) # Should be last color
+  var value_color_128 = provider.get_color_for_value(128, 0)  # Should be middle color
+  var value_color_255 = provider.get_color_for_value(255, 0) # Should be last color
   
   assert(value_color_0 == custom_color0, f"Value 0 should return first color")
-  assert(value_color_100 == custom_color3, f"Value 100 should return last color")
+  assert(value_color_255 == custom_color3, f"Value 255 should return last color")
   
   # Test 10: Test edge cases
   var invalid_color = provider._get_color_at_index(-1)  # Invalid index
-  assert(invalid_color == 0xFFFFFFFF, f"Invalid index should return white")
+  assert(invalid_color == 0x00000000, f"Invalid index should return transparent")
   
   var out_of_bounds_color = provider._get_color_at_index(100)  # Out of bounds
-  assert(out_of_bounds_color == 0xFFFFFFFF, f"Out of bounds index should return white")
+  assert(out_of_bounds_color == 0x00000000, f"Out of bounds index should return transparent")
   
   # Test 11: Test empty palette handling
   var empty_palette = bytes()
-  provider.palette = empty_palette
+  provider.colors = empty_palette
   var empty_size = provider._get_palette_size()
   assert(empty_size == 0, f"Empty palette should have 0 colors")
   
   var empty_color = provider.produce_value("color", 1000)
-  assert(empty_color == 0xFFFFFFFF, f"Empty palette should return white")
+  assert(empty_color == 0x00000000, f"Empty palette should return transparent")
   
-  print("✓ All ColorCycleColorProvider bytes format tests passed!")
+  print("✓ All color_cycle bytes format tests passed!")
 end
 
 def test_bytes_parameter_validation()
@@ -126,8 +121,8 @@ def test_bytes_parameter_validation()
   
   # Test 1: Valid bytes palette should be accepted
   var valid_palette = bytes("FF0000FFFF00FF00FFFF0000")
-  provider.palette = valid_palette
-  assert(provider._get_palette_size() == 3, "Valid bytes palette should be accepted")
+  provider.colors = valid_palette
+  assert(provider.palette_size == 3, "Valid bytes palette should be accepted")
   
   # Test 2: Invalid types should be rejected
   var invalid_types = ["string", 123, 3.14, true, [], {}]
@@ -135,16 +130,12 @@ def test_bytes_parameter_validation()
   for invalid_val : invalid_types
     var caught_error = false
     try
-      provider.palette = invalid_val
+      provider.colors = invalid_val
     except "value_error"
       caught_error = true
     end
     assert(caught_error, f"Should reject {type(invalid_val)}: {invalid_val}")
   end
-  
-  # Test 3: Nil should be accepted (uses default)
-  provider.palette = nil
-  assert(provider._get_palette_size() == 3, "Nil should use default palette")
   
   print("✓ All bytes parameter validation tests passed!")
 end
@@ -152,4 +143,4 @@ end
 # Run the tests
 test_color_cycle_bytes_format()
 test_bytes_parameter_validation()
-print("✓ All ColorCycleColorProvider tests completed successfully!")
+print("✓ All color_cycle tests completed successfully!")

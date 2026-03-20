@@ -1,11 +1,11 @@
 # Test file for Breathe animation effect
 #
-# This file contains tests for the BreatheAnimation class following parameterized class specification
+# This file contains tests for the breathe class following parameterized class specification
 #
 # Command to run test is:
 #    ./berry -s -g -m lib/libesp32/berry_animation -e "import tasmota" lib/libesp32/berry_animation/tests/breathe_animation_test.be
 
-print("Testing BreatheAnimation...")
+print("Testing breathe...")
 
 # Import the core animation module
 import animation
@@ -13,42 +13,51 @@ print("Imported animation module")
 
 # Create LED strip and animation engine following specification
 var strip = global.Leds(10)  # Use global.Leds() for testing as per specification
-var engine = animation.animation_engine(strip)
+var engine = animation.create_engine(strip)
 print("Created LED strip and animation engine")
 
 # Create a breathe animation with engine-only parameter
-var anim = animation.breathe_animation(engine)
+var anim = animation.breathe(engine)
 print("Created breathe animation with defaults")
 
 # Test default values
-print(f"Default base_color: 0x{anim.base_color :08x}")
+print(f"Default color: 0x{anim._breathe.color :08x}")
 print(f"Default min_brightness: {anim.min_brightness}")
 print(f"Default max_brightness: {anim.max_brightness}")
 print(f"Default period: {anim.period}")
 print(f"Default curve_factor: {anim.curve_factor}")
 
 # Create another breathe animation and set custom parameters using virtual member assignment
-var blue_breathe = animation.breathe_animation(engine)
-blue_breathe.base_color = 0xFF0000FF
+var blue_breathe = animation.breathe(engine)
+blue_breathe.color = 0xFF0000FF
 blue_breathe.min_brightness = 20
 blue_breathe.max_brightness = 200
 blue_breathe.period = 4000
 blue_breathe.curve_factor = 3
 blue_breathe.priority = 15
-print(f"Blue breathe animation base_color: 0x{blue_breathe.base_color :08x}")
+print(f"Blue breathe animation color: 0x{blue_breathe._breathe.color :08x}")
 print(f"Blue breathe animation min_brightness: {blue_breathe.min_brightness}")
 print(f"Blue breathe animation max_brightness: {blue_breathe.max_brightness}")
 print(f"Blue breathe animation period: {blue_breathe.period}")
 print(f"Blue breathe animation curve_factor: {blue_breathe.curve_factor}")
 
 # Create red breathe animation with different parameters
-var red_breathe = animation.breathe_animation(engine)
-red_breathe.base_color = 0xFFFF0000
+var red_breathe = animation.breathe(engine)
+red_breathe.color = 0xFFFF0000
 red_breathe.min_brightness = 10
 red_breathe.max_brightness = 180
 red_breathe.period = 3000
 red_breathe.curve_factor = 2
-print(f"Red breathe animation base_color: 0x{red_breathe.base_color :08x}")
+print(f"Red breathe animation color: 0x{red_breathe._breathe.color :08x}")
+
+# Create green breathe animation with color as a closure value provider
+var green_breathe = animation.breathe(engine)
+green_breathe.color = animation.create_closure_value(engine, def (engine) return 0xFF00FF00 end)
+green_breathe.min_brightness = 10
+green_breathe.max_brightness = 180
+green_breathe.period = 3000
+green_breathe.curve_factor = 2
+print(f"Green breathe animation color: 0x{green_breathe._breathe.color :08x}")
 
 # Test parameter updates using virtual member assignment
 blue_breathe.min_brightness = 30
@@ -107,7 +116,7 @@ print(f"Color at full cycle: 0x{color_full :08x}")
 
 # Test rendering
 var frame = animation.frame_buffer(5)
-blue_breathe.render(frame, engine.time_ms)
+blue_breathe.render(frame, engine.time_ms, engine.strip_length)
 print(f"First pixel after rendering: 0x{frame.get_pixel_color(0) :08x}")
 
 # Test parameter validation
@@ -131,9 +140,14 @@ print("✓ Animation added to engine successfully")
 
 # Validate key test results
 assert(anim != nil, "Default breathe animation should be created")
-assert(blue_breathe != nil, "Custom breathe animation should be created")
+assert(blue_breathe != nil, "Blue breathe animation should be created")
 assert(red_breathe != nil, "Red breathe animation should be created")
-assert(blue_breathe.base_color == 0xFF0000FF, "Blue breathe should have correct base_color")
+assert(green_breathe != nil, "Green breathe animation should be created")
+assert(red_breathe._breathe.color == 0xFFFF0000, "Red breathe should have correct color")
+assert(red_breathe.curve_factor == 2, "Red breathe should have curve factor of 2")
+assert(animation.is_value_provider(green_breathe._breathe.get_param("color")), "Green breathe should have color as a value provider")
+assert(green_breathe._breathe.color == 0xFF00FF00, "Green breathe should have correct color")
+assert(blue_breathe._breathe.color == 0xFF0000FF, "Blue breathe should have correct color")
 assert(blue_breathe.min_brightness == 30, "Min brightness should be updated to 30")
 assert(blue_breathe.max_brightness == 220, "Max brightness should be updated to 220")
 assert(blue_breathe.period == 3500, "Breathe period should be updated to 3500")
@@ -141,7 +155,7 @@ assert(blue_breathe.curve_factor == 4, "Curve factor should be updated to 4")
 assert(blue_breathe.is_running, "Blue breathe should be running after start")
 assert(frame.get_pixel_color(0) != 0x00000000, "First pixel should not be black after rendering")
 assert(blue_breathe.engine == engine, "Animation should have correct engine reference")
-assert(blue_breathe.breathe_provider != nil, "Animation should have internal breathe provider")
+assert(blue_breathe._breathe != nil, "Animation should have internal breathe provider")
 
 print("All tests completed successfully!")
 return true
