@@ -696,68 +696,99 @@ class LDFCacheOptimizer:
             'total_count': total_count
         }
 
+    def _collect_relevant_files(self):
+        """
+        Collect all LDF-relevant file paths with their types.
+        
+        Scans source directory and platformio*.ini files, returning
+        a list of (abs_path, rel_path, file_type) tuples.
+        
+        Returns:
+            list: Tuples of (Path, str, str) - absolute path, relative path, type
+        """
+        relevant_files = []
+        src_path = Path(self.src_dir)
+
+        for file_path in src_path.rglob('*'):
+            if file_path.is_dir() or self._is_ignored_directory(file_path.parent):
+                continue
+            if file_path.suffix in self.ALL_RELEVANT_EXTENSIONS:
+                rel_path = self._get_relative_path_from_project(file_path)
+                if file_path.suffix in self.SOURCE_EXTENSIONS:
+                    relevant_files.append((file_path, rel_path, 'source'))
+                elif file_path.suffix in self.HEADER_EXTENSIONS:
+                    relevant_files.append((file_path, rel_path, 'header'))
+                elif file_path.suffix in self.CONFIG_EXTENSIONS:
+                    relevant_files.append((file_path, rel_path, 'config'))
+
+        project_path = Path(self.project_dir)
+        for ini_path in project_path.glob('platformio*.ini'):
+            if ini_path.exists() and ini_path.is_file():
+                rel_path = self._get_relative_path_from_project(ini_path)
+                relevant_files.append((ini_path, rel_path, 'ini'))
+
+        return relevant_files
+
+    def _collect_file_mtimes(self):
+        """
+        Collect modification times for all LDF-relevant files.
+        
+        Uses stat().st_mtime_ns for nanosecond precision to detect
+        even rapid successive modifications.
+        
+        Returns:
+            dict: Mapping of relative path to mtime_ns (int)
+        """
+        file_mtimes = {}
+        for file_path, rel_path, _ in self._collect_relevant_files():
+            try:
+                file_mtimes[rel_path] = file_path.stat().st_mtime_ns
+            except (IOError, OSError):
+                pass
+        return file_mtimes
+
     def get_project_hash_with_details(self):
         """
         Calculate comprehensive project hash for cache invalidation.
         
         Computes hash based on all LDF-relevant files to detect changes
         that would require cache invalidation. Only includes files that
-        can affect dependency resolution.
+        can affect dependency resolution. Also collects file mtimes for
+        fast validation on subsequent runs.
         
         Returns:
-            dict: Hash details including file hashes and final combined hash
+            dict: Hash details including file hashes, mtimes, and final combined hash
         """
         file_hashes = {}
-        src_path = Path(self.src_dir)
-        
-        # Process all files in source directory
-        for file_path in src_path.rglob('*'):
-            # Skip directories and ignored directories
-            if file_path.is_dir() or self._is_ignored_directory(file_path.parent):
-                continue
-                
-            # Only process LDF-relevant file extensions
-            if file_path.suffix in self.ALL_RELEVANT_EXTENSIONS:
-                try:
-                    rel_path = self._get_relative_path_from_project(file_path)
-                    
-                    # Hash source files based on their include dependencies
-                    if file_path.suffix in self.SOURCE_EXTENSIONS:
-                        includes = self._extract_includes(file_path)
-                        include_hash = hashlib.md5(str(sorted(includes)).encode()).hexdigest()
-                        file_hashes[rel_path] = include_hash
-                    # Hash header files based on content
-                    elif file_path.suffix in self.HEADER_EXTENSIONS:
-                        file_content = file_path.read_bytes()
-                        file_hash = hashlib.md5(file_content).hexdigest()
-                        file_hashes[rel_path] = file_hash
-                    # Hash config files based on content
-                    elif file_path.suffix in self.CONFIG_EXTENSIONS:
-                        file_content = file_path.read_bytes()
-                        file_hash = hashlib.md5(file_content).hexdigest()
-                        file_hashes[rel_path] = file_hash
-                except (IOError, OSError) as e:
-                    print(f"⚠ Could not hash {file_path}: {e}")
-                    continue
-                    
-        # Process platformio.ini files
-        project_path = Path(self.project_dir)
-        for ini_path in project_path.glob('platformio*.ini'):
-            if ini_path.exists() and ini_path.is_file():
-                try:
-                    platformio_hash = self._hash_platformio_ini(ini_path)
+        file_mtimes = {}
+
+        for file_path, rel_path, file_type in self._collect_relevant_files():
+            try:
+                file_mtimes[rel_path] = file_path.stat().st_mtime_ns
+
+                if file_type == 'source':
+                    includes = self._extract_includes(file_path)
+                    include_hash = hashlib.md5(str(sorted(includes)).encode()).hexdigest()
+                    file_hashes[rel_path] = include_hash
+                elif file_type == 'header' or file_type == 'config':
+                    file_content = file_path.read_bytes()
+                    file_hash = hashlib.md5(file_content).hexdigest()
+                    file_hashes[rel_path] = file_hash
+                elif file_type == 'ini':
+                    platformio_hash = self._hash_platformio_ini(file_path)
                     if platformio_hash:
-                        rel_ini_path = self._get_relative_path_from_project(ini_path)
-                        file_hashes[rel_ini_path] = platformio_hash
-                except (IOError, OSError) as e:
-                    print(f"⚠ Could not hash {ini_path}: {e}")
-                    
+                        file_hashes[rel_path] = platformio_hash
+            except (IOError, OSError) as e:
+                print(f"⚠ Could not hash {file_path}: {e}")
+                continue
+
         # Compute final combined hash
         combined_content = json.dumps(file_hashes, sort_keys=True)
         final_hash = hashlib.sha256(combined_content.encode()).hexdigest()
         
         return {
             'file_hashes': file_hashes,
+            'file_mtimes': file_mtimes,
             'final_hash': final_hash,
             'file_count': len(file_hashes)
         }
@@ -787,11 +818,12 @@ class LDFCacheOptimizer:
 
             # Create cache data structure
             cache_data = {
-                'version': '1.0',
+                'version': '1.1',
                 'env_name': self.env_name,
                 'timestamp': datetime.datetime.now().isoformat(),
                 'project_hash': project_hash['final_hash'],
                 'file_hashes': project_hash['file_hashes'],
+                'file_mtimes': project_hash.get('file_mtimes', {}),
                 'build_order': build_order,
                 'artifacts': artifacts
             }
@@ -888,12 +920,40 @@ class LDFCacheOptimizer:
             print(f"❌ Error loading cache: {e}")
             return None
 
+    def _quick_mtime_check(self, cached_mtimes):
+        """
+        Fast cache validation using file modification times.
+        
+        Compares current file mtimes against cached values. This is
+        significantly faster than computing content hashes since it
+        only requires stat() calls, not file reads.
+        
+        Args:
+            cached_mtimes: Dict of relative path to mtime_ns from cache
+            
+        Returns:
+            bool: True if all mtimes match (no files changed)
+        """
+        current_mtimes = self._collect_file_mtimes()
+
+        # Check for new or deleted files
+        if set(current_mtimes.keys()) != set(cached_mtimes.keys()):
+            return False
+
+        # Check for modified files
+        for rel_path, current_mtime in current_mtimes.items():
+            if cached_mtimes.get(rel_path) != current_mtime:
+                return False
+
+        return True
+
     def validate_cache(self, cache_data):
         """
         Validate cache integrity and freshness.
         
-        Performs comprehensive validation including signature verification
-        and project hash comparison to ensure cache is valid and current.
+        Uses a two-tier validation strategy:
+        1. Fast path: Compare file mtimes (stat() only, no file reads)
+        2. Slow path: Full content hash if mtimes unavailable or changed
         
         Args:
             cache_data: Cache data to validate
@@ -916,13 +976,28 @@ class LDFCacheOptimizer:
                 print("⚠ Cache signature mismatch")
                 return False
 
-            # Verify project hasn't changed
+            # Fast path: mtime check (available since cache version 1.1)
+            cached_mtimes = cache_data.get('file_mtimes')
+            if cached_mtimes:
+                if self._quick_mtime_check(cached_mtimes):
+                    print("✅ Cache validation successful (mtime fast path)")
+                    return True
+                # mtimes differ - fall through to full hash verification
+                # (mtime can change without content change, e.g. git checkout)
+
+            # Slow path: full content hash verification
             current_hash = self.get_project_hash_with_details()
             if cache_data.get('project_hash') != current_hash['final_hash']:
                 print("⚠ Project files changed, cache invalid")
                 return False
 
-            print("✅ Cache validation successful")
+            # Content unchanged despite mtime change - update cached mtimes
+            if cached_mtimes and current_hash.get('file_mtimes'):
+                cache_data['file_mtimes'] = current_hash['file_mtimes']
+                cache_data['signature'] = self.compute_signature(cache_data)
+                self.save_cache(cache_data)
+
+            print("✅ Cache validation successful (full hash)")
             return True
 
         except Exception as e:
