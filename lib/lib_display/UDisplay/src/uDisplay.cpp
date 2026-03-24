@@ -310,10 +310,10 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               // Parse data pins directly into RGB config
               // Note: byte order may be swapped later based on lvgl_param.swap_color
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
-                  panel_config->rgb.data_gpio_nums[cnt + 8] = next_val(&lp1);
+                  panel_config->rgb.data_gpio_nums[cnt + 8] = (gpio_num_t)next_val(&lp1);
               }
               for (uint32_t cnt = 0; cnt < 8; cnt++) {
-                  panel_config->rgb.data_gpio_nums[cnt] = next_val(&lp1);
+                  panel_config->rgb.data_gpio_nums[cnt] = (gpio_num_t)next_val(&lp1);
               }
               spi_speed = next_val(&lp1);
 #endif //SOC_LCD_RGB_SUPPORTED
@@ -1272,15 +1272,14 @@ if (interface == _UDSP_SPI) {
     panel_config->rgb.timings.h_res = gxs;
     panel_config->rgb.timings.v_res = gys;
     panel_config->rgb.data_width = 16; // RGB565 in parallel mode, thus 16bit in width
-    panel_config->rgb.sram_trans_align = 8;
-    panel_config->rgb.psram_trans_align = 64;
+    // Note: sram_trans_align and psram_trans_align removed in newer ESP-IDF versions
 
     // Handle byte swapping by swapping the low and high byte pin assignments
     if (lvgl_param.swap_color) {
       for (uint32_t cnt = 0; cnt < 8; cnt++) {
         int8_t temp = panel_config->rgb.data_gpio_nums[cnt];
-        panel_config->rgb.data_gpio_nums[cnt] = panel_config->rgb.data_gpio_nums[cnt + 8];
-        panel_config->rgb.data_gpio_nums[cnt + 8] = temp;
+        panel_config->rgb.data_gpio_nums[cnt] = (gpio_num_t)panel_config->rgb.data_gpio_nums[cnt + 8];
+        panel_config->rgb.data_gpio_nums[cnt + 8] = (gpio_num_t)temp;
       }
       lvgl_param.swap_color = 0;
     }
