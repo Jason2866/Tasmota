@@ -81,7 +81,7 @@ static void gpio_setup_out(int gpio, int sig, bool invert) {
         return;
     PIN_FUNC_SELECT(GPIO_PIN_MUX_REG[gpio], PIN_FUNC_GPIO);
     gpio_set_direction(gpio, GPIO_MODE_DEF_OUTPUT);
-    gpio_matrix_out(gpio, sig, invert, false);
+    rom_gpio_matrix_out(gpio, sig, invert, false);
 }
 
 /// Resets "Start Pulse" signal when the current row output is done.

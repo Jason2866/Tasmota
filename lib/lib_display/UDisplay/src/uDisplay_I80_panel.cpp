@@ -348,7 +348,7 @@ uint32_t I80Panel::getSimpleResistiveTouch(uint32_t threshold) {
     _pb_init_pin(true);
     
     // Temporarily reconfigure I80 pins as GPIOs for analog touch
-    gpio_matrix_out(cfg.dc_pin, 0x100, 0, 0);
+    rom_gpio_matrix_out(cfg.dc_pin, 0x100, 0, 0);
 
     pinMode(cfg.data_pins_low[0], INPUT_PULLUP);
     pinMode(cfg.dc_pin, INPUT_PULLUP);
@@ -382,7 +382,7 @@ uint32_t I80Panel::getSimpleResistiveTouch(uint32_t threshold) {
 
     // Re-enable GPIO matrix routing for I80
     _pb_init_pin(false);
-    gpio_matrix_out(cfg.dc_pin, LCD_DC_IDX, 0, 0);
+    rom_gpio_matrix_out(cfg.dc_pin, LCD_DC_IDX, 0, 0);
 
     return aval;
 }
@@ -562,14 +562,14 @@ void I80Panel::_pb_init_pin(bool read) {
         auto idx_base = LCD_DATA_OUT0_IDX;
         if (cfg.bus_width == 8) {
             for (size_t i = 0; i < 8; ++i) {
-                gpio_matrix_out(cfg.data_pins_low[i], idx_base + i, 0, 0);
+                rom_gpio_matrix_out(cfg.data_pins_low[i], idx_base + i, 0, 0);
             }
         } else {
             for (size_t i = 0; i < 8; ++i) {
-                gpio_matrix_out(cfg.data_pins_low[i], idx_base + i, 0, 0);
+                rom_gpio_matrix_out(cfg.data_pins_low[i], idx_base + i, 0, 0);
             }
             for (size_t i = 0; i < 8; ++i) {
-                gpio_matrix_out(cfg.data_pins_high[i], idx_base + 8 + i, 0, 0);
+                rom_gpio_matrix_out(cfg.data_pins_high[i], idx_base + 8 + i, 0, 0);
             }
         }
     }

@@ -10,6 +10,7 @@
 #include "esp32-hal-spi.h"
 #include "driver/spi_master.h"
 #include "soc/gpio_periph.h"
+#include "soc/gpio_struct.h"
 #endif
 
 #ifndef ESP32

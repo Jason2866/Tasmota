@@ -99,14 +99,36 @@ const uint8_t MAX_SPI = 2;                  // Max number of Hardware SPI contro
 
 // I2S
 #ifdef SOC_I2S_SUPPORTED
-  const uint8_t MAX_I2S = SOC_I2S_NUM;
+  // Determine number of I2S peripherals based on chip type
+  #if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3)
+    const uint8_t MAX_I2S = 2;
+  #elif defined(CONFIG_IDF_TARGET_ESP32P4)
+    const uint8_t MAX_I2S = 3;
+  #elif defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C2) || \
+        defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C5) || \
+        defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C61) || \
+        defined(CONFIG_IDF_TARGET_ESP32H2)
+    const uint8_t MAX_I2S = 1;
+  #else
+    const uint8_t MAX_I2S = 1;  // Safe default for unknown variants
+  #endif
 #else  // SOC_I2S_SUPPORTED
   const uint8_t MAX_I2S = 0;
 #endif // SOC_I2S_SUPPORTED
 
 // RMT
 #ifdef SOC_RMT_SUPPORTED
-  const uint8_t MAX_RMT = (SOC_RMT_GROUPS) * (SOC_RMT_TX_CANDIDATES_PER_GROUP);
+  // Determine number of RMT channels based on chip type
+  #if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3)
+    const uint8_t MAX_RMT = 8;
+  #elif defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32C2) || \
+        defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C5) || \
+        defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C61) || \
+        defined(CONFIG_IDF_TARGET_ESP32H2) || defined(CONFIG_IDF_TARGET_ESP32P4)
+    const uint8_t MAX_RMT = 4;
+  #else
+    const uint8_t MAX_RMT = 4;  // Safe default for unknown variants
+  #endif
 #else // SOC_RMT_SUPPORTED
   const uint8_t MAX_RMT = 0;
 #endif // SOC_RMT_SUPPORTED

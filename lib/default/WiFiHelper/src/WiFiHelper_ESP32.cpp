@@ -210,7 +210,7 @@ bool WiFiHelper::setPhyMode(WiFiPhyMode_t mode) {
     Thus you are more likely to experience disturbances.
     The response speed and stability is better at HT20 for ESP units.
   */
-  esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
+  esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW20);
   /*
     ESPEasy:
     Set to use "Long GI" making it more resilliant to reflections
