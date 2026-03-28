@@ -9,7 +9,7 @@
 	},
 	"build": {
 		"includeDir": ".",
-		"srcFilter": [ "-<*>", "-<src/draw/sw/blend/helium/>" ],
+		"srcFilter": [ "+<*>", "-<draw/sw/blend/helium/>" ],
 		"flags": [ "-I$PROJECT_DIR/tasmota/lvgl_berry" ]
 	},
 	"license": "MIT",

@@ -27,7 +27,7 @@
 
 // ESP32-P4 SDK removed i2s_port_t enum, use int instead
 #ifndef SOC_I2S_NUM
-  #define SOC_I2S_NUM  2
+  #define SOC_I2S_NUM  MAX_I2S
 #endif
 typedef int i2s_port_t;
 
