@@ -1,0 +1,19 @@
+---
+Checks: >
+  misc-unused-*,
+  bugprone-*,
+  clang-analyzer-*,
+  performance-*,
+  modernize-*,
+  -modernize-use-std-print,
+  -modernize-use-trailing-return-type,
+  -bugprone-easily-swappable-parameters,
+  -modernize-avoid-c-arrays
+
+ExtraArgs:
+  - "-Qunused-arguments"
+  - "-fms-extensions"
+  - "-Wno-unknown-argument"
+
+WarningsAsErrors: ''
+InheritParentConfig: true # Added for potential compatibility

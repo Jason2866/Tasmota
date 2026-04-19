@@ -1,7 +1,31 @@
 CompileFlags:
+  BuiltinHeaders: QueryDriver
+Diagnostics:
+  Suppress: [pp_expects_filename]
+---
+CompileFlags:
+  Add:
+    - "-Wall"
+    - "-Wextra"
+    - "-Wunused-variable"
+    - "-Wunused-function"
+    - "-Wno-unused-parameter"
+    - "-Wno-reserved-identifier"
   Remove:
-    - -fstrict-volatile-bitfields
-    - -fno-tree-switch-conversion
-    - -free
-    - -fipa-pta
-    - -march=*
+    - "-misc-unused-parameters"
+    - "-mfix-esp32-psram-cache-issue"
+    - "-fno-shrink-wrap"
+    - "-fno-tree-switch-conversion"
+    - "-fstrict-volatile-bitfields"
+    - "-free"
+    - "-fipa-pta"
+    - "-march=*"
+    - "-mdisable-hardware-atomics"
+    - "-mno-target-align"
+Index:
+    Background: Build
+    StandardLibrary: true
+Diagnostics:
+  ClangTidy:
+    Remove: [misc-unused-parameters, bugprone-reserved-identifier]
+  Suppress: [reserved_identifier]
