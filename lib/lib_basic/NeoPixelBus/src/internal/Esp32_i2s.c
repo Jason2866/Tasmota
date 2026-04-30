@@ -216,7 +216,7 @@ void i2sSetPins(uint8_t bus_num, int8_t out, bool invert) {
     if (out >= 0) {
         if (I2S[bus_num].out != out) {
             if (I2S[bus_num].out >= 0) {
-                gpio_matrix_out(I2S[bus_num].out, 0x100, invert, false);
+                rom_gpio_matrix_out(I2S[bus_num].out, 0x100, invert, false);
             }
             I2S[bus_num].out = out;
             pinMode(out, OUTPUT);
@@ -233,10 +233,10 @@ void i2sSetPins(uint8_t bus_num, int8_t out, bool invert) {
                 i2sSignal = I2S0O_DATA_OUT23_IDX;
             }
 
-            gpio_matrix_out(out, i2sSignal, invert, false);
+            rom_gpio_matrix_out(out, i2sSignal, invert, false);
         }
     } else if (I2S[bus_num].out >= 0) {
-        gpio_matrix_out(I2S[bus_num].out, 0x100, invert, false);
+        rom_gpio_matrix_out(I2S[bus_num].out, 0x100, invert, false);
         I2S[bus_num].out = -1;
     }
 

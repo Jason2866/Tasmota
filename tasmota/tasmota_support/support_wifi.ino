@@ -2113,7 +2113,7 @@ uint64_t WifiGetNtp(void) {
 // Respond to some Arduino/esp-idf events for better IPv6 support
 // --------------------------------------------------------------------------------
 #ifdef ESP32
-extern esp_netif_t* get_esp_interface_netif(esp_interface_t interface);
+extern esp_netif_t* get_esp_interface_netif(wifi_interface_t interface);
 
 // typedef void (*WiFiEventSysCb)(arduino_event_t *event);
 
@@ -2160,7 +2160,7 @@ void WifiEvents(arduino_event_t *event) {
       // workaround for the race condition in LWIP, see https://github.com/espressif/arduino-esp32/pull/9016#discussion_r1451774885
       {
         uint32_t i = 5;   // try 5 times only
-        while (esp_netif_create_ip6_linklocal(get_esp_interface_netif(ESP_IF_WIFI_STA)) != ESP_OK) {
+        while (esp_netif_create_ip6_linklocal(get_esp_interface_netif(WIFI_IF_STA)) != ESP_OK) {
           delay(1);
           if (i-- == 0) {
             break;

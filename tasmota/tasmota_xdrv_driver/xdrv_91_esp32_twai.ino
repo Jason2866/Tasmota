@@ -41,7 +41,11 @@
 
 #define TWAI_POLLING_RATE_MS  100
 
+// Suppress deprecation warning - new esp_twai.h API is not yet complete
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcpp"
 #include "driver/twai.h"
+#pragma GCC diagnostic pop
 
 enum TwaiSpeeds { TWAI_SPEED_25KBITS = 0,
                   TWAI_SPEED_50KBITS,

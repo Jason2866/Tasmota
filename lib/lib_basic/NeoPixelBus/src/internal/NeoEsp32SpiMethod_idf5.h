@@ -237,7 +237,7 @@ public:
         // wait until the last send finishes before destructing everything
         // arbitrary time out of 10 seconds
 
-        gpio_matrix_out(_pin, 0x100, false, false);
+        rom_gpio_matrix_out(_pin, 0x100, false, false);
         pinMode(_pin, INPUT);
 
         spi_bus_remove_device(_spi_strip->spi_device);

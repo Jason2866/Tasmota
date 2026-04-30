@@ -43,7 +43,7 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
     esp_lcd_dsi_bus_config_t bus_config = {
         .bus_id = 0,
         .num_data_lanes = cfg.dsi_lanes,
-        .lane_bit_rate_mbps = cfg.lane_speed_mbps
+        .lane_bit_rate_mbps = (float)cfg.lane_speed_mbps
     };
     ret = esp_lcd_new_dsi_bus(&bus_config, &dsi_bus);
     if (ret != ESP_OK) {
@@ -70,7 +70,8 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
     dpi_config.dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT;
     dpi_config.dpi_clock_freq_mhz = cfg.pixel_clock_hz / 1000000;
     dpi_config.virtual_channel = 0;
-    dpi_config.pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565;
+    dpi_config.in_color_format = LCD_COLOR_FMT_RGB565;
+    dpi_config.out_color_format = LCD_COLOR_FMT_RGB565;
     dpi_config.num_fbs = 1;
     dpi_config.video_timing.h_size = cfg.width;
     dpi_config.video_timing.v_size = cfg.height;
@@ -80,7 +81,7 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
     dpi_config.video_timing.vsync_back_porch = cfg.timing.v_back_porch;
     dpi_config.video_timing.vsync_pulse_width = cfg.timing.v_sync_pulse;
     dpi_config.video_timing.vsync_front_porch = cfg.timing.v_front_porch;
-    dpi_config.flags.use_dma2d = 1;
+    dpi_config.flags.disable_lp = 0;  // Enable low-power mode
     
     AddLog(3, "DSI: DPI config: clk=%dMHz res=%dx%d", dpi_config.dpi_clock_freq_mhz, cfg.width, cfg.height);
     AddLog(3, "DSI: H timing: BP=%d PW=%d FP=%d", cfg.timing.h_back_porch, cfg.timing.h_sync_pulse, cfg.timing.h_front_porch);

@@ -494,7 +494,7 @@ public:
         ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_tx_wait_all_done(_channel.RmtChannelNumber, 10000 / portTICK_PERIOD_MS));
         ESP_ERROR_CHECK( rmt_del_channel(_channel.RmtChannelNumber));
 
-        gpio_matrix_out(_pin, 0x100, false, false);
+        rom_gpio_matrix_out(_pin, 0x100, false, false);
         pinMode(_pin, INPUT);
 
         free(_dataEditing);

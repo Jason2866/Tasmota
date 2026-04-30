@@ -400,8 +400,8 @@ void rngxSetup()
 #endif // ESP8266
 #ifdef ESP32
   esp_err_t err;
-  esp_netif_t* esp_netif_STA = get_esp_interface_netif(ESP_IF_WIFI_STA);
-  esp_netif_t* esp_netif_AP = get_esp_interface_netif(ESP_IF_WIFI_AP);
+  esp_netif_t* esp_netif_STA = get_esp_interface_netif(WIFI_IF_STA);
+  esp_netif_t* esp_netif_AP = get_esp_interface_netif(WIFI_IF_AP);
   esp_netif_dns_info_t ip_dns;
 
   err = esp_netif_dhcps_stop(esp_netif_AP);

@@ -139,7 +139,7 @@ const uint8_t eth_type_xtable[] = {
 char eth_hostname[sizeof(TasmotaGlobal.hostname)];
 uint8_t eth_config_change;
 
-extern esp_netif_t* get_esp_interface_netif(esp_interface_t interface);
+extern esp_netif_t* get_esp_interface_netif(wifi_interface_t interface);
 
 void EthernetEvent(arduino_event_t *event);
 void EthernetEvent(arduino_event_t *event) {

@@ -49,6 +49,10 @@
 #include "driver/jpeg_encode.h"
 #include "esp_ldo_regulator.h"
 
+// Lookup tables for mapping format index (0=RAW8, 1=RAW10, 2=RAW12) to color types
+#define WC_RAW_FORMAT_TO_CAM_COLOR(fmt)  ((fmt) == 1 ? CAM_CTLR_COLOR_RAW10 : (fmt) == 2 ? CAM_CTLR_COLOR_RAW12 : CAM_CTLR_COLOR_RAW8)
+#define WC_RAW_FORMAT_TO_ISP_COLOR(fmt)  ((fmt) == 1 ? ISP_COLOR_RAW10 : (fmt) == 2 ? ISP_COLOR_RAW12 : ISP_COLOR_RAW8)
+
 // H.264 encoder for RTP session (ESP32-P4 hardware)
 extern "C" {
 #include "esp_h264_enc_single_hw.h"
@@ -386,7 +390,7 @@ uint32_t WcInitPipeline() {
   Wc.core.read_idx = 1;
 
   // 2. Configure CSI
-  cam_ctlr_color_t csi_output_format = (Wc.core.session_type == SESSION_RTSP_AND_WS || Wc.core.session_type == SESSION_WEBRTC) ? CAM_CTLR_COLOR_YUV420 : CAM_CTLR_COLOR_YUV422; // H.264 requires YUV420, JPEG needs YUV422 on early P4 chips
+  cam_ctlr_color_t csi_output_format = (Wc.core.session_type == SESSION_RTSP_AND_WS || Wc.core.session_type == SESSION_WEBRTC) ? CAM_CTLR_COLOR_YUV420 : CAM_CTLR_COLOR_YUV422_YUYV; // H.264 requires YUV420, JPEG needs YUV422 on early P4 chips
   
   esp_cam_ctlr_csi_config_t csi_config = {
     .ctlr_id = 0,
@@ -394,7 +398,7 @@ uint32_t WcInitPipeline() {
     .v_res = Wc.core.config.height,
     .data_lane_num = Wc.core.config.lane_num,
     .lane_bit_rate_mbps = (int)Wc.core.config.mipi_clock,
-    .input_data_color_type = (cam_ctlr_color_t)COLOR_TYPE_ID(COLOR_SPACE_RAW, (color_pixel_raw_format_t)Wc.core.config.format),
+    .input_data_color_type = WC_RAW_FORMAT_TO_CAM_COLOR(Wc.core.config.format),
     .output_data_color_type = csi_output_format,
     .queue_items = 1,
     .byte_swap_en = false,
@@ -429,7 +433,7 @@ uint32_t WcInitPipeline() {
     esp_isp_processor_cfg_t isp_config = {
       .clk_hz = 120 * 1000 * 1000,
       .input_data_source = ISP_INPUT_DATA_SOURCE_CSI,
-      .input_data_color_type = (isp_color_t)COLOR_TYPE_ID(COLOR_SPACE_RAW, (color_pixel_raw_format_t)Wc.core.config.format),
+      .input_data_color_type = WC_RAW_FORMAT_TO_ISP_COLOR(Wc.core.config.format),
       .output_data_color_type = isp_output_format,
       .h_res = Wc.core.config.width,
       .v_res = Wc.core.config.height,

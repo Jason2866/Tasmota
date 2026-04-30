@@ -149,7 +149,7 @@ TasmotaLEDPusherRMT::~TasmotaLEDPusherRMT() {
   }
 
   if (_pin >= 0) {
-    gpio_matrix_out(_pin, 0x100, false, false);
+    rom_gpio_matrix_out(_pin, 0x100, false, false);
     pinMode(_pin, INPUT);
     _pin = -1;
   }

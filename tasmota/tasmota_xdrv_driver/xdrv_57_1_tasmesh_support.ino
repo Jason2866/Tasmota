@@ -271,7 +271,7 @@ int MESHaddPeer(uint8_t *_MAC ) {
   esp_now_peer_info_t _peer;
   _peer.channel = MESH.channel;
   _peer.encrypt = false;
-  _peer.ifidx = (wifi_interface_t)ESP_IF_WIFI_AP;
+  _peer.ifidx = (wifi_interface_t)WIFI_IF_AP;
   memcpy(_peer.peer_addr, _MAC, 6);
   err = esp_now_add_peer(&_peer);
 #else

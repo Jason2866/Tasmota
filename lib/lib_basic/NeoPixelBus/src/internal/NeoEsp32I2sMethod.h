@@ -173,7 +173,7 @@ public:
             yield();
         }
 
-        gpio_matrix_out(_pin, 0x100, false, false);
+        rom_gpio_matrix_out(_pin, 0x100, false, false);
         pinMode(_pin, INPUT);
 
         free(_data);
