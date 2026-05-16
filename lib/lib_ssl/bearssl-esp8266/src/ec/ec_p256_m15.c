@@ -24,6 +24,11 @@
 
 #include "t_inner.h"
 
+/* The HW HAL (_ec_p256_m15.c) owns br_ec_p256_m15 when USE_SHA_ROM
+ * is active and the chip has an MPI accelerator. Skip the entire SW
+ * implementation in that case. */
+#ifndef BR_HAL_PROVIDES_EC_P256
+
 /*
  * If BR_NO_ARITH_SHIFT is undefined, or defined to 0, then we _assume_
  * that right-shifting a signed negative integer copies the sign bit
@@ -2109,3 +2114,5 @@ const br_ec_impl br_ec_p256_m15 PROGMEM = {
 	&api_mulgen,
 	&api_muladd
 };
+
+#endif /* !BR_HAL_PROVIDES_EC_P256 */

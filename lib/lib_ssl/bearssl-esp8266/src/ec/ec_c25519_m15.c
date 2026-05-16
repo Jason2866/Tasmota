@@ -24,6 +24,11 @@
 
 #include "t_inner.h"
 
+/* The HW HAL (_ec_c25519_m15.c) owns br_ec_c25519_m15 when USE_SHA_ROM
+ * is active and the chip has an MPI accelerator. Skip the entire SW
+ * implementation in that case. */
+#ifndef BR_HAL_PROVIDES_EC_C25519
+
 /* obsolete
 #include <stdio.h>
 #include <stdlib.h>
@@ -1476,3 +1481,4 @@ const br_ec_impl br_ec_c25519_m15 PROGMEM = {
 	&api_mulgen,
 	&api_muladd
 };
+#endif /* !BR_HAL_PROVIDES_EC_C25519 */

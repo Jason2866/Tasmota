@@ -36,6 +36,16 @@
 #include "rom/bigint.h"
 #include "t_inner.h"
 
+/* Shared MPI lock — see _ec_p256_m15.c for rationale. */
+#if __has_include("esp_crypto_lock.h")
+# include "esp_crypto_lock.h"
+# define BR_MPI_LOCK_ACQUIRE() esp_crypto_mpi_lock_acquire()
+# define BR_MPI_LOCK_RELEASE() esp_crypto_mpi_lock_release()
+#else
+# define BR_MPI_LOCK_ACQUIRE() ((void)0)
+# define BR_MPI_LOCK_RELEASE() ((void)0)
+#endif
+
 #define WORDS 8  /* 8×32-bit limbs */
 
 /* 
@@ -267,6 +277,7 @@ api_mul(unsigned char *G, size_t Glen,
     uint32_t a[WORDS], aa[WORDS], b[WORDS], bb[WORDS];
     uint32_t c[WORDS], d[WORDS], e[WORDS], da[WORDS], cb[WORDS];
     uint32_t t[WORDS];
+    BR_MPI_LOCK_ACQUIRE();
 #if defined(CONFIG_IDF_TARGET_ESP32)
     ets_bigint_enable();
 #endif
@@ -316,6 +327,7 @@ api_mul(unsigned char *G, size_t Glen,
 #if defined(CONFIG_IDF_TARGET_ESP32)
     ets_bigint_disable();
 #endif
+    BR_MPI_LOCK_RELEASE();
 
     /* Final reduction if needed and serialize */
     if (ge_ct(unorm, P_LE)) {

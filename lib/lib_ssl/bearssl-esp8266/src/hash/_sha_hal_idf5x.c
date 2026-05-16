@@ -53,10 +53,55 @@
 #define HAVE_HAL_SHA384  (SOC_SHA_SUPPORT_SHA384)
 #define HAVE_HAL_SHA512  (SOC_SHA_SUPPORT_SHA512)
 
+/* ------------------------------------------------------------------
+ * Lock sharing with ESP-IDF mbedTLS / WPA / OTA.
+ *
+ * The SHA accelerator is a single shared peripheral. ESP-IDF's own
+ * mbedTLS, Wi-Fi WPA2 EAPOL and OTA verification all reach it via the
+ * lock published in esp_crypto_lock.h. A private portMUX here would
+ * not serialize against those users — a TLS handshake concurrent with
+ * a Wi-Fi key derivation would corrupt the midstate.
+ *
+ * Use the IDF lock when esp_crypto_lock.h is available (IDF 5.x for
+ * every ESP32 family that has a SHA accelerator) and fall back to a
+ * private spinlock only when the header is not present.
+ * ------------------------------------------------------------------ */
+#if __has_include("esp_crypto_lock.h")
+# include "esp_crypto_lock.h"
+# define BR_SHA_USE_IDF_LOCK 1
+#endif
+
+#if BR_SHA_USE_IDF_LOCK
+/* The IDF SHA lock also covers AES (shared crypto-DMA on S2/S3). Still
+ * call sha_ll_enable_bus_clock/reset_register here because the IDF lock
+ * does not by itself touch the bus clock; mbedTLS does it inside its
+ * own per-call wrapper. */
+# define SHA_ENTER()  do { esp_crypto_sha_aes_lock_acquire(); \
+                           { int __DECLARE_RCC_ATOMIC_ENV; \
+                             sha_ll_enable_bus_clock(true); \
+                             sha_ll_reset_register(); } } while (0)
+# define SHA_EXIT()   do { { int __DECLARE_RCC_ATOMIC_ENV; \
+                             sha_ll_enable_bus_clock(false); } \
+                           esp_crypto_sha_aes_lock_release(); } while (0)
+#else
 static portMUX_TYPE s_sha_mux = portMUX_INITIALIZER_UNLOCKED;
-#define SHA_ENTER()  {portENTER_CRITICAL(&s_sha_mux); int __DECLARE_RCC_ATOMIC_ENV; sha_ll_enable_bus_clock(true); sha_ll_reset_register();}
-#define SHA_EXIT()   {portEXIT_CRITICAL(&s_sha_mux); int __DECLARE_RCC_ATOMIC_ENV; sha_ll_enable_bus_clock(false);}
+# define SHA_ENTER()  {portENTER_CRITICAL(&s_sha_mux); int __DECLARE_RCC_ATOMIC_ENV; sha_ll_enable_bus_clock(true); sha_ll_reset_register();}
+# define SHA_EXIT()   {portEXIT_CRITICAL(&s_sha_mux); int __DECLARE_RCC_ATOMIC_ENV; sha_ll_enable_bus_clock(false);}
+#endif
+
 #define SHA_WAIT()   {while (sha_ll_busy()) { } }
+
+/* On ESP32-P4 with IDF >= 5.5 the SHA mode register must be programmed
+ * explicitly via sha_ll_set_mode() before every operation; the bare
+ * mode argument to sha_ll_load() / start_block() / continue_block() is
+ * no longer sufficient. This macro is a no-op on every other target. */
+#if defined(CONFIG_IDF_TARGET_ESP32P4) && defined(ESP_IDF_VERSION) && \
+    defined(ESP_IDF_VERSION_VAL) && \
+    ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)
+# define SHA_SET_MODE(m) sha_ll_set_mode(m)
+#else
+# define SHA_SET_MODE(m) ((void)0)
+#endif
 
 /* ================================================================
  * SHA-1 (HAL path, no save/restore) - needs char buf[112];
@@ -69,9 +114,7 @@ sha_hal_process_block(void *state_buf, const void *blk,
                       size_t block_words, bool first)
 {
     SHA_ENTER();
-#if defined(CONFIG_IDF_TARGET_ESP32P4) && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)
-    sha_ll_set_mode(type); // required on P4 in IDF 5.5+
-#endif 
+    SHA_SET_MODE(type);
     if (!first) {
         sha_ll_write_digest(type, state_buf, digest_words);
     }
@@ -306,6 +349,7 @@ void br_sha224_update(br_sha224_context *cc, const void *data, size_t len)
         size_t block_count_in_run = 0;
 
         SHA_ENTER();
+        SHA_SET_MODE(mode);
 
         /* Complete the partial block (stitch) if needed */
         if (stitch_take) {
@@ -409,6 +453,7 @@ void br_sha256_out(const br_sha256_context *cc, void *out)
     bool must_start_from_iv = midstate_is_iv && no_full_blocks_done;
 
     SHA_ENTER();
+    SHA_SET_MODE(mode);
 
     if (!must_start_from_iv) {
         uint32_t midstate_words[8];
@@ -545,7 +590,7 @@ void br_sha384_update(br_sha384_context *cc, const void *data, size_t len) {
             br_range_dec64le(st_be, 8, cc->val);
             br_range_enc64be(st_be, st_be, 8);
             SHA_ENTER();
-            sha_ll_load(SHA2_512);
+            SHA_SET_MODE(SHA2_512); sha_ll_load(SHA2_512);
             sha_ll_write_digest(SHA2_512, st_be, 16);
             sha_ll_fill_text_block(cc->buf, 32);
             sha_ll_continue_block(SHA2_512);
@@ -565,7 +610,7 @@ void br_sha384_update(br_sha384_context *cc, const void *data, size_t len) {
         br_range_enc64be(st_be, st_be, 8);
         bool first = (prior_count == 0);
         SHA_ENTER();
-        sha_ll_load(SHA2_512);
+        SHA_SET_MODE(SHA2_512); sha_ll_load(SHA2_512);
         sha_ll_write_digest(SHA2_512, st_be, 16);
         while (len >= 128) {
             sha_ll_fill_text_block(src, 32);
@@ -601,7 +646,7 @@ void br_sha384_out(const br_sha384_context *cc, void *out) {
         br_range_dec64le(st_be, 8, ctx.val);
         br_range_enc64be(st_be, st_be, 8);
         SHA_ENTER();
-        sha_ll_load(SHA2_512);
+        SHA_SET_MODE(SHA2_512); sha_ll_load(SHA2_512);
         sha_ll_write_digest(SHA2_512, st_be, 16);
         sha_ll_fill_text_block(ctx.buf, 32);
         sha_ll_continue_block(SHA2_512);
@@ -621,7 +666,7 @@ void br_sha384_out(const br_sha384_context *cc, void *out) {
     br_range_dec64le(st_be2, 8, ctx.val);
     br_range_enc64be(st_be2, st_be2, 8);
     SHA_ENTER();
-    sha_ll_load(SHA2_512);
+    SHA_SET_MODE(SHA2_512); sha_ll_load(SHA2_512);
     sha_ll_write_digest(SHA2_512, st_be2, 16);
     sha_ll_fill_text_block(ctx.buf, 32);
     sha_ll_continue_block(SHA2_512);
@@ -701,7 +746,7 @@ void br_sha512_out(const br_sha512_context *cc, void *out) {
         br_range_dec64le(st_be, 8, ctx.val);
         br_range_enc64be(st_be, st_be, 8);
         SHA_ENTER();
-        sha_ll_load(SHA2_512);
+        SHA_SET_MODE(SHA2_512); sha_ll_load(SHA2_512);
         sha_ll_write_digest(SHA2_512, st_be, 16);
         sha_ll_fill_text_block(ctx.buf, 32);
         sha_ll_continue_block(SHA2_512);
@@ -721,7 +766,7 @@ void br_sha512_out(const br_sha512_context *cc, void *out) {
     br_range_dec64le(st_be2, 8, ctx.val);
     br_range_enc64be(st_be2, st_be2, 8);
     SHA_ENTER();
-    sha_ll_load(SHA2_512);
+    SHA_SET_MODE(SHA2_512); sha_ll_load(SHA2_512);
     sha_ll_write_digest(SHA2_512, st_be2, 16);
     sha_ll_fill_text_block(ctx.buf, 32);
     sha_ll_continue_block(SHA2_512);

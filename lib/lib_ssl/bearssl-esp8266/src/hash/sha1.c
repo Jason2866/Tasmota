@@ -41,6 +41,12 @@ const uint32_t br_sha1_IV[5] PROGMEM = {
 	0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0
 };
 
+/* The HW HAL (_sha_hal_idf5x.c) emits br_sha1_init / _update / _out /
+ * _state / _set_state and br_sha1_vtable when USE_SHA_ROM selects it.
+ * Skip the conflicting SW definitions in that case; br_sha1_IV is still
+ * needed by md5sha1.c so it remains defined above. */
+#ifndef BR_HAL_PROVIDES_SHA1
+
 /* see inner.h */
 void
 br_sha1_round(const unsigned char *buf, uint32_t *val)
@@ -189,3 +195,5 @@ const br_hash_class br_sha1_vtable PROGMEM = {
 	(void (*)(const br_hash_class **, const void *, uint64_t))
 		&br_sha1_set_state
 };
+
+#endif /* !BR_HAL_PROVIDES_SHA1 */

@@ -37,6 +37,18 @@
 #include "rom/bigint.h"
 #include "t_inner.h"
 
+/* The MPI accelerator is shared with mbedTLS RSA, ECDSA-software-fallback
+ * and DS. Always use the IDF lock so concurrent users cannot corrupt our
+ * Montgomery multiplications during a TLS handshake. */
+#if __has_include("esp_crypto_lock.h")
+# include "esp_crypto_lock.h"
+# define BR_MPI_LOCK_ACQUIRE() esp_crypto_mpi_lock_acquire()
+# define BR_MPI_LOCK_RELEASE() esp_crypto_mpi_lock_release()
+#else
+# define BR_MPI_LOCK_ACQUIRE() ((void)0)
+# define BR_MPI_LOCK_RELEASE() ((void)0)
+#endif
+
 #define WORDS 8
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
@@ -443,6 +455,7 @@ static uint32_t api_mul(unsigned char *G, size_t Glen,
     (void)curve;
     p256_pt Pp, R;
     if (!load_point_uncompressed(&Pp, G, Glen)) return 0;
+    BR_MPI_LOCK_ACQUIRE();
 #if defined(CONFIG_IDF_TARGET_ESP32)
     ets_bigint_enable();
 #endif
@@ -451,6 +464,7 @@ static uint32_t api_mul(unsigned char *G, size_t Glen,
 #if defined(CONFIG_IDF_TARGET_ESP32)
     ets_bigint_disable();
 #endif
+    BR_MPI_LOCK_RELEASE();
     store_point_uncompressed(G, &R);
     return 1;
 }
@@ -461,6 +475,7 @@ static size_t api_mulgen(unsigned char *Rbuf,
     (void)curve;
     p256_pt Gp, R;
     load_generator(&Gp);
+    BR_MPI_LOCK_ACQUIRE();
 #if defined(CONFIG_IDF_TARGET_ESP32)
     ets_bigint_enable();
 #endif
@@ -471,6 +486,7 @@ static size_t api_mulgen(unsigned char *Rbuf,
 #if defined(CONFIG_IDF_TARGET_ESP32)
     ets_bigint_disable();
 #endif
+    BR_MPI_LOCK_RELEASE();
 
     store_point_uncompressed(Rbuf, &R);
     return 65;
@@ -493,6 +509,7 @@ static uint32_t api_muladd(unsigned char *A, const unsigned char *B,
         load_generator(&Qp);
     }
 
+    BR_MPI_LOCK_ACQUIRE();
 #if defined(CONFIG_IDF_TARGET_ESP32)
     ets_bigint_enable();
 #endif
@@ -505,6 +522,7 @@ static uint32_t api_muladd(unsigned char *A, const unsigned char *B,
 #if defined(CONFIG_IDF_TARGET_ESP32)
     ets_bigint_disable();
 #endif
+    BR_MPI_LOCK_RELEASE();
 
     store_point_uncompressed(A, &R);
     return 1;

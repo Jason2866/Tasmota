@@ -24,6 +24,11 @@
 
 #include "t_inner.h"
 
+/* The HW HAL (_sha_hal_idf5x.c) owns the entire SHA-384 + SHA-512 family
+ * when USE_SHA_ROM is active on an ESP32 with a fully supported HW SHA
+ * engine. Skip every symbol here in that case (see sha2small.c). */
+#ifndef BR_HAL_PROVIDES_SHA512_FAMILY
+
 #define CH(X, Y, Z)    ((((Y) ^ (Z)) & (X)) ^ (Z))
 #define MAJ(X, Y, Z)   (((Y) & (Z)) | (((Y) | (Z)) & (X)))
 
@@ -283,3 +288,5 @@ const br_hash_class br_sha512_vtable PROGMEM = {
 	(void (*)(const br_hash_class **, const void *, uint64_t))
 		&br_sha512_set_state
 };
+
+#endif /* !BR_HAL_PROVIDES_SHA512_FAMILY */

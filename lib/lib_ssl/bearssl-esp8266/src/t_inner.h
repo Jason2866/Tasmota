@@ -34,6 +34,10 @@
 #include "t_config.h"
 #include "t_bearssl.h"
 
+/* Decide whether HW HAL or SW implementations own SHA / EC symbols.
+ * Must be included before any SW TU emits br_sha* / br_ec_* symbols. */
+#include "bssl_hal_select.h"
+
 /*
  * On MSVC, disable the warning about applying unary minus on an
  * unsigned type: it is standard, we do it all the time, and for

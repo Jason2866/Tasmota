@@ -24,6 +24,14 @@
 
 #include "t_inner.h"
 
+/* The HW HAL (_sha_hal_idf5x.c) owns the entire SHA-224 + SHA-256 family
+ * when USE_SHA_ROM is active on an ESP32 with a fully supported HW SHA
+ * engine. Skip every symbol defined here in that case to avoid duplicate
+ * definitions and incompatible midstate byte layouts.
+ * br_sha224_IV / br_sha256_IV / br_sha2small_round are only consumed
+ * inside this TU, so dropping them is safe. */
+#ifndef BR_HAL_PROVIDES_SHA256_FAMILY
+
 #define CH(X, Y, Z)    ((((Y) ^ (Z)) & (X)) ^ (Z))
 #define MAJ(X, Y, Z)   (((Y) & (Z)) | (((Y) | (Z)) & (X)))
 
@@ -339,3 +347,5 @@ const br_hash_class br_sha256_vtable PROGMEM = {
 	(void (*)(const br_hash_class **, const void *, uint64_t))
 		&br_sha256_set_state
 };
+
+#endif /* !BR_HAL_PROVIDES_SHA256_FAMILY */
