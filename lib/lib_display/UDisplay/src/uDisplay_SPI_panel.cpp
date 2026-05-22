@@ -404,14 +404,23 @@ uint8_t SPIPanel::getMonoPixel(int16_t x, int16_t y) const {
 }
 
 bool SPIPanel::hasPackedMono() const {
+    // Allow packed-mono blocks larger than one byte (e.g. ST7302's native
+    // 1x12 page packing). Each block is emitted as ceil(width*height/8)
+    // bytes, with bits filled row-major MSB->LSB and rolling over to the
+    // next byte when the current one is full. A fixed cap keeps the
+    // on-stack output buffer in updateFramePackedMono() bounded.
     return fb_buffer && cfg.bpp == 1 && cfg.mono_pack_width && cfg.mono_pack_height &&
-           (cfg.mono_pack_width * cfg.mono_pack_height <= 8);
+           (uint16_t(cfg.mono_pack_width) * uint16_t(cfg.mono_pack_height) <= 64);
 }
 
 bool SPIPanel::updateFramePackedMono() {
     if (!hasPackedMono()) {
         return false;
     }
+
+    const uint16_t bits_per_block = uint16_t(cfg.mono_pack_width) * uint16_t(cfg.mono_pack_height);
+    const uint8_t bytes_per_block = (bits_per_block + 7) >> 3;
+    uint8_t block_bytes[8];  // sized for the hasPackedMono() cap (64 bits)
 
     spi->beginTransaction();
     spi->csLow();
@@ -429,22 +438,31 @@ bool SPIPanel::updateFramePackedMono() {
     for (uint16_t x = 0; x < width; x += cfg.mono_pack_width) {
         for (uint16_t y = 0; y < height; y += cfg.mono_pack_height) {
             // Descriptor-defined packed mono format, row-major from bit7 down.
-            uint8_t packed = 0;
-            uint8_t bit = 0x80;
+            // Bits flow continuously across the block; when the current byte
+            // fills, the cursor advances to the next byte (still MSB first).
+            // Unused trailing bits in the last byte stay zero (then inverted
+            // along with the rest if UDISP_MONO_PACK_INVERT is set).
+            for (uint8_t i = 0; i < bytes_per_block; i++) {
+                block_bytes[i] = 0;
+            }
+            uint16_t bit_index = 0;
             for (uint8_t row = 0; row < cfg.mono_pack_height; row++) {
                 int16_t sy = (cfg.mono_pack_flags & UDISP_MONO_PACK_REVERSE_Y)
                               ? height - 1 - y - row : y + row;
                 for (uint8_t col = 0; col < cfg.mono_pack_width; col++) {
                     if (getMonoPixel(x + col, sy)) {
-                        packed |= bit;
+                        block_bytes[bit_index >> 3] |= uint8_t(0x80 >> (bit_index & 7));
                     }
-                    bit >>= 1;
+                    bit_index++;
                 }
             }
-            if (cfg.mono_pack_flags & UDISP_MONO_PACK_INVERT) {
-                packed = ~packed;
+            for (uint8_t i = 0; i < bytes_per_block; i++) {
+                uint8_t out = block_bytes[i];
+                if (cfg.mono_pack_flags & UDISP_MONO_PACK_INVERT) {
+                    out = ~out;
+                }
+                spi->writeData8(out);
             }
-            spi->writeData8(packed);
         }
     }
 
