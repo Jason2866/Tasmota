@@ -3,8 +3,9 @@
 This document covers the descriptor-driven *packed monochrome* support added
 for Sitronix reflective LCD controllers in the uDisplay SPI panel driver,
 how the `:F` descriptor field works, what changed in the code, the two new
-display descriptors (ST7306 and ST7302), and what must be verified per
-module before treating those descriptors as production-ready.
+display descriptors (ST7306 and ST7302), and which fields are verified
+against vendor reference code versus which still require per-module
+confirmation.
 
 ## Background
 
@@ -21,9 +22,9 @@ packed into one byte, with the polarity inverted and the Y scan reversed.
 The low-level SPI panel driver intentionally contains **no** ST7305-specific
 code. The controller-specific behavior lives in the descriptor.
 
-ST7306 and ST7302 are part of the same Sitronix reflective TFT family and
+ST7306 and ST7302 belong to the same Sitronix reflective TFT family and
 use the same general RAMWR packed-pixel concept, but with different block
-geometries — which is exactly what `:F` is designed to describe.
+geometries — exactly what `:F` is designed to describe.
 
 ## What `:F` does
 
@@ -48,20 +49,21 @@ For each block:
 
 Flags combine. ST7305 uses `3` (invert + reverse-Y).
 
-Definitions live in [include/uDisplay_SPI_panel.h](../../lib/lib_display/UDisplay/include/uDisplay_SPI_panel.h)
+Definitions live in
+[lib/lib_display/UDisplay/include/uDisplay_SPI_panel.h](../../lib/lib_display/UDisplay/include/uDisplay_SPI_panel.h)
 (`enum UDisplayMonoPackFlags`).
 
 ### Block size limits
 
 The packer caps `width * height` at **64 bits** (= 8 bytes per block). This
-is enforced in `SPIPanel::hasPackedMono()`. Any combination that fits inside
-that limit and produces whole-byte blocks works — for example:
+is enforced in `SPIPanel::hasPackedMono()`. Any combination that fits
+inside that limit and produces whole-byte blocks works. Examples below.
 
-| Controller | `:F,w,h,flags` | Bytes/block | Notes                          |
-| ---------- | -------------- | ----------- | ------------------------------ |
-| ST7305     | `:F,2,4,3`     | 1           | Original supported case.       |
-| ST7306 mono| `:F,2,4,3`     | 1           | 1 bpp mode (DTFORM `3A,10`).   |
-| ST7302     | `:F,1,12,3`    | 2           | Native 12-row gate grouping.   |
+| Controller | `:F` value     | Bytes/block | Verified                           |
+| ---------- | -------------- | ----------- | ---------------------------------- |
+| ST7305     | `:F,2,4,3`     | 1           | Yes — original PR #24738.          |
+| ST7302     | `:F,2,12,0`    | 3           | Yes — see ST7302 section below.    |
+| ST7306 (1bpp) | n/a         | n/a         | No 1 bpp vendor reference; see ST7306 section. |
 
 ## Code changes
 
@@ -86,13 +88,13 @@ return fb_buffer && cfg.bpp == 1 && cfg.mono_pack_width && cfg.mono_pack_height 
 ```
 
 Raises the cap from 8 to 64 bits so blocks larger than one byte (e.g.
-ST7302's 1×12 page) are accepted.
+ST7302's 2×12 = 24-bit page) are accepted.
 
 #### `SPIPanel::updateFramePackedMono()`
 
-The single-byte accumulator was replaced with a small fixed-size byte buffer
-(`uint8_t block_bytes[8]`) and a continuous bit cursor that rolls over to
-the next byte when the current byte fills:
+The single-byte accumulator was replaced with a small fixed-size byte
+buffer (`uint8_t block_bytes[8]`) and a continuous bit cursor that rolls
+over to the next byte when the current byte fills:
 
 ```cpp
 for (uint8_t i = 0; i < bytes_per_block; i++) block_bytes[i] = 0;
@@ -117,135 +119,229 @@ for (uint8_t i = 0; i < bytes_per_block; i++) {
 `bytes_per_block = (cfg.mono_pack_width * cfg.mono_pack_height + 7) >> 3`.
 
 Behavior for the existing 8-bit case (`2*4 = 8`) is byte-identical to the
-previous implementation: `bytes_per_block = 1`, `bit_index` 0..7 lights up
-bit positions 7..0 in exactly the same order. The ST7305 descriptor and
-hardware behavior are therefore unchanged.
+previous implementation: `bytes_per_block = 1`, `bit_index` 0..7 lights
+up bit positions 7..0 in exactly the same order. The ST7305 descriptor
+and hardware behavior are therefore unchanged.
 
-### Descriptor changes
+## ST7302 — 250 × 122 (verified)
 
-#### `tasmota/displaydesc/ST7302_RLCD_250x122_display.ini`
+Descriptor:
+[ST7302_RLCD_250x122_display.ini](ST7302_RLCD_250x122_display.ini).
 
-```diff
--:F,1,8,3
-+:F,1,12,3
+### Source of truth
+
+Cross-checked against the following public ST7302 implementations:
+
+- [zhcong/ST7302-for-arduino](https://github.com/zhcong/ST7302-for-arduino)
+- [imcort-nrf-drivers/st7302](https://github.com/imcort-nrf-drivers/st7302)
+- [alm604/stm32-ST7302](https://github.com/alm604/stm32-ST7302)
+- [Marspacecraft/st7302_4gray](https://github.com/Marspacecraft/st7302_4gray)
+- [elulis/micropython_ST7302](https://github.com/elulis/micropython_ST7302)
+- [0ut4t1m3/MPY_ST7302](https://github.com/0ut4t1m3/MPY_ST7302)
+- [wangshujun-tj/FB_ST7302](https://github.com/wangshujun-tj/FB_ST7302)
+
+The canonical Arduino driver from `zhcong/ST7302-for-arduino` is the most
+fully commented and was used as the primary reference.
+
+### Why `:F,2,12,0` is exactly right
+
+The ST7302 RAMWR layout for `0x3A = 0x11` (1 bpp packed) is a
+**2-column × 12-row block = 24 bits = 3 bytes**, with this bit ordering
+(verbatim from `Marspacecraft/st7302_4gray/st7302.h` and the bit-interleave
+kernel in `elulis/micropython_ST7302/st7302viper.py`):
+
+```
+Byte 0  D7 = col_A row 0   D6 = col_B row 0
+        D5 = col_A row 1   D4 = col_B row 1
+        D3 = col_A row 2   D2 = col_B row 2
+        D1 = col_A row 3   D0 = col_B row 3
+
+Byte 1  rows 4–7  (same MSB-first 2-col × 4-row pattern)
+
+Byte 2  rows 8–11 (same pattern)
 ```
 
-Switches to the controller's native 12-row gate grouping (2 bytes per block,
-top 12 bits used, bottom 4 bits padding).
+The new multi-byte `:F,2,12,X` packer produces *exactly* this sequence:
+walking 12 rows × 2 cols row-major with a continuous MSB→LSB bit cursor
+that rolls over every 8 bits. ST7302's per-byte layout is literally the
+same 2×4 MSB-first pattern as ST7305, repeated three times — so 3 stacked
+ST7305-style bytes cover one ST7302 page.
 
-## New descriptor files
+### Verified register values used in the descriptor
 
-Two starter descriptors were added, both modelled on the ST7305 one and
-sharing the Sitronix register map.
+| Cmd  | Value(s)                                | Meaning                  | Source         |
+| ---- | --------------------------------------- | ------------------------ | -------------- |
+| 0x38 | (no params)                             | High Power Mode          | zhcong line 31 |
+| 0xEB | 0x02                                    | Enable OTP               | zhcong line 33 |
+| 0xD7 | 0x68                                    | OTP Load Control         | zhcong line 35 |
+| 0xD1 | 0x01                                    | Auto Power Control       | zhcong line 37 |
+| 0xC0 | 0x80                                    | Gate Voltage VGH=12V/VGL=-5V | zhcong line 39 |
+| 0xC1 | 0x28, 0x28, 0x28, 0x28, 0x14, 0x00      | VSH                      | zhcong line 41 |
+| 0xC2 | 0x00, 0x00, 0x00, 0x00                  | VSL                      | zhcong line 49 |
+| 0xCB | 0x14                                    | VCOMH                    | zhcong line 55 |
+| 0xB4 | E5, 77, F1, FF, FF, 4F, F1, FF, FF, 4F  | Gate EQ HPM/LPM          | zhcong line 57 |
+| 0x11 | (sleep out) + 150 ms                    | Sleep Out                | zhcong line 69 |
+| 0xC7 | 0xA6, 0xE9                              | OSC                      | zhcong line 73 |
+| 0xB0 | 0x64                                    | Duty                     | zhcong line 75 |
+| 0x36 | 0x20                                    | MADCTL (MY flip)         | zhcong line 77 |
+| 0x3A | 0x11                                    | Data Format (1 bpp 24-bit page) | zhcong line 79 |
+| 0xB9 | 0x23                                    | Source Setting           | zhcong line 81 |
+| 0xB8 | 0x09                                    | Panel Setting            | zhcong line 83 |
+| 0x2A | 0x05, 0x36                              | Full-panel CASET init    | zhcong line 85 |
+| 0x2B | 0x00, 0xC7                              | Full-panel RASET init    | zhcong line 88 |
+| 0xD0 | 0x1F                                    | Power timing             | zhcong line 91 |
+| 0x29 | (display on)                            | Display On               | zhcong line 93 |
+| 0xB9 | 0xE3 + 150 ms                           | Enable RAM clear         | zhcong line 95 |
+| 0xB9 | 0x23                                    | Disable RAM clear        | zhcong line 98 |
+| 0x72 | 0x00                                    | Destress Off             | zhcong line 100 |
+| 0x39 | (LPM)                                   | Low Power Mode           | zhcong line 102 |
+| 0x2A | 0x19, 0x23                              | **Working window CASET** | zhcong line 104 |
+| 0x2B | 0x00, 0x7C                              | **Working window RASET** | zhcong line 106 |
 
-### `ST7306_RLCD_300x400_display.ini`
+The working window covers 11 CASET slots × 12 rows = 132 row positions
+(122 physical + 10 padding) and 125 RASET slots × 2 cols = 250 cols.
+The packer naturally emits exactly 11 × 3 = 33 bytes per column pair
+when `:H` height is 122 with `:F,2,12,0` — `(122 + 11) / 12 = 11`
+iterations of the y loop (last iteration's rows 120..131 read 0 from
+the out-of-range framebuffer), × 3 bytes per block = 33 bytes per
+column pair × 125 column pairs = 4125 bytes total. Matches the
+controller window exactly.
 
-- Resolution: 300 × 400
-- Packing: `:F,2,4,3` (1 bpp mono mode)
-- DTFORM: `3A,10` — forces 1-bit-per-pixel mode so the existing packer
-  applies. Native 2 bpp grayscale is **not** enabled (see Limitations).
+### Why flags=0 (and not 3 like ST7305)
 
-### `ST7302_RLCD_250x122_display.ini`
+- INVERT: ST7302's `0x3A = 0x11` layout writes `1` for dark pixels in the
+  unrotated default. No inversion needed in the packer.
+- REVERSE_Y: orientation is handled by MADCTL `0x36 = 0x20` (MY bit set),
+  so the controller flips Y in hardware. Doing it again in the packer
+  would un-flip it.
 
-- Resolution: 250 × 122
-- Packing: `:F,1,12,3` (native page layout, now possible after the code
-  change above)
-- DTFORM: `3A,11`
+If your panel is mounted differently, the first thing to try is
+swapping MADCTL between `0x00` and `0x20` (both are observed in vendor
+code), then if needed adding the INVERT or REVERSE_Y bit to the `:F`
+flags.
 
-## What you MUST verify per module
+## ST7306 — 300 × 400 (NOT functional with the current packer)
 
-The two new descriptors are templates, not validated firmware. Before
-treating either as production-ready, walk through this list against the
-module's vendor reference code and the controller datasheet.
+Descriptor:
+[ST7306_RLCD_300x400_display.ini](ST7306_RLCD_300x400_display.ini).
 
-### 1. Init register block
+### Source of truth
 
-All `D6 … 29` lines were copied verbatim from the ST7305 Waveshare RLCD-4.2
-init blob. The Sitronix family shares the register map, but per-panel
-trim values differ:
+Verified against [musicaJack/ST73xx_Reflective_Lcd](https://github.com/musicaJack/ST73xx_Reflective_Lcd)
+(`src/st73xx/st7306_driver.cpp`, `include/st73xx/st7306_driver.hpp`).
+This is the only public driver with a complete init sequence and pixel
+packer for ST7306.
 
-- `C0` Booster control
-- `C1 / C2 / C4 / C5` VCOM and gamma trim (panel-specific)
-- `B2 / B3 / B4` Frame-rate / waveform LUT
-- `D6 / D1 / D8 / 62` Power timing
-- `B7 / B0 / B8 / B9` Output enable / data format polarity
+### Why this descriptor cannot drive the panel today
 
-Replace these from your module's reference code if you have it. Wrong
-gamma/VCOM values typically show as **washed-out, ghosting, or completely
-blank** displays, not as garbled pixels.
+ST7306 is **natively 2 bits per pixel** (4-level grayscale: white, light
+gray, dark gray, black). The vendor init sequence sets:
 
-### 2. Address window (`2A`, `2B`, and the `:A` line)
+- `0x3A = 0x11` — "3 writes for 24-bit data" (2 bpp packed)
+- `0xB9 = 0x20` — Mono gamma curve
 
-These are panel-internal *byte addresses* (post-packing), not pixel
-coordinates. The starting values used in the new descriptors are derived
-from the panel resolution and the chosen packing geometry, but Sitronix
-panels typically need a small offset because the gate driver starts a few
-lines in. **If text/graphics are shifted, this is the first thing to fix.**
+…and the pixel packer maps each 2-pixel-wide × 2-pixel-tall block to
+**one byte holding four 2-bit pixels**:
 
-For ST7302 specifically: with `1×12` packing, the row address range
-counts in 12-row groups. 122 rows → 11 full groups of 12 = 132 rows
-allocated (10 unused). Confirm against the vendor init.
+```
+One byte covers a 2×2 pixel block, 2 bits per pixel:
 
-### 3. Rotation table (`:R` and `:0` … `:3`)
+  pixel (x+0,y+0): bits 7, 5  (MSB pair)
+  pixel (x+0,y+1): bits 6, 4
+  pixel (x+1,y+0): bits 3, 1
+  pixel (x+1,y+1): bits 2, 0
+```
 
-Copied from ST7305. The MADCTL byte values for each rotation depend on
-the controller's MX/MY/MV bits and may need swapping if your panel is
-physically mounted in a different orientation.
+The `:F` packer is currently 1 bpp only (gated on `cfg.bpp == 1`). It
+cannot emit two bits per source pixel, so this descriptor — which uses
+the controller's only verified mode — is shipped as a **reference for
+when 2 bpp support is added**, not as something that draws correctly
+today.
 
-### 4. Pin map in `:H`
+There is no public ST7306 reference for the controller's 1 bpp fallback
+mode (`0x3A = 0x10`, "4 writes for 24-bit data"). Guessing at it would
+just produce another untested descriptor, so we did not.
 
-The `:H` line uses CS=40, SCK=11, MOSI=12, DC=5, RESET=41, no MISO, no
-backlight (Waveshare RLCD-4.2 layout). Change to match your wiring.
+### What's verified in the file anyway
+
+The register values (`D6, D1, C0, C1, C2, C4, C5, D8, B2, B3, B0, C9,
+36, 3A, B9, B8, 2A, 2B, BB`) come from `st7306_driver.cpp::initST7306()`
+lines 77–215, with addressing for the documented working window
+(50 CASET slots × 6 pixel cols = 300 cols, 200 RASET slots × 2 pixel
+rows = 400 rows). When the 2 bpp packer eventually lands, only the
+`:F` line and the framebuffer allocator should need changing.
+
+### What is needed to make ST7306 functional
+
+1. A 2 bpp framebuffer allocator in
+   [uDisplay.cpp](../../lib/lib_display/UDisplay/src/uDisplay.cpp)
+   (currently sizes 1 bpp as `gxs * ((gys + 7) / 8)`).
+2. A `getGrayPixel(x, y) -> 0..3` accessor parallel to `getMonoPixel`.
+3. An extended `:F` form (e.g. `:F,w,h,flags,bits_per_pixel`) and a
+   packer that uses `bits_per_pixel` bits per pixel — for ST7306 that
+   would be `:F,2,2,0,2` (2×2 block, 2 bpp).
+4. Renderer-level changes so user/LVGL pixel writes can express
+   grayscale instead of being clamped to mono.
+
+That is a cross-cutting change to the Renderer contract and
+intentionally **not** part of this work.
+
+## What you must still verify per module
+
+Even with vendor-verified register values, per-board adjustments are
+common.
+
+### 1. Pin map (`:H` line)
+
+The `:H` line in both new descriptors uses CS=40, SCK=11, MOSI=12,
+DC=5, RESET=41, no MISO, no backlight (Waveshare RLCD-4.2 layout
+inherited from the ST7305 descriptor). **Change to match your wiring.**
+
+### 2. MADCTL / orientation
+
+ST7302 vendor code uses `0x20` (MY flip) or `0x00` (no flip) depending
+on the module — both are valid. If the image is upside down, try
+flipping that bit. The rotation table (`:0` … `:3`) is currently filled
+with the rotation-0 MADCTL value for all four rotations, i.e. rotation
+is effectively a no-op. Filling in real per-rotation MADCTL bits is
+left for a follow-up if/when someone needs rotation on these panels.
+
+### 3. Address window (`2A`, `2B`, `:A`)
+
+These come straight from vendor code and are **panel-specific**: ST7302
+working window `0x19..0x23 / 0x00..0x7C`, ST7306 `0x05..0x36 / 0x00..0xC7`.
+Both are panel-internal byte/group addresses, not pixel coordinates,
+and they assume the panel uses the standard Waveshare/heltec module
+layout. A custom module with a different gate-driver tap point will
+need a small offset adjustment.
+
+### 4. Power / gamma values
+
+`C0, C1, C2, C4, C5, D8, B4` are voltage and waveform trims and *can*
+vary slightly between module vendors. Symptoms of wrong values:
+washed-out, ghosting, or completely blank — not garbled pixels. The
+ST7306 values match the musicaJack-reference panel; ST7302 values
+match the zhcong-reference panel. If your specific module ships with a
+different vendor init blob, prefer that.
 
 ### 5. Packing flags
 
-Both new descriptors use `flags=3` (invert + reverse-Y) inherited from
-ST7305. If your display looks **photonegative**, drop the invert bit
-(use `2`). If it's **upside down**, drop the reverse-Y bit (use `1`).
-If it looks correct, leave it.
+- ST7305: `flags=3` (invert + reverse-Y). Verified by the upstream PR.
+- ST7302: `flags=0`. Justified above; MADCTL handles orientation.
+- ST7306: `flags=3` placeholder copied from ST7305; **not meaningful
+  until 2 bpp support exists**.
 
-## Limitations
-
-### True 2 bpp grayscale ST7306 is not supported
-
-ST7306 natively supports 4-level grayscale by packing 2 bits per pixel
-(2×2 block = 4 pixels = 1 byte). The current `:F` parser is gated on
-`bpp == 1`, and the uDisplay framebuffer + the Tasmota `Renderer` base
-class both assume the standard 1 bpp vertical-page layout
-(`fb_buffer[x + (y >> 3) * width] & (1 << (y & 7))`).
-
-Adding real grayscale would require:
-
-1. A 2 bpp framebuffer allocator in [uDisplay.cpp](../../lib/lib_display/UDisplay/src/uDisplay.cpp)
-   (currently sizes 1 bpp as `gxs * ((gys + 7) / 8)`).
-2. A `getGrayPixel(x, y) -> 0..3` accessor parallel to `getMonoPixel`.
-3. An extended `:F` form (e.g. `:F,w,h,flags,bpp_pack`) and a packer that
-   uses `bpp_pack` bits per pixel.
-4. Renderer-level changes so user/LVGL pixel writes can express grayscale
-   instead of being clamped to mono.
-
-That is a cross-cutting change to the Renderer contract and intentionally
-**not** part of this work. The ST7306 descriptor here uses the controller's
-1 bpp mode (DTFORM `3A,10`) which works with the existing packer today,
-just without grayscale.
-
-### ST7302 packing assumption
-
-The new code emits `ceil(12/8) = 2` whole bytes per 1×12 column page, with
-the unused trailing 4 bits zeroed. Some ST7302 reference drivers pack
-12-bit pages *tightly* (no inter-block byte alignment, so 2 pages = 3
-bytes). If your panel only accepts that tight packing, this code does
-not yet cover it; the cleanest fix would be a new flag bit
-`UDISP_MONO_PACK_BIT_TIGHT` and a continuous bit cursor across the whole
-column stripe rather than per-block.
+If your display looks photonegative, set bit 0 (INVERT). If it's
+upside down, set bit 1 (REVERSE_Y) — but consider flipping MADCTL
+first since that's typically the controller's intended mechanism.
 
 ## Files touched
 
 | File                                                                                    | Change                                                |
 | --------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | `lib/lib_display/UDisplay/src/uDisplay_SPI_panel.cpp`                                   | Multi-byte packed-mono blocks, cap raised to 64 bits. |
-| `tasmota/displaydesc/ST7306_RLCD_300x400_display.ini`                                   | **New.** ST7306 1 bpp template.                       |
-| `tasmota/displaydesc/ST7302_RLCD_250x122_display.ini`                                   | **New.** ST7302 native 1×12 template.                 |
+| `tasmota/displaydesc/ST7302_RLCD_250x122_display.ini`                                   | **New.** Vendor-verified init + native 2×12 packing.  |
+| `tasmota/displaydesc/ST7306_RLCD_300x400_display.ini`                                   | **New.** Vendor-verified init; 2 bpp packer not yet implemented. |
 | `tasmota/displaydesc/Sitronix_RLCD_packed_mono.md`                                      | **New.** This document.                               |
 
 No header / struct / API change. The descriptor parser in
