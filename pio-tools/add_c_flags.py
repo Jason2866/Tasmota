@@ -56,7 +56,7 @@ if idf_version:
 # print(f"IDF version: {idf_major}.{idf_minor}.{idf_patch}")
 
 # General options that are passed to the C++ compiler
-env.Append(CXXFLAGS=["-Wno-volatile"])
+env.Append(CXXFLAGS=["-Wno-volatile", "-Wno-overloaded-virtual"])
 
 # General options that are passed to the C compiler (C only; not C++).
 env.Append(CFLAGS=["-Wno-discarded-qualifiers", "-Wno-implicit-function-declaration", "-Wno-incompatible-pointer-types"])
