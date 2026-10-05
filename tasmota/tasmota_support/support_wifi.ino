@@ -459,9 +459,9 @@ void WifiBegin(uint8_t flag, uint8_t channel) {
   }
 
 #ifndef FIRMWARE_SAFEBOOT
-#ifdef CONFIG_ESP_WIFI_REMOTE_ENABLED
+#if defined(CONFIG_ESP_WIFI_REMOTE_ENABLED) && !defined(SOC_WIFI_SUPPORTED)
   HostedMCUStatus();
-#endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED
+#endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED && !SOC_WIFI_SUPPORTED
 #endif  // FIRMWARE_SAFEBOOT
 }
 
@@ -1557,7 +1557,7 @@ void WifiConnect(void)
   if (!wifi_event_registered) {
     WiFi.onEvent(WifiEvents);   // register event listener only once
     wifi_event_registered = true;
-#ifdef CONFIG_ESP_WIFI_REMOTE_ENABLED
+#if defined(CONFIG_ESP_WIFI_REMOTE_ENABLED) && !defined(SOC_WIFI_SUPPORTED)
 #if __has_include("esp_hosted.h")
     // Hosted MCU SDIO pins must be set before WiFi is initialized
     char sdio_source[10] = "default";
@@ -1588,7 +1588,7 @@ void WifiConnect(void)
     AddLog(LOG_LEVEL_DEBUG, PSTR("HST: Hosted MCU using %s GPIO%02d(CLK), GPIO%02d(CMD), GPIO%02d(D0), GPIO%02d(D1), GPIO%02d(D2), GPIO%02d(D3) and GPIO%02d(RST)"),
       sdio_source, sdio_pins[0], sdio_pins[1], sdio_pins[2], sdio_pins[3], sdio_pins[4], sdio_pins[5], sdio_pins[6]);
 #endif  // __has_include("esp_hosted.h")
-#endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED
+#endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED && !SOC_WIFI_SUPPORTED
   }
 #endif  // ESP32
   WifiSetState(0);

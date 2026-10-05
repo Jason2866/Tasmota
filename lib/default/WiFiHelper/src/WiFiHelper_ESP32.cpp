@@ -410,13 +410,13 @@ int WiFiHelper::hostByName(const char* aHostname, IPAddress& aResult)
 String WiFiHelper::macAddress(void) {
   uint8_t mac[6] = {0,0,0,0,0,0};
   char macStr[18] = { 0 };
-#ifdef CONFIG_SOC_HAS_WIFI
+#ifdef SOC_WIFI_SUPPORTED
   esp_read_mac(mac, ESP_MAC_WIFI_STA);  // Local WiFi station MAC address
 #elif CONFIG_ESP_WIFI_REMOTE_ENABLED
   WiFi.macAddress(mac);                 // Remote WiFi station MAC address (devices without WiFi but hostedMCU)
-#else   // No CONFIG_SOC_HAS_WIFI
+#else   // No SOC_WIFI_SUPPORTED
   esp_read_mac(mac, ESP_MAC_BASE);      // Local hardware base MAC address
-#endif  // CONFIG_SOC_HAS_WIFI
+#endif  // SOC_WIFI_SUPPORTED
   snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   return String(macStr);
 }
