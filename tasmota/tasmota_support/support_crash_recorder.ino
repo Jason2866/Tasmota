@@ -315,6 +315,8 @@ const char *esp32c3_crash_reason[] = {
 #define NUM_C3_REASONS (sizeof(esp32c3_crash_reason) / sizeof(char *))
 
 #include <riscv/rvruntime-frames.h>
+#include "soc/soc.h"
+
 extern "C" IRAM_ATTR void custom_crash_recorder(void *exc_frame, bool pseudo_excause) {
   RvExcFrame *regs = (RvExcFrame *)exc_frame;
 
@@ -335,7 +337,8 @@ extern "C" IRAM_ATTR void custom_crash_recorder(void *exc_frame, bool pseudo_exc
   // // code copied from panic_print_basic_backtrace()
   uint32_t * sp = (uint32_t*) regs->sp;
   uint32_t i = 0;
-  for (uint32_t i = 0; ((uint32_t) sp) < 0x3FCDFFF0 && i < 320 && idx < crash_dump_max_len; i++, sp++) {
+  const uint32_t stack_limit = SOC_DRAM_HIGH;
+  for (uint32_t i = 0; ((uint32_t) sp) < stack_limit && i < 320 && idx < crash_dump_max_len; i++, sp++) {
     uint32_t value = *sp;
     if ((value >= 0x40000000) && (value < 0x42800000)) {  // keep only addresses in code area
       crash_recorder.stack[idx++] = value;
