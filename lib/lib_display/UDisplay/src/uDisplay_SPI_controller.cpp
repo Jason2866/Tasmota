@@ -289,12 +289,16 @@ void SPIController::hw_write9(uint8_t val, uint8_t dc) {
         else regvalue &= 0x7f;
         if (val & 1) regvalue |= 0x8000;
 
-        REG_SET_BIT(SPI_USER_REG(3), SPI_USR_MOSI);
-        REG_WRITE(SPI_MOSI_DLEN_REG(3), 9 - 1);
-        uint32_t *dp = (uint32_t*)SPI_W0_REG(3);
+        uint8_t spi_index = 3;
+#if CONFIG_IDF_TARGET_ESP32S31
+        if (spi_config.bus_nr == 1) spi_index = 2;
+#endif
+        REG_SET_BIT(SPI_USER_REG(spi_index), SPI_USR_MOSI);
+        REG_WRITE(SPI_MOSI_DLEN_REG(spi_index), 9 - 1);
+        uint32_t *dp = (uint32_t*)SPI_W0_REG(spi_index);
         *dp = regvalue;
-        REG_SET_BIT(SPI_CMD_REG(3), SPI_USR);
-        while (REG_GET_FIELD(SPI_CMD_REG(3), SPI_USR));
+        REG_SET_BIT(SPI_CMD_REG(spi_index), SPI_USR);
+        while (REG_GET_FIELD(SPI_CMD_REG(spi_index), SPI_USR));
     }
 }
 #else
@@ -336,6 +340,9 @@ bool SPIController::initDMA(uint16_t width, uint16_t flushlines, uint8_t data) {
     }
     if (spi_config.bus_nr == 1){
         AddLog(3,"DSP: dma spi 1");
+#if CONFIG_IDF_TARGET_ESP32S31
+        spi_host = FSPI_HOST;
+#endif
     } else if (spi_config.bus_nr == 2){
         AddLog(3,"DSP: dma spi 2");
         spi_host = HSPI_HOST;
