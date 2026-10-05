@@ -168,9 +168,6 @@ const char WIFI_HOSTNAME[] = WIFI_DEFAULT_HOSTNAME;    // Override by user_confi
   #define TASMOTA_ARCH              "esp32s3"
 #elif CONFIG_IDF_TARGET_ESP32S31
   #define TASMOTA_ARCH              "esp32s31"
-#ifdef USE_ESP32_TWAI
-  #undef USE_ESP32_TWAI                         // ESP32-S31 uses the new TWAI API, not supported by this driver
-#endif
 #else
   #define TASMOTA_ARCH              "esp32"
 #endif
