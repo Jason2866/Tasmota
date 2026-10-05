@@ -1549,7 +1549,7 @@ const char PINS_WEMOS[] PROGMEM = "IOIOIOIOIOIOIOIOIOIOIOIOIOIOIOIOAOAOAOAOAOAOA
 
 const char PINS_WEMOS[] PROGMEM =
   "IOIOIOIOIOIO"                    // GPIO0..5
-  "AOAOAOAOAOAOAOAOAOAOAOAOAOAO"    // GPIO6..19: touch-capable GPIOs
+  "IOIOIOIOIOIOIOIOIOIOIOIOIOIO"    // GPIO6..19: touch-capable GPIOs
   "IOIOIOIOIOIOIOIOIO"              // GPIO20..28
   "--"                              // GPIO29 is not bonded
   "IOIOIOIOIOIOIOIOIOIOIO"          // GPIO30..40
