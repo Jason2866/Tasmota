@@ -2215,7 +2215,11 @@ void WifiEvents(arduino_event_t *event) {
       // workaround for the race condition in LWIP, see https://github.com/espressif/arduino-esp32/pull/9016#discussion_r1451774885
       {
         uint32_t i = 5;   // try 5 times only
+        #if ESP_IDF_VERSION_MAJOR < 6
+        while (esp_netif_create_ip6_linklocal(get_esp_interface_netif(ESP_IF_WIFI_STA)) != ESP_OK) {
+        #else
         while (esp_netif_create_ip6_linklocal(get_esp_interface_netif(WIFI_IF_STA)) != ESP_OK) {
+        #endif
           delay(1);
           if (i-- == 0) {
             break;
