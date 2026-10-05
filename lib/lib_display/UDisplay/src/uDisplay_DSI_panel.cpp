@@ -102,6 +102,12 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
         return;
     }
     AddLog(3, "DSI: DPI panel created");
+#if ESP_IDF_VERSION_MAJOR >= 6
+    ret = esp_lcd_dpi_panel_enable_dma2d(panel_handle);
+    if (ret != ESP_OK) {
+        AddLog(3, "DSI: Failed to enable DMA2D: %d", ret);
+    }
+#endif
 
     // Step 6: Reset via GPIO (from config)
     if (cfg.reset_pin >= 0) {
