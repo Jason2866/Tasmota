@@ -33,7 +33,7 @@
   #ifdef RTC_NOINIT_ATTR
     #undef RTC_NOINIT_ATTR
   #endif
-  #define RTC_NOINIT_ATTR DRAM_ATTR
+  #define RTC_NOINIT_ATTR __NOINIT_ATTR
 #endif  // CONFIG_IDF_TARGET_ESP32C2
 
 #endif  // ESP32
