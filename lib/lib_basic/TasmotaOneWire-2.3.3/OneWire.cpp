@@ -226,6 +226,10 @@ bool directRead(IO_REG_TYPE mask)
 #if ESP_IDF_VERSION_MAJOR >= 5
 #include "soc/gpio_periph.h"
 #endif // ESP_IDF_VERSION_MAJOR >= 5
+#if __has_include("soc/gpio_struct.h")
+// IDF 6.x: GPIO register struct no longer exported via gpio_periph.h
+#include "soc/gpio_struct.h"
+#endif
 #define PIN_TO_BASEREG(pin)             (0)
 #define PIN_TO_BITMASK(pin)             (pin)
 #define IO_REG_TYPE uint32_t

@@ -99,6 +99,9 @@ const uint8_t MAX_SPI = 2;                  // Max number of Hardware SPI contro
 
 // I2S
 #ifdef SOC_I2S_SUPPORTED
+  #ifndef SOC_I2S_NUM
+    #define SOC_I2S_NUM 1  // IDF 6.x: SOC_I2S_NUM removed; default to 1 when I2S is supported
+  #endif
   const uint8_t MAX_I2S = SOC_I2S_NUM;
 #else  // SOC_I2S_SUPPORTED
   const uint8_t MAX_I2S = 0;
@@ -106,6 +109,12 @@ const uint8_t MAX_SPI = 2;                  // Max number of Hardware SPI contro
 
 // RMT
 #ifdef SOC_RMT_SUPPORTED
+  #ifndef SOC_RMT_GROUPS
+    #define SOC_RMT_GROUPS 1  // IDF 6.x: SOC_RMT_GROUPS removed; default to 1 group
+  #endif
+  #ifndef SOC_RMT_TX_CANDIDATES_PER_GROUP
+    #define SOC_RMT_TX_CANDIDATES_PER_GROUP 5  // IDF 6.x: removed; use same default as esp32-hal-rmt.h
+  #endif
   const uint8_t MAX_RMT = (SOC_RMT_GROUPS) * (SOC_RMT_TX_CANDIDATES_PER_GROUP);
 #else // SOC_RMT_SUPPORTED
   const uint8_t MAX_RMT = 0;

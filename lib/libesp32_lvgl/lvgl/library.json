@@ -9,7 +9,12 @@
 	},
 	"build": {
 		"includeDir": ".",
-		"flags": [ "-I$PROJECT_DIR/tasmota/lvgl_berry" ]
+		"flags": [ "-I$PROJECT_DIR/tasmota/lvgl_berry" ],
+		"srcFilter": [
+			"+<*>",
+			"-<src/draw/sw/blend/helium/>",
+			"-<src/draw/convert/helium/>"
+		]
 	},
 	"license": "MIT",
 	"homepage": "https://lvgl.io",
