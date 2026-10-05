@@ -24,6 +24,18 @@
 // Modul
 #undef MODULE
 #define MODULE WEMOS // [Module] Select default model
+
+// ESP32-C2 has no RTC slow memory; RTC_NOINIT_ATTR is explicitly broken there.
+// Fall back to DRAM_ATTR so the variable survives warm resets (but not deep-sleep).
+// The IDF header itself defines RTC_NOINIT_ATTR as static_assert(0,...) on C2,
+// so we must redefine it *after* that header has been pulled in via esp8266toEsp32.h.
+#ifdef CONFIG_IDF_TARGET_ESP32C2
+  #ifdef RTC_NOINIT_ATTR
+    #undef RTC_NOINIT_ATTR
+  #endif
+  #define RTC_NOINIT_ATTR DRAM_ATTR
+#endif  // CONFIG_IDF_TARGET_ESP32C2
+
 #endif  // ESP32
 
 #ifdef ESP8266
