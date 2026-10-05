@@ -99,8 +99,14 @@ const uint8_t MAX_SPI = 2;                  // Max number of Hardware SPI contro
 
 // I2S
 #ifdef SOC_I2S_SUPPORTED
-  #ifndef SOC_I2S_NUM
-    #define SOC_I2S_NUM 1  // IDF 6.x: SOC_I2S_NUM removed; default to 1 when I2S is supported
+  #ifndef SOC_I2S_NUM  // IDF 6.x: SOC_I2S_NUM removed
+    #ifdef CONFIG_IDF_TARGET_ESP32P4
+      #define SOC_I2S_NUM 3
+    #elif CONFIG_IDF_TARGET_ESP32S3
+      #define SOC_I2S_NUM 2
+    #else
+      #define SOC_I2S_NUM 1   
+    #endif
   #endif
   const uint8_t MAX_I2S = SOC_I2S_NUM;
 #else  // SOC_I2S_SUPPORTED
@@ -108,12 +114,20 @@ const uint8_t MAX_SPI = 2;                  // Max number of Hardware SPI contro
 #endif // SOC_I2S_SUPPORTED
 
 // RMT
-#ifdef SOC_RMT_SUPPORTED
-  #ifndef SOC_RMT_GROUPS
-    #define SOC_RMT_GROUPS 1  // IDF 6.x: SOC_RMT_GROUPS removed; default to 1 group
-  #endif
+#ifdef SOC_RMT_SUPPORTED  // IDF 6.x:  SOC_RMT_SUPPORTED removed
   #ifndef SOC_RMT_TX_CANDIDATES_PER_GROUP
-    #define SOC_RMT_TX_CANDIDATES_PER_GROUP 5  // IDF 6.x: removed; use same default as esp32-hal-rmt.h
+    #ifdef CONFIG_IDF_TARGET_ESP32
+      #define SOC_RMT_TX_CANDIDATES_PER_GROUP 8
+    #elif CONFIG_IDF_TARGET_ESP32S3
+      #define SOC_RMT_TX_CANDIDATES_PER_GROUP 4
+    #elif CONFIG_IDF_TARGET_ESP32P4
+      #define SOC_RMT_TX_CANDIDATES_PER_GROUP 4
+    #else
+      #define SOC_RMT_TX_CANDIDATES_PER_GROUP 2
+    #endif
+  #endif
+  #ifndef SOC_RMT_GROUPS  // IDF 6.x: removed
+    #define SOC_RMT_GROUPS 1
   #endif
   const uint8_t MAX_RMT = (SOC_RMT_GROUPS) * (SOC_RMT_TX_CANDIDATES_PER_GROUP);
 #else // SOC_RMT_SUPPORTED
