@@ -9,7 +9,24 @@
 #define GPIO_SET_SLOW(A) digitalWrite(A, HIGH)
 #define GPIO_CLR_SLOW(A) digitalWrite(A, LOW)
 #else // ESP32
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
+#if CONFIG_IDF_TARGET_ESP32S31
+static inline void uDisplayGpioClear(uint32_t pin) {
+  if (pin < 32) {
+    GPIO.out_w1tc.val = (1U << pin);
+  } else {
+    GPIO.out1_w1tc.val = (1U << (pin - 32));
+  }
+}
+static inline void uDisplayGpioSet(uint32_t pin) {
+  if (pin < 32) {
+    GPIO.out_w1ts.val = (1U << pin);
+  } else {
+    GPIO.out1_w1ts.val = (1U << (pin - 32));
+  }
+}
+#define GPIO_CLR(A) uDisplayGpioClear(A)
+#define GPIO_SET(A) uDisplayGpioSet(A)
+#elif CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
 #define GPIO_CLR(A) GPIO.out_w1tc.val = (1 << A)
 #define GPIO_SET(A) GPIO.out_w1ts.val = (1 << A)
 #else // plain ESP32 or S3

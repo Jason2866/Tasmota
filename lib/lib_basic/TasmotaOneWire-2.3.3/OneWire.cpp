@@ -241,6 +241,11 @@ IO_REG_TYPE directRead(IO_REG_TYPE pin)
 {
 #if SOC_GPIO_PIN_COUNT <= 32 || CONFIG_IDF_TARGET_ESP32P4
     return (GPIO.in.val >> pin) & 0x1;
+#elif CONFIG_IDF_TARGET_ESP32S31
+    if ( pin < 32 )
+        return (GPIO.in.val >> pin) & 0x1;
+    else
+        return (GPIO.in1.val >> (pin - 32)) & 0x1;
 #else  // ESP32 with over 32 gpios
     if ( pin < 32 )
         return (GPIO.in >> pin) & 0x1;
@@ -256,6 +261,11 @@ void directWriteLow(IO_REG_TYPE pin)
 {
 #if SOC_GPIO_PIN_COUNT <= 32 || CONFIG_IDF_TARGET_ESP32P4
     GPIO.out_w1tc.val = ((uint32_t)1 << pin);
+#elif CONFIG_IDF_TARGET_ESP32S31
+    if ( pin < 32 )
+        GPIO.out_w1tc.val = ((uint32_t)1 << pin);
+    else
+        GPIO.out1_w1tc.val = ((uint32_t)1 << (pin - 32));
 #else  // ESP32 with over 32 gpios
     if ( pin < 32 )
         GPIO.out_w1tc = ((uint32_t)1 << pin);
@@ -269,6 +279,11 @@ void directWriteHigh(IO_REG_TYPE pin)
 {
 #if SOC_GPIO_PIN_COUNT <= 32 || CONFIG_IDF_TARGET_ESP32P4
     GPIO.out_w1ts.val = ((uint32_t)1 << pin);
+#elif CONFIG_IDF_TARGET_ESP32S31
+    if ( pin < 32 )
+        GPIO.out_w1ts.val = ((uint32_t)1 << pin);
+    else
+        GPIO.out1_w1ts.val = ((uint32_t)1 << (pin - 32));
 #else  // ESP32 with over 32 gpios
     if ( pin < 32 )
         GPIO.out_w1ts = ((uint32_t)1 << pin);
@@ -286,6 +301,11 @@ void directModeInput(IO_REG_TYPE pin)
         // Input
 #if SOC_GPIO_PIN_COUNT <= 32 || CONFIG_IDF_TARGET_ESP32P4
         GPIO.enable_w1tc.val = ((uint32_t)1 << (pin));
+#elif CONFIG_IDF_TARGET_ESP32S31
+        if ( pin < 32 )
+            GPIO.enable_w1tc.val = ((uint32_t)1 << pin);
+        else
+            GPIO.enable1_w1tc.val = ((uint32_t)1 << (pin - 32));
 #else  // ESP32 with over 32 gpios
         if ( pin < 32 )
             GPIO.enable_w1tc = ((uint32_t)1 << pin);
@@ -304,6 +324,11 @@ void directModeOutput(IO_REG_TYPE pin)
         // Output
 #if SOC_GPIO_PIN_COUNT <= 32 || CONFIG_IDF_TARGET_ESP32P4
         GPIO.enable_w1ts.val = ((uint32_t)1 << (pin));
+#elif CONFIG_IDF_TARGET_ESP32S31
+        if ( pin < 32 )
+            GPIO.enable_w1ts.val = ((uint32_t)1 << pin);
+        else
+            GPIO.enable1_w1ts.val = ((uint32_t)1 << (pin - 32));
 #else  // ESP32 with over 32 gpios
         if ( pin < 32 )
             GPIO.enable_w1ts = ((uint32_t)1 << pin);
