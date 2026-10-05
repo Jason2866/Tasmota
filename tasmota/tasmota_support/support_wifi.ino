@@ -1591,6 +1591,7 @@ void WifiConnect(void)
 #endif  // CONFIG_ESP_WIFI_REMOTE_ENABLED
   }
 #endif  // ESP32
+  WifiSetState(0);
 //  WifiSetOutputPower();
 
 //#ifdef ESP8266
