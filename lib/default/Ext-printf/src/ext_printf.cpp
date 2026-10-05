@@ -21,6 +21,9 @@
 #include <Arduino.h>
 #include <IPAddress.h>
 #include <SBuffer.hpp>
+#if CONFIG_IDF_TARGET_ESP32S31
+#include "soc/soc.h"
+#endif
 
 /*********************************************************************************************\
  * va_list extended support
@@ -255,7 +258,11 @@ char * copyStr(const char * str) {
 }
 
 const char ext_invalid_mem[] PROGMEM = "<--INVALID-->";
+#if CONFIG_IDF_TARGET_ESP32S31
+const uint32_t min_valid_ptr = SOC_DRAM_LOW;
+#else
 const uint32_t min_valid_ptr = 0x3F000000;    // addresses below this line are invalid
+#endif
 
 int32_t ext_vsnprintf_P(char * out_buf, size_t buf_len, const char * fmt_P, va_list va) {
   va_list va_cpy;
