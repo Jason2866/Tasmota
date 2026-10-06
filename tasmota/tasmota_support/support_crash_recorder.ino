@@ -337,7 +337,11 @@ extern "C" IRAM_ATTR void custom_crash_recorder(void *exc_frame, bool pseudo_exc
   // // code copied from panic_print_basic_backtrace()
   uint32_t * sp = (uint32_t*) regs->sp;
   uint32_t i = 0;
+  #ifdef ESP32 // ESP32 specific stack limit
   const uint32_t stack_limit = SOC_DRAM_HIGH;
+  #else
+  const uint32_t stack_limit = 0x3FCDFFF0;  // default stack limit for ESP8266
+  #endif // ESP32
   for (uint32_t i = 0; ((uint32_t) sp) < stack_limit && i < 320 && idx < crash_dump_max_len; i++, sp++) {
     uint32_t value = *sp;
     if ((value >= 0x40000000) && (value < 0x42800000)) {  // keep only addresses in code area

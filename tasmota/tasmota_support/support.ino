@@ -21,9 +21,9 @@ extern "C" {
 extern struct rst_info resetInfo;
 }
 
-#if CONFIG_IDF_TARGET_ESP32S31
+#ifdef ESP32 // ESP32 specific gpio driver defines
 #include "driver/gpio.h"
-#endif
+#endif // ESP32
 
 /*********************************************************************************************\
  * ESP32 Watchdog
