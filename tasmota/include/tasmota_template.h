@@ -1548,11 +1548,11 @@ const char PINS_WEMOS[] PROGMEM = "IOIOIOIOIOIOIOIOIOIOIOIOIOIOIOIOAOAOAOAOAOAOA
 #define WEMOS_MODULE       0
 
 const char PINS_WEMOS[] PROGMEM =
-  "IOIOIOIOIOIO"                    // GPIO0..5
-  "IOIOIOIOIOIOIOIOIOIOIOIOIOIO"    // GPIO6..19: touch-capable GPIOs
+  "AOAOIOIOIOIO"                    // GPIO0..5: 32 kHz crystal analog functions on GPIO0..1
+  "AOAOAOAOAOAOAOAOAOAOAOAOAOAO"    // GPIO6..19: touch-capable GPIOs
   "IOIOIOIOIOIOIOIOIO"              // GPIO20..28
   "--"                              // GPIO29 is not bonded
-  "IOIOIOIOIOIOIOIOIOIOIO"          // GPIO30..40
+  "IOIOIOAOAOIOIOAOAOAOAO"          // GPIO30..40: USB on GPIO33..34, comparator on GPIO37..40
   "--"                              // GPIO41 is not bonded
   "AOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAO" // GPIO42..57: ADC-capable GPIOs
   "IOIOIOIO";                       // GPIO58..61
