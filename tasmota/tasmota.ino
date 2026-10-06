@@ -97,6 +97,7 @@
 #ifdef ESP32
 #include "include/tasconsole.h"
 #if SOC_USB_SERIAL_JTAG_SUPPORTED
+#include "soc/io_mux_reg.h"                 // USB_INT_PHY0_Dx_GPIO_NUM
 #include "hal/usb_serial_jtag_ll.h"
 #include "esp_private/rtc_clk.h"
 #endif  // SOC_USB_SERIAL_JTAG_SUPPORTED
