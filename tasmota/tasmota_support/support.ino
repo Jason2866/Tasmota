@@ -1808,7 +1808,8 @@ bool FlashPin(uint32_t pin) {
 #elif CONFIG_IDF_TARGET_ESP32P4
   return false;                        // ESP32P4 has no flash pins, but GPIOs 34-38 are strapping pins
 #elif CONFIG_IDF_TARGET_ESP32S31
-  return false;                        // Flash and PSRAM use a dedicated MSPI interface
+  return ((pin >= 26) && (pin <= 28)) ||
+         ((pin >= 30) && (pin <= 32)); // SPI flash pins; GPIO29 is unbonded
 #else
   return (pin >= 28) && (pin <= 31);   // ESP32 skip 28-31
 #endif  // ESP32C2/C3/C5/C6 and S2/S3

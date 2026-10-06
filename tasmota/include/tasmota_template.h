@@ -1550,9 +1550,9 @@ const char PINS_WEMOS[] PROGMEM = "IOIOIOIOIOIOIOIOIOIOIOIOIOIOIOIOAOAOAOAOAOAOA
 const char PINS_WEMOS[] PROGMEM =
   "AOAOIOIOIOIO"                    // GPIO0..5: 32 kHz crystal analog functions on GPIO0..1
   "AOAOAOAOAOAOAOAOAOAOAOAOAOAO"    // GPIO6..19: touch-capable GPIOs
-  "IOIOIOIOIOIOIOIOIO"              // GPIO20..28
+  "IOIOIOIOIOIOFLFLFL"              // GPIO20..28: GPIO26..28 are SPI flash pins
   "--"                              // GPIO29 is not bonded
-  "IOIOIOAOAOIOIOAOAOAOAO"          // GPIO30..40: USB on GPIO33..34, comparator on GPIO37..40
+  "FLFLFLAOAOIOIOAOAOAOAO"          // GPIO30..40: GPIO30..32 are SPI flash pins
   "--"                              // GPIO41 is not bonded
   "AOAOAOAOAOAOAOAOAOAOAOAOAOAOAOAO" // GPIO42..57: ADC-capable GPIOs
   "IOIOIOIO";                       // GPIO58..61
@@ -3421,13 +3421,13 @@ const mytmplt kModules[] PROGMEM = {
      AGPIO(GPIO_USER),            // 23
      AGPIO(GPIO_USER),            // 24
      AGPIO(GPIO_USER),            // 25
-     AGPIO(GPIO_USER),            // 26
-     AGPIO(GPIO_USER),            // 27
-     AGPIO(GPIO_USER),            // 28
+     AGPIO(GPIO_NONE),            // 26: SPI flash
+     AGPIO(GPIO_NONE),            // 27: SPI flash
+     AGPIO(GPIO_NONE),            // 28: SPI flash
      AGPIO(GPIO_NONE),            // 29: not bonded
-     AGPIO(GPIO_USER),            // 30
-     AGPIO(GPIO_USER),            // 31
-     AGPIO(GPIO_USER),            // 32
+     AGPIO(GPIO_NONE),            // 30: SPI flash
+     AGPIO(GPIO_NONE),            // 31: SPI flash
+     AGPIO(GPIO_NONE),            // 32: SPI flash
      AGPIO(GPIO_USER),            // 33
      AGPIO(GPIO_USER),            // 34
      AGPIO(GPIO_USER),            // 35
