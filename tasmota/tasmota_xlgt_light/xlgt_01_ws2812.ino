@@ -148,7 +148,7 @@ typedef CONCAT3(NEO_FEATURE_NEO,NEO_FEATURE_TYPE,NEO_FEATURE_FEATURE) selectedNe
 
 #if defined(ESP8266) && defined(USE_WS2812_DMA)
 typedef CONCAT6(NEO_NEO,NEO_CHIP,NEO_PROTO,NEO_INV,NEO_HW,Method)   selectedNeoSpeedType;
-#elif defined(CONFIG_IDF_TARGET_ESP32C2)
+#elif defined(CONFIG_IDF_TARGET_ESP32C2) || defined(CONFIG_IDF_TARGET_ESP32C61)
 typedef NeoEsp32SpiN800KbpsMethod   selectedNeoSpeedType;
 #else // Dma : different naming scheme
 typedef CONCAT6(NEO_NEO,NEO_CHIP,NEO_PROTO,NEO_HW,NEO_INV,Method)   selectedNeoSpeedType;

@@ -1723,7 +1723,7 @@ void TemplateGpios(myio *gp)
     j++;
 #endif  // ESP8266
 #ifdef ESP32
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32P4
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C61 || CONFIG_IDF_TARGET_ESP32P4
     dest[i] = src[i];
 #elif CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
     if (22 == i) { j = 33; }    // skip 22-32
@@ -1799,6 +1799,8 @@ bool FlashPin(uint32_t pin) {
   return ((pin > 15) && (pin < 23));   // ESP32C5 has GPIOs 16-22 reserved for Flash
 #elif CONFIG_IDF_TARGET_ESP32C6
   return ((pin == 24) || (pin == 25) || (pin == 27) || (pin == 29) || (pin == 30));  // ESP32C6 has GPIOs 24-30 reserved for Flash, with some boards GPIOs 26 28 are useable
+#elif CONFIG_IDF_TARGET_ESP32C61
+  return ((pin >= 14) && (pin <= 21)); // ESP32C61 has GPIOs 14-21 reserved for Flash/PSRAM
 #elif CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
   return (pin > 21) && (pin < 33);     // ESP32S2 skip 22-32
 #elif CONFIG_IDF_TARGET_ESP32P4
@@ -1822,6 +1824,8 @@ bool RedPin(uint32_t pin) {            // Pin may be dangerous to change, displa
   return (2 == pin) || (7 == pin) || (25 == pin) || (27 == pin) || (28 == pin);  // ESP32C5: GPIO2,7,25,27,28 are strapping pins
 #elif CONFIG_IDF_TARGET_ESP32C6
   return (26 == pin) || (28 == pin);   // ESP32C6: GPIOs 26 28 are usually used for Flash (mode QIO/QOUT)
+#elif CONFIG_IDF_TARGET_ESP32C61
+  return (0 == pin) || (2 == pin) || (3 == pin) || (4 == pin) || (7 == pin) || (8 == pin) || (9 == pin);  // ESP32C61: GPIO0,2,3,4,7,8,9 are strapping pins
 #elif CONFIG_IDF_TARGET_ESP32S2
   return false;                        // No red pin on ESP32S3
 #elif  CONFIG_IDF_TARGET_ESP32P4
@@ -2242,7 +2246,7 @@ void SetSerial(uint32_t baudrate, uint32_t serial_config) {
 
 void ClaimSerial(void) {
 #ifdef ESP32
-#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C61 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
 #ifdef USE_USB_CDC_CONSOLE
   if (!tasconsole_serial) {
     return;              // USB console does not use serial

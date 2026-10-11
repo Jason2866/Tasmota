@@ -7,7 +7,7 @@
 */
 
 #ifdef ESP32
-#if !CONFIG_IDF_TARGET_ESP32C5 // todo: remove when ESP32C5 TWAI support is added
+#if !CONFIG_IDF_TARGET_ESP32C5 && !CONFIG_IDF_TARGET_ESP32C61 // todo: remove when ESP32C5/C61 TWAI support is added
 #ifdef USE_ESP32_TWAI
 #if SOC_TWAI_SUPPORTED
 /*********************************************************************************************\
@@ -443,5 +443,5 @@ bool Xdrv91(uint32_t function) {
 
 #endif  // SOC_TWAI_SUPPORTED
 #endif  // USE_ESP32_TWAI
-#endif  // !CONFIG_IDF_TARGET_ESP32C5
+#endif  // !CONFIG_IDF_TARGET_ESP32C5 && !CONFIG_IDF_TARGET_ESP32C61
 #endif  // ESP32
