@@ -443,5 +443,5 @@ bool Xdrv91(uint32_t function) {
 
 #endif  // SOC_TWAI_SUPPORTED
 #endif  // USE_ESP32_TWAI
-#endif  // !CONFIG_IDF_TARGET_ESP32C5 && !CONFIG_IDF_TARGET_ESP32C61
+#endif  // !CONFIG_IDF_TARGET_ESP32C5
 #endif  // ESP32
