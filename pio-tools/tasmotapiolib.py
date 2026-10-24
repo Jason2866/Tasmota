@@ -155,23 +155,53 @@ NON_BUILD_TARGETS = frozenset({
     # info-only / no-op
     "monitor", "nobuild", "envdump", "exec",
     "size", "sizedata", "metrics", "idedata", "compiledb",
+    # code formatting
+    "clang-format", "clangformat", "clangformat-write",
     # cleanups
     "clean", "fullclean", "cleanall",
     # custom Tasmota targets (see pio-tools/custom_target.py)
     "reset_target", "factory_flash", "external_crashreport",
 })
 
+def _is_clang_format_target(target):
+    target = str(target).strip().lower()
+    for option in ("-t=", "--target="):
+        if target.startswith(option):
+            target = target[len(option):].strip()
+            break
+    return target in {"clang-format", "clangformat", "clangformat-write"}
+
 def is_non_build_target(env=None):
     """Return True if the current PlatformIO invocation only requests
     non-compiling targets (upload, erase, monitor, ...).
 
     Returns False for the default build (no -t given) and for any
-    invocation that mixes a build-relevant target.
+    invocation that mixes a build-relevant target. The clang-format target
+    always takes precedence because formatting must not trigger build-time
+    generators, even if an IDE adds auxiliary targets to the invocation.
     """
     try:
         from SCons.Script import COMMAND_LINE_TARGETS
     except ImportError:
         COMMAND_LINE_TARGETS = []
+
+    argv_lower = [str(a).lower() for a in sys.argv]
+    # SCons may report auxiliary build targets while the requested formatter
+    # target is only present in argv. Check both sources before deciding.
+    has_clang_format_target = any(
+        _is_clang_format_target(target) for target in COMMAND_LINE_TARGETS
+    )
+    has_clang_format_target = has_clang_format_target or any(
+        _is_clang_format_target(arg)
+        or (
+            arg in ("-t", "--target")
+            and index + 1 < len(argv_lower)
+            and _is_clang_format_target(argv_lower[index + 1])
+        )
+        for index, arg in enumerate(argv_lower)
+    )
+    if has_clang_format_target:
+        return True
 
     if COMMAND_LINE_TARGETS:
         # SCons targets available - use them directly.
@@ -179,7 +209,6 @@ def is_non_build_target(env=None):
 
     # COMMAND_LINE_TARGETS is empty (e.g. VS Code / PlatformIO IDE environment).
     # Fall back to inspecting sys.argv for known non-build target keywords.
-    argv_lower = [str(a).lower() for a in sys.argv]
     if any(t == arg for t in NON_BUILD_TARGETS for arg in argv_lower):
         return True
 
