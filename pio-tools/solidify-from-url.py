@@ -3,12 +3,19 @@
 Import("env")
 
 import os
+import re
+import subprocess
 from genericpath import exists
 from os.path import join
-import subprocess
-from colorama import Fore, Back, Style
+
 import requests
-import re
+from colorama import Back, Fore, Style
+
+from tasmotapiolib import is_clang_format_target
+
+if is_clang_format_target():
+    print("solidify-from-url: skipped (clang-format target)")
+    Return()
 
 def cleanFolder():
     with open(HEADER_FILE_PATH, 'w') as file:

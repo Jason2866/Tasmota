@@ -130,89 +130,85 @@ def is_env_set(name: str, env):
     return False
 
 
-# ---------------------------------------------------------------------------
-# Target detection helper
-#
-# The Berry generator scripts (dump-defines.py, gen-berry-defines.py,
-# gen-berry-structures.py) are wired in as `extra_scripts` and therefore
-# execute during PlatformIO's SCons script-loading phase for *every*
-# invocation - including targets that do not actually compile firmware
-# (upload, erase, monitor, ...).
-#
-# `is_non_build_target(env)` returns True when the user only asked for one
-# of those non-compiling targets, so the Berry pipeline can short-circuit
-# and avoid regenerating .be / .h artifacts.
-# ---------------------------------------------------------------------------
+# Helpers for extra scripts to detect non-compiling targets. Some IDEs leave
+# COMMAND_LINE_TARGETS empty, so inspect both CLI arguments and SCons targets.
 
-# Targets for which Berry artifact regeneration should be skipped.
-NON_BUILD_TARGETS = frozenset({
-    # filesystem-only uploads (do not compile firmware)
-    "uploadfs", "uploadfsota",
-    # filesystem build/download
-    "buildfs", "downloadfs", "download_fs",
-    # erase variants
-    "erase", "erase_flash", "eraseflash",
-    # info-only / no-op
-    "monitor", "nobuild", "envdump", "exec",
-    "size", "sizedata", "metrics", "idedata", "compiledb",
-    # code formatting
-    "clang-format", "clangformat", "clangformat-write",
-    # cleanups
-    "clean", "fullclean", "cleanall",
-    # custom Tasmota targets (see pio-tools/custom_target.py)
-    "reset_target", "factory_flash", "external_crashreport",
-})
+CLANG_FORMAT_TARGETS = frozenset(
+    {"clang-format", "clangformat", "clangformat-write"}
+)
+
+# Targets that do not compile firmware or regenerate Berry artifacts.
+NON_BUILD_TARGETS = frozenset(
+    {
+        # Filesystem operations
+        "uploadfs", "uploadfsota",
+        "buildfs", "downloadfs", "download_fs",
+        # Erase and information targets
+        "erase", "erase_flash", "eraseflash",
+        "monitor", "nobuild", "envdump", "exec",
+        "size", "sizedata", "metrics", "idedata", "compiledb",
+        # Cleanup and custom Tasmota targets
+        "clean", "fullclean", "cleanall",
+        "reset_target", "factory_flash", "external_crashreport",
+    }
+) | CLANG_FORMAT_TARGETS
+
+TARGET_FLAGS = {"-t", "--target"}
+TARGET_OPTIONS = ("-t=", "--target=")
+
 
 def _is_clang_format_target(target):
-    target = str(target).strip().lower()
-    for option in ("-t=", "--target="):
+    target = str(getattr(target, "name", target)).strip().lower()
+    for option in TARGET_OPTIONS:
         if target.startswith(option):
-            target = target[len(option):].strip()
+            target = target[len(option) :].strip()
             break
-    return target in {"clang-format", "clangformat", "clangformat-write"}
+
+    if target.startswith(("clang-format (", "clangformat (")):
+        target = target.split(" (", 1)[0]
+    return target in CLANG_FORMAT_TARGETS
+
+
+def _cli_target_values(argv):
+    for index, argument in enumerate(argv):
+        if argument in TARGET_FLAGS and index + 1 < len(argv):
+            yield argv[index + 1]
+        elif argument.startswith(TARGET_OPTIONS) or _is_clang_format_target(argument):
+            yield argument
+
+
+def is_clang_format_target():
+    """Return whether PlatformIO or its IDE requested clang-format."""
+    try:
+        from SCons.Script import BUILD_TARGETS, COMMAND_LINE_TARGETS
+    except ImportError:
+        BUILD_TARGETS = []
+        COMMAND_LINE_TARGETS = []
+
+    targets = (*_cli_target_values(sys.argv), *COMMAND_LINE_TARGETS, *BUILD_TARGETS)
+    return any(_is_clang_format_target(target) for target in targets)
+
 
 def is_non_build_target(env=None):
-    """Return True if the current PlatformIO invocation only requests
-    non-compiling targets (upload, erase, monitor, ...).
+    """Return True when the invocation does not compile firmware.
 
-    Returns False for the default build (no -t given) and for any
-    invocation that mixes a build-relevant target. The clang-format target
-    always takes precedence because formatting must not trigger build-time
-    generators, even if an IDE adds auxiliary targets to the invocation.
+    clang-format takes priority over auxiliary IDE targets.
     """
     try:
         from SCons.Script import COMMAND_LINE_TARGETS
     except ImportError:
         COMMAND_LINE_TARGETS = []
 
-    argv_lower = [str(a).lower() for a in sys.argv]
-    # SCons may report auxiliary build targets while the requested formatter
-    # target is only present in argv. Check both sources before deciding.
-    has_clang_format_target = any(
-        _is_clang_format_target(target) for target in COMMAND_LINE_TARGETS
-    )
-    has_clang_format_target = has_clang_format_target or any(
-        _is_clang_format_target(arg)
-        or (
-            arg in ("-t", "--target")
-            and index + 1 < len(argv_lower)
-            and _is_clang_format_target(argv_lower[index + 1])
-        )
-        for index, arg in enumerate(argv_lower)
-    )
-    if has_clang_format_target:
+    if is_clang_format_target():
         return True
 
     if COMMAND_LINE_TARGETS:
         # SCons targets available - use them directly.
         return all(t in NON_BUILD_TARGETS for t in COMMAND_LINE_TARGETS)
 
-    # COMMAND_LINE_TARGETS is empty (e.g. VS Code / PlatformIO IDE environment).
-    # Fall back to inspecting sys.argv for known non-build target keywords.
-    if any(t == arg for t in NON_BUILD_TARGETS for arg in argv_lower):
-        return True
-
-    return False  # default build
+    # Fall back to CLI arguments for IDEs that leave COMMAND_LINE_TARGETS empty.
+    argv_targets = {str(argument).strip().lower() for argument in sys.argv}
+    return bool(argv_targets & NON_BUILD_TARGETS)
 
 
 def _compress_with_gzip(data, level=9):

@@ -16,7 +16,7 @@ from SCons.Script import COMMAND_LINE_TARGETS
 
 board_config = env.BoardConfig()
 
-if "nobuild" in COMMAND_LINE_TARGETS:
+if "nobuild" in COMMAND_LINE_TARGETS and not tasmotapiolib.is_clang_format_target():
     prog_name = join(env.subst("$BUILD_DIR"),"firmware.bin")
     if not os.path.isfile(prog_name):
         #print ("No firmware in path:",join(env.subst("$BUILD_DIR")))

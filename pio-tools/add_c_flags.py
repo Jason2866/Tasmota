@@ -4,6 +4,15 @@ import json
 import re
 from pathlib import Path
 
+from SCons.Script import COMMAND_LINE_TARGETS
+
+from tasmotapiolib import is_clang_format_target
+
+if is_clang_format_target():
+  if "nobuild" not in COMMAND_LINE_TARGETS:
+    COMMAND_LINE_TARGETS.append("nobuild")
+  print("Skipping firmware build setup for clang-format target")
+
 build_flags = env['BUILD_FLAGS']
 mcu = env.get("BOARD_MCU").lower()
 
