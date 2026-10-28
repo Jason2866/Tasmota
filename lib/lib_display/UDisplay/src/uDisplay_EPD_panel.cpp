@@ -399,8 +399,7 @@ bool EPDPanel::updateFrame() {
     if (!fb_buffer) return false;
 
     if (cfg.ep_mode == 4) {
-        updateInky();
-        return true;
+        return updateInky();
     }
     
     // Handle different EPD modes
@@ -466,10 +465,10 @@ void EPDPanel::waitInkyIdle(uint32_t timeout_ms) {
     }
 }
 
-void EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
+bool EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
     if (cfg.busy_pin < 0) {
         delay(timeout_ms);
-        return;
+        return true;
     }
 
     const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
@@ -478,20 +477,21 @@ void EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
     while (digitalRead(cfg.busy_pin) != busy_level) {
         if ((millis() - started) >= timeout_ms) {
             AddLog(3, "UDisplay: Inky refresh did not start");
-            return;
+            return false;
         }
         delay(5);
     }
     while (digitalRead(cfg.busy_pin) == busy_level) {
         if ((millis() - started) >= timeout_ms) {
             AddLog(3, "UDisplay: Inky refresh timed out");
-            return;
+            return false;
         }
         delay(20);
     }
+    return true;
 }
 
-void EPDPanel::updateInky() {
+bool EPDPanel::updateInky() {
     // The E673 has one RAM plane with two 4-bit color indices per byte.
     sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
 
@@ -502,13 +502,21 @@ void EPDPanel::updateInky() {
     sendInkyCommand(0x06, booster_after_power, sizeof(booster_after_power));
     static const uint8_t refresh[] = {0x00};
     sendInkyCommand(0x12, refresh, sizeof(refresh)); // DRF
-    waitInkyRefresh(cfg.update_time ? cfg.update_time : 32000);
+    const bool refresh_completed = waitInkyRefresh(cfg.update_time ? cfg.update_time : 32000);
+    if (!refresh_completed) {
+        const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
+        if (cfg.busy_pin >= 0 && digitalRead(cfg.busy_pin) == busy_level) {
+            // Do not power down the controller while the panel is still refreshing.
+            return false;
+        }
+    }
 
     sendInkyCommand(0x02, refresh, sizeof(refresh)); // POF
     waitInkyIdle(300);
     static const uint8_t power_save[] = {0x4F, 0x6E};
     sendInkyCommand(0x00, power_save, sizeof(power_save)); // PSR
     waitInkyIdle(300);
+    return refresh_completed;
 }
 
 // ===== ep_mode 2 Support (5-LUT mode) =====

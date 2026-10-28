@@ -129,10 +129,10 @@ private:
     // Private helpers
     void waitBusy();
     void drawAbsolutePixel(int x, int y, uint16_t color);
-    void updateInky();
+    bool updateInky();
     void sendInkyCommand(uint8_t command, const uint8_t* data = nullptr, uint32_t len = 0);
     void waitInkyIdle(uint32_t timeout_ms);
-    void waitInkyRefresh(uint32_t timeout_ms);
+    bool waitInkyRefresh(uint32_t timeout_ms);
     void sendYColumnAsXRow(const uint8_t* y_column_buffer, uint16_t buffer_width, 
                            uint16_t rows, uint16_t cols_bytes);
 };
