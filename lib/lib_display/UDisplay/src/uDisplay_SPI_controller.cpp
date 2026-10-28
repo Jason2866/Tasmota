@@ -120,6 +120,10 @@ void SPIController::endTransaction() {
     if (spi_config.bus_nr <= 2) spi->endTransaction();
 }
 
+void SPIController::setMode(uint8_t mode) {
+    spi_settings = SPISettings((uint32_t)spi_config.speed * 1000000, MSBFIRST, mode);
+}
+
 // ===== Low-Level Write Functions =====
 void SPIController::writeCommand(uint8_t cmd) {
     if (spi_config.dc < 0) {

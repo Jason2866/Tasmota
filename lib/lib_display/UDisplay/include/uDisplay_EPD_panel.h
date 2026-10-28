@@ -14,8 +14,8 @@
 struct EPDPanelConfig {
     uint16_t width;
     uint16_t height;
-    uint8_t bpp;  // Always 1 for EPD
-    uint8_t ep_mode; // 1=2-LUT, 2=5-LUT, 3=command-based
+    uint8_t bpp;  // 1 for monochrome EPDs, 4 for Inky Impression Spectra 6
+    uint8_t ep_mode; // 1=2-LUT, 2=5-LUT, 3=command-based, 4=Inky Impression E673
     
     // Timing
     int16_t lut_full_time;
@@ -129,6 +129,10 @@ private:
     // Private helpers
     void waitBusy();
     void drawAbsolutePixel(int x, int y, uint16_t color);
+    void updateInky();
+    void sendInkyCommand(uint8_t command, const uint8_t* data = nullptr, uint32_t len = 0);
+    void waitInkyIdle(uint32_t timeout_ms);
+    void waitInkyRefresh(uint32_t timeout_ms);
     void sendYColumnAsXRow(const uint8_t* y_column_buffer, uint16_t buffer_width, 
                            uint16_t rows, uint16_t cols_bytes);
 };
