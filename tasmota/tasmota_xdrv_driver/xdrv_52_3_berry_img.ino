@@ -183,6 +183,19 @@ struct be_img_util {
   }
 
   /**
+   * @brief Swaps red and blue channels in an RGB888 buffer
+   * @param buffer RGB888 pixel data
+   * @param buffer_len Buffer length in bytes
+   */
+  static void rgb888_swap_red_blue(uint8_t * buffer, size_t buffer_len){
+    for (size_t i=0; i + 2 < buffer_len; i+=3) {
+      uint8_t red = buffer[i];
+      buffer[i] = buffer[i+2];
+      buffer[i+2] = red;
+    }
+  }
+
+  /**
    * @brief Converts RGB888 to RGB565 in-place (produces little endian)
    * @param buffer RGB888 buffer
    * @param buffer_len Buffer length in bytes
@@ -730,7 +743,17 @@ extern "C" {
               be_img_util::rgb565_swap_bytes(temp_buf, img->len); // Swap LE to BE in temp buffer
               encode_format = PIXFORMAT_RGB565;
             }
+            // esp32-camera's fmt2jpg_cb() treats PIXFORMAT_RGB888 input as
+            // BGR and reverses the outer channels while encoding. Berry's
+            // RGB888 buffers are RGB, so adapt the input and restore it.
+            bool rgb888_swapped = encode_format == PIXFORMAT_RGB888;
+            if(rgb888_swapped) {
+              be_img_util::rgb888_swap_red_blue(img->buf, pixel_count * 3);
+            }
             bool encoded = fmt2jpg_cb(img->buf, img->len, img->width, img->height, encode_format, quality, be_img_util::_jpg_out_cb, (void *)&jpeg);
+            if(rgb888_swapped) {
+              be_img_util::rgb888_swap_red_blue(img->buf, pixel_count * 3);
+            }
             if (!encoded || jpeg.output_failed || jpeg.output_len == 0) {
               free(jpeg.output);
               be_raise(vm, "img_error", "jpg encoding failed");
