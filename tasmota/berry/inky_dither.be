@@ -176,17 +176,42 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   image.convert_to(jpeg_format, jpeg_quality)
   info = image.info()
   var encoded = bytes(introspect.toptr(info["buf_addr"]), info["size"])
-  var output = open(output_path, "wb")
+  var temp_path = output_path + ".tmp"
+  var backup_path = temp_path + ".bak"
+  import path
+  while temp_path == input_path || backup_path == input_path || path.exists(temp_path) || path.exists(backup_path)
+    temp_path += ".tmp"
+    backup_path = temp_path + ".bak"
+  end
+  var output = open(temp_path, "wb")
   if output == nil
-    raise "io_error", "could not open output JPEG"
+    raise "io_error", "could not open temporary output JPEG"
   end
   try
     output.write(encoded)
   except .. as err, msg
     output.close()
+    path.remove(temp_path)
     raise err, msg
   end
   output.close()
+
+  var has_previous_output = path.exists(output_path)
+  if has_previous_output && !path.rename(output_path, backup_path)
+    path.remove(temp_path)
+    raise "io_error", "could not back up existing output JPEG"
+  end
+  if !path.rename(temp_path, output_path)
+    if has_previous_output && !path.rename(backup_path, output_path)
+      path.remove(temp_path)
+      raise "io_error", "could not restore original output JPEG; backup is at " + backup_path
+    end
+    path.remove(temp_path)
+    raise "io_error", "could not replace output JPEG"
+  end
+  if has_previous_output
+    path.remove(backup_path)
+  end
 
   return {"width": info["width"], "height": info["height"],
           "bytes": info["size"], "path": output_path}

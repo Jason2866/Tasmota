@@ -220,8 +220,8 @@ struct be_img_util {
   }
 
   /**
-   * @brief Converts RGB888 to RGB565 in-place (produces little endian)
-   * @param buffer RGB888 buffer
+   * @brief Converts normalized RGB888 to RGB565 in-place (produces little endian)
+   * @param buffer RGB888 buffer in red, green, blue channel order
    * @param buffer_len Buffer length in bytes
    */
   static void rgb888_to_565_inplace(uint8_t * buffer, size_t buffer_len){
@@ -234,9 +234,9 @@ struct be_img_util {
     uint16_t r, g, b;
     int j = 0;
     for (uint32_t i=0; i < buffer_len; i+=3) {
-      blu = temp_buf[i];
+      red = temp_buf[i];
       grn = temp_buf[i+1];
-      red = temp_buf[i+2];
+      blu = temp_buf[i+2];
       b = (blu >> 3) & 0x1f;
       g = ((grn >> 2) & 0x3f) << 5;
       r = ((red >> 3) & 0x1f) << 11;
@@ -417,43 +417,61 @@ struct be_img_util {
    * @return true if valid JPEG and dimensions extracted, false otherwise
    */
   static bool jpeg_size(uint8_t* buffer, size_t data_size, uint16_t *width, uint16_t *height) {
-    union{
-      uint8_t * data;
-      uint16_t * data16;
-      uint32_t * data32;
-    };
-    data = buffer;
-    if(data[data_size-2] != 0xff ||  data[data_size-1] != 0xd9){
-      return false; // quick check for correct termination
+    if (!buffer || !width || !height || data_size < 4 ||
+        buffer[0] != 0xFF || buffer[1] != 0xD8 ||
+        buffer[data_size - 2] != 0xFF || buffer[data_size - 1] != 0xD9) {
+      return false;
     }
-    if(data32[0] == 0xE0FFD8FF) {
-      // Check for valid JPEG header (null terminated JFIF)
-      // if(data[i+2] == 'J' && data[i+3] == 'F' && data[i+4] == 'I' && data[i+5] == 'F' && data[i+6] == 0x00) {
-      if(data16[3] == 0x464a && data16[4] == 0x4649) {
-          //Retrieve the block length of the first block since the first block will not contain the size of file
-        int i = 20;
-        uint16_t block_length = 0;
-        while(i<data_size) {
-          i+=block_length;               //Increase the file index to get to the next block
-          if(i >= data_size) {
-            return false;}   //Check to protect against segmentation faults
-          if (data[i] != 0xFF) {
-            return false;}
-          if(data[i+1] == 0xC0 || data[i+1] == 0xC2) {   //0xFFC0 or 0xFFC2 is the "Start of frame" marker which contains the file size
-            //The structure of the 0xFFC0 block is quite simple [0xFFC0][ushort length][uchar precision][ushort x][ushort y]
-            *height = data[i+5]*256 + data[i+6];
-            *width = data[i+7]*256 + data[i+8];
-            return true;
-          }
-          else
-          {
-            i+=2;                              //Skip the block marker
-            block_length = data[i] * 256 + data[i+1];   //Go to the next block
-          }
-        }
+
+    size_t offset = 2;
+    const size_t data_end = data_size - 2;  // Exclude the required EOI marker.
+    while (offset < data_end) {
+      if (buffer[offset] != 0xFF) {
+        return false;
       }
+      while (offset < data_end && buffer[offset] == 0xFF) {
+        offset++;
+      }
+      if (offset >= data_end) {
+        return false;
+      }
+
+      const uint8_t marker = buffer[offset++];
+      if (marker == 0xD9 || marker == 0xDA || marker == 0xD8 || marker == 0x00) {
+        return false;
+      }
+      // TEM and restart markers do not contain a segment length.
+      if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) {
+        continue;
+      }
+      if (data_end - offset < 2) {
+        return false;
+      }
+
+      const uint16_t segment_length = ((uint16_t)buffer[offset] << 8) | buffer[offset + 1];
+      if (segment_length < 2 || segment_length > data_end - offset) {
+        return false;
+      }
+      if (marker == 0xC0 || marker == 0xC2) {
+        if (segment_length < 8) {
+          return false;
+        }
+        const uint8_t components = buffer[offset + 7];
+        if (components == 0 || segment_length < 8 + (uint16_t)components * 3) {
+          return false;
+        }
+        const uint16_t parsed_height = ((uint16_t)buffer[offset + 3] << 8) | buffer[offset + 4];
+        const uint16_t parsed_width = ((uint16_t)buffer[offset + 5] << 8) | buffer[offset + 6];
+        if (parsed_width == 0 || parsed_height == 0) {
+          return false;
+        }
+        *width = parsed_width;
+        *height = parsed_height;
+        return true;
+      }
+      offset += segment_length;
     }
-    return false;               //Not a valid SOI header
+    return false;
   }
 };
 
@@ -731,10 +749,9 @@ extern "C" {
           be_raise(vm, "img_error", "not enough heap");
           be_return_nil(vm);
         }
-        // fmt2rgb888 emits BGR for RGB565 and YUV422 input. RGB888 buffers
-        // elsewhere in the Berry image API are RGB, so normalize this target.
-        if (format == PIXFORMAT_RGB888 &&
-            (src_format == PIXFORMAT_RGB565 || src_format == PIXFORMAT_YUV422)) {
+        // fmt2rgb888 emits BGR for RGB565 and YUV422 input. Normalize its
+        // output here so all later conversions operate on RGB888 data.
+        if (src_format == PIXFORMAT_RGB565 || src_format == PIXFORMAT_YUV422) {
           be_img_util::rgb888_swap_red_blue(temp_buf, temp_buf_len);
         }
       }

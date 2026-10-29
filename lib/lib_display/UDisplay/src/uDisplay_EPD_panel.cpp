@@ -564,7 +564,7 @@ bool EPDPanel::updateInky() {
     sendInkyCommand(0x06, booster_after_power, sizeof(booster_after_power));
     static const uint8_t refresh[] = {0x00};
     sendInkyCommand(0x12, refresh, sizeof(refresh)); // DRF
-    const bool refresh_completed = waitInkyRefresh(cfg.update_time ? cfg.update_time : 32000);
+    const bool refresh_completed = waitInkyRefresh(cfg.busy_timeout);
     if (!refresh_completed) {
         const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
         if (cfg.busy_pin >= 0 && digitalRead(cfg.busy_pin) == busy_level) {
