@@ -54,6 +54,11 @@ def inky_dither(input_path, output_path, saturation=0.5, jpeg_quality=12)
   # The last white entry in the Python driver is not included in quantize(6).
   var saturated = [0, 0, 0, 161, 164, 165, 208, 190, 71,
                    156, 72, 75, 61, 59, 94, 58, 91, 70]
+  # Store the panel's ideal RGB colors in the JPEG. EPDPanel maps RGB565 to
+  # these same six colors, while the blended palette above is only for
+  # selecting colors and calculating the dithering error.
+  var ideal = [0, 0, 0, 255, 255, 255, 255, 255, 0,
+               255, 0, 0, 0, 0, 255, 0, 255, 0]
   var desaturated = [0, 0, 0, 255, 255, 255, 255, 255, 0,
                      255, 0, 0, 0, 0, 255, 0, 255, 0]
   var palette = list()
@@ -98,9 +103,9 @@ def inky_dither(input_path, output_path, saturation=0.5, jpeg_quality=12)
       var error_red = red - palette[best]
       var error_green = green - palette[best + 1]
       var error_blue = blue - palette[best + 2]
-      pixels[index] = palette[best]
-      pixels[index + 1] = palette[best + 1]
-      pixels[index + 2] = palette[best + 2]
+      pixels[index] = ideal[best]
+      pixels[index + 1] = ideal[best + 1]
+      pixels[index + 2] = ideal[best + 2]
 
       # Floyd-Steinberg weights: right 7/16, down-left 3/16,
       # down 5/16, down-right 1/16. Clamp propagated RGB values.
