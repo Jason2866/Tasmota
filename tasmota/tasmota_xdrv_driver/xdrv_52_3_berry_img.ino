@@ -58,6 +58,8 @@ typedef struct {
         const uint8_t *input;
         uint8_t *output;
         size_t output_len;
+        size_t output_capacity;
+        bool output_failed;
 } be_jpg_encoder_t;
 
 typedef struct { 
@@ -228,6 +230,29 @@ struct be_img_util {
    */
   static size_t _jpg_out_cb(void * arg, size_t index, const void* data, size_t len){
     be_jpg_encoder_t *jpeg = (be_jpg_encoder_t *)arg; 
+    if (jpeg->output_failed || len > SIZE_MAX - index) {
+      jpeg->output_failed = true;
+      return 0;
+    }
+    if (index > jpeg->output_capacity || len > jpeg->output_capacity - index) {
+      const size_t required = index + len;
+      size_t new_capacity = jpeg->output_capacity;
+      while (new_capacity < required) {
+        if (new_capacity > SIZE_MAX / 2) {
+          new_capacity = required;
+          break;
+        }
+        new_capacity *= 2;
+      }
+      uint8_t *new_output = (uint8_t *)heap_caps_realloc(
+          jpeg->output, new_capacity, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (new_output == nullptr) {
+        jpeg->output_failed = true;
+        return 0;
+      }
+      jpeg->output = new_output;
+      jpeg->output_capacity = new_capacity;
+    }
     memcpy(jpeg->output + index, data, len);
     jpeg->output_len = index+len;
     return len;
@@ -674,6 +699,8 @@ extern "C" {
       jpeg.input = img->buf;
       jpeg.output = temp_buf;
       jpeg.output_len = 0;
+      jpeg.output_capacity = temp_buf_len + 4;
+      jpeg.output_failed = false;
       switch(format){
         case PIXFORMAT_GRAYSCALE: // always from temporary RGB888
           be_img_util::rgb888_to_grayscale_inplace(temp_buf,temp_buf_len);
@@ -703,7 +730,13 @@ extern "C" {
               be_img_util::rgb565_swap_bytes(temp_buf, img->len); // Swap LE to BE in temp buffer
               encode_format = PIXFORMAT_RGB565;
             }
-            fmt2jpg_cb(img->buf, img->len, img->width, img->height, encode_format, quality, be_img_util::_jpg_out_cb, (void *)&jpeg);
+            bool encoded = fmt2jpg_cb(img->buf, img->len, img->width, img->height, encode_format, quality, be_img_util::_jpg_out_cb, (void *)&jpeg);
+            if (!encoded || jpeg.output_failed || jpeg.output_len == 0) {
+              free(jpeg.output);
+              be_raise(vm, "img_error", "jpg encoding failed");
+              be_return_nil(vm);
+            }
+            temp_buf = jpeg.output;
             temp_buf_len = jpeg.output_len;
           }
           break;
