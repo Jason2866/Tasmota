@@ -531,7 +531,9 @@ bool EPDPanel::updateInky() {
         AddLog(3, "UDisplay: Inky init command sequence is missing");
         return false;
     }
+    spi->beginTransaction();
     cfg.send_cmds_callback(0, cfg.init_cmd_count);
+    spi->endTransaction();
 
     // The E673 has one RAM plane with two 4-bit color indices per byte.
     sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
