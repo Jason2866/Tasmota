@@ -1300,6 +1300,7 @@ if (interface == _UDSP_SPI) {
         panel_config->epd.height = gys;
         panel_config->epd.bpp = bpp;
         panel_config->epd.ep_mode = ep_mode;
+        panel_config->epd.init_cmd_count = dsp_ncmds;
         // Timing values already set in panel_config->epd (either defaults or from :T section)
         panel_config->epd.reset_pin = reset;
         panel_config->epd.busy_pin = spiController->spi_config.miso;
@@ -1315,12 +1316,9 @@ if (interface == _UDSP_SPI) {
         // Create EPD panel BEFORE sending init commands (send_spi_cmds needs universal_panel)
         universal_panel = new EPDPanel(panel_config->epd, spiController, frame_buffer);
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
-        if (ep_mode == 4) {
-          // Inky needs reset before the register sequence (same order as the
-          // Pimoroni E673 driver). Its first frame is sent on Updateframe().
-          epd->resetDisplay();
-          send_spi_cmds(0, dsp_ncmds);
-        } else {
+        // Inky reset and register setup run immediately before each frame,
+        // matching the Pimoroni E673 update lifecycle.
+        if (ep_mode != 4) {
           send_spi_cmds(0, dsp_ncmds);
 
           // After descriptor init commands, do initial EPD setup

@@ -64,6 +64,7 @@ struct EPDPanelConfig {
     uint16_t epcoffs_part = 0;            // Offset to partial update commands
     uint8_t epc_full_cnt = 0;             // Count of full update commands
     uint8_t epc_part_cnt = 0;             // Count of partial update commands
+    uint16_t init_cmd_count = 0;          // Number of bytes in the panel init sequence
     
     // Callback to send command sequences from descriptor
     std::function<void(uint16_t offset, uint16_t count)> send_cmds_callback;
@@ -91,7 +92,7 @@ public:
     bool updateFrame() override;
 
     // EPD-specific public methods (for uDisplay wrapper compatibility)
-    void resetDisplay();
+    bool resetDisplay();
     void setLut(const uint8_t* lut, uint16_t len);
     void setLuts();  // For ep_mode 2 (5-LUT mode)
     void setMemoryArea(int x_start, int y_start, int x_end, int y_end);
@@ -131,7 +132,8 @@ private:
     void drawAbsolutePixel(int x, int y, uint16_t color);
     bool updateInky();
     void sendInkyCommand(uint8_t command, const uint8_t* data = nullptr, uint32_t len = 0);
-    void waitInkyIdle(uint32_t timeout_ms);
+    bool waitInkyIdle(uint32_t timeout_ms);
+    bool waitInkyReady(uint32_t timeout_ms);
     bool waitInkyRefresh(uint32_t timeout_ms);
     void sendYColumnAsXRow(const uint8_t* y_column_buffer, uint16_t buffer_width, 
                            uint16_t rows, uint16_t cols_bytes);

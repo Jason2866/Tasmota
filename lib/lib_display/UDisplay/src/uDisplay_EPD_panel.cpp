@@ -76,8 +76,8 @@ void EPDPanel::delay_sync(int32_t ms) {
     }
 }
 
-void EPDPanel::resetDisplay() {
-    if (cfg.reset_pin < 0) return;
+bool EPDPanel::resetDisplay() {
+    if (cfg.reset_pin < 0) return true;
     
     pinMode(cfg.reset_pin, OUTPUT);
     digitalWrite(cfg.reset_pin, HIGH);
@@ -86,11 +86,12 @@ void EPDPanel::resetDisplay() {
     delay(cfg.ep_mode == 4 ? 30 : 10);
     digitalWrite(cfg.reset_pin, HIGH);
     if (cfg.ep_mode == 4) {
-        waitInkyIdle(300);
+        return waitInkyIdle(300);
     } else {
         delay(10);
         delay_sync(100); // Use delay_sync instead of waitBusy
     }
+    return true;
 }
 
 void EPDPanel::waitBusy() {
@@ -396,7 +397,12 @@ bool EPDPanel::setRotation(uint8_t rot) {
 }
 
 bool EPDPanel::updateFrame() {
-    if (!fb_buffer) return false;
+    if (!fb_buffer) {
+        if (cfg.ep_mode == 4) {
+            AddLog(3, "UDisplay: Inky framebuffer is unavailable");
+        }
+        return false;
+    }
 
     if (cfg.ep_mode == 4) {
         return updateInky();
@@ -440,10 +446,10 @@ void EPDPanel::sendInkyCommand(uint8_t command, const uint8_t* data, uint32_t le
     spi->endTransaction();
 }
 
-void EPDPanel::waitInkyIdle(uint32_t timeout_ms) {
+bool EPDPanel::waitInkyIdle(uint32_t timeout_ms) {
     if (cfg.busy_pin < 0) {
         delay(timeout_ms);
-        return;
+        return true;
     }
 
     const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
@@ -452,17 +458,35 @@ void EPDPanel::waitInkyIdle(uint32_t timeout_ms) {
         // Match the Pimoroni driver's settle delay when the panel is already
         // idle; if BUSY is asserted, wait for the line to return to idle.
         delay(timeout_ms);
-        return;
+        return true;
     }
 
     uint32_t started = millis();
     while (digitalRead(cfg.busy_pin) == busy_level) {
         if ((millis() - started) >= timeout_ms) {
             AddLog(3, "UDisplay: Inky busy wait timed out");
-            return;
+            return false;
         }
         delay(1);
     }
+    return true;
+}
+
+bool EPDPanel::waitInkyReady(uint32_t timeout_ms) {
+    if (cfg.busy_pin < 0) {
+        return true;
+    }
+
+    const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
+    uint32_t started = millis();
+    while (digitalRead(cfg.busy_pin) == busy_level) {
+        if ((millis() - started) >= timeout_ms) {
+            AddLog(3, "UDisplay: Inky panel still busy; skipping update");
+            return false;
+        }
+        delay(1);
+    }
+    return true;
 }
 
 bool EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
@@ -492,11 +516,30 @@ bool EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
 }
 
 bool EPDPanel::updateInky() {
+    // A previous refresh may have timed out while BUSY remained asserted.
+    // Do not reset the controller or send another frame until it is safe.
+    if (!waitInkyReady(300)) {
+        return false;
+    }
+
+    // The Pimoroni driver resets and replays the E673 register setup before
+    // every frame update, so repeated refreshes follow the same lifecycle.
+    if (!resetDisplay()) {
+        return false;
+    }
+    if (!cfg.send_cmds_callback || !cfg.init_cmd_count) {
+        AddLog(3, "UDisplay: Inky init command sequence is missing");
+        return false;
+    }
+    cfg.send_cmds_callback(0, cfg.init_cmd_count);
+
     // The E673 has one RAM plane with two 4-bit color indices per byte.
     sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
 
     sendInkyCommand(0x04);                 // PON
-    waitInkyIdle(300);
+    if (!waitInkyIdle(300)) {
+        return false;
+    }
 
     static const uint8_t booster_after_power[] = {0x6F, 0x1F, 0x17, 0x49};
     sendInkyCommand(0x06, booster_after_power, sizeof(booster_after_power));
@@ -512,10 +555,14 @@ bool EPDPanel::updateInky() {
     }
 
     sendInkyCommand(0x02, refresh, sizeof(refresh)); // POF
-    waitInkyIdle(300);
+    if (!waitInkyIdle(300)) {
+        return false;
+    }
     static const uint8_t power_save[] = {0x4F, 0x6E};
     sendInkyCommand(0x00, power_save, sizeof(power_save)); // PSR
-    waitInkyIdle(300);
+    if (!waitInkyIdle(300)) {
+        return false;
+    }
     return refresh_completed;
 }
 
