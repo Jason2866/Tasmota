@@ -19,29 +19,29 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
     raise "value_error", "JPEG quality must be between 0 and 63"
   end
 
-  var input = open(input_path, "rb")
-  if input == nil
+  var input_file = open(input_path, "rb")
+  if input_file == nil
     raise "io_error", "could not open input JPEG"
   end
-  var input_size = input.size()
+  var input_size = input_file.size()
   if input_size <= 0
-    input.close()
+    input_file.close()
     raise "io_error", "input JPEG is empty"
   end
   # Berry limits bytes() to 512 KiB on PSRAM builds and 32 KiB otherwise.
   if input_size > 512 * 1024
-    input.close()
+    input_file.close()
     raise "memory_error", "JPEG exceeds Berry's 512 KiB bytes limit"
   end
 
   var jpeg_data = nil
   try
-    jpeg_data = input.readbytes()
+    jpeg_data = input_file.readbytes()
   except .. as err, msg
-    input.close()
+    input_file.close()
     raise err, msg
   end
-  input.close()
+  input_file.close()
   if size(jpeg_data) != input_size
     raise "io_error", "could not read complete input JPEG"
   end
