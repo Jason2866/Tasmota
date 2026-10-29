@@ -4,6 +4,12 @@
 
 ## Requirements
 
+## Inky Impression 7.3-inch display
+
+- `Inky_Impression_7_3_display.ini` supports the 800x480 Inky Impression 7.3-inch Spectra 6
+display with the E673 controller. It uses the universal uDisplay SPI driver and expects
+the display reset pin and the active-low BUSY signal on SPI MISO to be configured. A full color refresh takes about 32 seconds.
+
 - An ESP32 Tasmota build with Berry and `USE_BERRY_IMAGE` enabled. The Berry `img` class is provided by that feature.
 - PSRAM is required for the decoded 800 × 480 RGB image buffer. The buffer uses about 1.15 MiB, in addition to memory needed by JPEG decoding and encoding.
 - The source must be a JPEG that decodes to exactly 800 × 480 pixels.

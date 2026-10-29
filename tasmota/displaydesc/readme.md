@@ -49,10 +49,3 @@ for further info about display descriptors read the tasmota docs display part.
 
 the current files define the standard resolutions. if you change the resolution settings
 sometimes you also have to change some register values in the init or address map section
-
-## Inky Impression
-
-`Inky_Impression_7_3_display.ini` supports the 800x480 Inky Impression 7.3-inch Spectra 6
-display with the E673 controller. It uses the universal uDisplay SPI driver and expects
-the display reset pin and the active-low BUSY signal on SPI MISO to be configured. A full
-color refresh takes about 32 seconds.
