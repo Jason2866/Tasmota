@@ -86,6 +86,7 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   var y = 0
   while y < height
     var x = 0
+    var yield_x = 128
     while x < width
       var index = y * stride + x * 3
       var red = pixels[index]
@@ -168,8 +169,18 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
         end
       end
       x += 1
+      if x >= yield_x
+        # Keep each Berry execution slice short on slow ESP32 targets.
+        tasmota.yield()
+        yield_x += 128
+      end
     end
+    # Reset the timeout before starting the next row and JPEG encoding.
+    tasmota.yield()
     y += 1
+    if y % 16 == 0 || y == height
+      print("Inky dithering: " + str(y) + "/" + str(height) + " rows")
+    end
   end
 
   # JPEG conversion replaces the RGB buffer with the encoded data.
