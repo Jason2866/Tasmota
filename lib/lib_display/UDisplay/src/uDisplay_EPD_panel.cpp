@@ -77,7 +77,13 @@ void EPDPanel::delay_sync(int32_t ms) {
 }
 
 bool EPDPanel::resetDisplay() {
-    if (cfg.reset_pin < 0) return true;
+    if (cfg.reset_pin < 0) {
+        if (cfg.ep_mode == 4) {
+            AddLog(3, "UDisplay: Inky reset pin is not configured");
+            return false;
+        }
+        return true;
+    }
     
     pinMode(cfg.reset_pin, OUTPUT);
     digitalWrite(cfg.reset_pin, HIGH);
@@ -448,17 +454,19 @@ void EPDPanel::sendInkyCommand(uint8_t command, const uint8_t* data, uint32_t le
 
 bool EPDPanel::waitInkyIdle(uint32_t timeout_ms) {
     if (cfg.busy_pin < 0) {
-        delay(timeout_ms);
-        return true;
+        AddLog(3, "UDisplay: Inky BUSY pin is not configured");
+        return false;
     }
 
     const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
     const uint8_t idle_level = cfg.busy_invert ? HIGH : LOW;
     if (digitalRead(cfg.busy_pin) == idle_level) {
         // Match the Pimoroni driver's settle delay when the panel is already
-        // idle; if BUSY is asserted, wait for the line to return to idle.
+        // idle, then make sure it did not become busy during that delay.
         delay(timeout_ms);
-        return true;
+        if (digitalRead(cfg.busy_pin) == idle_level) {
+            return true;
+        }
     }
 
     uint32_t started = millis();
@@ -474,7 +482,8 @@ bool EPDPanel::waitInkyIdle(uint32_t timeout_ms) {
 
 bool EPDPanel::waitInkyReady(uint32_t timeout_ms) {
     if (cfg.busy_pin < 0) {
-        return true;
+        AddLog(3, "UDisplay: Inky BUSY pin is not configured");
+        return false;
     }
 
     const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
@@ -491,8 +500,8 @@ bool EPDPanel::waitInkyReady(uint32_t timeout_ms) {
 
 bool EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
     if (cfg.busy_pin < 0) {
-        delay(timeout_ms);
-        return true;
+        AddLog(3, "UDisplay: Inky BUSY pin is not configured");
+        return false;
     }
 
     const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;

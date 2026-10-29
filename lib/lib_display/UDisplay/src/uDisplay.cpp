@@ -1195,6 +1195,17 @@ Renderer *uDisplay::Init(void) {
     return NULL;
   }
 
+  if (ep_mode == 4) {
+    if (reset < 0) {
+      AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires a reset pin");
+      return NULL;
+    }
+    if (!spiController || spiController->spi_config.miso < 0) {
+      AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires a BUSY pin on SPI MISO");
+      return NULL;
+    }
+  }
+
   #ifdef UDSP_DEBUG
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Dsp Init 1 start");
   #endif
