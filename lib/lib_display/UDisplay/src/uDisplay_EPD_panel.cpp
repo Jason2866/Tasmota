@@ -311,14 +311,17 @@ bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
 bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
     if (cfg.ep_mode == 4) {
         if (!fb_buffer) return false;
-        for (int16_t y = window_y1; y < window_y2 && len > 0; y++) {
-            for (int16_t x = window_x1; x < window_x2 && len > 0; x++, len--) {
-                uint16_t color = *data++;
-                if (!first) {
-                    color = (color << 8) | (color >> 8);
-                }
-                drawPixel(x, y, color);
+        while (push_y < window_y2 && len > 0) {
+            uint16_t color = *data++;
+            if (!first) {
+                color = (color << 8) | (color >> 8);
             }
+            drawPixel(push_x, push_y, color);
+            if (++push_x >= window_x2) {
+                push_x = window_x1;
+                push_y++;
+            }
+            len--;
         }
         return true;
     }
@@ -332,14 +335,17 @@ bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
     // Write pixels to framebuffer based on window coordinates
     // IMPORTANT: window coordinates are in LOGICAL (rotated) space,
     // so we must use drawPixel (not drawAbsolutePixel) to apply rotation!
-    for (int16_t y = window_y1; y < window_y2 && len > 0; y++) {
-        for (int16_t x = window_x1; x < window_x2 && len > 0; x++, len--) {
-            uint16_t color = *data++;
-            // Convert to mono: white if any component > 50%
-            bool pixel = (color & RGB16_TO_MONO) ? true : false;
-            if (cfg.invert_colors) pixel = !pixel;
-            drawPixel(x, y, pixel ? 1 : 0);
+    while (push_y < window_y2 && len > 0) {
+        uint16_t color = *data++;
+        // Convert to mono: white if any component > 50%
+        bool pixel = (color & RGB16_TO_MONO) ? true : false;
+        if (cfg.invert_colors) pixel = !pixel;
+        drawPixel(push_x, push_y, pixel ? 1 : 0);
+        if (++push_x >= window_x2) {
+            push_x = window_x1;
+            push_y++;
         }
+        len--;
     }
     
     return true; // Handled by EPD panel
@@ -351,6 +357,8 @@ bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
     window_y1 = y0;
     window_x2 = x1;
     window_y2 = y1;
+    push_x = x0;
+    push_y = y0;
     return true;
 }
 

@@ -126,6 +126,8 @@ private:
     int16_t window_y1 = 0;
     int16_t window_x2 = 0;
     int16_t window_y2 = 0;
+    int16_t push_x = 0;
+    int16_t push_y = 0;
 
     // Private helpers
     void waitBusy();

@@ -152,19 +152,43 @@ struct be_img_util {
    * @return true on success, false on failure
    */
   static bool from_buffer(image_t *img, uint8_t* buffer, size_t len, uint16_t w, uint16_t h, pixformat_t f) {
-    if(img->buf != nullptr) {
+    if (!buffer || len == 0 || w == 0 || h == 0 || len > SIZE_MAX - 4) {
+      return false;
+    }
+    if (f == PIXFORMAT_JPEG) {
+      uint16_t jpeg_width, jpeg_height;
+      if (!jpeg_size(buffer, len, &jpeg_width, &jpeg_height) || jpeg_width != w || jpeg_height != h) {
+        return false;
+      }
+    } else {
+      size_t bpp;
+      switch (f) {
+        case PIXFORMAT_GRAYSCALE: bpp = 1; break;
+        case PIXFORMAT_RGB565:
+        case PIXFORMAT_YUV422: bpp = 2; break;
+        case PIXFORMAT_RGB888: bpp = 3; break;
+        default: return false;
+      }
+      size_t pixel_count = (size_t)w * h;
+      if (pixel_count > SIZE_MAX / bpp || len != pixel_count * bpp) {
+        return false;
+      }
+    }
+
+    uint8_t *new_buf = (uint8_t *)heap_caps_malloc(len + 4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!new_buf) {
+      return false;
+    }
+    memcpy(new_buf, buffer, len);
+    if (img->buf != nullptr) {
       free(img->buf);
     }
-    img->buf = (uint8_t *)heap_caps_malloc((len)+4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if(img->buf) {
-      memcpy(img->buf,buffer,len);
-      img->len = len;
-      setFormat(img, f);
-      img->width = w;
-      img->height = h;
-      return true;
-    }
-    return false;
+    img->buf = new_buf;
+    img->len = len;
+    setFormat(img, f);
+    img->width = w;
+    img->height = h;
+    return true;
   }
 
   /**
@@ -581,12 +605,14 @@ extern "C" {
       // be_pop(vm, 2);
       image_t * img = be_get_image_instance(vm);
       if(img){
-        if(img->buf != nullptr){
-          free(img->buf);
-        }
-        uint16_t width = be_toint(vm, 3);
-        uint16_t height = be_toint(vm, 4);
+        int32_t width_arg = be_toint(vm, 3);
+        int32_t height_arg = be_toint(vm, 4);
         int format = be_toint(vm, 5);
+        if (width_arg <= 0 || width_arg > UINT16_MAX || height_arg <= 0 || height_arg > UINT16_MAX) {
+          be_raise(vm, "img_error", "invalid image dimensions");
+        }
+        uint16_t width = width_arg;
+        uint16_t height = height_arg;
         if(be_img_util::from_buffer(img, src_buf, src_buf_len, width, height, (pixformat_t)format) == false){
           be_raise(vm, "img_error", "could not store from byte buffer");
         }
@@ -704,6 +730,12 @@ extern "C" {
           free(temp_buf);
           be_raise(vm, "img_error", "not enough heap");
           be_return_nil(vm);
+        }
+        // fmt2rgb888 emits BGR for RGB565 and YUV422 input. RGB888 buffers
+        // elsewhere in the Berry image API are RGB, so normalize this target.
+        if (format == PIXFORMAT_RGB888 &&
+            (src_format == PIXFORMAT_RGB565 || src_format == PIXFORMAT_YUV422)) {
+          be_img_util::rgb888_swap_red_blue(temp_buf, temp_buf_len);
         }
       }
       be_jpg_encoder_t jpeg;

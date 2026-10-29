@@ -4,7 +4,14 @@
 # Optional arguments are saturation (0.0..1.0, default 0.5) and JPEG quality
 # (default 12, matching the native img encoder; ESP32 camera scale 0..63).
 
-def inky_dither(input_path, output_path, saturation=0.5, jpeg_quality=12)
+def inky_dither(input_path, output_path, saturation, jpeg_quality)
+  if saturation == nil
+    saturation = 0.5
+  end
+  if jpeg_quality == nil
+    jpeg_quality = 12
+  end
+
   if saturation < 0.0 || saturation > 1.0
     raise "value_error", "saturation must be between 0.0 and 1.0"
   end
