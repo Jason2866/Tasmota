@@ -24,6 +24,9 @@ Configure the Tasmota GPIO functions to match the signals you wired:
 | `D/C` | pin 15 | `SPI DC` |
 | `RESET` | pin 13 | `Display Rst` |
 | `BUSY` | pin 11 | `SPI MISO` |
+| `3V3` | pin 1 | `3V3` |
+| `5V` | pin 2 | `5V` |
+| `GND` | pin 6 | `GND` |
 
 Assign each Tasmota function to the ESP GPIO physically wired to that Inky signal, using **Configure Module** (or the equivalent GPIO configuration for your device). The middle column documents the Raspberry Pi 40-pin header locations; these are not ESP32 GPIO numbers. Choose suitable GPIOs for your ESP32 wiring and assign the Tasmota functions accordingly. In particular, ensure that `SPI MISO` is assigned even though the panel has no MISO data output.
 
