@@ -29,7 +29,7 @@ extern Renderer *renderer;
 #endif //  USE_UNIVERSAL_DISPLAY
 
 #if defined(USE_UNIVERSAL_DISPLAY) && defined(USE_UFILESYS) && defined(JPEG_PICTS) && defined(ESP32)
-extern bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys);
+extern bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys, bool allow_url);
 extern void BrTimeoutReset(void);
 extern void BrTimeoutStart(void);
 #endif
@@ -79,7 +79,7 @@ extern "C" {
     // Inky refresh can take about 32 seconds, longer than Berry's execution
     // timeout. This native call services the display synchronously.
     BrTimeoutReset();
-    if (!Draw_RGB_Bitmap(file, 0, 0, 0, false, 0, 0)) {
+    if (!Draw_RGB_Bitmap(file, 0, 0, 0, false, 0, 0, false)) {
       BrTimeoutStart();
       be_raise(vm, "display_error", "could not decode the dithered JPEG");
     }

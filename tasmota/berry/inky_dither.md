@@ -43,15 +43,15 @@ inky_dither(input_path, output_path, saturation, jpeg_quality)
 - `input_path`: path to the source JPEG on the Tasmota filesystem.
 - `output_path`: destination path for the dithered JPEG. It may be the same as the input path.
 - `saturation`: palette blend from `0.0` to `1.0`. `0.5` matches the Python driver's default. Lower values use the desaturated palette; higher values increase saturation.
-- `jpeg_quality`: ESP32 camera encoder quality from `0` to `63`. Lower values retain more JPEG quality; the default `12` matches the Tasmota image encoder default.
+- `jpeg_quality`: software JPEG encoder quality from `1` to `100`. Higher values preserve more image detail and generally produce larger files. The default is `85`.
 
-Berry does not support default values in function declarations. Omit the optional arguments or pass `nil` to use the defaults. For example, `inky_dither("/image.jpg", "/image-dithered.jpg", nil, 30)` uses the default saturation and JPEG quality `30`.
+Berry does not support default values in function declarations. Omit the optional arguments or pass `nil` to use the defaults. For example, `inky_dither("/image.jpg", "/image-dithered.jpg", nil, 90)` uses the default saturation and JPEG quality `90`.
 
 For example, use a more saturated palette and a smaller, more compressed JPEG:
 
 ```berry
-var result = inky_dither("/image.jpg", "/image-dithered.jpg", 0.75, 30)
+var result = inky_dither("/image.jpg", "/image-dithered.jpg", 0.75, 70)
 print(result)
 ```
 
-The function returns a map with the output `path`, `width`, `height`, and encoded file size in `bytes`. JPEG is lossy, so the saved file can contain slight color changes from the six dither palette colors.
+The function returns a map with the output `path`, `width`, `height`, and encoded file size in `bytes`. JPEG is lossy, so the saved file can contain slight color changes from the six dither palette colors. Higher `jpeg_quality` values reduce these changes at the cost of a larger file.

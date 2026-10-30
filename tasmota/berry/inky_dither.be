@@ -2,21 +2,21 @@
 # Load this file in the Berry console, then call:
 #   inky_dither("/image.jpg", "/image-dithered.jpg")
 # Optional arguments are saturation (0.0..1.0, default 0.5) and JPEG quality
-# (default 12, matching the native img encoder; ESP32 camera scale 0..63).
+# (default 85, range 1..100; higher values preserve more detail).
 
 def inky_dither(input_path, output_path, saturation, jpeg_quality)
   if saturation == nil
     saturation = 0.5
   end
   if jpeg_quality == nil
-    jpeg_quality = 12
+    jpeg_quality = 85
   end
 
   if saturation < 0.0 || saturation > 1.0
     raise "value_error", "saturation must be between 0.0 and 1.0"
   end
-  if jpeg_quality < 0 || jpeg_quality > 63
-    raise "value_error", "JPEG quality must be between 0 and 63"
+  if jpeg_quality < 1 || jpeg_quality > 100
+    raise "value_error", "JPEG quality must be between 1 and 100"
   end
 
   var input_file = open(input_path, "rb")
