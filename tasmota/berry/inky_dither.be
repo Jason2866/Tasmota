@@ -224,6 +224,18 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
     path.remove(backup_path)
   end
 
+  # Release the decoded and encoded image buffers before JPEG rendering.
+  pixels = nil
+  encoded = nil
+  image = nil
+  import gc
+  gc.collect()
+
+  import display
+  if !display.draw_jpg(output_path)
+    raise "display_error", "could not display the dithered JPEG"
+  end
+
   return {"width": info["width"], "height": info["height"],
           "bytes": info["size"], "path": output_path}
 end

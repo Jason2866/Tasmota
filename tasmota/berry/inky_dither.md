@@ -11,6 +11,7 @@ display with the E673 controller. It uses the universal uDisplay SPI driver and 
 the display reset pin and the active-low BUSY signal on SPI MISO to be configured. A full color refresh takes about 32 seconds.
 
 - An ESP32 Tasmota build with Berry and `USE_BERRY_IMAGE` enabled. The Berry `img` class is provided by that feature. For a custom build, define `USE_BERRY_IMAGE` in `my_user_config.h` and rebuild and flash Tasmota; this is a compile-time option and cannot be enabled by loading the script.
+- JPEG display support (`JPEG_PICTS`) must also be enabled in the ESP32 Tasmota build. The script uses the universal display driver to render the saved JPEG and refresh the panel.
 - PSRAM is required for the decoded 800 × 480 RGB image buffer. The buffer uses about 1.15 MiB, in addition to memory needed by JPEG decoding and encoding.
 - The source must be a JPEG that decodes to exactly 800 × 480 pixels.
 - Berry's `bytes()` limit restricts the compressed source JPEG to 512 KiB on PSRAM builds and 32 KiB without PSRAM. In practice, PSRAM is required for this workflow.
@@ -27,7 +28,7 @@ var result = inky_dither("/image.jpg", "/image-dithered.jpg")
 print(result)
 ```
 
-The output file is written to the Tasmota filesystem. Retrieve it using the device's filesystem access method.
+After the output file is written successfully, the script renders it at the top-left corner of the active universal display and refreshes the panel. The Inky refresh takes about 32 seconds. The output JPEG remains in the Tasmota filesystem; retrieve it using the device's filesystem access method.
 
 Dithering runs in Berry and can take a while on an ESP32. The script yields every 128 pixels and at each row boundary so Tasmota's Berry execution timeout does not interrupt the pixel loop. It prints progress after each 16 rows; wait until it reports 480 rows and returns the output map.
 

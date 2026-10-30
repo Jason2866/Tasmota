@@ -28,13 +28,19 @@ Renderer *Init_uDisplay(const char *desc);
 extern Renderer *renderer;
 #endif //  USE_UNIVERSAL_DISPLAY
 
+#if defined(USE_UNIVERSAL_DISPLAY) && defined(USE_UFILESYS) && defined(JPEG_PICTS) && defined(ESP32)
+extern bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys);
+extern void BrTimeoutReset(void);
+extern void BrTimeoutStart(void);
+#endif
+
 extern "C" {
   /*********************************************************************************************\
    * Native functions mapped to Berry functions
-   * 
+   *
    * import display
    * display.start(string) -> comptr or nil if failed
-   * 
+   *
   \*********************************************************************************************/
   int be_ntv_display_start(struct bvm *vm) {
   #ifdef USE_UNIVERSAL_DISPLAY
@@ -55,6 +61,36 @@ extern "C" {
   #else // USE_UNIVERSAL_DISPLAY
     be_raise(vm, "internal_error", "universal display driver not present");
   #endif // USE_UNIVERSAL_DISPLAY
+  }
+
+  // `display.draw_jpg(path:string) -> bool` draws a filesystem JPEG at (0, 0)
+  // and refreshes the active universal display.
+  int be_ntv_display_draw_jpg(struct bvm *vm) {
+#if defined(USE_UNIVERSAL_DISPLAY) && defined(USE_UFILESYS) && defined(JPEG_PICTS) && defined(ESP32)
+    int32_t argc = be_top(vm);
+    if (argc != 1 || !be_isstring(vm, 1)) {
+      be_raise(vm, kTypeError, nullptr);
+    }
+    if (!renderer) {
+      be_raise(vm, "display_error", "universal display is not initialized");
+    }
+
+    char *file = const_cast<char *>(be_tostring(vm, 1));
+    // Inky refresh can take about 32 seconds, longer than Berry's execution
+    // timeout. This native call services the display synchronously.
+    BrTimeoutReset();
+    if (!Draw_RGB_Bitmap(file, 0, 0, 0, false, 0, 0)) {
+      BrTimeoutStart();
+      be_raise(vm, "display_error", "could not decode the dithered JPEG");
+    }
+    renderer->Updateframe();
+    be_pop(vm, argc);
+    BrTimeoutStart();
+    be_pushbool(vm, true);
+    be_return(vm);
+#else
+    be_raise(vm, "feature_error", "JPEG display requires universal display, filesystem, JPEG_PICTS and ESP32 support");
+#endif
   }
 
   // `display.dimmer([dim:int]) -> int` sets the dimmer of display, value 0..100. If `0` then turn off display. If no arg, read the current value.
