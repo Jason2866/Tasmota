@@ -157,7 +157,7 @@ void uDisplay::invertDisplay(boolean i) {
 void uDisplay::Splash(void) {
     if (splash_font < 0) return;
 
-    if (ep_mode) {
+    if (ep_mode && ep_mode != 4) {
         Updateframe();
         if (universal_panel) {
             EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);

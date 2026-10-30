@@ -58,6 +58,8 @@ typedef struct {
         const uint8_t *input;
         uint8_t *output;
         size_t output_len;
+        size_t output_capacity;
+        bool output_failed;
 } be_jpg_encoder_t;
 
 typedef struct { 
@@ -150,19 +152,43 @@ struct be_img_util {
    * @return true on success, false on failure
    */
   static bool from_buffer(image_t *img, uint8_t* buffer, size_t len, uint16_t w, uint16_t h, pixformat_t f) {
-    if(img->buf != nullptr) {
+    if (!buffer || len == 0 || w == 0 || h == 0 || len > SIZE_MAX - 4) {
+      return false;
+    }
+    if (f == PIXFORMAT_JPEG) {
+      uint16_t jpeg_width, jpeg_height;
+      if (!jpeg_size(buffer, len, &jpeg_width, &jpeg_height) || jpeg_width != w || jpeg_height != h) {
+        return false;
+      }
+    } else {
+      size_t bpp;
+      switch (f) {
+        case PIXFORMAT_GRAYSCALE: bpp = 1; break;
+        case PIXFORMAT_RGB565:
+        case PIXFORMAT_YUV422: bpp = 2; break;
+        case PIXFORMAT_RGB888: bpp = 3; break;
+        default: return false;
+      }
+      size_t pixel_count = (size_t)w * h;
+      if (pixel_count > SIZE_MAX / bpp || len != pixel_count * bpp) {
+        return false;
+      }
+    }
+
+    uint8_t *new_buf = (uint8_t *)heap_caps_malloc(len + 4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!new_buf) {
+      return false;
+    }
+    memcpy(new_buf, buffer, len);
+    if (img->buf != nullptr) {
       free(img->buf);
     }
-    img->buf = (uint8_t *)heap_caps_malloc((len)+4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if(img->buf) {
-      memcpy(img->buf,buffer,len);
-      img->len = len;
-      setFormat(img, f);
-      img->width = w;
-      img->height = h;
-      return true;
-    }
-    return false;
+    img->buf = new_buf;
+    img->len = len;
+    setFormat(img, f);
+    img->width = w;
+    img->height = h;
+    return true;
   }
 
   /**
@@ -181,8 +207,21 @@ struct be_img_util {
   }
 
   /**
-   * @brief Converts RGB888 to RGB565 in-place (produces little endian)
-   * @param buffer RGB888 buffer
+   * @brief Swaps red and blue channels in an RGB888 buffer
+   * @param buffer RGB888 pixel data
+   * @param buffer_len Buffer length in bytes
+   */
+  static void rgb888_swap_red_blue(uint8_t * buffer, size_t buffer_len){
+    for (size_t i=0; i + 2 < buffer_len; i+=3) {
+      uint8_t red = buffer[i];
+      buffer[i] = buffer[i+2];
+      buffer[i+2] = red;
+    }
+  }
+
+  /**
+   * @brief Converts normalized RGB888 to RGB565 in-place (produces little endian)
+   * @param buffer RGB888 buffer in red, green, blue channel order
    * @param buffer_len Buffer length in bytes
    */
   static void rgb888_to_565_inplace(uint8_t * buffer, size_t buffer_len){
@@ -195,9 +234,9 @@ struct be_img_util {
     uint16_t r, g, b;
     int j = 0;
     for (uint32_t i=0; i < buffer_len; i+=3) {
-      blu = temp_buf[i];
+      red = temp_buf[i];
       grn = temp_buf[i+1];
-      red = temp_buf[i+2];
+      blu = temp_buf[i+2];
       b = (blu >> 3) & 0x1f;
       g = ((grn >> 2) & 0x3f) << 5;
       r = ((red >> 3) & 0x1f) << 11;
@@ -228,6 +267,29 @@ struct be_img_util {
    */
   static size_t _jpg_out_cb(void * arg, size_t index, const void* data, size_t len){
     be_jpg_encoder_t *jpeg = (be_jpg_encoder_t *)arg; 
+    if (jpeg->output_failed || len > SIZE_MAX - index) {
+      jpeg->output_failed = true;
+      return 0;
+    }
+    if (index > jpeg->output_capacity || len > jpeg->output_capacity - index) {
+      const size_t required = index + len;
+      size_t new_capacity = jpeg->output_capacity;
+      while (new_capacity < required) {
+        if (new_capacity > SIZE_MAX / 2) {
+          new_capacity = required;
+          break;
+        }
+        new_capacity *= 2;
+      }
+      uint8_t *new_output = (uint8_t *)heap_caps_realloc(
+          jpeg->output, new_capacity, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (new_output == nullptr) {
+        jpeg->output_failed = true;
+        return 0;
+      }
+      jpeg->output = new_output;
+      jpeg->output_capacity = new_capacity;
+    }
     memcpy(jpeg->output + index, data, len);
     jpeg->output_len = index+len;
     return len;
@@ -355,43 +417,61 @@ struct be_img_util {
    * @return true if valid JPEG and dimensions extracted, false otherwise
    */
   static bool jpeg_size(uint8_t* buffer, size_t data_size, uint16_t *width, uint16_t *height) {
-    union{
-      uint8_t * data;
-      uint16_t * data16;
-      uint32_t * data32;
-    };
-    data = buffer;
-    if(data[data_size-2] != 0xff ||  data[data_size-1] != 0xd9){
-      return false; // quick check for correct termination
+    if (!buffer || !width || !height || data_size < 4 ||
+        buffer[0] != 0xFF || buffer[1] != 0xD8 ||
+        buffer[data_size - 2] != 0xFF || buffer[data_size - 1] != 0xD9) {
+      return false;
     }
-    if(data32[0] == 0xE0FFD8FF) {
-      // Check for valid JPEG header (null terminated JFIF)
-      // if(data[i+2] == 'J' && data[i+3] == 'F' && data[i+4] == 'I' && data[i+5] == 'F' && data[i+6] == 0x00) {
-      if(data16[3] == 0x464a && data16[4] == 0x4649) {
-          //Retrieve the block length of the first block since the first block will not contain the size of file
-        int i = 20;
-        uint16_t block_length = 0;
-        while(i<data_size) {
-          i+=block_length;               //Increase the file index to get to the next block
-          if(i >= data_size) {
-            return false;}   //Check to protect against segmentation faults
-          if (data[i] != 0xFF) {
-            return false;}
-          if(data[i+1] == 0xC0 || data[i+1] == 0xC2) {   //0xFFC0 or 0xFFC2 is the "Start of frame" marker which contains the file size
-            //The structure of the 0xFFC0 block is quite simple [0xFFC0][ushort length][uchar precision][ushort x][ushort y]
-            *height = data[i+5]*256 + data[i+6];
-            *width = data[i+7]*256 + data[i+8];
-            return true;
-          }
-          else
-          {
-            i+=2;                              //Skip the block marker
-            block_length = data[i] * 256 + data[i+1];   //Go to the next block
-          }
-        }
+
+    size_t offset = 2;
+    const size_t data_end = data_size - 2;  // Exclude the required EOI marker.
+    while (offset < data_end) {
+      if (buffer[offset] != 0xFF) {
+        return false;
       }
+      while (offset < data_end && buffer[offset] == 0xFF) {
+        offset++;
+      }
+      if (offset >= data_end) {
+        return false;
+      }
+
+      const uint8_t marker = buffer[offset++];
+      if (marker == 0xD9 || marker == 0xDA || marker == 0xD8 || marker == 0x00) {
+        return false;
+      }
+      // TEM and restart markers do not contain a segment length.
+      if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) {
+        continue;
+      }
+      if (data_end - offset < 2) {
+        return false;
+      }
+
+      const uint16_t segment_length = ((uint16_t)buffer[offset] << 8) | buffer[offset + 1];
+      if (segment_length < 2 || segment_length > data_end - offset) {
+        return false;
+      }
+      if (marker == 0xC0 || marker == 0xC2) {
+        if (segment_length < 8) {
+          return false;
+        }
+        const uint8_t components = buffer[offset + 7];
+        if (components == 0 || segment_length < 8 + (uint16_t)components * 3) {
+          return false;
+        }
+        const uint16_t parsed_height = ((uint16_t)buffer[offset + 3] << 8) | buffer[offset + 4];
+        const uint16_t parsed_width = ((uint16_t)buffer[offset + 5] << 8) | buffer[offset + 6];
+        if (parsed_width == 0 || parsed_height == 0) {
+          return false;
+        }
+        *width = parsed_width;
+        *height = parsed_height;
+        return true;
+      }
+      offset += segment_length;
     }
-    return false;               //Not a valid SOI header
+    return false;
   }
 };
 
@@ -543,12 +623,14 @@ extern "C" {
       // be_pop(vm, 2);
       image_t * img = be_get_image_instance(vm);
       if(img){
-        if(img->buf != nullptr){
-          free(img->buf);
-        }
-        uint16_t width = be_toint(vm, 3);
-        uint16_t height = be_toint(vm, 4);
+        int32_t width_arg = be_toint(vm, 3);
+        int32_t height_arg = be_toint(vm, 4);
         int format = be_toint(vm, 5);
+        if (width_arg <= 0 || width_arg > UINT16_MAX || height_arg <= 0 || height_arg > UINT16_MAX) {
+          be_raise(vm, "img_error", "invalid image dimensions");
+        }
+        uint16_t width = width_arg;
+        uint16_t height = height_arg;
         if(be_img_util::from_buffer(img, src_buf, src_buf_len, width, height, (pixformat_t)format) == false){
           be_raise(vm, "img_error", "could not store from byte buffer");
         }
@@ -667,6 +749,11 @@ extern "C" {
           be_raise(vm, "img_error", "not enough heap");
           be_return_nil(vm);
         }
+        // fmt2rgb888 emits BGR for RGB565 and YUV422 input. Normalize its
+        // output here so all later conversions operate on RGB888 data.
+        if (src_format == PIXFORMAT_RGB565 || src_format == PIXFORMAT_YUV422) {
+          be_img_util::rgb888_swap_red_blue(temp_buf, temp_buf_len);
+        }
       }
       be_jpg_encoder_t jpeg;
       jpeg.width = 0;
@@ -674,6 +761,8 @@ extern "C" {
       jpeg.input = img->buf;
       jpeg.output = temp_buf;
       jpeg.output_len = 0;
+      jpeg.output_capacity = temp_buf_len + 4;
+      jpeg.output_failed = false;
       switch(format){
         case PIXFORMAT_GRAYSCALE: // always from temporary RGB888
           be_img_util::rgb888_to_grayscale_inplace(temp_buf,temp_buf_len);
@@ -703,7 +792,23 @@ extern "C" {
               be_img_util::rgb565_swap_bytes(temp_buf, img->len); // Swap LE to BE in temp buffer
               encode_format = PIXFORMAT_RGB565;
             }
-            fmt2jpg_cb(img->buf, img->len, img->width, img->height, encode_format, quality, be_img_util::_jpg_out_cb, (void *)&jpeg);
+            // esp32-camera's fmt2jpg_cb() treats PIXFORMAT_RGB888 input as
+            // BGR and reverses the outer channels while encoding. Berry's
+            // RGB888 buffers are RGB, so adapt the input and restore it.
+            bool rgb888_swapped = encode_format == PIXFORMAT_RGB888;
+            if(rgb888_swapped) {
+              be_img_util::rgb888_swap_red_blue(img->buf, pixel_count * 3);
+            }
+            bool encoded = fmt2jpg_cb(img->buf, img->len, img->width, img->height, encode_format, quality, be_img_util::_jpg_out_cb, (void *)&jpeg);
+            if(rgb888_swapped) {
+              be_img_util::rgb888_swap_red_blue(img->buf, pixel_count * 3);
+            }
+            if (!encoded || jpeg.output_failed || jpeg.output_len == 0) {
+              free(jpeg.output);
+              be_raise(vm, "img_error", "jpg encoding failed");
+              be_return_nil(vm);
+            }
+            temp_buf = jpeg.output;
             temp_buf_len = jpeg.output_len;
           }
           break;
