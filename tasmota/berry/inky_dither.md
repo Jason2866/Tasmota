@@ -16,16 +16,16 @@ The Inky's `BUSY` signal is a separate panel status output; it is not SPI MISO d
 
 Configure the Tasmota GPIO functions to match the signals you wired:
 
-| Inky E673 signal | Pimoroni Python default (BCM / Raspberry Pi header pin) | Tasmota GPIO function |
+| Inky E673 signal | Raspberry Pi header pin | Tasmota GPIO function |
 | --- | --- | --- |
-| `CS` / `CS0` | GPIO 8 / pin 24 | `SPI CS` |
-| `SCLK` | GPIO 11 / pin 23 | `SPI CLK` |
-| `MOSI` / `DIN` | GPIO 10 / pin 19 | `SPI MOSI` |
-| `D/C` | GPIO 22 / pin 15 | `SPI DC` |
-| `RESET` | GPIO 27 / pin 13 | `Display Rst` |
-| `BUSY` | GPIO 17 / pin 11 | `SPI MISO` |
+| `CS` / `CS0` | pin 24 | `SPI CS` |
+| `SCLK` | pin 23 | `SPI CLK` |
+| `MOSI` / `DIN` | pin 19 | `SPI MOSI` |
+| `D/C` | pin 15 | `SPI DC` |
+| `RESET` | pin 13 | `Display Rst` |
+| `BUSY` | pin 11 | `SPI MISO` |
 
-Assign each Tasmota function to the ESP GPIO physically wired to that Inky signal, using **Configure Module** (or the equivalent GPIO configuration for your device). The middle column documents the Python driver's Raspberry Pi defaults and 40-pin header locations; these are not ESP32 GPIO numbers. Choose suitable GPIOs for your ESP32 wiring and assign the Tasmota functions accordingly. In particular, ensure that `SPI MISO` is assigned even though the panel has no MISO data output.
+Assign each Tasmota function to the ESP GPIO physically wired to that Inky signal, using **Configure Module** (or the equivalent GPIO configuration for your device). The middle column documents the Raspberry Pi 40-pin header locations; these are not ESP32 GPIO numbers. Choose suitable GPIOs for your ESP32 wiring and assign the Tasmota functions accordingly. In particular, ensure that `SPI MISO` is assigned even though the panel has no MISO data output.
 
 - An ESP32 Tasmota build with Berry and `USE_BERRY_IMAGE` enabled. The Berry `img` class is provided by that feature. For a custom build, define `USE_BERRY_IMAGE` in `my_user_config.h` and rebuild and flash Tasmota; this is a compile-time option and cannot be enabled by loading the script.
 - JPEG display support (`JPEG_PICTS`) must also be enabled in the ESP32 Tasmota build. The script uses the universal display driver to render the saved JPEG and refresh the panel.
