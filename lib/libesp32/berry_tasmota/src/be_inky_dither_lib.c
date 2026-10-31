@@ -103,9 +103,14 @@ int m_inky_dither_dither(bvm *vm) {
 
     // Get pixel buffer
     size_t pixel_size = 0;
-    uint8_t *pixels = (uint8_t *) be_tobytes(vm, 2, &pixel_size);
-    if (!pixels || pixel_size != width * height * 3) {
-        be_raise(vm, "value_error", "invalid pixel buffer size");
+    uint8_t *pixels = (uint8_t *) be_tobytes(vm, 1, &pixel_size);
+    if (!pixels) {
+        be_raise(vm, "value_error", "invalid pixel buffer");
+    }
+    // The passed size may be the JPEG encoded size, so we calculate expected size from dimensions
+    size_t expected_size = width * height * 3;
+    if (pixel_size < expected_size) {
+        be_raise(vm, "value_error", "pixel buffer too small");
     }
 
     // Calculate palette based on saturation
