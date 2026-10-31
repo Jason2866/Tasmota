@@ -134,3 +134,5 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   return {"width": info["width"], "height": info["height"],
           "bytes": info["size"], "path": output_path}
 end
+
+return inky_dither

@@ -119,7 +119,7 @@ def metron_get_json(url, username, password)
 end
 
 def metron_get_cover_url(issue_detail)
-  if type(issue_detail) != "map"
+  if !isinstance(issue_detail, map)
     return nil
   end
   # Mokkari exposes this field as a string. Accept common nested API shapes too.
@@ -129,7 +129,7 @@ def metron_get_cover_url(issue_detail)
       if type(value) == "string" && size(value) > 0
         return value
       end
-      if type(value) == "map"
+      if isinstance(value, map)
         for nested_field : ["original_url", "image_url", "url"]
           var nested_value = value.find(nested_field)
           if type(nested_value) == "string" && size(nested_value) > 0
@@ -177,7 +177,7 @@ def metron_download_cover(username, password, series_name, output_path)
   # The issue-list filter takes 'series_id', not 'series'. Query specific issue numbers
   # or list to keep the response small.
   var issue = nil
-  for attempt : range(6)
+  for attempt : range(0, 5)
     var candidate_number = 1
     if attempt < 4
       candidate_number = ((seed + attempt * 37) % total_issues) + 1
@@ -291,10 +291,36 @@ def display_comic(username, password, series_name)
   print("Downloaded " + str(downloaded_bytes) + " bytes")
 
   # inky_dither normalizes the source to 800x480, dithers it, then refreshes Inky.
-  import inky_dither
+  var dither_fn = nil
+  import global
+  if global.inky_dither != nil
+    dither_fn = global.inky_dither
+  else
+    try
+      import inky_dither
+      if inky_dither != nil
+        dither_fn = inky_dither
+      end
+    except ..
+    end
+    if dither_fn == nil
+      try
+        tasmota.load("inky_dither.be")
+        if global.inky_dither != nil
+          dither_fn = global.inky_dither
+        end
+      except ..
+      end
+    end
+  end
+
+  if dither_fn == nil
+    raise "value_error", "inky_dither function is not loaded. Upload or run load('inky_dither.be') first."
+  end
+
   var result = nil
   try
-    result = inky_dither(comic_source_path, comic_dithered_path, 0.5, 85)
+    result = dither_fn(comic_source_path, comic_dithered_path, 0.5, 85)
   except .. as err, msg
     if path.exists(comic_source_path)
       path.remove(comic_source_path)
