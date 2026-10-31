@@ -53,6 +53,8 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   var image = img()
   image.from_jpg(jpeg_data, rgb_format)
   jpeg_data = nil
+  import gc
+  gc.collect()
 
   var info = image.info()
   if info["bpp"] != 3 || info["width"] <= 0 || info["height"] <= 0
