@@ -64,7 +64,6 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   var height = info["height"]
 
   # Use the optimized C implementation for Floyd-Steinberg dithering
-  import InkyDither
   InkyDither.dither(pixels, width, height, saturation)
   print("Inky dithering: " + str(height) + "/" + str(height) + " rows")
 
