@@ -4,7 +4,7 @@
 #   load("comic_display.be")
 #   comic_display.start("METRON_USERNAME", "METRON_PASSWORD", "Batman")
 #
-# The search term is optional and defaults to "batman".
+# The search term is optional. When omitted, issues are selected without a series filter.
 
 import webclient
 import path
@@ -61,15 +61,22 @@ def metron_get_cover_url(issue_detail)
 end
 
 def metron_download_cover(username, password, series_name, output_path)
-  print("Searching Metron for: " + series_name)
-
-  var wc = webclient()
-  var encoded_series = wc.url_encode(series_name)
-  var search_url = metron_api + "?series_name=" + encoded_series
+  var search_url = metron_api
+  if series_name != nil && size(series_name) > 0
+    print("Searching Metron for: " + series_name)
+    var wc = webclient()
+    var encoded_series = wc.url_encode(series_name)
+    search_url = metron_api + "?series_name=" + encoded_series
+  else
+    print("Searching Metron for issues from all series")
+  end
   var search_data = metron_get_json(search_url, username, password)
   var results = search_data["results"]
   if results == nil || size(results) == 0
-    raise "value_error", "No Metron issues found for: " + series_name
+    if series_name != nil && size(series_name) > 0
+      raise "value_error", "No Metron issues found for: " + series_name
+    end
+    raise "value_error", "No Metron issues found"
   end
 
   # Select one result from the first API page, matching the reference script.
@@ -138,9 +145,6 @@ def install_downloaded_cover()
 end
 
 def display_comic(username, password, series_name)
-  if series_name == nil || size(series_name) == 0
-    series_name = "batman"
-  end
   if username == nil || password == nil || size(username) == 0 || size(password) == 0
     raise "value_error", "Pass your Metron username and password"
   end

@@ -19,7 +19,7 @@ load("comic_display.be")
 comic_display.start("METRON_USERNAME", "METRON_PASSWORD", "Batman")
 ```
 
-The search term is optional; when omitted, it defaults to `batman`:
+The search term is optional. When omitted, the script queries issues across all series and selects one issue from the first API page:
 
 ```berry
 comic_display.start("METRON_USERNAME", "METRON_PASSWORD")
@@ -29,6 +29,6 @@ To refresh the cover later, call `display_comic(username, password, series_name)
 
 ## Processing
 
-The script uses Metron's Basic Auth API to search issues by series name, chooses one result from the first API page, fetches the issue details, and downloads its cover image. Portrait covers are rotated 90 degrees counter-clockwise. The image is resized to 800×480, dithered for the Inky Spectra 6 palette, and shown on the display.
+The script uses Metron's Basic Auth API to search issues across all series by default, or filters by series name when one is provided. It chooses one result from the first API page, fetches the issue details, and downloads its cover image. Portrait covers are rotated 90 degrees counter-clockwise. The image is resized to 800×480, dithered for the Inky Spectra 6 palette, and shown on the display.
 
 The downloaded source is kept at `/metron_comic.jpg`; the dithered image is written to `/metron_comic_dithered.jpg`. The compressed source JPEG must be 512 KiB or smaller. The display refresh takes about 32 seconds.
