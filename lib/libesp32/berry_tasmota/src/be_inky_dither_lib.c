@@ -286,7 +286,7 @@ int m_inky_dither_dither(bvm *vm) {
 
 /* @const_object_info_begin
 class be_class_inky_dither (scope: global, name: InkyDither) {
-    dither, func(m_inky_dither_dither)
+    dither, static_func(m_inky_dither_dither)
 }
 @const_object_info_end */
 
