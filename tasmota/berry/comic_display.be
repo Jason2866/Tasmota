@@ -175,20 +175,11 @@ def metron_download_cover(username, password, series_name, output_path)
   end
 
   # The issue-list filter takes 'series_id', not 'series'. Query specific issue numbers
-  # or list to keep the response small.
+  # and keep the response small.
   var issue = nil
-  for attempt : range(0, 5)
-    var candidate_number = 1
-    if attempt < 4
-      candidate_number = ((seed + attempt * 37) % total_issues) + 1
-    elif attempt == 4
-      candidate_number = 1
-    end
-
-    var issue_url = metron_api + "?series_id=" + str(series_id)
-    if attempt < 5
-      issue_url += "&number=" + str(candidate_number)
-    end
+  for attempt : range(0, 3)
+    var candidate_number = ((seed + attempt * 37) % total_issues) + 1
+    var issue_url = metron_api + "?series_id=" + str(series_id) + "&number=" + str(candidate_number) + "&page_size=1"
     var issue_data = metron_get_json(issue_url, username, password)
     var issue_results = issue_data.find("results")
     if issue_results != nil && size(issue_results) > 0
@@ -301,7 +292,8 @@ def display_comic(username, password, series_name)
       if inky_dither != nil
         dither_fn = inky_dither
       end
-    except ..
+    except .. as err, msg
+      print("Could not import inky_dither: " + str(err) + " - " + str(msg))
     end
     if dither_fn == nil
       try
@@ -309,7 +301,8 @@ def display_comic(username, password, series_name)
         if global.inky_dither != nil
           dither_fn = global.inky_dither
         end
-      except ..
+      except .. as err, msg
+        print("Could not load inky_dither.be: " + str(err) + " - " + str(msg))
       end
     end
   end

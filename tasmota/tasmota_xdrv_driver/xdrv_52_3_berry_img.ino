@@ -645,7 +645,7 @@ extern "C" {
       size_t src_buf_len;
       uint8_t* src_buf = (uint8_t*) be_tobytes(vm, 2, &src_buf_len);
       int format = -1;
-      if(argc == 3 && be_isint(vm, 3)){
+      if(argc >= 3 && be_isint(vm, 3)){
         format =  be_toint(vm, 3);
       }
       image_t * img = be_get_image_instance(vm);
