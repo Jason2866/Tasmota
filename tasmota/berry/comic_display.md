@@ -16,19 +16,19 @@ Upload [comic_display.be](./comic_display.be) and [inky_dither.be](./inky_dither
 
 ```berry
 load("comic_display.be")
-comic_display.start("METRON_USERNAME", "METRON_PASSWORD", "Batman")
+start("METRON_USERNAME", "METRON_PASSWORD", "Batman")
 ```
 
-The search term is optional. When omitted, the script queries issues across all series and selects one issue from the first API page:
+Pass `nil` or an empty string to use the default series, `Batman`:
 
 ```berry
-comic_display.start("METRON_USERNAME", "METRON_PASSWORD")
+start("METRON_USERNAME", "METRON_PASSWORD", nil)
 ```
 
-To refresh the cover later, call `display_comic(username, password, series_name)` from a Tasmota rule. Keep the Metron credentials in the rule configuration you control.
+`load("comic_display.be")` defines `start()` and `display_comic()` in the global Berry context. To refresh the cover later, call `display_comic(username, password, series_name)` from a Tasmota rule. Keep the Metron credentials in the rule configuration you control.
 
 ## Processing
 
-The script uses Metron's Basic Auth API to search issues across all series by default, or filters by series name when one is provided. It chooses one result from the first API page, fetches the issue details, and downloads its cover image. Portrait covers are rotated 90 degrees counter-clockwise. The image is resized to 800×480, dithered for the Inky Spectra 6 palette, and shown on the display.
+The script uses Metron's Basic Auth API to find matching series by name, then filters issues by the selected series ID and issue number. List requests ask for one result at a time to stay below Berry's 32 KB string limit. The webclient uses HTTP/1.0 so responses without a `Content-Length` end when the server closes the connection. This requires firmware with the `webclient.use_http10()` binding from `xdrv_52_3_berry_webclient.ino`. The script probes a few randomized issue numbers, with issue 1 as a fallback, then fetches the issue details and downloads its cover image. Portrait covers are rotated 90 degrees counter-clockwise. The image is resized to 800×480, dithered for the Inky Spectra 6 palette, and shown on the display.
 
 The downloaded source is kept at `/metron_comic.jpg`; the dithered image is written to `/metron_comic_dithered.jpg`. The compressed source JPEG must be 512 KiB or smaller. The display refresh takes about 32 seconds.
