@@ -1,6 +1,6 @@
 /********************************************************************
  * Berry class `inky_dither`
- * 
+ *
  * Floyd-Steinberg dithering for Inky Impression 7.3 (E673 / Spectra 6).
  * Optimized C implementation for performance.
  *******************************************************************/
@@ -74,12 +74,12 @@ static void find_closest_color(int32_t red, int32_t green, int32_t blue,
 int m_inky_dither_dither(bvm *vm);
 int m_inky_dither_dither(bvm *vm) {
     int32_t argc = be_top(vm);
-    
+
     // Check arguments
     if (argc < 4 || !be_isbytes(vm, 2) || !be_isint(vm, 3) || !be_isint(vm, 4)) {
         be_raise(vm, "value_error", "Expected bytes, width, height as arguments");
     }
-    
+
     // Get saturation (optional, default 0.5)
     float saturation = 0.5f;
     if (argc >= 5) {
@@ -92,22 +92,22 @@ int m_inky_dither_dither(bvm *vm) {
             be_raise(vm, "value_error", "saturation must be a number or nil");
         }
     }
-    
+
     // Get width and height
     int32_t width = be_toint(vm, 3);
     int32_t height = be_toint(vm, 4);
-    
+
     if (width != 800 || height != 480) {
         be_raise(vm, "value_error", "image must be 800x480");
     }
-    
+
     // Get pixel buffer
     size_t pixel_size = 0;
     uint8_t *pixels = (uint8_t *) be_tobytes(vm, 2, &pixel_size);
     if (!pixels || pixel_size != width * height * 3) {
         be_raise(vm, "value_error", "invalid pixel buffer size");
     }
-    
+
     // Calculate palette based on saturation
     const int32_t saturated[18] = {
         0, 0, 0, 161, 164, 165, 208, 190, 71,
@@ -117,64 +117,64 @@ int m_inky_dither_dither(bvm *vm) {
         0, 0, 0, 255, 255, 255, 255, 255, 0,
         255, 0, 0, 0, 0, 255, 0, 255, 0
     };
-    
+
     float inv_sat = 1.0f - saturation;
     int32_t palette[18];
     for (int i = 0; i < 18; i++) {
         palette[i] = (int32_t)(saturated[i] * saturation + desaturated[i] * inv_sat);
     }
-    
+
     int32_t stride = width * 3;
     int32_t last_x = width - 1;
     int32_t last_y = height - 1;
-    
+
     // Floyd-Steinberg dithering loop
     for (int32_t y = 0; y < height; y++) {
         for (int32_t x = 0; x < width; x++) {
             int32_t index = y * stride + x * 3;
-            
+
             // Get current pixel
             int32_t red = pixels[index];
             int32_t green = pixels[index + 1];
             int32_t blue = pixels[index + 2];
-            
+
             // Find closest palette color
             int32_t pal_r, pal_g, pal_b;
             int32_t id_r, id_g, id_b;
             find_closest_color(red, green, blue, palette,
                              &pal_r, &pal_g, &pal_b,
                              &id_r, &id_g, &id_b);
-            
+
             // Write the quantized color (ID color)
             pixels[index] = id_r;
             pixels[index + 1] = id_g;
             pixels[index + 2] = id_b;
-            
+
             // Calculate error
             int32_t error_red = red - pal_r;
             int32_t error_green = green - pal_g;
             int32_t error_blue = blue - pal_b;
-            
+
             // Calculate Floyd-Steinberg weights (without floats)
             int32_t ar = abs_value(error_red);
             int32_t ag = abs_value(error_green);
             int32_t ab = abs_value(error_blue);
-            
+
             int32_t e7r = (ar * 7) >> 4;
             int32_t e5r = (ar * 5) >> 4;
             int32_t e3r = (ar * 3) >> 4;
             int32_t e1r = ar >> 4;
-            
+
             int32_t e7g = (ag * 7) >> 4;
             int32_t e5g = (ag * 5) >> 4;
             int32_t e3g = (ag * 3) >> 4;
             int32_t e1g = ag >> 4;
-            
+
             int32_t e7b = (ab * 7) >> 4;
             int32_t e5b = (ab * 5) >> 4;
             int32_t e3b = (ab * 3) >> 4;
             int32_t e1b = ab >> 4;
-            
+
             if (error_red < 0) {
                 e7r = -e7r; e5r = -e5r; e3r = -e3r; e1r = -e1r;
             }
@@ -184,11 +184,11 @@ int m_inky_dither_dither(bvm *vm) {
             if (error_blue < 0) {
                 e7b = -e7b; e5b = -e5b; e3b = -e3b; e1b = -e1b;
             }
-            
+
             // Distribute error to neighboring pixels
             int32_t next, down;
             int32_t r, g, b;
-            
+
             if (y < last_y && x > 0 && x < last_x) {
                 // Right pixel (7/16)
                 next = index + 3;
@@ -198,7 +198,7 @@ int m_inky_dither_dither(bvm *vm) {
                 pixels[next] = r;
                 pixels[next + 1] = g;
                 pixels[next + 2] = b;
-                
+
                 // Down-left pixel (3/16)
                 next = index + stride - 3;
                 r = clamp_byte(pixels[next] + e3r);
@@ -207,7 +207,7 @@ int m_inky_dither_dither(bvm *vm) {
                 pixels[next] = r;
                 pixels[next + 1] = g;
                 pixels[next + 2] = b;
-                
+
                 // Down pixel (5/16)
                 next = index + stride;
                 r = clamp_byte(pixels[next] + e5r);
@@ -216,7 +216,7 @@ int m_inky_dither_dither(bvm *vm) {
                 pixels[next] = r;
                 pixels[next + 1] = g;
                 pixels[next + 2] = b;
-                
+
                 // Down-right pixel (1/16)
                 next = index + stride + 3;
                 r = clamp_byte(pixels[next] + e1r);
@@ -237,7 +237,7 @@ int m_inky_dither_dither(bvm *vm) {
                     pixels[next + 1] = g;
                     pixels[next + 2] = b;
                 }
-                
+
                 if (y < last_y) {
                     down = index + stride;
                     if (x > 0) {
@@ -250,7 +250,7 @@ int m_inky_dither_dither(bvm *vm) {
                         pixels[next + 1] = g;
                         pixels[next + 2] = b;
                     }
-                    
+
                     // Down pixel (5/16)
                     r = clamp_byte(pixels[down] + e5r);
                     g = clamp_byte(pixels[down + 1] + e5g);
@@ -258,7 +258,7 @@ int m_inky_dither_dither(bvm *vm) {
                     pixels[down] = r;
                     pixels[down + 1] = g;
                     pixels[down + 2] = b;
-                    
+
                     if (x < last_x) {
                         // Down-right pixel (1/16)
                         next = down + 3;
@@ -272,13 +272,13 @@ int m_inky_dither_dither(bvm *vm) {
                 }
             }
         }
-        
+
         // Yield every 16 rows to allow other tasks to run
         if (y % 16 == 0) {
             yield();
         }
     }
-    
+
     be_return_nil(vm);
 }
 
