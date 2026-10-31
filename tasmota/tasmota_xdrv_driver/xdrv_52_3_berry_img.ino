@@ -749,9 +749,9 @@ extern "C" {
           be_raise(vm, "img_error", "not enough heap");
           be_return_nil(vm);
         }
-        // fmt2rgb888 emits BGR for RGB565 and YUV422 input. Normalize its
+        // fmt2rgb888 emits BGR for RGB565, YUV422, and JPEG input. Normalize its
         // output here so all later conversions operate on RGB888 data.
-        if (src_format == PIXFORMAT_RGB565 || src_format == PIXFORMAT_YUV422) {
+        if (src_format == PIXFORMAT_RGB565 || src_format == PIXFORMAT_YUV422 || src_format == PIXFORMAT_JPEG) {
           be_img_util::rgb888_swap_red_blue(temp_buf, temp_buf_len);
         }
       }
