@@ -573,6 +573,10 @@ extern "C" {
     const uint16_t source_height = img->height;
     const uint32_t rotated_width = rotate90 ? source_height : source_width;
     const uint32_t rotated_height = rotate90 ? source_width : source_height;
+    if ((size_t)target_width > SIZE_MAX / 3 / (size_t)target_height) {
+      be_raise(vm, "img_error", "resize dimensions too large");
+      be_return_nil(vm);
+    }
     const size_t output_size = (size_t)target_width * target_height * 3;
     uint8_t *output = (uint8_t *)heap_caps_malloc(output_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!output) {
