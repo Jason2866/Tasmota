@@ -76,26 +76,26 @@ int m_inky_dither_dither(bvm *vm) {
     int32_t argc = be_top(vm);
 
     // Check arguments
-    if (argc < 4 || !be_isbytes(vm, 2) || !be_isint(vm, 3) || !be_isint(vm, 4)) {
+    if (argc < 3 || !be_isbytes(vm, 1) || !be_isint(vm, 2) || !be_isint(vm, 3)) {
         be_raise(vm, "value_error", "Expected bytes, width, height as arguments");
     }
 
     // Get saturation (optional, default 0.5)
     float saturation = 0.5f;
-    if (argc >= 5) {
-        if (be_isnumber(vm, 5)) {
-            saturation = be_toreal(vm, 5);
+    if (argc >= 4) {
+        if (be_isnumber(vm, 4)) {
+            saturation = be_toreal(vm, 4);
             if (saturation < 0.0f || saturation > 1.0f) {
                 be_raise(vm, "value_error", "saturation must be between 0.0 and 1.0");
             }
-        } else if (!be_isnil(vm, 5)) {
+        } else if (!be_isnil(vm, 4)) {
             be_raise(vm, "value_error", "saturation must be a number or nil");
         }
     }
 
     // Get width and height
-    int32_t width = be_toint(vm, 3);
-    int32_t height = be_toint(vm, 4);
+    int32_t width = be_toint(vm, 2);
+    int32_t height = be_toint(vm, 3);
 
     if (width != 800 || height != 480) {
         be_raise(vm, "value_error", "image must be 800x480");
