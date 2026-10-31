@@ -82,10 +82,14 @@ int m_inky_dither_dither(bvm *vm) {
     
     // Get saturation (optional, default 0.5)
     float saturation = 0.5f;
-    if (argc >= 5 && be_isreal(vm, 5)) {
-        saturation = be_toreal(vm, 5);
-        if (saturation < 0.0f || saturation > 1.0f) {
-            be_raise(vm, "value_error", "saturation must be between 0.0 and 1.0");
+    if (argc >= 5) {
+        if (be_isnumber(vm, 5)) {
+            saturation = be_toreal(vm, 5);
+            if (saturation < 0.0f || saturation > 1.0f) {
+                be_raise(vm, "value_error", "saturation must be between 0.0 and 1.0");
+            }
+        } else if (!be_isnil(vm, 5)) {
+            be_raise(vm, "value_error", "saturation must be a number or nil");
         }
     }
     
@@ -267,6 +271,11 @@ int m_inky_dither_dither(bvm *vm) {
                     }
                 }
             }
+        }
+        
+        // Yield every 16 rows to allow other tasks to run
+        if (y % 16 == 0) {
+            yield();
         }
     }
     

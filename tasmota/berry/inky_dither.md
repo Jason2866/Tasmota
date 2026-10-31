@@ -50,7 +50,7 @@ print(result)
 
 After the output file is written successfully, the script renders it at the top-left corner of the active universal display and refreshes the panel. The Inky refresh takes about 32 seconds. The output JPEG remains in the Tasmota filesystem; retrieve it using the device's filesystem access method.
 
-Dithering runs in Berry and can take a while on an ESP32. The script yields every 128 pixels and at each row boundary so Tasmota's Berry execution timeout does not interrupt the pixel loop. It prints progress after each 16 rows; wait until it reports 480 rows and returns the output map.
+Dithering is performed by the native InkyDither.dither class for optimal performance.
 
 If `load("inky_dither.be")` fails with `img undeclared`, the running firmware does not provide the Berry `img` class. Confirm that it was built with `USE_BERRY_IMAGE` enabled, then rebuild and flash it. The failure occurs while Berry compiles the script, before `inky_dither()` runs.
 
