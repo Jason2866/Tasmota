@@ -6,6 +6,11 @@
 # Optional arguments are saturation (0.0..1.0, default 0.5) and JPEG quality
 # (default 85, range 1..100; higher values preserve more detail).
 
+import path
+import introspect
+import gc
+import display
+
 def inky_dither(input_path, output_path, saturation, jpeg_quality)
   if saturation == nil
     saturation = 0.5
@@ -53,7 +58,6 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   var image = img()
   image.from_jpg(jpeg_data, rgb_format)
   jpeg_data = nil
-  import gc
   gc.collect()
 
   var info = image.info()
@@ -71,7 +75,6 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   end
 
   # Map the native RGB888 image buffer instead of copying its 1.15 MiB payload.
-  import introspect
   var pixels = bytes(introspect.toptr(info["buf_addr"]), info["size"])
   var width = info["width"]
   var height = info["height"]
@@ -86,7 +89,6 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   var encoded = bytes(introspect.toptr(info["buf_addr"]), info["size"])
   var temp_path = output_path + ".tmp"
   var backup_path = temp_path + ".bak"
-  import path
   while temp_path == input_path || backup_path == input_path || path.exists(temp_path) || path.exists(backup_path)
     temp_path += ".tmp"
     backup_path = temp_path + ".bak"
@@ -125,10 +127,8 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   pixels = nil
   encoded = nil
   image = nil
-  import gc
   gc.collect()
 
-  import display
   if !display.draw_jpg(output_path)
     raise "display_error", "could not display the dithered JPEG"
   end
