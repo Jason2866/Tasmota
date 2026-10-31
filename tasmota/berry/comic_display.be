@@ -11,30 +11,85 @@ import json
 
 var metron_api = "https://metron.cloud/api/issue/"
 var metron_series_api = "https://metron.cloud/api/series/"
+var metron_user_agent = "TasmotaComicDisplay/1.0"
+var metron_http_timeout_ms = 15000
+var metron_connect_timeout_ms = 10000
+var metron_retries = 3
 var comic_source_path = "/metron_comic.jpg"
 var comic_download_path = "/metron_comic.download"
 var comic_backup_path = "/metron_comic.backup"
 var comic_dithered_path = "/metron_comic_dithered.jpg"
 
-def metron_get_json(url, username, password)
+def metron_new_client(username, password)
   var wc = webclient()
-  wc.set_auth(username, password)
-  wc.collect_headers("Server", "Content-Type", "Location", "Transfer-Encoding", "Connection")
-  wc.begin(url)
-  var status = wc.GET()
-  if status != 200
+  # Berry webclient defaults to a 2 s connect timeout, which is too short for
+  # metron.cloud HTTPS/TLS and surfaces as HTP: Connection error -2.
+  wc.set_useragent(metron_user_agent)
+  wc.set_timeouts(metron_http_timeout_ms, metron_connect_timeout_ms)
+  if username != nil && size(username) > 0
+    wc.set_auth(username, password)
+  end
+  return wc
+end
+
+def metron_should_retry(status)
+  return status < 100 || status == 408 || status == 429 || status >= 500
+end
+
+def metron_status_message(status, server_header, content_type, location_header)
+  # Async webclient maps a failed TCP/TLS connect to -2 (send header failed).
+  if status == -1 || status == -2
+    return "Cannot reach metron.cloud (webclient " + str(status) +
+           "). TCP/TLS never completed; Metron often firewalls home IPs. Open https://metron.cloud/ from a browser on the same network, or call diagnose_network()."
+  end
+  if status < 100 || status > 599
+    return "Metron request did not receive a valid HTTP status (webclient result=" + str(status) +
+           ", server=" + server_header + ", content-type=" + content_type +
+           ", location=" + location_header + ")"
+  end
+  return "Metron API returned HTTP " + str(status) +
+         " (server=" + server_header + ", content-type=" + content_type +
+         ", location=" + location_header + ")"
+end
+
+def diagnose_network()
+  print("WiFi: " + str(tasmota.wifi()))
+  var targets = ["https://example.com/", "https://metron.cloud/"]
+  var names = ["example.com", "metron.cloud"]
+  var i = 0
+  while i < size(targets)
+    var wc = metron_new_client(nil, nil)
+    wc.begin(targets[i])
+    var status = wc.GET()
+    wc.close()
+    print(names[i] + " -> " + str(status))
+    i += 1
+  end
+end
+
+def metron_get_json(url, username, password)
+  var wc = nil
+  var status = 0
+  var attempt = 0
+  while attempt < metron_retries
+    attempt += 1
+    wc = metron_new_client(username, password)
+    wc.collect_headers("Server", "Content-Type", "Location", "Transfer-Encoding", "Connection")
+    wc.begin(url)
+    status = wc.GET()
+    if status == 200
+      break
+    end
     var server_header = wc.get_header("Server")
     var content_type = wc.get_header("Content-Type")
     var location_header = wc.get_header("Location")
     wc.close()
-    if status < 100 || status > 599
-      raise "network_error", "Metron request did not receive a valid HTTP status (webclient result=" + str(status) +
-            ", server=" + server_header + ", content-type=" + content_type +
-            ", location=" + location_header + ")"
+    wc = nil
+    if !metron_should_retry(status) || attempt >= metron_retries
+      raise "network_error", metron_status_message(status, server_header, content_type, location_header)
     end
-    raise "network_error", "Metron API returned HTTP " + str(status) +
-          " (server=" + server_header + ", content-type=" + content_type +
-          ", location=" + location_header + ")"
+    print("Metron request failed with " + str(status) + ", retrying (" + str(attempt) + "/" + str(metron_retries) + ")")
+    tasmota.delay(500)
   end
 
   var response_size = wc.get_size()
@@ -44,11 +99,12 @@ def metron_get_json(url, username, password)
     raise "value_error", "Metron API response exceeds Berry's 32 KB limit; check the API filters"
   end
   var response = wc.get_string()
+  var transfer_encoding = wc.get_header("Transfer-Encoding")
+  var connection_header = wc.get_header("Connection")
+  var server_header = wc.get_header("Server")
+  var content_type = wc.get_header("Content-Type")
+  wc.close()
   if response == nil || size(response) == 0
-    var transfer_encoding = wc.get_header("Transfer-Encoding")
-    var connection_header = wc.get_header("Connection")
-    var server_header = wc.get_header("Server")
-    var content_type = wc.get_header("Content-Type")
     raise "network_error", "Metron API returned an empty response (HTTP " + str(status) +
           ", size=" + str(response_size) + ", transfer-encoding=" + transfer_encoding +
           ", connection=" + connection_header + ", server=" + server_header +
@@ -63,16 +119,19 @@ def metron_get_json(url, username, password)
 end
 
 def metron_get_cover_url(issue_detail)
+  if type(issue_detail) != "map"
+    return nil
+  end
   # Mokkari exposes this field as a string. Accept common nested API shapes too.
   for field : ["image", "cover", "cover_image", "cover_url", "image_url"]
-    var value = issue_detail[field]
+    var value = issue_detail.find(field)
     if value != nil
       if type(value) == "string" && size(value) > 0
         return value
       end
       if type(value) == "map"
         for nested_field : ["original_url", "image_url", "url"]
-          var nested_value = value[nested_field]
+          var nested_value = value.find(nested_field)
           if type(nested_value) == "string" && size(nested_value) > 0
             return nested_value
           end
@@ -84,43 +143,54 @@ def metron_get_cover_url(issue_detail)
 end
 
 def metron_download_cover(username, password, series_name, output_path)
-  var wc = webclient()
   if series_name == nil || size(series_name) == 0
     series_name = "Batman"
   end
 
   print("Searching Metron series: " + series_name)
-  var encoded_series = wc.url_encode(series_name)
+  var encoded_series = webclient.url_encode(series_name)
   var series_url = metron_series_api + "?name=" + encoded_series + "&page_size=1"
   var series_data = metron_get_json(series_url, username, password)
-  var series_results = series_data["results"]
+  var series_results = series_data.find("results")
   if series_results == nil || size(series_results) == 0
     raise "value_error", "No Metron series found for: " + series_name
   end
 
-  # The issue-list filter takes a series ID, not a series name. Resolve the name
-  # first, then query one issue number at a time to keep every response small.
+  # Metron series endpoint returns the title under 'series' (or fallback 'name')
   var seed = int(tasmota.millis())
   var series = series_results[seed % size(series_results)]
-  if series["id"] == nil
+  var series_id = series.find("id")
+  if series_id == nil
     raise "value_error", "Metron series result has no ID"
   end
-  print("Searching issues in " + str(series["name"]) + " (series " + str(series["id"]) + ")")
+  var series_title = series.find("series")
+  if series_title == nil
+    series_title = series.find("name", str(series_id))
+  end
+  print("Searching issues in " + str(series_title) + " (series " + str(series_id) + ")")
 
+  var total_issues = series.find("issue_count", 0)
+  if total_issues == nil || total_issues < 1
+    total_issues = 20
+  end
+
+  # The issue-list filter takes 'series_id', not 'series'. Query specific issue numbers
+  # or list to keep the response small.
   var issue = nil
   for attempt : range(6)
     var candidate_number = 1
     if attempt < 4
-      candidate_number = ((seed + attempt * 37) % 100) + 1
-    else
-      if attempt == 5
-        candidate_number = 0
-      end
+      candidate_number = ((seed + attempt * 37) % total_issues) + 1
+    elif attempt == 4
+      candidate_number = 1
     end
 
-    var issue_url = metron_api + "?series=" + str(series["id"]) + "&number=" + str(candidate_number) + "&page_size=1"
+    var issue_url = metron_api + "?series_id=" + str(series_id)
+    if attempt < 5
+      issue_url += "&number=" + str(candidate_number)
+    end
     var issue_data = metron_get_json(issue_url, username, password)
-    var issue_results = issue_data["results"]
+    var issue_results = issue_data.find("results")
     if issue_results != nil && size(issue_results) > 0
       issue = issue_results[seed % size(issue_results)]
       break
@@ -128,24 +198,29 @@ def metron_download_cover(username, password, series_name, output_path)
   end
 
   if issue == nil
-    raise "value_error", "No Metron issues found in series: " + str(series["name"])
+    raise "value_error", "No Metron issues found in series: " + str(series_title)
   end
-  if issue["id"] == nil
+  if issue.find("id") == nil
     raise "value_error", "Metron issue result has no ID"
   end
 
-  var issue_name = issue["issue_name"]
+  var issue_name = issue.find("issue")
+  if issue_name == nil
+    issue_name = issue.find("issue_name", issue.find("name"))
+  end
   if issue_name != nil
     print("Fetching cover for: " + str(issue_name))
   end
-  var issue_detail_url = metron_api + str(issue["id"]) + "/"
-  var issue_detail_data = metron_get_json(issue_detail_url, username, password)
-  var issue_detail = issue_detail_data["results"]
-  if issue_detail == nil
-    issue_detail = issue_detail_data
+
+  # Check if issue summary already contains the cover URL (avoids extra 21KB API call)
+  var cover_url = metron_get_cover_url(issue)
+  if cover_url == nil
+    var issue_detail_url = metron_api + str(issue.find("id")) + "/"
+    var issue_detail_data = metron_get_json(issue_detail_url, username, password)
+    var issue_detail = issue_detail_data.find("results", issue_detail_data)
+    cover_url = metron_get_cover_url(issue_detail)
   end
 
-  var cover_url = metron_get_cover_url(issue_detail)
   if cover_url == nil
     raise "value_error", "Metron issue has no cover image URL"
   end
@@ -154,12 +229,24 @@ def metron_download_cover(username, password, series_name, output_path)
   if path.exists(output_path)
     path.remove(output_path)
   end
-  var image_client = webclient()
-  image_client.begin(cover_url)
-  var status = image_client.GET()
-  if status != 200
+  var image_client = nil
+  var status = 0
+  var attempt = 0
+  while attempt < metron_retries
+    attempt += 1
+    image_client = metron_new_client(nil, nil)
+    image_client.begin(cover_url)
+    status = image_client.GET()
+    if status == 200
+      break
+    end
     image_client.close()
-    raise "network_error", "Cover download returned HTTP " + str(status)
+    image_client = nil
+    if !metron_should_retry(status) || attempt >= metron_retries
+      raise "network_error", "Cover download returned HTTP " + str(status)
+    end
+    print("Cover download failed with " + str(status) + ", retrying (" + str(attempt) + "/" + str(metron_retries) + ")")
+    tasmota.delay(500)
   end
   var written = image_client.write_file(output_path)
   image_client.close()
@@ -220,7 +307,8 @@ def display_comic(username, password, series_name)
   if path.exists(comic_backup_path)
     path.remove(comic_backup_path)
   end
-  print("Displayed Metron cover: " + result["path"])
+  var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
+  print("Displayed Metron cover: " + str(image_path))
   return result
 end
 
@@ -228,5 +316,6 @@ def start(username, password, series_name)
   print("Starting Metron comic display")
   var result = display_comic(username, password, series_name)
   print("Comic display started. Schedule display_comic(username, password, series) with a Tasmota rule for updates.")
-  return {"status": "started", "image": result["path"]}
+  var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
+  return {"status": "started", "image": image_path}
 end
