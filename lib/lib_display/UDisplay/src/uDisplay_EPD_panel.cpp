@@ -4,6 +4,7 @@
 
 #include "uDisplay_EPD_panel.h"
 #include <Arduino.h>
+extern void AddLog(uint32_t loglevel, const char* formatP, ...);
 
 // EPD Command Definitions
 static constexpr uint8_t DRIVER_OUTPUT_CONTROL                = 0x01;
@@ -31,11 +32,14 @@ static constexpr uint8_t TERMINATE_FRAME_READ_WRITE           = 0xFF;
 EPDPanel::EPDPanel(const EPDPanelConfig& config,
                    SPIController* spi_ctrl,
                    uint8_t* framebuffer)
-    : spi(spi_ctrl), cfg(config), fb_buffer(framebuffer), update_mode(0), rotation(0)
+    : cfg(config), spi(spi_ctrl), fb_buffer(framebuffer), update_mode(0), rotation(0)
 {
     // Don't do automatic initialization here - let the descriptor init commands handle it
     // The uDisplay framework will call send_spi_cmds() after panel creation
     // which will handle reset, LUT setup, and initial display state
+    if (cfg.ep_mode == 4 && cfg.busy_pin >= 0) {
+        pinMode(cfg.busy_pin, INPUT_PULLUP);
+    }
 }
 
 EPDPanel::~EPDPanel() {
@@ -72,17 +76,28 @@ void EPDPanel::delay_sync(int32_t ms) {
     }
 }
 
-void EPDPanel::resetDisplay() {
-    if (cfg.reset_pin < 0) return;
+bool EPDPanel::resetDisplay() {
+    if (cfg.reset_pin < 0) {
+        if (cfg.ep_mode == 4) {
+            AddLog(3, "UDisplay: Inky reset pin is not configured");
+            return false;
+        }
+        return true;
+    }
     
     pinMode(cfg.reset_pin, OUTPUT);
     digitalWrite(cfg.reset_pin, HIGH);
-    delay(10);
+    delay(cfg.ep_mode == 4 ? 30 : 10);
     digitalWrite(cfg.reset_pin, LOW);
-    delay(10);
+    delay(cfg.ep_mode == 4 ? 30 : 10);
     digitalWrite(cfg.reset_pin, HIGH);
-    delay(10);
-    delay_sync(100); // Use delay_sync instead of waitBusy
+    if (cfg.ep_mode == 4) {
+        return waitInkyIdle(300);
+    } else {
+        delay(10);
+        delay_sync(100); // Use delay_sync instead of waitBusy
+    }
+    return true;
 }
 
 void EPDPanel::waitBusy() {
@@ -207,6 +222,39 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
     //
     // setFrameMemory() will convert Y-column to X-row format when sending to hardware.
     
+    if (cfg.ep_mode == 4) {
+        // Inky Impression accepts six native colors in a 4-bit pixel slot.
+        // Store two row-major pixels per byte, first pixel in the high nibble.
+        static const uint8_t inky_codes[] = {0, 1, 2, 3, 5, 6};
+        static const uint8_t inky_rgb[][3] = {
+            {0, 0, 0}, {255, 255, 255}, {255, 255, 0},
+            {255, 0, 0}, {0, 0, 255}, {0, 255, 0}
+        };
+        uint8_t r = ((color >> 11) & 0x1F) * 255 / 31;
+        uint8_t g = ((color >> 5) & 0x3F) * 255 / 63;
+        uint8_t b = (color & 0x1F) * 255 / 31;
+        uint32_t best_distance = 0xFFFFFFFFUL;
+        uint8_t code = 0;
+        for (uint8_t index = 0; index < sizeof(inky_codes); index++) {
+            int16_t dr = r - inky_rgb[index][0];
+            int16_t dg = g - inky_rgb[index][1];
+            int16_t db = b - inky_rgb[index][2];
+            uint32_t distance = dr * dr + dg * dg + db * db;
+            if (distance < best_distance) {
+                best_distance = distance;
+                code = inky_codes[index];
+            }
+        }
+        uint32_t pixel = (uint32_t)y * cfg.width + x;
+        uint8_t& packed = fb_buffer[pixel >> 1];
+        if (pixel & 1) {
+            packed = (packed & 0xF0) | code;
+        } else {
+            packed = (packed & 0x0F) | (code << 4);
+        }
+        return;
+    }
+
     if (color) {
         fb_buffer[x + (y / 8) * cfg.width] |= (1 << (y & 7));
     } else {
@@ -245,8 +293,8 @@ bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
             break;
     }
     
-    // Convert color to monochrome and draw
-    drawAbsolutePixel(x, y, (color != 0) ? 1 : 0);
+    // Color EPDs consume RGB565 colors; legacy EPDs consume monochrome values.
+    drawAbsolutePixel(x, y, cfg.ep_mode == 4 ? color : (color != 0 ? 1 : 0));
     return true;
 }
 
@@ -261,6 +309,23 @@ bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
 }
 
 bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
+    if (cfg.ep_mode == 4) {
+        if (!fb_buffer) return false;
+        while (push_y < window_y2 && len > 0) {
+            uint16_t color = *data++;
+            if (!first) {
+                color = (color << 8) | (color >> 8);
+            }
+            drawPixel(push_x, push_y, color);
+            if (++push_x >= window_x2) {
+                push_x = window_x1;
+                push_y++;
+            }
+            len--;
+        }
+        return true;
+    }
+
     // Convert RGB565 to monochrome and write to framebuffer
     // Pixel is white if at least one of the 3 RGB components is above 50%
     static constexpr uint16_t RGB16_TO_MONO = 0x8410;
@@ -270,14 +335,17 @@ bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
     // Write pixels to framebuffer based on window coordinates
     // IMPORTANT: window coordinates are in LOGICAL (rotated) space,
     // so we must use drawPixel (not drawAbsolutePixel) to apply rotation!
-    for (int16_t y = window_y1; y < window_y2 && len > 0; y++) {
-        for (int16_t x = window_x1; x < window_x2 && len > 0; x++, len--) {
-            uint16_t color = *data++;
-            // Convert to mono: white if any component > 50%
-            bool pixel = (color & RGB16_TO_MONO) ? true : false;
-            if (cfg.invert_colors) pixel = !pixel;
-            drawPixel(x, y, pixel ? 1 : 0);
+    while (push_y < window_y2 && len > 0) {
+        uint16_t color = *data++;
+        // Convert to mono: white if any component > 50%
+        bool pixel = (color & RGB16_TO_MONO) ? true : false;
+        if (cfg.invert_colors) pixel = !pixel;
+        drawPixel(push_x, push_y, pixel ? 1 : 0);
+        if (++push_x >= window_x2) {
+            push_x = window_x1;
+            push_y++;
         }
+        len--;
     }
     
     return true; // Handled by EPD panel
@@ -289,6 +357,8 @@ bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
     window_y1 = y0;
     window_x2 = x1;
     window_y2 = y1;
+    push_x = x0;
+    push_y = y0;
     return true;
 }
 
@@ -314,6 +384,12 @@ bool EPDPanel::displayOnff(int8_t on) {
 }
 
 bool EPDPanel::invertDisplay(bool invert) {
+    if (cfg.ep_mode == 4) {
+        // The Inky controller has no display inversion command. Avoid applying
+        // the monochrome framebuffer inversion to the packed color buffer.
+        return true;
+    }
+
     // Toggle color inversion logic
     cfg.invert_colors = invert;
     
@@ -335,7 +411,16 @@ bool EPDPanel::setRotation(uint8_t rot) {
 }
 
 bool EPDPanel::updateFrame() {
-    if (!fb_buffer) return false;
+    if (!fb_buffer) {
+        if (cfg.ep_mode == 4) {
+            AddLog(3, "UDisplay: Inky framebuffer is unavailable");
+        }
+        return false;
+    }
+
+    if (cfg.ep_mode == 4) {
+        return updateInky();
+    }
     
     // Handle different EPD modes
     if (cfg.ep_mode == 1 || cfg.ep_mode == 3) {
@@ -362,6 +447,142 @@ bool EPDPanel::updateFrame() {
     }
     
     return true;
+}
+
+void EPDPanel::sendInkyCommand(uint8_t command, const uint8_t* data, uint32_t len) {
+    spi->beginTransaction();
+    spi->csLow();
+    spi->writeCommand(command);
+    for (uint32_t index = 0; index < len; index++) {
+        spi->writeData8(data[index]);
+    }
+    spi->csHigh();
+    spi->endTransaction();
+}
+
+bool EPDPanel::waitInkyIdle(uint32_t timeout_ms) {
+    if (cfg.busy_pin < 0) {
+        AddLog(3, "UDisplay: Inky BUSY pin is not configured");
+        return false;
+    }
+
+    const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
+    const uint8_t idle_level = cfg.busy_invert ? HIGH : LOW;
+    if (digitalRead(cfg.busy_pin) == idle_level) {
+        // Match the Pimoroni driver's settle delay when the panel is already
+        // idle, then make sure it did not become busy during that delay.
+        delay(timeout_ms);
+        if (digitalRead(cfg.busy_pin) == idle_level) {
+            return true;
+        }
+    }
+
+    uint32_t started = millis();
+    while (digitalRead(cfg.busy_pin) == busy_level) {
+        if ((millis() - started) >= timeout_ms) {
+            AddLog(3, "UDisplay: Inky busy wait timed out");
+            return false;
+        }
+        delay(1);
+    }
+    return true;
+}
+
+bool EPDPanel::waitInkyReady(uint32_t timeout_ms) {
+    if (cfg.busy_pin < 0) {
+        AddLog(3, "UDisplay: Inky BUSY pin is not configured");
+        return false;
+    }
+
+    const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
+    uint32_t started = millis();
+    while (digitalRead(cfg.busy_pin) == busy_level) {
+        if ((millis() - started) >= timeout_ms) {
+            AddLog(3, "UDisplay: Inky panel still busy; skipping update");
+            return false;
+        }
+        delay(1);
+    }
+    return true;
+}
+
+bool EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
+    if (cfg.busy_pin < 0) {
+        AddLog(3, "UDisplay: Inky BUSY pin is not configured");
+        return false;
+    }
+
+    const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
+    uint32_t started = millis();
+    // Wait for BUSY to assert after refresh starts, then wait until it clears.
+    while (digitalRead(cfg.busy_pin) != busy_level) {
+        if ((millis() - started) >= timeout_ms) {
+            AddLog(3, "UDisplay: Inky refresh did not start");
+            return false;
+        }
+        delay(5);
+    }
+    while (digitalRead(cfg.busy_pin) == busy_level) {
+        if ((millis() - started) >= timeout_ms) {
+            AddLog(3, "UDisplay: Inky refresh timed out");
+            return false;
+        }
+        delay(20);
+    }
+    return true;
+}
+
+bool EPDPanel::updateInky() {
+    // A previous refresh may have timed out while BUSY remained asserted.
+    // Do not reset the controller or send another frame until it is safe.
+    if (!waitInkyReady(300)) {
+        return false;
+    }
+
+    // The Pimoroni driver resets and replays the E673 register setup before
+    // every frame update, so repeated refreshes follow the same lifecycle.
+    if (!resetDisplay()) {
+        return false;
+    }
+    if (!cfg.send_cmds_callback || !cfg.init_cmd_count) {
+        AddLog(3, "UDisplay: Inky init command sequence is missing");
+        return false;
+    }
+    spi->beginTransaction();
+    cfg.send_cmds_callback(0, cfg.init_cmd_count);
+    spi->endTransaction();
+
+    // The E673 has one RAM plane with two 4-bit color indices per byte.
+    sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
+
+    sendInkyCommand(0x04);                 // PON
+    if (!waitInkyIdle(300)) {
+        return false;
+    }
+
+    static const uint8_t booster_after_power[] = {0x6F, 0x1F, 0x17, 0x49};
+    sendInkyCommand(0x06, booster_after_power, sizeof(booster_after_power));
+    static const uint8_t refresh[] = {0x00};
+    sendInkyCommand(0x12, refresh, sizeof(refresh)); // DRF
+    const bool refresh_completed = waitInkyRefresh(cfg.busy_timeout);
+    if (!refresh_completed) {
+        const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
+        if (cfg.busy_pin >= 0 && digitalRead(cfg.busy_pin) == busy_level) {
+            // Do not power down the controller while the panel is still refreshing.
+            return false;
+        }
+    }
+
+    sendInkyCommand(0x02, refresh, sizeof(refresh)); // POF
+    if (!waitInkyIdle(300)) {
+        return false;
+    }
+    static const uint8_t power_save[] = {0x4F, 0x6E};
+    sendInkyCommand(0x00, power_save, sizeof(power_save)); // PSR
+    if (!waitInkyIdle(300)) {
+        return false;
+    }
+    return refresh_completed;
 }
 
 // ===== ep_mode 2 Support (5-LUT mode) =====

@@ -34,7 +34,7 @@ void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
 }
 
 void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
-    if (framebuffer) {
+    if (framebuffer && ep_mode != 4) {
         Renderer::drawFastVLine(x, y, h, color);
         return;
     }

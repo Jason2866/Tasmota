@@ -236,7 +236,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               col_type = uCOLOR_BW;
             } else {
               col_type = uCOLOR_COLOR;
-              if (bpp == 16) {
+              if (bpp == 16 || bpp == 4) {
                 fg_col = GetColorFromIndex(fg_col);
                 bg_col = GetColorFromIndex(bg_col);
               }
@@ -381,7 +381,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             splash_size = next_val(&lp1);
             fg_col = next_val(&lp1);
             bg_col = next_val(&lp1);
-            if (bpp == 16) {
+            if (bpp == 16 || bpp == 4) {
               fg_col = GetColorFromIndex(fg_col);
               bg_col = GetColorFromIndex(bg_col);
             }
@@ -911,6 +911,13 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
       // no lutfsize or lutpsize, but epcoffs_full or epcoffs_part
       ep_mode = 3;
     }
+
+    // Four bits per pixel selects the color EPD path used by Inky Impression
+    // panels with the E673 controller.
+    if (bpp == 4) {
+      ep_mode = 4;
+      panel_config->epd.busy_timeout = 32000;
+    }
   }
 
 
@@ -1188,6 +1195,17 @@ Renderer *uDisplay::Init(void) {
     return NULL;
   }
 
+  if (ep_mode == 4) {
+    if (reset < 0) {
+      AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires a reset pin");
+      return NULL;
+    }
+    if (!spiController || spiController->spi_config.miso < 0) {
+      AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires a BUSY pin on SPI MISO");
+      return NULL;
+    }
+  }
+
   #ifdef UDSP_DEBUG
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Dsp Init 1 start");
   #endif
@@ -1213,7 +1231,18 @@ Renderer *uDisplay::Init(void) {
     } else {
       framebuffer = (uint8_t*)calloc(framebuffer_size, 1);
     }
+    if (!framebuffer && ep_mode == 4) {
+      framebuffer = (uint8_t*)calloc(framebuffer_size, 1);
+    }
 #endif // ESP8266
+    if (framebuffer && ep_mode == 4) {
+      // Inky pixel value 1 is white; initialize the image buffer to white.
+      memset(framebuffer, 0x11, framebuffer_size);
+    }
+    if (!framebuffer && ep_mode == 4) {
+      AddLog(LOG_LEVEL_ERROR, "UDisplay: unable to allocate Inky framebuffer (%u bytes)", framebuffer_size);
+      return NULL;
+    }
   }
   frame_buffer = framebuffer;
 
@@ -1259,9 +1288,14 @@ if (interface == _UDSP_SPI) {
 
     HandeBP(-1);
 
+    if (ep_mode == 4) {
+      // The Inky E673 Python driver uses SPI mode 0.
+      spiController->setMode(SPI_MODE0);
+    }
+
     spiController->beginTransaction();
  
-    if (reset >= 0) {
+    if (reset >= 0 && ep_mode != 4) {
       pinMode(reset, OUTPUT);
       digitalWrite(reset, HIGH);
       delay(50);
@@ -1277,6 +1311,7 @@ if (interface == _UDSP_SPI) {
         panel_config->epd.height = gys;
         panel_config->epd.bpp = bpp;
         panel_config->epd.ep_mode = ep_mode;
+        panel_config->epd.init_cmd_count = dsp_ncmds;
         // Timing values already set in panel_config->epd (either defaults or from :T section)
         panel_config->epd.reset_pin = reset;
         panel_config->epd.busy_pin = spiController->spi_config.miso;
@@ -1291,24 +1326,28 @@ if (interface == _UDSP_SPI) {
         
         // Create EPD panel BEFORE sending init commands (send_spi_cmds needs universal_panel)
         universal_panel = new EPDPanel(panel_config->epd, spiController, frame_buffer);
-        send_spi_cmds(0, dsp_ncmds);
-        
-        // After descriptor init commands, do initial EPD setup
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
-        epd->resetDisplay();
-        if (epd->cfg.lut_full && epd->cfg.lut_full_len > 0) {
-            epd->setLut(epd->cfg.lut_full, epd->cfg.lut_full_len);
+        // Inky reset and register setup run immediately before each frame,
+        // matching the Pimoroni E673 update lifecycle.
+        if (ep_mode != 4) {
+          send_spi_cmds(0, dsp_ncmds);
+
+          // After descriptor init commands, do initial EPD setup
+          epd->resetDisplay();
+          if (epd->cfg.lut_full && epd->cfg.lut_full_len > 0) {
+              epd->setLut(epd->cfg.lut_full, epd->cfg.lut_full_len);
+          }
+          epd->clearFrameMemory(0xFF);
+          epd->displayFrame();
+
+          // Send full update command sequence if available
+          if (epd->cfg.epc_full_cnt) {
+              send_spi_cmds(epd->cfg.epcoffs_full, epd->cfg.epc_full_cnt);
+          }
+
+          // Set update mode to partial for subsequent updates
+          epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
         }
-        epd->clearFrameMemory(0xFF);
-        epd->displayFrame();
-        
-        // Send full update command sequence if available
-        if (epd->cfg.epc_full_cnt) {
-            send_spi_cmds(epd->cfg.epcoffs_full, epd->cfg.epc_full_cnt);
-        }
-        
-        // Set update mode to partial for subsequent updates
-        epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
     } else {   
         AddLog(2,"DSP: SPI Panel");
         // Populate remaining SPI config fields (most already parsed directly into union)
@@ -1478,6 +1517,12 @@ if (interface == _UDSP_SPI) {
 
 void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
   if (p != DISPLAY_INIT_MODE && ep_mode) {
+    if (ep_mode == 4) {
+      if (universal_panel) {
+        universal_panel->updateFrame();
+      }
+      return;
+    }
     if (p == DISPLAY_INIT_PARTIAL) {
       if (universal_panel) {
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
