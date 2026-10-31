@@ -273,16 +273,20 @@ struct be_img_util {
     }
     if (index > jpeg->output_capacity || len > jpeg->output_capacity - index) {
       const size_t required = index + len;
-      size_t new_capacity = jpeg->output_capacity;
-      while (new_capacity < required) {
-        if (new_capacity > SIZE_MAX / 2) {
-          new_capacity = required;
-          break;
-        }
-        new_capacity *= 2;
+      size_t step = (jpeg->output_capacity < 128 * 1024) ? jpeg->output_capacity : 32 * 1024;
+      if (step < 4096) step = 4096;
+      size_t new_capacity = jpeg->output_capacity + step;
+      if (new_capacity < required) {
+        new_capacity = required + 4096;
       }
       uint8_t *new_output = (uint8_t *)heap_caps_realloc(
           jpeg->output, new_capacity, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (new_output == nullptr) {
+        // Fallback: try allocating just the exact required size
+        new_capacity = required;
+        new_output = (uint8_t *)heap_caps_realloc(
+            jpeg->output, new_capacity, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      }
       if (new_output == nullptr) {
         jpeg->output_failed = true;
         return 0;
