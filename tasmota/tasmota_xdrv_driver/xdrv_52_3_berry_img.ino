@@ -531,6 +531,97 @@ extern "C" {
   }
 
   /**
+   * @brief Resize an RGB888 image, optionally rotating it 90 degrees counter-clockwise first
+   * @param vm Berry VM pointer
+   * @return Berry nil
+   * Berry arguments: (width, height, [rotate90])
+   */
+  int be_img_resize(struct bvm *vm);
+  int be_img_resize(struct bvm *vm) {
+    int32_t argc = be_top(vm);
+    if (argc < 3 || !be_isint(vm, 2) || !be_isint(vm, 3)) {
+      be_raise(vm, "img_error", "resize expects width and height");
+      be_return_nil(vm);
+    }
+
+    image_t *img = be_get_image_instance(vm);
+    int32_t target_width = be_toint(vm, 2);
+    int32_t target_height = be_toint(vm, 3);
+    bool rotate90 = argc >= 4 && be_isbool(vm, 4) && be_tobool(vm, 4);
+    if (target_width <= 0 || target_width > UINT16_MAX ||
+        target_height <= 0 || target_height > UINT16_MAX) {
+      be_raise(vm, "img_error", "invalid resize dimensions");
+      be_return_nil(vm);
+    }
+    if (!img->buf || img->bpp != 3 || img->format != PIXFORMAT_RGB888 ||
+        img->width == 0 || img->height == 0) {
+      be_raise(vm, "img_error", "resize requires a decoded RGB888 image");
+      be_return_nil(vm);
+    }
+    if (!rotate90 && img->width == target_width && img->height == target_height) {
+      be_return_nil(vm);
+    }
+
+    const uint16_t source_width = img->width;
+    const uint16_t source_height = img->height;
+    const uint32_t rotated_width = rotate90 ? source_height : source_width;
+    const uint32_t rotated_height = rotate90 ? source_width : source_height;
+    const size_t output_size = (size_t)target_width * target_height * 3;
+    uint8_t *output = (uint8_t *)heap_caps_malloc(output_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!output) {
+      be_raise(vm, "img_error", "not enough memory to resize image");
+      be_return_nil(vm);
+    }
+
+    // Bilinear scaling matches the reference script's fit-to-panel step while
+    // keeping the large working buffer in native PSRAM instead of Berry bytes.
+    for (int32_t y = 0; y < target_height; ++y) {
+      float sample_y = (((float)y + 0.5f) * rotated_height / target_height) - 0.5f;
+      if (sample_y < 0.0f) sample_y = 0.0f;
+      if (sample_y > rotated_height - 1) sample_y = rotated_height - 1;
+      uint32_t y0 = (uint32_t)sample_y;
+      uint32_t y1 = y0 + 1 < rotated_height ? y0 + 1 : y0;
+      float fy = sample_y - y0;
+      for (int32_t x = 0; x < target_width; ++x) {
+        float sample_x = (((float)x + 0.5f) * rotated_width / target_width) - 0.5f;
+        if (sample_x < 0.0f) sample_x = 0.0f;
+        if (sample_x > rotated_width - 1) sample_x = rotated_width - 1;
+        uint32_t x0 = (uint32_t)sample_x;
+        uint32_t x1 = x0 + 1 < rotated_width ? x0 + 1 : x0;
+        float fx = sample_x - x0;
+
+        uint32_t source_x00 = rotate90 ? source_width - 1 - y0 : x0;
+        uint32_t source_y00 = rotate90 ? x0 : y0;
+        uint32_t source_x10 = rotate90 ? source_width - 1 - y0 : x1;
+        uint32_t source_y10 = rotate90 ? x1 : y0;
+        uint32_t source_x01 = rotate90 ? source_width - 1 - y1 : x0;
+        uint32_t source_y01 = rotate90 ? x0 : y1;
+        uint32_t source_x11 = rotate90 ? source_width - 1 - y1 : x1;
+        uint32_t source_y11 = rotate90 ? x1 : y1;
+        size_t source_offset00 = ((size_t)source_y00 * source_width + source_x00) * 3;
+        size_t source_offset10 = ((size_t)source_y10 * source_width + source_x10) * 3;
+        size_t source_offset01 = ((size_t)source_y01 * source_width + source_x01) * 3;
+        size_t source_offset11 = ((size_t)source_y11 * source_width + source_x11) * 3;
+        size_t target_offset = ((size_t)y * target_width + x) * 3;
+        for (uint8_t channel = 0; channel < 3; ++channel) {
+          float top = img->buf[source_offset00 + channel] * (1.0f - fx) +
+                      img->buf[source_offset10 + channel] * fx;
+          float bottom = img->buf[source_offset01 + channel] * (1.0f - fx) +
+                         img->buf[source_offset11 + channel] * fx;
+          output[target_offset + channel] = (uint8_t)(top * (1.0f - fy) + bottom * fy + 0.5f);
+        }
+      }
+    }
+
+    free(img->buf);
+    img->buf = output;
+    img->width = (uint16_t)target_width;
+    img->height = (uint16_t)target_height;
+    img->len = output_size;
+    be_return_nil(vm);
+  }
+
+  /**
    * @brief Loads image from JPEG buffer, optionally decoding to specified format
    * @param vm Berry VM pointer
    * @return Berry nil

@@ -1,6 +1,8 @@
 # Floyd-Steinberg quantization for Inky Impression 7.3 (E673 / Spectra 6).
 # Load this file in the Berry console, then call:
 #   inky_dither("/image.jpg", "/image-dithered.jpg")
+# Portrait inputs are rotated 90 degrees counter-clockwise and all inputs are
+# resized to the panel's 800x480 resolution before dithering.
 # Optional arguments are saturation (0.0..1.0, default 0.5) and JPEG quality
 # (default 85, range 1..100; higher values preserve more detail).
 
@@ -53,8 +55,17 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   jpeg_data = nil
 
   var info = image.info()
+  if info["bpp"] != 3 || info["width"] <= 0 || info["height"] <= 0
+    raise "value_error", "input JPEG must decode to RGB888"
+  end
+
+  # Match the Metron/Inky Python example: rotate portrait covers, then resize
+  # to the display resolution. The native method keeps the large buffer in PSRAM.
+  var rotate90 = info["height"] > info["width"]
+  image.resize(800, 480, rotate90)
+  info = image.info()
   if info["width"] != 800 || info["height"] != 480 || info["bpp"] != 3
-    raise "value_error", "input image must decode to 800x480 RGB888"
+    raise "value_error", "could not prepare image for the 800x480 display"
   end
 
   # Map the native RGB888 image buffer instead of copying its 1.15 MiB payload.

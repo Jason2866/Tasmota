@@ -6,7 +6,7 @@
 
 - An ESP32 Tasmota build with features (`USE_DISPLAY`, `USE_UNIVERSAL_DISPLAY`, `USE_UFILESYS`, `USE_BERRY_IMAGE` and `JPEG_PICTS`) enabled. This are compile-time options and cannot be enabled by loading the script. The script uses the universal display driver to render the saved JPEG and refresh the panel.
 - PSRAM is required for the decoded 800 × 480 RGB image buffer. The buffer uses about 1.15 MiB, in addition to memory needed by JPEG decoding and encoding.
-- The source must be a JPEG that decodes to exactly 800 × 480 pixels.
+- The source must be a JPEG that decodes to RGB888. Portrait images are rotated 90 degrees counter-clockwise, then all images are resized to 800 × 480 before dithering.
 - Berry's `bytes()` limit restricts the compressed source JPEG to 512 KiB. PSRAM is required for this workflow.
 
 ## Inky Impression 7.3-inch display
@@ -47,7 +47,7 @@ print(result)
 
 After the output file is written successfully, the script renders it at the top-left corner of the display and refreshes the panel. The Inky refresh takes about 32 seconds. The output JPEG remains in the Tasmota filesystem; retrieve it using the device's filesystem access method.
 
-Dithering is performed by the native InkyDither.dither class for optimal performance.
+Dithering is performed by the native InkyDither.dither class for optimal performance. Image resizing uses the native `img.resize()` method to keep its large working buffer in PSRAM; the firmware must include the updated Berry image module.
 
 If `load("inky_dither.be")` fails with `img undeclared`, the running firmware does not provide the Berry `img` class. Confirm that it was built with `USE_BERRY_IMAGE` enabled, then rebuild and flash it. The failure occurs while Berry compiles the script, before `inky_dither()` runs.
 
@@ -57,7 +57,7 @@ If `load("inky_dither.be")` fails with `img undeclared`, the running firmware do
 inky_dither(input_path, output_path, saturation, jpeg_quality)
 ```
 
-- `input_path`: path to the source JPEG on the Tasmota filesystem.
+- `input_path`: path to the source JPEG on the Tasmota filesystem. The compressed source must not exceed Berry's 512 KiB `bytes()` limit.
 - `output_path`: destination path for the dithered JPEG. It may be the same as the input path.
 - `saturation`: palette blend from `0.0` to `1.0`. `0.5` matches the Python driver's default. Lower values use the desaturated palette; higher values increase saturation.
 - `jpeg_quality`: software JPEG encoder quality from `1` to `100`. Higher values preserve more image detail and generally produce larger files. The default is `85`.
