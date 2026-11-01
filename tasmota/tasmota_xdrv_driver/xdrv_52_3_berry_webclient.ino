@@ -70,7 +70,7 @@ String wc_UrlEncode(const String& text) {
 	int len = text.length();
 	int i = 0;
 	while (i < len)	{
-		char decodedChar = text.charAt(i++);
+		unsigned char decodedChar = (unsigned char)text.charAt(i++);
 
     if (('a' <= decodedChar && decodedChar <= 'z') ||
         ('A' <= decodedChar && decodedChar <= 'Z') ||

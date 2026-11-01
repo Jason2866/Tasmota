@@ -145,7 +145,7 @@ def metron_get_cover_url(issue_detail)
 end
 
 def metron_download_cover(username, password, series_name, output_path)
-  var seed = int(tasmota.millis())
+  var seed = int(tasmota.millis()) & 0x7FFFFFFF
   var series_data = nil
   var series_url = nil
   if series_name == nil || size(series_name) == 0
@@ -200,7 +200,7 @@ def metron_download_cover(username, password, series_name, output_path)
   # and keep the response small.
   var issue = nil
   for attempt : range(0, 3)
-    var candidate_number = ((seed + attempt * 37) % total_issues) + 1
+    var candidate_number = ((seed % total_issues + attempt * 37) % total_issues) + 1
     var issue_url = metron_api + "?series_id=" + str(series_id) + "&number=" + str(candidate_number) + "&page_size=1"
     var issue_data = metron_get_json(issue_url, username, password)
     var issue_results = issue_data.find("results")
