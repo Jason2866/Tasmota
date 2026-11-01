@@ -236,8 +236,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               col_type = uCOLOR_BW;
             } else {
               col_type = uCOLOR_COLOR;
-              if (bpp == 16 || bpp == 4) {
-                fg_col = bpp == 4 ? (fg_col ? 0xFFFF : 0) : GetColorFromIndex(fg_col);
+              if (bpp == 16) {
+                fg_col = GetColorFromIndex(fg_col);
                 bg_col = GetColorFromIndex(bg_col);
               }
             }
@@ -381,8 +381,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             splash_size = next_val(&lp1);
             fg_col = next_val(&lp1);
             bg_col = next_val(&lp1);
-            if (bpp == 16 || bpp == 4) {
-              fg_col = bpp == 4 ? (fg_col ? 0xFFFF : 0) : GetColorFromIndex(fg_col);
+            if (bpp == 16) {
+              fg_col = GetColorFromIndex(fg_col);
               bg_col = GetColorFromIndex(bg_col);
             }
             splash_xp = next_val(&lp1);
@@ -918,6 +918,16 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
       ep_mode = 4;
       panel_config->epd.busy_timeout = 32000;
     }
+  }
+
+  // Resolve 4-bpp colors after EPD mode detection; only Inky maps foreground to white.
+  if (bpp == 4) {
+    if (ep_mode == 4) {
+      fg_col = fg_col ? 0xFFFF : 0;
+    } else {
+      fg_col = GetColorFromIndex(fg_col);
+    }
+    bg_col = GetColorFromIndex(bg_col);
   }
 
 
