@@ -92,14 +92,14 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   rot_t[2] = 2;
   rot_t[3] = 3;
   interface = 0;
-  
+
   // Allocate panel_config once at the beginning
   panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
   // Set EPD timing defaults (will be used if EPD mode is detected)
   panel_config->epd.lut_full_time = 350;
   panel_config->epd.lut_partial_time = 35;
   panel_config->epd.update_time = 10;
-  
+
   char linebuff[UDSP_LBSIZE];
   while (*lp) {
 
@@ -120,16 +120,16 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
         lp1++;
         section = *lp1++;
         if (section == 'I') {
-          
+
           if (*lp1 == 'C') {
             allcmd_mode = 1;
             lp1++;
           }
-          
+
           if (*lp1 == 'S') {
             // special case RGB with software SPI init clk,mosi,cs,reset
             lp1++;
-            if (interface == _UDSP_RGB) { 
+            if (interface == _UDSP_RGB) {
                 lp1++;
                 SPIControllerConfig spi_cfg = {
                     .bus_nr = 4,
@@ -164,7 +164,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
           } else if (*lp1 == 'I') {
             // pecial case RGB with i2c init, bus nr, i2c addr
             lp1++;
-            if (interface == _UDSP_RGB) { 
+            if (interface == _UDSP_RGB) {
               // collect line and send directly
               lp1++;
               wire_n = next_val(&lp1);
@@ -183,14 +183,14 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               }
               spec_init = _UDSP_I2C;
             }
-          }         
+          }
         } else if (section == 'L') {
           if (*lp1 >= '1' && *lp1 <= '5') {
             lut_num = (*lp1 & 0x07);
             lp1 += 2;
             uint8_t lut_size = next_val(&lp1);
             uint8_t lut_cmd_val = next_hex(&lp1);
-            
+
             // Store directly in EPD config
             panel_config->epd.lut_siz[lut_num - 1] = lut_size;
             panel_config->epd.lut_array_data[lut_num - 1] = (uint8_t*)malloc(lut_size);
@@ -200,7 +200,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             lp1++;
             uint16_t lut_size = next_val(&lp1);
             uint8_t lut_cmd_val = next_hex(&lp1);
-            
+
             // Store directly in EPD config
             panel_config->epd.lut_full_data = (uint8_t*)malloc(lut_size);
             panel_config->epd.lutfsize = 0;  // Will be filled during :L data parsing
@@ -210,14 +210,14 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
           lp1++;
           uint16_t lut_size = next_val(&lp1);
           uint8_t lut_cmd_val = next_hex(&lp1);
-          
+
           // Store directly in EPD config
           panel_config->epd.lut_partial_data = (uint8_t*)malloc(lut_size);
           panel_config->epd.lutpsize = 0;  // Will be filled during :l data parsing
           panel_config->epd.lut_cmd[0] = lut_cmd_val;
         }
         if (*lp1 == ',') lp1++;
-        
+
       }
       if (*lp1 && *lp1 != ':' && *lp1 != '\n' && *lp1 != ' ') {   // Add space char
         switch (section) {
@@ -237,7 +237,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             } else {
               col_type = uCOLOR_COLOR;
               if (bpp == 16 || bpp == 4) {
-                fg_col = GetColorFromIndex(fg_col);
+                fg_col = bpp == 4 ? (fg_col ? 0xFFFF : 0) : GetColorFromIndex(fg_col);
                 bg_col = GetColorFromIndex(bg_col);
               }
             }
@@ -294,7 +294,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 interface = _UDSP_PAR16;
               }
               reset = next_val(&lp1);
-              
+
               // Parse control pins directly into I80 config
               panel_config->i80.cs_pin = next_val(&lp1);
               panel_config->i80.dc_pin = next_val(&lp1);
@@ -359,12 +359,12 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               panel_config->dsi.lane_speed_mbps = next_val(&lp1);
               panel_config->dsi.rgb_order = next_val(&lp1);
               panel_config->dsi.data_endian = next_val(&lp1);
-              
+
               // Set display dimensions
               panel_config->dsi.width = gxs;
               panel_config->dsi.height = gys;
               panel_config->dsi.bpp = bpp;
-              
+
               section = 0;
 #ifdef UDSP_DEBUG
               AddLog(LOG_LEVEL_DEBUG, "UDisplay: DSI interface - Lanes:%d TE:%d BL:%d LDO:%d@%dmV Clock:%dHz Speed:%dMbps RGB_Order:%d Endian:%d",
@@ -382,7 +382,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             fg_col = next_val(&lp1);
             bg_col = next_val(&lp1);
             if (bpp == 16 || bpp == 4) {
-              fg_col = GetColorFromIndex(fg_col);
+              fg_col = bpp == 4 ? (fg_col ? 0xFFFF : 0) : GetColorFromIndex(fg_col);
               bg_col = GetColorFromIndex(bg_col);
             }
             splash_xp = next_val(&lp1);
