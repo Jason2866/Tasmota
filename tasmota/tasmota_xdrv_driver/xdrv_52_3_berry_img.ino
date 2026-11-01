@@ -309,6 +309,9 @@ struct be_img_util {
       if (!ctx || !ctx->img || !ctx->img->buf) return 0;
       image_t *img = ctx->img;
 
+      if (pDraw->x < 0 || pDraw->y < 0) return 0;
+      if (pDraw->x >= img->width || pDraw->y >= img->height) return 1;
+
       // Crop check - skip MCUs outside target area (top-left crop)
       if (ctx->crop_enabled) {
           if (pDraw->x >= ctx->target_width || pDraw->y >= ctx->target_height) {
@@ -317,7 +320,7 @@ struct be_img_util {
       }
 
       // Calculate actual copy dimensions (handle partial MCUs at edges)
-      int copy_width = pDraw->iWidth;
+      int copy_width = pDraw->iWidthUsed;
       int copy_height = pDraw->iHeight;
       if (ctx->crop_enabled) {
           if (pDraw->x + copy_width > ctx->target_width) {
@@ -327,11 +330,22 @@ struct be_img_util {
               copy_height = ctx->target_height - pDraw->y;
           }
       }
+      if (copy_width > img->width - pDraw->x) {
+          copy_width = img->width - pDraw->x;
+      }
+      if (copy_height > img->height - pDraw->y) {
+          copy_height = img->height - pDraw->y;
+      }
+      if (copy_width <= 0 || copy_height <= 0) return 1;
+
+      size_t dst_offset = ((size_t)pDraw->y * ctx->stride) + ((size_t)pDraw->x * img->bpp);
+      size_t last_row_offset = ((size_t)(pDraw->y + copy_height - 1) * ctx->stride) +
+                               ((size_t)pDraw->x * img->bpp) + ((size_t)copy_width * img->bpp);
+      if (last_row_offset > ctx->buf_size) return 0;
 
       // Check if we're converting RGB8888 -> RGB888
       if (img->bpp == 3 && pDraw->iBpp == 32) {  // 32 bits = 4 bytes
           // Convert 4-byte pixels to 3-byte pixels on the fly
-          size_t dst_offset = (pDraw->y * ctx->stride) + (pDraw->x * img->bpp);
           uint8_t *dst = img->buf + dst_offset;
           const uint8_t *src = (const uint8_t*)pDraw->pPixels;
 
@@ -345,13 +359,6 @@ struct be_img_util {
           }
       } else {
           // Normal case - direct copy
-          size_t dst_offset = (pDraw->y * ctx->stride) + (pDraw->x * img->bpp);
-          // Check bounds for actual copy area, not full stride
-          size_t last_row_offset = ((pDraw->y + copy_height - 1) * ctx->stride) + (pDraw->x * img->bpp) + (copy_width * img->bpp);
-          if (last_row_offset > ctx->buf_size) {
-              return 0;
-          }
-
           uint8_t *dst = img->buf + dst_offset;
           const uint8_t *src = (const uint8_t*)pDraw->pPixels;
 
