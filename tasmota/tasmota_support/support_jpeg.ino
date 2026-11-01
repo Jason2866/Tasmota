@@ -145,11 +145,12 @@ bool jpg2rgb888(const uint8_t *src, size_t src_len, uint8_t * out, jpg_scale_t s
 
 
 // https://web.archive.org/web/20131016210645/http://www.64lines.com/jpeg-width-height
-//Gets the JPEG size from the array of data passed to the function, file reference: http://www.obrador.com/essentialjpeg/headerinfo.htm
+// Gets the JPEG size from the array of data passed to the function, file reference: http://www.obrador.com/essentialjpeg/headerinfo.htm
 char get_jpeg_size(unsigned char* data, unsigned int data_size, unsigned short *width, unsigned short *height) {
-   if (!data || !width || !height || data_size < 4) return false;
+   if (!width || !height) return false;
    *width = 0;
    *height = 0;
+   if (!data || data_size < 4) return false;
 
    // Check for a valid JPEG SOI and APP0 marker.
    if (data[0] != 0xFF || data[1] != 0xD8 || data[2] != 0xFF || data[3] != 0xE0) return false;
