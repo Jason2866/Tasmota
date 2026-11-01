@@ -65,6 +65,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   pwr_cbp = 0;
   dim_cbp = 0;
   framebuffer = 0;
+  frame_buffer = nullptr;
   col_mode = 16;
   sa_mode = 16;
   saw_3 = 0xff;
