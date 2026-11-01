@@ -470,7 +470,7 @@ bool EPDPanel::waitInkyIdle(uint32_t timeout_ms) {
     const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
     const uint8_t idle_level = cfg.busy_invert ? HIGH : LOW;
     if (digitalRead(cfg.busy_pin) == idle_level) {
-        // Match the Pimoroni driver's settle delay when the panel is already
+        // Match the Pimoroni Inky driver's settle delay when the panel is already
         // idle, then make sure it did not become busy during that delay.
         delay(timeout_ms);
         if (digitalRead(cfg.busy_pin) == idle_level) {
@@ -532,7 +532,7 @@ bool EPDPanel::updateInky() {
         return false;
     }
 
-    // The Pimoroni driver resets and replays the E673 register setup before
+    // The Inky Pimoroni driver resets and replays the E673 register setup before
     // every frame update, so repeated refreshes follow the same lifecycle.
     if (!resetDisplay()) {
         return false;
@@ -545,7 +545,7 @@ bool EPDPanel::updateInky() {
     cfg.send_cmds_callback(0, cfg.init_cmd_count);
     spi->endTransaction();
 
-    // The E673 has one RAM plane with two 4-bit color indices per byte.
+    // The Inky E673 has one RAM plane with two 4-bit color indices per byte.
     sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
 
     sendInkyCommand(0x04);                 // PON

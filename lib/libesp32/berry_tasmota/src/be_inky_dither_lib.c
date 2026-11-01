@@ -1,8 +1,7 @@
 /********************************************************************
  * Berry class `inky_dither`
  *
- * Floyd-Steinberg dithering for Inky Impression 7.3 (E673 / Spectra 6).
- * Optimized C implementation for performance.
+ * Floyd-Steinberg dithering for 800x480 Inky 7.3" Pimoroni display
  *******************************************************************/
 #include "be_constobj.h"
 #include "be_mem.h"
