@@ -21,6 +21,8 @@ var comic_source_path = "/metron_comic.jpg"
 var comic_download_path = "/metron_comic.download"
 var comic_backup_path = "/metron_comic.backup"
 var comic_dithered_path = "/metron_comic_dithered.jpg"
+var comic_max_source_bytes = 512 * 1024
+var comic_cover_attempts = 5
 
 def metron_new_client(username, password)
   var wc = webclient()
@@ -261,6 +263,11 @@ def metron_download_cover(username, password, series_name, output_path)
     print("Cover download failed with " + str(status) + ", retrying (" + str(attempt) + "/" + str(metron_retries) + ")")
     tasmota.delay(500)
   end
+  var response_size = image_client.get_size()
+  if response_size > comic_max_source_bytes
+    image_client.close()
+    return response_size
+  end
   var written = image_client.write_file(output_path)
   image_client.close()
   if written <= 0
@@ -297,9 +304,26 @@ def display_comic(username, password, series_name)
     raise "value_error", "Pass your Metron username and password"
   end
 
-  print("Fetching a random Metron comic cover...")
-  var downloaded_bytes = metron_download_cover(username, password,
-                                                series_name, comic_download_path)
+  var downloaded_bytes = 0
+  var cover_attempt = 0
+  while cover_attempt < comic_cover_attempts
+    cover_attempt += 1
+    print("Fetching a random Metron comic cover (attempt " + str(cover_attempt) + "/" + str(comic_cover_attempts) + ")...")
+    downloaded_bytes = metron_download_cover(username, password,
+                                              series_name, comic_download_path)
+    if downloaded_bytes <= comic_max_source_bytes
+      break
+    end
+    print("Metron cover is " + str(downloaded_bytes) + " bytes; exceeds the 512 KiB limit, searching for another cover")
+    if path.exists(comic_download_path)
+      path.remove(comic_download_path)
+    end
+  end
+  if downloaded_bytes > comic_max_source_bytes
+    print("No Metron cover within 512 KiB found after " + str(comic_cover_attempts) + " attempts; keeping the current image")
+    return nil
+  end
+
   install_downloaded_cover()
   print("Downloaded " + str(downloaded_bytes) + " bytes")
 
@@ -356,6 +380,9 @@ end
 def start(username, password, series_name)
   print("Starting Metron comic display")
   var result = display_comic(username, password, series_name)
+  if result == nil
+    return {"status": "no_suitable_cover"}
+  end
   print("Comic display started. Schedule display_comic(username, password, series) with a Tasmota rule for updates.")
   var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
   return {"status": "started", "image": image_path}
