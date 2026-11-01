@@ -373,7 +373,7 @@ struct be_img_util {
    * @param img Image structure (must have width, height, bpp pre-set)
    * @return true on success, false on failure
    */
-  static bool jpeg_decode_one_image(uint8_t *input_buf, int len, uint8_t *output_buf, 
+  static bool jpeg_decode_one_image(uint8_t *input_buf, int len, uint8_t *output_buf,
                                       int type, image_t *img, int scale_opt = 0) {
       if (!input_buf || len <= 0 || !output_buf || !img) return false;
       if (img->bpp == 0) return false;
@@ -388,7 +388,7 @@ struct be_img_util {
           if (jpeg_width != img->width || jpeg_height != img->height) {
               // Dimension mismatch - enable cropping
               crop_enabled = true;
-              AddLog(LOG_LEVEL_DEBUG, PSTR("IMG: JPEG crop %dx%d -> %dx%d"), 
+              AddLog(LOG_LEVEL_DEBUG, PSTR("IMG: JPEG crop %dx%d -> %dx%d"),
                      jpeg_width, jpeg_height, img->width, img->height);
           }
       }
@@ -584,8 +584,7 @@ extern "C" {
       be_return_nil(vm);
     }
 
-    // Bilinear scaling matches the reference script's fit-to-panel step while
-    // keeping the large working buffer in native PSRAM instead of Berry bytes.
+    // Bilinear scaling while keeping the large working buffer in native PSRAM instead of Berry bytes.
     for (int32_t y = 0; y < target_height; ++y) {
       float sample_y = (((float)y + 0.5f) * rotated_height / target_height) - 0.5f;
       if (sample_y < 0.0f) sample_y = 0.0f;
@@ -701,6 +700,12 @@ extern "C" {
         scale_opt = JPEG_SCALE_EIGHTH;
         w = (w + 7) / 8;
         h = (h + 7) / 8;
+      }
+
+      if ((size_t)w * h > SIZE_MAX / img->bpp) {
+        be_img_util::clear(img);
+        be_raise(vm, "img_error", "image too large");
+        be_return_nil(vm);
       }
 
       const size_t newSize = (size_t)w * h * img->bpp;

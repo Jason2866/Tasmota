@@ -65,8 +65,8 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
     raise "value_error", "input JPEG must decode to RGB888"
   end
 
-  # Match the Metron/Inky Python example: rotate portrait covers, then resize
-  # to the display resolution. The native method keeps the large buffer in PSRAM.
+  # Rotate portrait covers, then resize to the display resolution.
+  # The native method keeps the large buffer in PSRAM.
   var rotate90 = info["height"] > info["width"]
   image.resize(800, 480, rotate90)
   info = image.info()
@@ -79,9 +79,9 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   var width = info["width"]
   var height = info["height"]
 
-  # Use the optimized C implementation for Floyd-Steinberg dithering
+  # Use the C implementation for Floyd-Steinberg dithering
   InkyDither.dither(pixels, width, height, saturation)
-  print("Inky dithering: " + str(height) + "/" + str(height) + " rows")
+  print("Dithering: " + str(height) + "/" + str(height) + " rows")
 
   # JPEG conversion replaces the RGB buffer with the encoded data.
   image.convert_to(jpeg_format, jpeg_quality)
