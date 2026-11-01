@@ -417,12 +417,7 @@ bool EPDPanel::setRotation(uint8_t rot) {
 }
 
 bool EPDPanel::updateFrame() {
-    if (!fb_buffer) {
-        if (cfg.ep_mode == 4) {
-            AddLog(3, "UDisplay: Inky framebuffer is unavailable");
-        }
-        return false;
-    }
+    if (!fb_buffer) return false;
 
     if (cfg.ep_mode == 4) {
         return updateInky();
