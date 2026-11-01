@@ -1,10 +1,12 @@
-# Fetches a random comic cover from Metron and displays it on Inky Impression.
+# Fetches a comic cover from Metron and displays it on Inky Impression.
 #
 # Usage:
 #   load("comic_display.be")
 #   start("METRON_USERNAME", "METRON_PASSWORD", "Batman")
 #
-# Pass nil or an empty string to use the default series, Batman.
+# Pass nil or an empty string to choose a random series.
+#
+#   start("METRON_USERNAME", "METRON_PASSWORD", nil)
 
 import path
 import json
@@ -143,21 +145,41 @@ def metron_get_cover_url(issue_detail)
 end
 
 def metron_download_cover(username, password, series_name, output_path)
+  var seed = int(tasmota.millis())
+  var series_data = nil
+  var series_url = nil
   if series_name == nil || size(series_name) == 0
-    series_name = "Batman"
+    var first_page = metron_get_json(metron_series_api + "?page_size=1", username, password)
+    var first_page_results = first_page.find("results")
+    var series_count = first_page.find("count", 0)
+    if first_page_results == nil || size(first_page_results) == 0 || series_count == nil || series_count < 1
+      raise "value_error", "No Metron series found"
+    end
+    var page_size = size(first_page_results)
+    var page_count = int((series_count + page_size - 1) / page_size)
+    var series_page = (seed % page_count) + 1
+    print("Searching a random Metron series (page " + str(series_page) + " of " + str(page_count) + ")")
+    if series_page == 1
+      series_data = first_page
+    else
+      series_url = metron_series_api + "?page=" + str(series_page) + "&page_size=1"
+      series_data = metron_get_json(series_url, username, password)
+    end
+  else
+    print("Searching Metron series: " + series_name)
+    var encoded_series = webclient.url_encode(series_name)
+    series_url = metron_series_api + "?name=" + encoded_series + "&page_size=1"
+    series_data = metron_get_json(series_url, username, password)
   end
-
-  print("Searching Metron series: " + series_name)
-  var encoded_series = webclient.url_encode(series_name)
-  var series_url = metron_series_api + "?name=" + encoded_series + "&page_size=1"
-  var series_data = metron_get_json(series_url, username, password)
   var series_results = series_data.find("results")
   if series_results == nil || size(series_results) == 0
+    if series_name == nil || size(series_name) == 0
+      raise "value_error", "No Metron series found"
+    end
     raise "value_error", "No Metron series found for: " + series_name
   end
 
   # Metron series endpoint returns the title under 'series' (or fallback 'name')
-  var seed = int(tasmota.millis())
   var series = series_results[seed % size(series_results)]
   var series_id = series.find("id")
   if series_id == nil

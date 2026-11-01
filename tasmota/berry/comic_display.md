@@ -19,7 +19,7 @@ load("comic_display.be")
 start("METRON_USERNAME", "METRON_PASSWORD", "Batman")
 ```
 
-Pass `nil` or an empty string to use the default series, `Batman`:
+Pass `nil` or an empty string to use a random comic series:
 
 ```berry
 start("METRON_USERNAME", "METRON_PASSWORD", nil)
