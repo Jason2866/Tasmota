@@ -76,7 +76,7 @@ String wc_UrlEncode(const String& text) {
         ('A' <= decodedChar && decodedChar <= 'Z') ||
         ('0' <= decodedChar && decodedChar <= '9') ||
         ('=' == decodedChar)) {
-      encoded += decodedChar;
+      encoded += (char)decodedChar;
 		} else {
       encoded += '%';
 			encoded += hex[decodedChar >> 4];

@@ -170,7 +170,9 @@ def metron_download_cover(username, password, series_name, output_path)
   else
     print("Searching Metron series: " + series_name)
     var encoded_series = webclient.url_encode(series_name)
-    series_url = metron_series_api + "?name=" + encoded_series + "&page_size=1"
+    # Quick search also matches a series' alternative names.
+    series_url = metron_series_api + "?q=" + encoded_series + "&page_size=1"
+    print("Metron series query: " + series_url)
     series_data = metron_get_json(series_url, username, password)
   end
   var series_results = series_data.find("results")
