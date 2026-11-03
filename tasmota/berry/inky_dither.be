@@ -120,6 +120,15 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
   InkyDither.dither(pixels, width, height, saturation)
   print("Dithering: " + str(height) + "/" + str(height) + " rows")
 
+  # Draw the quantized RGB buffer directly so JPEG encoding cannot alter the panel image.
+  if use_display
+    if !display.draw_rgb888(pixels, width, height)
+      raise "display_error", "could not draw the dithered RGB image"
+    end
+  end
+  pixels = nil
+  gc.collect()
+
   # JPEG conversion replaces the RGB buffer with the encoded data.
   image.convert_to(jpeg_format, jpeg_quality)
   info = image.info()
@@ -160,17 +169,10 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
     path.remove(backup_path)
   end
 
-  # Release the decoded and encoded image buffers before JPEG rendering.
-  pixels = nil
+  # Release the decoded and encoded image buffers after saving the JPEG.
   encoded = nil
   image = nil
   gc.collect()
-
-  if use_display
-    if !display.draw_jpg(output_path)
-      raise "display_error", "could not display the dithered JPEG"
-    end
-  end
 
   return {"width": info["width"], "height": info["height"],
           "bytes": info["size"], "path": output_path,

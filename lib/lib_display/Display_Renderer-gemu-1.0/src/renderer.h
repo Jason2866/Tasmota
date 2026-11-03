@@ -71,6 +71,7 @@ public:
   virtual void DisplayInit(int8_t p,int8_t size,int8_t rot,int8_t font);
   virtual void Begin(int16_t p1,int16_t p2,int16_t p3);
   virtual void Updateframe();
+  virtual bool UpdateframeChecked();
   virtual void dim(uint8_t contrast);   // input has range 0..15
   virtual void dim10(uint8_t contrast, uint16_t contrast_gamma);  // input has range 0..255, second arg has gamma correction for PWM with 10 bits resolution
   virtual void pushColors(uint16_t *data, uint32_t len, boolean first);
