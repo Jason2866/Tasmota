@@ -294,7 +294,9 @@ end
 def install_downloaded_cover()
   # Keep the last successfully displayed source if the download or rename fails.
   if path.exists(comic_backup_path) && !path.exists(comic_source_path)
-    path.rename(comic_backup_path, comic_source_path)
+    if !path.rename(comic_backup_path, comic_source_path)
+      raise "io_error", "Could not restore the previous comic image"
+    end
   end
   if path.exists(comic_backup_path)
     path.remove(comic_backup_path)
@@ -305,7 +307,9 @@ def install_downloaded_cover()
   end
   if !path.rename(comic_download_path, comic_source_path)
     if has_previous
-      path.rename(comic_backup_path, comic_source_path)
+      if !path.rename(comic_backup_path, comic_source_path)
+        raise "io_error", "Could not restore the previous comic image"
+      end
     end
     raise "io_error", "Could not install the downloaded comic image"
   end
@@ -377,7 +381,9 @@ def display_comic(username, password, series_name)
         path.remove(comic_source_path)
       end
       if path.exists(comic_backup_path)
-        path.rename(comic_backup_path, comic_source_path)
+        if !path.rename(comic_backup_path, comic_source_path)
+          raise "io_error", "Could not restore the previous comic image"
+        end
       end
       if err == "img_error" && msg == "not enough memory to resize image"
         gc.collect()

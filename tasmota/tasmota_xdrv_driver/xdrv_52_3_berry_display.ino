@@ -199,14 +199,18 @@ extern "C" {
     int32_t width, height;
     be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height);
     if (!renderer->CanStartUpdateFrameAsync()) {
-      be_raise(vm, "display_error", "asynchronous display refresh is unavailable or already active");
+      be_pop(vm, argc);
+      be_pushbool(vm, false);
+      be_return(vm);
     }
 
     be_ntv_display_push_rgb888(vm, pixels, width, height);
     BrTimeoutStart();
     const bool started = renderer->StartUpdateFrameAsync();
     if (!started) {
-      be_raise(vm, "display_error", "could not start asynchronous display refresh");
+      be_pop(vm, argc);
+      be_pushbool(vm, false);
+      be_return(vm);
     }
 
     be_pop(vm, argc);
