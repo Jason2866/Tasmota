@@ -179,5 +179,9 @@ void uDisplay::setRotation(uint8_t rotation) {
 }
 
 void uDisplay::Updateframe(void) {
-    universal_panel->updateFrame();
+    UpdateframeChecked();
+}
+
+bool uDisplay::UpdateframeChecked(void) {
+    return universal_panel && universal_panel->updateFrame();
 }

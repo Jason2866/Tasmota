@@ -94,6 +94,11 @@ void Renderer::Updateframe() {
 
 }
 
+bool Renderer::UpdateframeChecked() {
+  Updateframe();
+  return true;
+}
+
 void Renderer::TS_RotConvert(int16_t *x, int16_t *y) {
 
 }

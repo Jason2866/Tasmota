@@ -101,7 +101,10 @@ extern "C" {
       BrTimeoutStart();
       be_raise(vm, "display_error", "could not decode the dithered JPEG");
     }
-    renderer->Updateframe();
+    if (!renderer->UpdateframeChecked()) {
+      BrTimeoutStart();
+      be_raise(vm, "display_error", "display refresh failed");
+    }
     be_pop(vm, argc);
     BrTimeoutStart();
     be_pushbool(vm, true);
