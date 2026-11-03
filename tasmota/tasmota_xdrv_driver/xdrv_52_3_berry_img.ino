@@ -137,7 +137,7 @@ struct be_img_util {
    */
   static bool from_jpg(image_t *img, uint8_t* buffer, size_t len) {
     uint16_t width, height;
-    if(jpeg_size(buffer, len, &width, &height) != true){
+    if(jpeg_size(buffer, len, &width, &height, nullptr) != true){
       return false;
     }
     pixformat_t format = PIXFORMAT_JPEG;
@@ -160,7 +160,7 @@ struct be_img_util {
     }
     if (f == PIXFORMAT_JPEG) {
       uint16_t jpeg_width, jpeg_height;
-      if (!jpeg_size(buffer, len, &jpeg_width, &jpeg_height) || jpeg_width != w || jpeg_height != h) {
+      if (!jpeg_size(buffer, len, &jpeg_width, &jpeg_height, nullptr) || jpeg_width != w || jpeg_height != h) {
         return false;
       }
     } else {
@@ -391,7 +391,7 @@ struct be_img_util {
       // Parse JPEG dimensions to check for mismatch
       uint16_t jpeg_width, jpeg_height;
       bool crop_enabled = false;
-      if (jpeg_size(input_buf, len, &jpeg_width, &jpeg_height)) {
+      if (jpeg_size(input_buf, len, &jpeg_width, &jpeg_height, nullptr)) {
           if (scale_opt & JPEG_SCALE_HALF) { jpeg_width = (jpeg_width + 1) / 2; jpeg_height = (jpeg_height + 1) / 2; }
           else if (scale_opt & JPEG_SCALE_QUARTER) { jpeg_width = (jpeg_width + 3) / 4; jpeg_height = (jpeg_height + 3) / 4; }
           else if (scale_opt & JPEG_SCALE_EIGHTH) { jpeg_width = (jpeg_width + 7) / 8; jpeg_height = (jpeg_height + 7) / 8; }
@@ -433,7 +433,11 @@ struct be_img_util {
    * @param height Output: image height
    * @return true if valid JPEG and dimensions extracted, false otherwise
    */
-  static bool jpeg_size(uint8_t* buffer, size_t data_size, uint16_t *width, uint16_t *height) {
+  static bool jpeg_size(uint8_t* buffer, size_t data_size, uint16_t *width, uint16_t *height,
+                        bool *is_progressive) {
+    if (is_progressive) {
+      *is_progressive = false;
+    }
     if (!buffer || !width || !height || data_size < 4 ||
         buffer[0] != 0xFF || buffer[1] != 0xD8) {
       return false;
@@ -512,6 +516,9 @@ struct be_img_util {
         return false;
       }
       if (marker == 0xC0 || marker == 0xC2) {
+        if (marker == 0xC2 && is_progressive) {
+          *is_progressive = true;
+        }
         if (segment_length < 8) {
           return false;
         }
@@ -718,9 +725,14 @@ extern "C" {
 
       bool success = false;
       uint16_t w,h;
-      if (be_img_util::jpeg_size(src_buf, src_buf_len, &w, &h) == false){
+      bool is_progressive = false;
+      if (be_img_util::jpeg_size(src_buf, src_buf_len, &w, &h, &is_progressive) == false){
         be_raise(vm, "img_error", "no compatible jpg buffer");
         be_return_nil(vm); //do not destroy the old image
+      }
+      if (is_progressive) {
+        be_raise(vm, "img_error", "unsupported progressive JPEG");
+        be_return_nil(vm);
       }
 
       be_img_util::setFormat(img, pixformat_t(format));

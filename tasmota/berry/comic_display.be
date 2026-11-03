@@ -385,6 +385,14 @@ def display_comic(username, password, series_name)
           raise "io_error", "Could not restore the previous comic image"
         end
       end
+      if err == "img_error" && msg == "unsupported progressive JPEG"
+        gc.collect()
+        print("Metron cover is a progressive JPEG unsupported by the decoder; searching for another cover")
+        if cover_attempt < comic_cover_attempts
+          continue
+        end
+        break
+      end
       if err == "img_error" && msg == "not enough memory to resize image"
         gc.collect()
         print("Not enough memory to resize this Metron cover; searching for another cover")
