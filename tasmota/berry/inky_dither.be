@@ -1,17 +1,22 @@
 # Floyd-Steinberg quantization for Inky Impression 7.3 (E673 / Spectra 6).
 # Load this file in the Berry console, then call:
 #   inky_dither("/image.jpg", "/image-dithered.jpg")
+# Explicit offline processing for Inky 7.3:
+#   inky_dither("/image.jpg", "/image-dithered.jpg", 0.5, 85, 480, 800, false)
 # Images are resized to the logical display dimensions from display.ini;
 # uDisplay applies the configured panel rotation when drawing.
 # Optional arguments are saturation (0.0..1.0, default 0.5) and JPEG quality
-# (default 85, range 1..100; higher values preserve more detail).
+# (default 85, range 1..100; higher values preserve more detail). With no
+# initialized display, Inky 7.3 with DisplayRotate 1 defaults to 480x800 and
+# only saves the result (the physical panel resolution is 800x480).
+# Optional width, height, and draw_to_display arguments override that behavior.
 
 import path
 import introspect
 import gc
 import display
 
-def inky_dither(input_path, output_path, saturation, jpeg_quality)
+def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height, draw_to_display)
   if saturation == nil
     saturation = 0.5
   end
@@ -65,21 +70,40 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
     raise "value_error", "input JPEG must decode to RGB888"
   end
 
-  # Use dimensions after the display.ini rotation. The native method keeps
-  # the large resize buffer in PSRAM; uDisplay applies panel rotation on draw.
-  var width = 0
-  var height = 0
-  try
-    width = display.width()
-    height = display.height()
-  except .. as err, msg
-    if err == "attribute_error"
-      raise "feature_error", "Firmware is outdated: rebuild and flash Tasmota with display.width()/height() and the current InkyDither library for rotated display dimensions"
+  # Use dimensions after display.ini rotation when a display is initialized.
+  # Without one, process the rotated Inky 7.3 image at 480x800 and save it.
+  var use_display = draw_to_display
+  if width == nil && height == nil
+    width = 0
+    height = 0
+    try
+      width = display.width()
+      height = display.height()
+    except .. as err, msg
+      if err == "attribute_error"
+        raise "feature_error", "Firmware is outdated: rebuild and flash Tasmota with display.width()/height() and the current InkyDither library for rotated display dimensions"
+      end
+      raise err, msg
     end
-    raise err, msg
+    if width <= 0 || height <= 0
+      width = 480
+      height = 800
+      if use_display == nil
+        use_display = false
+      end
+    elif use_display == nil
+      use_display = true
+    end
+  else
+    if width == nil || height == nil
+      raise "value_error", "width and height must be provided together"
+    end
+    if use_display == nil
+      use_display = false
+    end
   end
   if width <= 0 || height <= 0
-    raise "display_error", "display is not initialized"
+    raise "value_error", "image dimensions must be positive"
   end
   image.resize(width, height)
   info = image.info()
@@ -142,12 +166,15 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
   image = nil
   gc.collect()
 
-  if !display.draw_jpg(output_path)
-    raise "display_error", "could not display the dithered JPEG"
+  if use_display
+    if !display.draw_jpg(output_path)
+      raise "display_error", "could not display the dithered JPEG"
+    end
   end
 
   return {"width": info["width"], "height": info["height"],
-          "bytes": info["size"], "path": output_path}
+          "bytes": info["size"], "path": output_path,
+          "displayed": use_display}
 end
 
 return inky_dither

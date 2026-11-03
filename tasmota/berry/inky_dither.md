@@ -8,6 +8,7 @@
 - PSRAM is required for the decoded RGB image buffer. An 800 × 480 buffer uses about 1.15 MiB, in addition to memory needed by JPEG decoding and encoding.
 - The source must be a JPEG that decodes to RGB888. Images are resized to the logical dimensions selected by `display.ini` and dithered. uDisplay applies the configured panel rotation when drawing; source-image orientation is not inferred automatically.
 - Firmware must export `display.width()` and `display.height()` and include the current `InkyDither.dither` implementation, which accepts the logical dimensions after rotation (480 × 800 for Inky 7.3 with `DisplayRotate 1`).
+- Without an initialized display, the script saves a dithered 480 × 800 image for Inky 7.3 with `DisplayRotate 1` and skips panel drawing. The physical panel resolution is 800 × 480.
 - Berry's `bytes()` limit restricts the compressed source JPEG to 512 KiB. PSRAM is required for this workflow.
 
 ## Inky Impression 7.3-inch display
@@ -55,13 +56,15 @@ If `load("inky_dither.be")` fails with `img undeclared`, the running firmware do
 ## Parameters
 
 ```berry
-inky_dither(input_path, output_path, saturation, jpeg_quality)
+inky_dither(input_path, output_path, saturation, jpeg_quality, width, height, draw_to_display)
 ```
 
 - `input_path`: path to the source JPEG on the Tasmota filesystem. The compressed source must not exceed Berry's 512 KiB `bytes()` limit.
 - `output_path`: destination path for the dithered JPEG. It may be the same as the input path.
 - `saturation`: palette blend from `0.0` to `1.0`. `0.5` matches the Python driver's default. Lower values use the desaturated palette; higher values increase saturation.
 - `jpeg_quality`: software JPEG encoder quality from `1` to `100`. Higher values preserve more image detail and generally produce larger files. The default is `85`.
+- `width` and `height`: optional logical output dimensions, which must be supplied together. If omitted, the function uses the initialized display dimensions or falls back to 480 × 800 when no display is initialized.
+- `draw_to_display`: optional boolean. Defaults to drawing when display dimensions are detected; with explicit dimensions or the no-display fallback, it defaults to `false` and only saves the JPEG.
 
 Berry does not support default values in function declarations. Omit the optional arguments or pass `nil` to use the defaults. For example, `inky_dither("/image.jpg", "/image-dithered.jpg", nil, 90)` uses the default saturation and JPEG quality `90`.
 
@@ -72,4 +75,4 @@ var result = inky_dither("/image.jpg", "/image-dithered.jpg", 0.75, 70)
 print(result)
 ```
 
-The function returns the output `path`, `width`, `height`, and encoded file size in `bytes`. JPEG is lossy, so the saved file can contain slight color changes from the six dither palette colors. Higher `jpeg_quality` values reduce these changes at the cost of a larger file.
+The function returns the output `path`, `width`, `height`, encoded file size in `bytes`, and whether it was `displayed`. JPEG is lossy, so the saved file can contain slight color changes from the six dither palette colors. Higher `jpeg_quality` values reduce these changes at the cost of a larger file.
