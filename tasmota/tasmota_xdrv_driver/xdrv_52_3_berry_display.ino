@@ -116,11 +116,9 @@ extern "C" {
 #endif
   }
 
-  // `display.draw_rgb888(pixels:bytes, width:int, height:int) -> bool`
-  // draws a full logical RGB888 frame and refreshes the active display.
-  int be_ntv_display_draw_rgb888(struct bvm *vm) {
 #if defined(USE_UNIVERSAL_DISPLAY) && defined(ESP32)
-    int32_t argc = be_top(vm);
+  static void be_ntv_display_validate_rgb888(struct bvm *vm, int32_t argc,
+                                              const uint8_t **pixels, int32_t *width, int32_t *height) {
     if (argc != 3 || !be_isbytes(vm, 1) || !be_isint(vm, 2) || !be_isint(vm, 3)) {
       be_raise(vm, kTypeError, nullptr);
     }
@@ -128,26 +126,27 @@ extern "C" {
       be_raise(vm, "display_error", "universal display is not initialized");
     }
 
-    int32_t width = be_toint(vm, 2);
-    int32_t height = be_toint(vm, 3);
-    if (width <= 0 || height <= 0 || width > UINT16_MAX || height > UINT16_MAX ||
-        width != renderer->width() || height != renderer->height() ||
-        (size_t)width > SIZE_MAX / 3 / (size_t)height) {
+    *width = be_toint(vm, 2);
+    *height = be_toint(vm, 3);
+    if (*width <= 0 || *height <= 0 || *width > UINT16_MAX || *height > UINT16_MAX ||
+        *width != renderer->width() || *height != renderer->height() ||
+        (size_t)*width > SIZE_MAX / 3 / (size_t)*height) {
       be_raise(vm, "value_error", "RGB888 dimensions must match the display");
     }
     size_t pixel_size = 0;
-    const uint8_t *pixels = (const uint8_t *)be_tobytes(vm, 1, &pixel_size);
-    const size_t expected_size = (size_t)width * (size_t)height * 3;
-    if (!pixels || pixel_size != expected_size) {
+    *pixels = (const uint8_t *)be_tobytes(vm, 1, &pixel_size);
+    const size_t expected_size = (size_t)*width * (size_t)*height * 3;
+    if (!*pixels || pixel_size != expected_size) {
       be_raise(vm, "value_error", "RGB888 buffer size does not match its dimensions");
     }
+  }
 
+  static void be_ntv_display_push_rgb888(struct bvm *vm, const uint8_t *pixels, int32_t width, int32_t height) {
     uint16_t *row = (uint16_t *)special_malloc((uint32_t)width * sizeof(uint16_t));
     if (!row) {
       be_raise(vm, "memory_error", "could not allocate RGB565 display row");
     }
 
-    BrTimeoutReset();
     for (int32_t y = 0; y < height; y++) {
       const uint8_t *source = pixels + (size_t)y * width * 3;
       for (int32_t x = 0; x < width; x++) {
@@ -162,8 +161,22 @@ extern "C" {
       OsWatchLoop();
     }
     renderer->setAddrWindow(0, 0, 0, 0);
-    const bool refreshed = renderer->UpdateframeChecked();
     free(row);
+  }
+#endif
+
+  // `display.draw_rgb888(pixels:bytes, width:int, height:int) -> bool`
+  // draws a full logical RGB888 frame and refreshes the active display.
+  int be_ntv_display_draw_rgb888(struct bvm *vm) {
+#if defined(USE_UNIVERSAL_DISPLAY) && defined(ESP32)
+    int32_t argc = be_top(vm);
+    const uint8_t *pixels;
+    int32_t width, height;
+    be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height);
+
+    BrTimeoutReset();
+    be_ntv_display_push_rgb888(vm, pixels, width, height);
+    const bool refreshed = renderer->UpdateframeChecked();
     BrTimeoutStart();
     if (!refreshed) {
       be_raise(vm, "display_error", "display refresh failed");
@@ -182,53 +195,17 @@ extern "C" {
   int be_ntv_display_draw_rgb888_async(struct bvm *vm) {
 #if defined(USE_UNIVERSAL_DISPLAY) && defined(ESP32)
     int32_t argc = be_top(vm);
-    if (argc != 3 || !be_isbytes(vm, 1) || !be_isint(vm, 2) || !be_isint(vm, 3)) {
-      be_raise(vm, kTypeError, nullptr);
-    }
-    if (!renderer) {
-      be_raise(vm, "display_error", "universal display is not initialized");
-    }
-
-    int32_t width = be_toint(vm, 2);
-    int32_t height = be_toint(vm, 3);
-    if (width <= 0 || height <= 0 || width > UINT16_MAX || height > UINT16_MAX ||
-        width != renderer->width() || height != renderer->height() ||
-        (size_t)width > SIZE_MAX / 3 / (size_t)height) {
-      be_raise(vm, "value_error", "RGB888 dimensions must match the display");
-    }
-    size_t pixel_size = 0;
-    const uint8_t *pixels = (const uint8_t *)be_tobytes(vm, 1, &pixel_size);
-    const size_t expected_size = (size_t)width * (size_t)height * 3;
-    if (!pixels || pixel_size != expected_size) {
-      be_raise(vm, "value_error", "RGB888 buffer size does not match its dimensions");
-    }
+    const uint8_t *pixels;
+    int32_t width, height;
+    be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height);
     if (!renderer->CanStartUpdateFrameAsync()) {
       be_raise(vm, "display_error", "asynchronous display refresh is unavailable or already active");
     }
 
-    uint16_t *row = (uint16_t *)special_malloc((uint32_t)width * sizeof(uint16_t));
-    if (!row) {
-      be_raise(vm, "memory_error", "could not allocate RGB565 display row");
-    }
-
     BrTimeoutReset();
-    for (int32_t y = 0; y < height; y++) {
-      const uint8_t *source = pixels + (size_t)y * width * 3;
-      for (int32_t x = 0; x < width; x++) {
-        const uint8_t red = source[x * 3];
-        const uint8_t green = source[x * 3 + 1];
-        const uint8_t blue = source[x * 3 + 2];
-        row[x] = ((uint16_t)(red & 0xF8) << 8) |
-                 ((uint16_t)(green & 0xFC) << 3) | (blue >> 3);
-      }
-      renderer->setAddrWindow(0, y, width, y + 1);
-      renderer->pushColors(row, width, true);
-      OsWatchLoop();
-    }
-    renderer->setAddrWindow(0, 0, 0, 0);
+    be_ntv_display_push_rgb888(vm, pixels, width, height);
     BrTimeoutStart();
     const bool started = renderer->StartUpdateFrameAsync();
-    free(row);
     if (!started) {
       be_raise(vm, "display_error", "could not start asynchronous display refresh");
     }
