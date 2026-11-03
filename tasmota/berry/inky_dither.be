@@ -67,8 +67,17 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
 
   # Use dimensions after the display.ini rotation. The native method keeps
   # the large resize buffer in PSRAM; uDisplay applies panel rotation on draw.
-  var width = display.width()
-  var height = display.height()
+  var width = 0
+  var height = 0
+  try
+    width = display.width()
+    height = display.height()
+  except .. as err, msg
+    if err == "attribute_error"
+      raise "feature_error", "Firmware is outdated: rebuild and flash Tasmota with display.width()/height() and the current InkyDither library for rotated display dimensions"
+    end
+    raise err, msg
+  end
   if width <= 0 || height <= 0
     raise "display_error", "display is not initialized"
   end
