@@ -124,6 +124,8 @@ class uDisplay : public Renderer {
   virtual void dim10(uint8_t dim, uint16_t dim_gamma);           // dimmer with 8 bits resolution, 0..255. Gamma correction must be done by caller with 10 bits resolution
   uint16_t GetColorFromIndex(uint8_t index);
   void setRotation(uint8_t m);
+  static bool resizeRGB888(const uint8_t *source, uint16_t source_width, uint16_t source_height,
+                           uint8_t *output, uint16_t target_width, uint16_t target_height, bool rotate90);
   void fillScreen(uint16_t color);
   void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
   void pushColors(uint16_t *data, uint32_t len, boolean first);

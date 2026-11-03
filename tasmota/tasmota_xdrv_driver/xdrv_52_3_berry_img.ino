@@ -26,6 +26,9 @@
 
 #include "esp_camera.h"
 #include "JPEGDEC.h"
+#ifdef USE_UNIVERSAL_DISPLAY
+#include <uDisplay.h>
+#endif
 
 /*********************************************************************************************\
  * typedefs
@@ -578,8 +581,6 @@ extern "C" {
 
     const uint16_t source_width = img->width;
     const uint16_t source_height = img->height;
-    const uint32_t rotated_width = rotate90 ? source_height : source_width;
-    const uint32_t rotated_height = rotate90 ? source_width : source_height;
     if ((size_t)target_width > SIZE_MAX / 3 / (size_t)target_height) {
       be_raise(vm, "img_error", "resize dimensions too large");
       be_return_nil(vm);
@@ -591,34 +592,34 @@ extern "C" {
       be_return_nil(vm);
     }
 
+#ifdef USE_UNIVERSAL_DISPLAY
+    bool resized = uDisplay::resizeRGB888(img->buf, source_width, source_height, output,
+                                           (uint16_t)target_width, (uint16_t)target_height, rotate90);
+#else
+    if (rotate90) {
+      free(output);
+      be_raise(vm, "img_error", "image rotation requires universal display support");
+      be_return_nil(vm);
+    }
     // Bilinear scaling while keeping the large working buffer in native PSRAM instead of Berry bytes.
     for (int32_t y = 0; y < target_height; ++y) {
-      float sample_y = (((float)y + 0.5f) * rotated_height / target_height) - 0.5f;
+      float sample_y = (((float)y + 0.5f) * source_height / target_height) - 0.5f;
       if (sample_y < 0.0f) sample_y = 0.0f;
-      if (sample_y > rotated_height - 1) sample_y = rotated_height - 1;
+      if (sample_y > source_height - 1) sample_y = source_height - 1;
       uint32_t y0 = (uint32_t)sample_y;
-      uint32_t y1 = y0 + 1 < rotated_height ? y0 + 1 : y0;
+      uint32_t y1 = y0 + 1 < source_height ? y0 + 1 : y0;
       float fy = sample_y - y0;
       for (int32_t x = 0; x < target_width; ++x) {
-        float sample_x = (((float)x + 0.5f) * rotated_width / target_width) - 0.5f;
+        float sample_x = (((float)x + 0.5f) * source_width / target_width) - 0.5f;
         if (sample_x < 0.0f) sample_x = 0.0f;
-        if (sample_x > rotated_width - 1) sample_x = rotated_width - 1;
+        if (sample_x > source_width - 1) sample_x = source_width - 1;
         uint32_t x0 = (uint32_t)sample_x;
-        uint32_t x1 = x0 + 1 < rotated_width ? x0 + 1 : x0;
+        uint32_t x1 = x0 + 1 < source_width ? x0 + 1 : x0;
         float fx = sample_x - x0;
-
-        uint32_t source_x00 = rotate90 ? source_width - 1 - y0 : x0;
-        uint32_t source_y00 = rotate90 ? x0 : y0;
-        uint32_t source_x10 = rotate90 ? source_width - 1 - y0 : x1;
-        uint32_t source_y10 = rotate90 ? x1 : y0;
-        uint32_t source_x01 = rotate90 ? source_width - 1 - y1 : x0;
-        uint32_t source_y01 = rotate90 ? x0 : y1;
-        uint32_t source_x11 = rotate90 ? source_width - 1 - y1 : x1;
-        uint32_t source_y11 = rotate90 ? x1 : y1;
-        size_t source_offset00 = ((size_t)source_y00 * source_width + source_x00) * 3;
-        size_t source_offset10 = ((size_t)source_y10 * source_width + source_x10) * 3;
-        size_t source_offset01 = ((size_t)source_y01 * source_width + source_x01) * 3;
-        size_t source_offset11 = ((size_t)source_y11 * source_width + source_x11) * 3;
+        size_t source_offset00 = ((size_t)y0 * source_width + x0) * 3;
+        size_t source_offset10 = ((size_t)y0 * source_width + x1) * 3;
+        size_t source_offset01 = ((size_t)y1 * source_width + x0) * 3;
+        size_t source_offset11 = ((size_t)y1 * source_width + x1) * 3;
         size_t target_offset = ((size_t)y * target_width + x) * 3;
         for (uint8_t channel = 0; channel < 3; ++channel) {
           float top = img->buf[source_offset00 + channel] * (1.0f - fx) +
@@ -628,6 +629,13 @@ extern "C" {
           output[target_offset + channel] = (uint8_t)(top * (1.0f - fy) + bottom * fy + 0.5f);
         }
       }
+    }
+    bool resized = true;
+#endif
+    if (!resized) {
+      free(output);
+      be_raise(vm, "img_error", "could not resize image");
+      be_return_nil(vm);
     }
 
     free(img->buf);
