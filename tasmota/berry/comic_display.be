@@ -13,6 +13,7 @@
 
 import path
 import json
+import gc
 
 var metron_api = "https://metron.cloud/api/issue/"
 var metron_series_api = "https://metron.cloud/api/series/"
@@ -315,31 +316,6 @@ def display_comic(username, password, series_name)
     raise "value_error", "Pass your Metron username and password"
   end
 
-  var downloaded_bytes = 0
-  var cover_attempt = 0
-  while cover_attempt < comic_cover_attempts
-    cover_attempt += 1
-    print("Fetching a random Metron comic cover (attempt " + str(cover_attempt) + "/" + str(comic_cover_attempts) + ")...")
-    downloaded_bytes = metron_download_cover(username, password,
-                                              series_name, comic_download_path)
-    tasmota.yield()
-    if downloaded_bytes <= comic_max_source_bytes
-      break
-    end
-    print("Metron cover is " + str(downloaded_bytes) + " bytes; exceeds the 512 KiB limit, searching for another cover")
-    if path.exists(comic_download_path)
-      path.remove(comic_download_path)
-    end
-  end
-  if downloaded_bytes > comic_max_source_bytes
-    print("No Metron cover within 512 KiB found after " + str(comic_cover_attempts) + " attempts; keeping the current image")
-    return nil
-  end
-
-  install_downloaded_cover()
-  tasmota.yield()
-  print("Downloaded " + str(downloaded_bytes) + " bytes")
-
   # inky_dither normalizes the source to the logical display dimensions, dithers it, then refreshes Inky.
   var dither_fn = nil
   import global
@@ -370,18 +346,57 @@ def display_comic(username, password, series_name)
     raise "value_error", "inky_dither function is not loaded. Upload or run load('inky_dither.be') first."
   end
 
+  var downloaded_bytes = 0
   var result = nil
-  try
-    result = dither_fn(comic_source_path, comic_dithered_path, 0.5, 85)
+  var cover_was_under_limit = false
+  var cover_attempt = 0
+  while cover_attempt < comic_cover_attempts
+    cover_attempt += 1
+    print("Fetching a random Metron comic cover (attempt " + str(cover_attempt) + "/" + str(comic_cover_attempts) + ")...")
+    downloaded_bytes = metron_download_cover(username, password,
+                                              series_name, comic_download_path)
     tasmota.yield()
-  except .. as err, msg
-    if path.exists(comic_source_path)
-      path.remove(comic_source_path)
+    if downloaded_bytes > comic_max_source_bytes
+      print("Metron cover is " + str(downloaded_bytes) + " bytes; exceeds the 512 KiB limit, searching for another cover")
+      if path.exists(comic_download_path)
+        path.remove(comic_download_path)
+      end
+      continue
     end
-    if path.exists(comic_backup_path)
-      path.rename(comic_backup_path, comic_source_path)
+
+    cover_was_under_limit = true
+    install_downloaded_cover()
+    tasmota.yield()
+    print("Downloaded " + str(downloaded_bytes) + " bytes")
+    try
+      result = dither_fn(comic_source_path, comic_dithered_path, 0.5, 85)
+      tasmota.yield()
+      break
+    except .. as err, msg
+      if path.exists(comic_source_path)
+        path.remove(comic_source_path)
+      end
+      if path.exists(comic_backup_path)
+        path.rename(comic_backup_path, comic_source_path)
+      end
+      if err == "img_error" && msg == "not enough memory to resize image"
+        gc.collect()
+        print("Not enough memory to resize this Metron cover; searching for another cover")
+        if cover_attempt < comic_cover_attempts
+          continue
+        end
+        break
+      end
+      raise err, msg
     end
-    raise err, msg
+  end
+  if result == nil
+    if cover_was_under_limit
+      print("No Metron cover could be processed after " + str(comic_cover_attempts) + " attempts; keeping the current image")
+    else
+      print("No Metron cover within 512 KiB found after " + str(comic_cover_attempts) + " attempts; keeping the current image")
+    end
+    return nil
   end
   if path.exists(comic_backup_path)
     path.remove(comic_backup_path)
