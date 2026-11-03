@@ -147,6 +147,7 @@ extern "C" {
       be_raise(vm, "memory_error", "could not allocate RGB565 display row");
     }
 
+    BrTimeoutReset();
     for (int32_t y = 0; y < height; y++) {
       const uint8_t *source = pixels + (size_t)y * width * 3;
       for (int32_t x = 0; x < width; x++) {
@@ -174,7 +175,6 @@ extern "C" {
     int32_t width, height;
     be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height);
 
-    BrTimeoutReset();
     be_ntv_display_push_rgb888(vm, pixels, width, height);
     const bool refreshed = renderer->UpdateframeChecked();
     BrTimeoutStart();
@@ -202,7 +202,6 @@ extern "C" {
       be_raise(vm, "display_error", "asynchronous display refresh is unavailable or already active");
     }
 
-    BrTimeoutReset();
     be_ntv_display_push_rgb888(vm, pixels, width, height);
     BrTimeoutStart();
     const bool started = renderer->StartUpdateFrameAsync();
