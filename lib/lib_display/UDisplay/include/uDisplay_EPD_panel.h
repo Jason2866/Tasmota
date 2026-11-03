@@ -131,6 +131,7 @@ private:
         WaitReady,
         ResetHigh,
         ResetLow,
+        ResetSettle,
         ResetWait,
         Initialize,
         TransferFrame,

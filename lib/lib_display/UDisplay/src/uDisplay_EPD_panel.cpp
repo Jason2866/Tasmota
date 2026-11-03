@@ -98,6 +98,7 @@ bool EPDPanel::resetDisplay() {
     delay(cfg.ep_mode == 4 ? 30 : 10);
     digitalWrite(cfg.reset_pin, HIGH);
     if (cfg.ep_mode == 4) {
+        delay(30);
         return waitInkyIdle(300);
     } else {
         delay(10);
@@ -548,6 +549,13 @@ void EPDPanel::serviceAsyncUpdate() {
         case InkyRefreshStep::ResetLow:
             if ((int32_t)(millis() - inky_deadline) >= 0) {
                 digitalWrite(cfg.reset_pin, HIGH);
+                inky_refresh_step = InkyRefreshStep::ResetSettle;
+                inky_deadline = millis() + 30;
+            }
+            break;
+
+        case InkyRefreshStep::ResetSettle:
+            if ((int32_t)(millis() - inky_deadline) >= 0) {
                 beginInkyIdleWait(InkyRefreshStep::ResetWait, 300);
             }
             break;
