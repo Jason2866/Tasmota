@@ -63,6 +63,24 @@ extern "C" {
   #endif // USE_UNIVERSAL_DISPLAY
   }
 
+  int32_t be_ntv_display_width(void) {
+  #ifdef USE_UNIVERSAL_DISPLAY
+    if (renderer) {
+      return renderer->width();
+    }
+  #endif
+    return 0;
+  }
+
+  int32_t be_ntv_display_height(void) {
+  #ifdef USE_UNIVERSAL_DISPLAY
+    if (renderer) {
+      return renderer->height();
+    }
+  #endif
+    return 0;
+  }
+
   // `display.draw_jpg(path:string) -> bool` draws a filesystem JPEG at (0, 0)
   // and refreshes the active universal display.
   int be_ntv_display_draw_jpg(struct bvm *vm) {

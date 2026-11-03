@@ -548,10 +548,10 @@ extern "C" {
   }
 
   /**
-   * @brief Resize an RGB888 image, optionally rotating it 90 degrees counter-clockwise first
+   * @brief Resize an RGB888 image to the requested dimensions
    * @param vm Berry VM pointer
    * @return Berry nil
-   * Berry arguments: (width, height, [rotate90])
+   * Berry arguments: (width, height)
    */
   int be_img_resize(struct bvm *vm);
   int be_img_resize(struct bvm *vm) {
@@ -564,7 +564,6 @@ extern "C" {
     image_t *img = be_get_image_instance(vm);
     int32_t target_width = be_toint(vm, 2);
     int32_t target_height = be_toint(vm, 3);
-    bool rotate90 = argc >= 4 && be_isbool(vm, 4) && be_tobool(vm, 4);
     if (target_width <= 0 || target_width > UINT16_MAX ||
         target_height <= 0 || target_height > UINT16_MAX) {
       be_raise(vm, "img_error", "invalid resize dimensions");
@@ -575,7 +574,7 @@ extern "C" {
       be_raise(vm, "img_error", "resize requires a decoded RGB888 image");
       be_return_nil(vm);
     }
-    if (!rotate90 && img->width == target_width && img->height == target_height) {
+    if (img->width == target_width && img->height == target_height) {
       be_return_nil(vm);
     }
 
@@ -594,13 +593,8 @@ extern "C" {
 
 #ifdef USE_UNIVERSAL_DISPLAY
     bool resized = uDisplay::resizeRGB888(img->buf, source_width, source_height, output,
-                                           (uint16_t)target_width, (uint16_t)target_height, rotate90);
+                                           (uint16_t)target_width, (uint16_t)target_height);
 #else
-    if (rotate90) {
-      free(output);
-      be_raise(vm, "img_error", "image rotation requires universal display support");
-      be_return_nil(vm);
-    }
     // Bilinear scaling while keeping the large working buffer in native PSRAM instead of Berry bytes.
     for (int32_t y = 0; y < target_height; ++y) {
       float sample_y = (((float)y + 0.5f) * source_height / target_height) - 0.5f;

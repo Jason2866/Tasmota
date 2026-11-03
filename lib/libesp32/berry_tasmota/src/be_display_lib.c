@@ -11,6 +11,8 @@
 #ifdef USE_DISPLAY
 
 extern int be_ntv_display_start(bvm *vm);
+extern int32_t be_ntv_display_width(void);  BE_FUNC_CTYPE_DECLARE(be_ntv_display_width, "i", "")
+extern int32_t be_ntv_display_height(void); BE_FUNC_CTYPE_DECLARE(be_ntv_display_height, "i", "")
 extern int be_ntv_display_draw_jpg(bvm *vm);
 extern int be_ntv_display_dimmer(bvm *vm);
 extern bbool be_ntv_display_started(void);
@@ -23,6 +25,8 @@ extern const char* be_ntv_display_driver_name(void);
 /* @const_object_info_begin
 module display (scope: global, strings: weak) {
     start, func(be_ntv_display_start)
+    width, ctype_func(be_ntv_display_width)
+    height, ctype_func(be_ntv_display_height)
     draw_jpg, func(be_ntv_display_draw_jpg)
     started, ctype_func(be_ntv_display_started)
     dimmer, func(be_ntv_display_dimmer)

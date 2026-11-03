@@ -1,8 +1,8 @@
 # Floyd-Steinberg quantization for Inky Impression 7.3 (E673 / Spectra 6).
 # Load this file in the Berry console, then call:
 #   inky_dither("/image.jpg", "/image-dithered.jpg")
-# Portrait inputs are rotated 90 degrees counter-clockwise and all inputs are
-# resized to the panel's 800x480 resolution before dithering.
+# Images are resized to the logical display dimensions from display.ini;
+# uDisplay applies the configured panel rotation when drawing.
 # Optional arguments are saturation (0.0..1.0, default 0.5) and JPEG quality
 # (default 85, range 1..100; higher values preserve more detail).
 
@@ -65,19 +65,23 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality)
     raise "value_error", "input JPEG must decode to RGB888"
   end
 
-  # Rotate portrait covers, then resize to the display resolution.
-  # The native method keeps the large buffer in PSRAM.
-  var rotate90 = info["height"] > info["width"]
-  image.resize(800, 480, rotate90)
+  # Use dimensions after the display.ini rotation. The native method keeps
+  # the large resize buffer in PSRAM; uDisplay applies panel rotation on draw.
+  var width = display.width()
+  var height = display.height()
+  if width <= 0 || height <= 0
+    raise "display_error", "display is not initialized"
+  end
+  image.resize(width, height)
   info = image.info()
-  if info["width"] != 800 || info["height"] != 480 || info["bpp"] != 3
-    raise "value_error", "could not prepare image for the 800x480 display"
+  if info["width"] != width || info["height"] != height || info["bpp"] != 3
+    raise "value_error", "could not prepare image for the configured display dimensions"
   end
 
   # Map the native RGB888 image buffer instead of copying its 1.15 MiB payload.
   var pixels = bytes(introspect.toptr(info["buf_addr"]), info["size"])
-  var width = info["width"]
-  var height = info["height"]
+  width = info["width"]
+  height = info["height"]
 
   # Use the C implementation for Floyd-Steinberg dithering
   InkyDither.dither(pixels, width, height, saturation)

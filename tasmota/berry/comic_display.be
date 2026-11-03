@@ -329,7 +329,7 @@ def display_comic(username, password, series_name)
   install_downloaded_cover()
   print("Downloaded " + str(downloaded_bytes) + " bytes")
 
-  # inky_dither normalizes the source to 800x480, dithers it, then refreshes Inky.
+  # inky_dither normalizes the source to the logical display dimensions, dithers it, then refreshes Inky.
   var dither_fn = nil
   import global
   if global.inky_dither != nil
