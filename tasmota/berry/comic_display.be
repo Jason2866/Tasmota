@@ -68,6 +68,7 @@ def diagnose_network()
     var wc = metron_new_client(nil, nil)
     wc.begin(targets[i])
     var status = wc.GET()
+    tasmota.yield()
     wc.close()
     print(names[i] + " -> " + str(status))
     i += 1
@@ -84,6 +85,7 @@ def metron_get_json(url, username, password)
     wc.collect_headers("Server", "Content-Type", "Location", "Transfer-Encoding", "Connection")
     wc.begin(url)
     status = wc.GET()
+    tasmota.yield()
     if status == 200
       break
     end
@@ -106,6 +108,7 @@ def metron_get_json(url, username, password)
     raise "value_error", "Metron API response exceeds Berry's 32 KB limit; check the API filters"
   end
   var response = wc.get_string()
+  tasmota.yield()
   var transfer_encoding = wc.get_header("Transfer-Encoding")
   var connection_header = wc.get_header("Connection")
   var server_header = wc.get_header("Server")
@@ -122,6 +125,7 @@ def metron_get_json(url, username, password)
   if data == nil
     raise "value_error", "Could not parse Metron API response"
   end
+  tasmota.yield()
   return data
 end
 
@@ -257,6 +261,7 @@ def metron_download_cover(username, password, series_name, output_path)
     image_client = metron_new_client(nil, nil)
     image_client.begin(cover_url)
     status = image_client.GET()
+    tasmota.yield()
     if status == 200
       break
     end
@@ -274,6 +279,7 @@ def metron_download_cover(username, password, series_name, output_path)
     return response_size
   end
   var written = image_client.write_file(output_path)
+  tasmota.yield()
   image_client.close()
   if written <= 0
     if path.exists(output_path)
@@ -316,6 +322,7 @@ def display_comic(username, password, series_name)
     print("Fetching a random Metron comic cover (attempt " + str(cover_attempt) + "/" + str(comic_cover_attempts) + ")...")
     downloaded_bytes = metron_download_cover(username, password,
                                               series_name, comic_download_path)
+    tasmota.yield()
     if downloaded_bytes <= comic_max_source_bytes
       break
     end
@@ -330,6 +337,7 @@ def display_comic(username, password, series_name)
   end
 
   install_downloaded_cover()
+  tasmota.yield()
   print("Downloaded " + str(downloaded_bytes) + " bytes")
 
   # inky_dither normalizes the source to the logical display dimensions, dithers it, then refreshes Inky.
@@ -365,6 +373,7 @@ def display_comic(username, password, series_name)
   var result = nil
   try
     result = dither_fn(comic_source_path, comic_dithered_path, 0.5, 85)
+    tasmota.yield()
   except .. as err, msg
     if path.exists(comic_source_path)
       path.remove(comic_source_path)

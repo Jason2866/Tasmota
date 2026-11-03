@@ -435,13 +435,12 @@ struct be_img_util {
    */
   static bool jpeg_size(uint8_t* buffer, size_t data_size, uint16_t *width, uint16_t *height) {
     if (!buffer || !width || !height || data_size < 4 ||
-        buffer[0] != 0xFF || buffer[1] != 0xD8 ||
-        buffer[data_size - 2] != 0xFF || buffer[data_size - 1] != 0xD9) {
++        buffer[0] != 0xFF || buffer[1] != 0xD8) {
       return false;
     }
 
     size_t offset = 2;
-    const size_t data_end = data_size - 2;  // Exclude the required EOI marker.
+    const size_t data_end = data_size;
     while (offset < data_end) {
       if (buffer[offset] != 0xFF) {
         return false;
