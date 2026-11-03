@@ -403,8 +403,12 @@ def display_comic(username, password, series_name)
   end
   var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
   var refresh = result.find("refresh_status", "not_requested")
-  if refresh == "running" || refresh == "complete"
+  if refresh == "complete"
     print("Displayed Metron cover: " + str(image_path))
+  elif refresh == "running"
+    print("Metron cover refresh started: " + str(image_path))
+  elif refresh == "failed"
+    print("Metron cover was saved, but the display refresh failed: " + str(image_path))
   else
     print("Dithered Metron cover saved without a display: " + str(image_path))
   end
@@ -419,12 +423,20 @@ def start(username, password, series_name)
   end
   var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
   var refresh = result.find("refresh_status", "not_requested")
-  var displayed = refresh == "running" || refresh == "complete"
-  if displayed
-    print("Comic display started. Schedule display_comic(username, password, series) with a Tasmota rule for updates.")
+  var displayed = refresh == "complete"
+  var status = "saved"
+  if refresh == "complete"
+    status = "displayed"
+    print("Comic displayed. Schedule display_comic(username, password, series) with a Tasmota rule for updates.")
+  elif refresh == "running"
+    status = "started"
+    print("Comic display refresh started. Schedule display_comic(username, password, series) with a Tasmota rule for updates.")
+  elif refresh == "failed"
+    status = "refresh_failed"
+    print("Comic cover was saved, but the display refresh failed.")
   else
     print("Comic cover dithered and saved; no display is initialized.")
   end
-  return {"status": displayed ? "started" : "saved", "image": image_path,
+  return {"status": status, "image": image_path,
           "displayed": displayed}
 end
