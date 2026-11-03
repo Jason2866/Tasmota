@@ -1,12 +1,13 @@
 /********************************************************************
  * Berry class `inky_dither`
  *
- * Floyd-Steinberg dithering for 800x480 Inky 7.3" Pimoroni display
+ * Floyd-Steinberg dithering for the Inky 7.3" Pimoroni display palette
  *******************************************************************/
 #include "be_constobj.h"
 #include "be_mem.h"
 #include "be_exec.h"
 #include "be_byteslib.h"
+#include <stdint.h>
 
 #ifdef USE_BERRY_IMAGE
 
@@ -67,8 +68,8 @@ static void find_closest_color(int32_t red, int32_t green, int32_t blue,
 //
 // Perform Floyd-Steinberg dithering on the RGB888 pixel buffer in-place.
 // pixels: bytes object containing RGB888 data (3 bytes per pixel)
-// width: image width in pixels (must be 800)
-// height: image height in pixels (must be 480)
+// width: image width in pixels
+// height: image height in pixels
 // saturation: saturation value between 0.0 and 1.0 (default 0.5)
 int m_inky_dither_dither(bvm *vm);
 int m_inky_dither_dither(bvm *vm) {
@@ -96,8 +97,11 @@ int m_inky_dither_dither(bvm *vm) {
     int32_t width = be_toint(vm, 2);
     int32_t height = be_toint(vm, 3);
 
-    if (width != 800 || height != 480) {
-        be_raise(vm, "value_error", "image must be 800x480");
+    if (width <= 0 || height <= 0) {
+        be_raise(vm, "value_error", "image dimensions must be positive");
+    }
+    if ((size_t)width > SIZE_MAX / 3 / (size_t)height) {
+        be_raise(vm, "value_error", "image dimensions too large");
     }
 
     // Get pixel buffer
@@ -107,7 +111,7 @@ int m_inky_dither_dither(bvm *vm) {
         be_raise(vm, "value_error", "invalid pixel buffer");
     }
     // The passed size may be the JPEG encoded size, so we calculate expected size from dimensions
-    size_t expected_size = width * height * 3;
+    size_t expected_size = (size_t)width * (size_t)height * 3;
     if (pixel_size < expected_size) {
         be_raise(vm, "value_error", "pixel buffer too small");
     }
@@ -128,14 +132,14 @@ int m_inky_dither_dither(bvm *vm) {
         palette[i] = (int32_t)(saturated[i] * saturation + desaturated[i] * inv_sat);
     }
 
-    int32_t stride = width * 3;
+    size_t stride = (size_t)width * 3;
     int32_t last_x = width - 1;
     int32_t last_y = height - 1;
 
     // Floyd-Steinberg dithering loop
     for (int32_t y = 0; y < height; y++) {
         for (int32_t x = 0; x < width; x++) {
-            int32_t index = y * stride + x * 3;
+            size_t index = (size_t)y * stride + (size_t)x * 3;
 
             // Get current pixel
             int32_t red = pixels[index];
@@ -190,7 +194,7 @@ int m_inky_dither_dither(bvm *vm) {
             }
 
             // Distribute error to neighboring pixels
-            int32_t next, down;
+            size_t next, down;
             int32_t r, g, b;
 
             if (y < last_y && x > 0 && x < last_x) {
