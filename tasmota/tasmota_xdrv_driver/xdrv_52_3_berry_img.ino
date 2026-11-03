@@ -727,10 +727,11 @@ extern "C" {
 
       int scale_opt = 0;
       int scale = 0;
-      if (argc >= 4 && be_isint(vm, 4)) {
+      bool scale_provided = argc >= 4 && be_isint(vm, 4);
+      if (scale_provided) {
         scale = be_toint(vm, 4);
       }
-      if (scale <= 0) {
+      if (scale_provided && scale <= 0) {
         size_t free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
         // On boards with <= 2MB PSRAM, reserve ~1.3MB for display/resize buffers
         if (free_psram < 3000000) {

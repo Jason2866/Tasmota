@@ -917,7 +917,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
     // panels with the E673 controller.
     if (bpp == 4) {
       ep_mode = 4;
-      panel_config->epd.busy_timeout = 32000;
+      // Refresh takes ~32 s; leave margin so a slow refresh is not reported as failed.
+      panel_config->epd.busy_timeout = 45000;
     }
   }
 

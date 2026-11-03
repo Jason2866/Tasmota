@@ -488,11 +488,12 @@ bool start_lvgl(const char * uconfig) {
   }
 
   if (!renderer || uconfig) {
-    renderer  = Init_uDisplay((char*)uconfig);
-    if (!renderer) {
+    Renderer *newrenderer = Init_uDisplay((char*)uconfig);
+    if (!newrenderer) {
       AddLog(LOG_LEVEL_ERROR, "LVG: Could not start Universal Display");
       return false;
     }
+    renderer = newrenderer;
   }
 
   renderer->DisplayOnff(true);

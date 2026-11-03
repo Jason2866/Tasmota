@@ -402,7 +402,8 @@ def display_comic(username, password, series_name)
     path.remove(comic_backup_path)
   end
   var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
-  if result != nil && result.find("displayed", false)
+  var refresh = result.find("refresh_status", "not_requested")
+  if refresh == "running" || refresh == "complete"
     print("Displayed Metron cover: " + str(image_path))
   else
     print("Dithered Metron cover saved without a display: " + str(image_path))
@@ -417,7 +418,8 @@ def start(username, password, series_name)
     return {"status": "no_suitable_cover"}
   end
   var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
-  var displayed = result.find("displayed", false)
+  var refresh = result.find("refresh_status", "not_requested")
+  var displayed = refresh == "running" || refresh == "complete"
   if displayed
     print("Comic display started. Schedule display_comic(username, password, series) with a Tasmota rule for updates.")
   else

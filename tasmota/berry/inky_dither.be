@@ -61,7 +61,7 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
   var rgb_format = img.RGB888
   var jpeg_format = img.JPEG
   var image = img()
-  image.from_jpg(jpeg_data, rgb_format)
+  image.from_jpg(jpeg_data, rgb_format, 0)
   jpeg_data = nil
   gc.collect()
 
