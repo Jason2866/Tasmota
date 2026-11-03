@@ -2472,8 +2472,12 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
     fp = ufsp->open(file, FS_FILE_READ);
     if (!fp) return false;
 
-    fp.read((uint8_t*)&xsize, 2);
-    fp.read((uint8_t*)&ysize, 2);
+    if (fp.read((uint8_t*)&xsize, sizeof(xsize)) != sizeof(xsize) ||
+        fp.read((uint8_t*)&ysize, sizeof(ysize)) != sizeof(ysize) ||
+        !xsize || !ysize) {
+      fp.close();
+      return false;
+    }
     uint16_t xoffs;
     uint16_t yoffs;
     if (xs > 0) {
@@ -2487,10 +2491,14 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
 #ifndef SLOW_RGB16
     //renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
     uint16_t *rgb = (uint16_t *)special_malloc(xsize * 2);
+    bool drawn = rgb != nullptr;
     if (rgb) {
       //uint16_t rgb[xsize];
-      for (int16_t j = 0; j < ysize; j++) {
-        fp.read((uint8_t*)rgb, xsize * 2);
+      for (uint16_t j = 0; j < ysize; j++) {
+        if (fp.read((uint8_t*)rgb, xsize * 2) != xsize * 2) {
+          drawn = false;
+          break;
+        }
         renderer->setAddrWindow(xp, yp + j, xp + xsize, yp + j + 1);
         renderer->pushColors(rgb, xsize, true);
         OsWatchLoop();
@@ -2499,23 +2507,28 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
     }
     renderer->setAddrWindow(0, 0, 0, 0);
 #else
-    for (int16_t j = 0; j < ysize; j++) {
-      for (int16_t i = 0; i < xsize; i++ ) {
+    bool drawn = true;
+    for (uint16_t j = 0; j < ysize; j++) {
+      for (uint16_t i = 0; i < xsize; i++ ) {
         uint16_t rgb;
         uint8_t res = fp.read((uint8_t*)&rgb, 2);
-        if (!res) break;
+        if (res != 2) {
+          drawn = false;
+          break;
+        }
         renderer->writePixel(xp + i, yp, rgb);
       }
+      if (!drawn) break;
       delay(0);
       OsWatchLoop();
       yp++;
     }
 #endif
-    if (scale) {
+    if (drawn && scale) {
       if (renderer) renderer->drawRect(xp, yp, xsize, ysize, GetColorFromIndex(scale));
     }
     fp.close();
-    return true;
+    return drawn;
   } else if (!strcmp(estr,"jpg") || !strcmp(estr,"jpeg")) {
     // jpeg files on ESP32 with more memory
 #ifdef ESP32
