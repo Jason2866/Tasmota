@@ -7,6 +7,9 @@
 # Pass nil or an empty string to choose a random series.
 #
 #   start("METRON_USERNAME", "METRON_PASSWORD", nil)
+#
+# For correct Inky output orientation, set the Tasmota command DisplayRotate 1
+# (90 degrees) before running this script.
 
 import path
 import json
