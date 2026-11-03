@@ -591,6 +591,7 @@ void UDISP_Time(void) {
 
 void UDISP_Refresh(void) {  // Every second
   if (!renderer) return;
+  if (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) return;
   if (DM_TIME == Settings->display_mode) {
     UDISP_Time();
   }
