@@ -435,13 +435,53 @@ struct be_img_util {
    */
   static bool jpeg_size(uint8_t* buffer, size_t data_size, uint16_t *width, uint16_t *height) {
     if (!buffer || !width || !height || data_size < 4 ||
-+        buffer[0] != 0xFF || buffer[1] != 0xD8) {
+        buffer[0] != 0xFF || buffer[1] != 0xD8) {
       return false;
     }
 
     size_t offset = 2;
     const size_t data_end = data_size;
+    uint16_t parsed_width = 0;
+    uint16_t parsed_height = 0;
+    bool found_scan = false;
+    bool in_scan = false;
     while (offset < data_end) {
+      if (in_scan) {
+        while (offset < data_end) {
+          if (buffer[offset] != 0xFF) {
+            offset++;
+            continue;
+          }
+
+          const size_t marker_start = offset;
+          while (offset < data_end && buffer[offset] == 0xFF) {
+            offset++;
+          }
+          if (offset >= data_end) {
+            return false;
+          }
+          const uint8_t scan_marker = buffer[offset++];
+          // FF00 is byte-stuffed image data; TEM and restart markers stay in the scan.
+          if (scan_marker == 0x00 || scan_marker == 0x01 ||
+              (scan_marker >= 0xD0 && scan_marker <= 0xD7)) {
+            continue;
+          }
+          if (scan_marker == 0xD9) {
+            *width = parsed_width;
+            *height = parsed_height;
+            return true;
+          }
+
+          // Hand other markers (including progressive JPEG's next scan) to the parser.
+          offset = marker_start;
+          in_scan = false;
+          break;
+        }
+        if (in_scan || offset >= data_end) {
+          return false;
+        }
+      }
+
       if (buffer[offset] != 0xFF) {
         return false;
       }
@@ -453,7 +493,10 @@ struct be_img_util {
       }
 
       const uint8_t marker = buffer[offset++];
-      if (marker == 0xD9 || marker == 0xDA || marker == 0xD8 || marker == 0x00) {
+      if (marker == 0xD9) {
+        return false;
+      }
+      if (marker == 0xD8 || marker == 0x00) {
         return false;
       }
       // TEM and restart markers do not contain a segment length.
@@ -476,16 +519,25 @@ struct be_img_util {
         if (components == 0 || segment_length < 8 + (uint16_t)components * 3) {
           return false;
         }
-        const uint16_t parsed_height = ((uint16_t)buffer[offset + 3] << 8) | buffer[offset + 4];
-        const uint16_t parsed_width = ((uint16_t)buffer[offset + 5] << 8) | buffer[offset + 6];
+        parsed_height = ((uint16_t)buffer[offset + 3] << 8) | buffer[offset + 4];
+        parsed_width = ((uint16_t)buffer[offset + 5] << 8) | buffer[offset + 6];
         if (parsed_width == 0 || parsed_height == 0) {
           return false;
         }
-        *width = parsed_width;
-        *height = parsed_height;
-        return true;
       }
-      offset += segment_length;
+
+      const size_t segment_end = offset + segment_length;
+      if (marker == 0xDA) {
+        if (parsed_width == 0 || parsed_height == 0) {
+          return false;
+        }
+        found_scan = true;
+        offset = segment_end;
+        in_scan = true;
+      } else {
+        offset = segment_end;
+        in_scan = found_scan;
+      }
     }
     return false;
   }
