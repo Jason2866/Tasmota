@@ -101,7 +101,11 @@ void lv_flush_callback(lv_display_t *disp, const lv_area_t *area, uint8_t *color
   renderer->setAddrWindow(area->x1, area->y1, area->x1+width, area->y1+height);
   renderer->pushColors((uint16_t *)color_p, pixels_len, true);
   renderer->setAddrWindow(0,0,0,0);
-  renderer->Updateframe();
+  // Inky performs a full-panel refresh per Updateframe(). Wait until LVGL has
+  // flushed the last area so one screen update causes only one refresh.
+  if (renderer->disp_bpp != 4 || lv_disp_flush_is_last(disp)) {
+    renderer->Updateframe();
+  }
   uint32_t chrono_time = micros() - chrono_start;
 
   lv_disp_flush_ready(disp);

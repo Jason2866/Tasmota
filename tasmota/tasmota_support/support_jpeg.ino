@@ -145,36 +145,48 @@ bool jpg2rgb888(const uint8_t *src, size_t src_len, uint8_t * out, jpg_scale_t s
 
 
 // https://web.archive.org/web/20131016210645/http://www.64lines.com/jpeg-width-height
-//Gets the JPEG size from the array of data passed to the function, file reference: http://www.obrador.com/essentialjpeg/headerinfo.htm
+// Gets the JPEG size from the array of data passed to the function, file reference: http://www.obrador.com/essentialjpeg/headerinfo.htm
 char get_jpeg_size(unsigned char* data, unsigned int data_size, unsigned short *width, unsigned short *height) {
-   //Check for valid JPEG image
-   int i=0;   // Keeps track of the position within the file
-   if(data[i] == 0xFF && data[i+1] == 0xD8 && data[i+2] == 0xFF && data[i+3] == 0xE0) {
-      i += 4;
-      // Check for valid JPEG header (null terminated JFIF)
-      if(data[i+2] == 'J' && data[i+3] == 'F' && data[i+4] == 'I' && data[i+5] == 'F' && data[i+6] == 0x00) {
-         //Retrieve the block length of the first block since the first block will not contain the size of file
-         unsigned short block_length = data[i] * 256 + data[i+1];
-         while(i<data_size) {
-            i+=block_length;               //Increase the file index to get to the next block
-            if(i >= data_size) return false;   //Check to protect against segmentation faults
-            if(data[i] != 0xFF) return false;   //Check that we are truly at the start of another block
-            if(data[i+1] == 0xC0) {            //0xFFC0 is the "Start of frame" marker which contains the file size
-               //The structure of the 0xFFC0 block is quite simple [0xFFC0][ushort length][uchar precision][ushort x][ushort y]
-               *height = data[i+5]*256 + data[i+6];
-               *width = data[i+7]*256 + data[i+8];
-               return true;
-            }
-            else
-            {
-               i+=2;                              //Skip the block marker
-               block_length = data[i] * 256 + data[i+1];   //Go to the next block
-            }
-         }
-         return false;                     //If this point is reached then no size was found
-      }else{ return false; }                  //Not a valid JFIF string
+   if (!width || !height) return false;
+   *width = 0;
+   *height = 0;
+   if (!data || data_size < 4) return false;
 
-   }else{ return false; }                     //Not a valid SOI header
+   // Check for a valid JPEG SOI and APP0 marker.
+   if (data[0] != 0xFF || data[1] != 0xD8 || data[2] != 0xFF || data[3] != 0xE0) return false;
+
+   size_t offset = 4;
+   size_t remaining = data_size - offset;
+   // Read the APP0 length and the complete JFIF identifier before accessing it.
+   if (remaining < 7) return false;
+   if (data[offset + 2] != 'J' || data[offset + 3] != 'F' ||
+       data[offset + 4] != 'I' || data[offset + 5] != 'F' || data[offset + 6] != 0x00) return false;
+
+   size_t block_length = (data[offset] << 8) | data[offset + 1];
+   if (block_length < 7 || block_length > remaining) return false;
+   offset += block_length;
+
+   while (offset < data_size) {
+      remaining = data_size - offset;
+      // Every segment starts with a two-byte marker.
+      if (remaining < 2 || data[offset] != 0xFF) return false;
+      if (data[offset + 1] == 0xC0) {
+         // SOF0 needs its length, precision, and both dimensions in the buffer.
+         if (remaining < 4) return false;
+         block_length = (data[offset + 2] << 8) | data[offset + 3];
+         if (block_length < 7 || block_length > remaining - 2) return false;
+         *height = (data[offset + 5] << 8) | data[offset + 6];
+         *width = (data[offset + 7] << 8) | data[offset + 8];
+         return true;
+      }
+
+      // Other segments need a complete length field and a fully present payload.
+      if (remaining < 4) return false;
+      block_length = (data[offset + 2] << 8) | data[offset + 3];
+      if (block_length < 2 || block_length > remaining - 2) return false;
+      offset += 2 + block_length;
+   }
+   return false;
 }
 
 

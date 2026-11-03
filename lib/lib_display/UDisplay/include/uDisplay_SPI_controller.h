@@ -48,6 +48,7 @@ public:
     // ===== Transaction Control =====
     void beginTransaction();
     void endTransaction();
+    void setMode(uint8_t mode);
 
     // ===== High-Level Write Functions =====
     void writeCommand(uint8_t cmd);
