@@ -15,6 +15,8 @@ extern int32_t be_ntv_display_width(void);  BE_FUNC_CTYPE_DECLARE(be_ntv_display
 extern int32_t be_ntv_display_height(void); BE_FUNC_CTYPE_DECLARE(be_ntv_display_height, "i", "")
 extern int be_ntv_display_draw_jpg(bvm *vm);
 extern int be_ntv_display_draw_rgb888(bvm *vm);
+extern int be_ntv_display_draw_rgb888_async(bvm *vm);
+extern int be_ntv_display_refresh_status(bvm *vm);
 extern int be_ntv_display_dimmer(bvm *vm);
 extern bbool be_ntv_display_started(void);
             BE_FUNC_CTYPE_DECLARE(be_ntv_display_started, "b", "")
@@ -30,6 +32,8 @@ module display (scope: global, strings: weak) {
     height, ctype_func(be_ntv_display_height)
     draw_jpg, func(be_ntv_display_draw_jpg)
     draw_rgb888, func(be_ntv_display_draw_rgb888)
+    draw_rgb888_async, func(be_ntv_display_draw_rgb888_async)
+    refresh_status, func(be_ntv_display_refresh_status)
     started, ctype_func(be_ntv_display_started)
     dimmer, func(be_ntv_display_dimmer)
     touch_update, ctype_func(be_ntv_display_touch_update)

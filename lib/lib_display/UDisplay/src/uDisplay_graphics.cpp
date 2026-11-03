@@ -154,6 +154,7 @@ void uDisplay::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 }
 
 void uDisplay::setRotation(uint8_t rotation) {
+    if (GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) return;
     cur_rot = rotation;
     if (universal_panel->setRotation(rotation)) {
         // Update Renderer dimensions based on rotation
@@ -184,4 +185,20 @@ void uDisplay::Updateframe(void) {
 
 bool uDisplay::UpdateframeChecked(void) {
     return universal_panel && universal_panel->updateFrame();
+}
+
+bool uDisplay::CanStartUpdateFrameAsync() {
+    return universal_panel && universal_panel->canStartAsyncUpdate();
+}
+
+bool uDisplay::StartUpdateFrameAsync() {
+    return universal_panel && universal_panel->startAsyncUpdate();
+}
+
+void uDisplay::ServiceUpdateFrameAsync() {
+    if (universal_panel) universal_panel->serviceAsyncUpdate();
+}
+
+uint8_t uDisplay::GetUpdateFrameAsyncStatus() {
+    return universal_panel ? universal_panel->asyncUpdateStatus() : RENDERER_UPDATE_UNSUPPORTED;
 }

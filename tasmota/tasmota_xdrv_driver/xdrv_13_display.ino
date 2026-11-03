@@ -672,6 +672,10 @@ void DisplayText(void)
             break;
 #ifdef USE_MULTI_DISPLAY
           case 'S':
+            if (renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+              AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot switch displays while an asynchronous refresh is active"));
+              break;
+            }
             { int16_t rot = -1, srot, model;
               var = atoiv(cp, &temp);
               cp += var;
@@ -3143,6 +3147,13 @@ bool Xdrv13(uint32_t function) {
         if (disp_apply_display_dimmer_request) {
           ApplyDisplayDimmer(GetDisplayDimmer());  // Allowed here.
         }
+        break;
+      case FUNC_LOOP:
+#ifdef USE_UNIVERSAL_DISPLAY
+        if (renderer) {
+          renderer->ServiceUpdateFrameAsync();
+        }
+#endif  // USE_UNIVERSAL_DISPLAY
         break;
       case FUNC_EVERY_50_MSECOND:
         if (Settings->display_model) { 

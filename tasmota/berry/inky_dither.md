@@ -7,7 +7,7 @@
 - An ESP32 Tasmota build with features (`USE_DISPLAY`, `USE_UNIVERSAL_DISPLAY`, `USE_UFILESYS`, `USE_BERRY_IMAGE` and `JPEG_PICTS`) enabled. These are compile-time options and cannot be enabled by loading the script. The script sends the quantized RGB888 buffer directly to the universal display and saves a JPEG copy separately.
 - PSRAM is required for the decoded RGB image buffer. An 800 × 480 buffer uses about 1.15 MiB, in addition to memory needed by JPEG decoding and encoding.
 - The source must be a JPEG that decodes to RGB888. Images are resized to the logical dimensions selected by `display.ini` and dithered. uDisplay applies the configured panel rotation when drawing; source-image orientation is not inferred automatically.
-- Firmware must export `display.width()`, `display.height()` and `display.draw_rgb888()`, and include the current `InkyDither.dither` implementation, which accepts the logical dimensions after rotation (480 × 800 for Inky 7.3 with `DisplayRotate 1`).
+- Firmware must export `display.width()`, `display.height()`, `display.draw_rgb888_async()` and `display.refresh_status()`, and include the current `InkyDither.dither` implementation, which accepts the logical dimensions after rotation (480 × 800 for Inky 7.3 with `DisplayRotate 1`).
 - Without an initialized display, the script saves a dithered 480 × 800 image for Inky 7.3 with `DisplayRotate 1` and skips panel drawing. The physical panel resolution is 800 × 480.
 - Berry's `bytes()` limit restricts the compressed source JPEG to 512 KiB. PSRAM is required for this workflow.
 
@@ -47,7 +47,9 @@ var result = inky_dither("/image.jpg", "/image-dithered.jpg")
 print(result)
 ```
 
-The script draws the quantized RGB888 buffer directly to the display before JPEG encoding, so compression cannot change the image shown on the panel. It also saves a JPEG copy in the Tasmota filesystem; retrieve it using the device's filesystem access method. JPEG quality only affects this saved copy. The Inky refresh takes about 32 seconds.
+The script draws the quantized RGB888 buffer directly to the display before JPEG encoding, so compression cannot change the image shown on the panel. It starts the panel refresh asynchronously, then saves a JPEG copy in the Tasmota filesystem; retrieve it using the device's filesystem access method. JPEG quality only affects this saved copy. Panel BUSY waits are serviced by Tasmota's main loop, so MQTT, rules, and web requests can run during the roughly 32-second physical refresh. The 192,000-byte framebuffer transfer still runs in one synchronous SPI operation.
+
+The returned `refresh_status` is usually `running` when the script finishes. Check it later with `display.refresh_status()`; it changes to `complete` or `failed`. The returned `displayed` field is true only when the refresh has completed by the time the result is assembled. The driver also writes completion or failure to the log. While a refresh is running, drawing, rotation, another refresh, and display reinitialization are rejected or ignored to protect the framebuffer and panel state.
 
 Dithering is performed by the native InkyDither.dither class for optimal performance. Image resizing uses the native `img.resize()` method to keep its large working buffer in PSRAM; the firmware must include the updated Berry image module.
 
@@ -75,4 +77,4 @@ var result = inky_dither("/image.jpg", "/image-dithered.jpg", 0.75, 70)
 print(result)
 ```
 
-The function returns the output `path`, `width`, `height`, encoded file size in `bytes`, and whether it was `displayed`. JPEG is lossy, so the saved file can contain slight color changes from the six dither palette colors even though the displayed image uses the original quantized buffer. Higher `jpeg_quality` values reduce these changes at the cost of a larger file.
+The function returns the output `path`, `width`, `height`, encoded file size in `bytes`, `displayed`, and `refresh_status`. JPEG is lossy, so the saved file can contain slight color changes from the six dither palette colors even though the displayed image uses the original quantized buffer. Higher `jpeg_quality` values reduce these changes at the cost of a larger file.

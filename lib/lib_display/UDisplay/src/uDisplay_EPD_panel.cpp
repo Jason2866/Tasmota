@@ -271,6 +271,7 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
 // ===== UniversalPanel Interface Implementation =====
 
 bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
+    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
     if (!fb_buffer) return false;
 
     // Get rotated dimensions for bounds check
@@ -305,6 +306,7 @@ bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
 }
 
 bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
+    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
     // Use drawPixel to handle rotation properly
     for (int16_t yp = y; yp < y + h; yp++) {
         for (int16_t xp = x; xp < x + w; xp++) {
@@ -315,6 +317,7 @@ bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
 }
 
 bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
+    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
     if (cfg.ep_mode == 4) {
         if (!fb_buffer) return false;
         while (push_y < window_y2 && len > 0) {
@@ -358,6 +361,7 @@ bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
 }
 
 bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
     // Save window coordinates for pushColors
     window_x1 = x0;
     window_y1 = y0;
@@ -369,6 +373,7 @@ bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
 }
 
 bool EPDPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
+    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
     while (w--) {
         drawPixel(x, y, color);
         x++;
@@ -377,6 +382,7 @@ bool EPDPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
 }
 
 bool EPDPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
+    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
     while (h--) {
         drawPixel(x, y, color);
         y++;
@@ -412,6 +418,7 @@ bool EPDPanel::invertDisplay(bool invert) {
 }
 
 bool EPDPanel::setRotation(uint8_t rot) {
+    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
     rotation = rot & 3;  // Store rotation (0-3)
     return true;
 }
@@ -420,6 +427,7 @@ bool EPDPanel::updateFrame() {
     if (!fb_buffer) return false;
 
     if (cfg.ep_mode == 4) {
+        if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return false;
         return updateInky();
     }
 
@@ -448,6 +456,189 @@ bool EPDPanel::updateFrame() {
     }
 
     return true;
+}
+
+bool EPDPanel::inkyBusy() {
+    const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
+    return digitalRead(cfg.busy_pin) == busy_level;
+}
+
+bool EPDPanel::canStartAsyncUpdate() {
+    return cfg.ep_mode == 4 && fb_buffer && busy_pin_configured && reset_pin_configured &&
+           cfg.send_cmds_callback && cfg.init_cmd_count &&
+           inky_async_status != UNIVERSAL_UPDATE_RUNNING && !inkyBusy();
+}
+
+bool EPDPanel::startAsyncUpdate() {
+    if (!canStartAsyncUpdate()) return false;
+    inky_async_status = UNIVERSAL_UPDATE_RUNNING;
+    inky_refresh_step = InkyRefreshStep::WaitReady;
+    inky_step_started = millis();
+    inky_deadline = inky_step_started + 300;
+    inky_idle_settle = false;
+    inky_refresh_failed = false;
+    return true;
+}
+
+uint8_t EPDPanel::asyncUpdateStatus() {
+    return cfg.ep_mode == 4 ? inky_async_status : UNIVERSAL_UPDATE_UNSUPPORTED;
+}
+
+void EPDPanel::failInkyAsync(const char* reason) {
+    inky_refresh_step = InkyRefreshStep::Failed;
+    inky_async_status = UNIVERSAL_UPDATE_FAILED;
+    AddLog(3, "UDisplay: Inky refresh failed: %s", reason);
+}
+
+void EPDPanel::beginInkyIdleWait(InkyRefreshStep wait_step, uint32_t timeout_ms) {
+    inky_refresh_step = wait_step;
+    inky_step_started = millis();
+    inky_idle_settle = !inkyBusy();
+    inky_deadline = inky_step_started + timeout_ms;
+}
+
+bool EPDPanel::serviceInkyIdleWait(InkyRefreshStep next_step, uint32_t timeout_ms) {
+    uint32_t now = millis();
+    if (inky_idle_settle) {
+        if ((int32_t)(now - inky_deadline) < 0) return false;
+        if (!inkyBusy()) {
+            inky_refresh_step = next_step;
+            return true;
+        }
+        inky_idle_settle = false;
+        inky_step_started = now;
+        inky_deadline = now + timeout_ms;
+        return false;
+    }
+
+    if (!inkyBusy()) {
+        inky_refresh_step = next_step;
+        return true;
+    }
+    if ((uint32_t)(now - inky_step_started) >= timeout_ms) {
+        failInkyAsync("BUSY pin did not become idle");
+    }
+    return false;
+}
+
+void EPDPanel::serviceAsyncUpdate() {
+    if (inky_async_status != UNIVERSAL_UPDATE_RUNNING) return;
+
+    static const uint8_t power[] = {0x00};
+    switch (inky_refresh_step) {
+        case InkyRefreshStep::WaitReady:
+            if (!inkyBusy()) {
+                pinMode(cfg.reset_pin, OUTPUT);
+                digitalWrite(cfg.reset_pin, HIGH);
+                inky_refresh_step = InkyRefreshStep::ResetHigh;
+                inky_deadline = millis() + 30;
+            } else if ((uint32_t)(millis() - inky_step_started) >= 300) {
+                failInkyAsync("panel remained busy before reset");
+            }
+            break;
+
+        case InkyRefreshStep::ResetHigh:
+            if ((int32_t)(millis() - inky_deadline) >= 0) {
+                digitalWrite(cfg.reset_pin, LOW);
+                inky_refresh_step = InkyRefreshStep::ResetLow;
+                inky_deadline = millis() + 30;
+            }
+            break;
+
+        case InkyRefreshStep::ResetLow:
+            if ((int32_t)(millis() - inky_deadline) >= 0) {
+                digitalWrite(cfg.reset_pin, HIGH);
+                beginInkyIdleWait(InkyRefreshStep::ResetWait, 300);
+            }
+            break;
+
+        case InkyRefreshStep::ResetWait:
+            serviceInkyIdleWait(InkyRefreshStep::Initialize, 300);
+            break;
+
+        case InkyRefreshStep::Initialize:
+            spi->beginTransaction();
+            cfg.send_cmds_callback(0, cfg.init_cmd_count);
+            spi->endTransaction();
+            inky_refresh_step = InkyRefreshStep::TransferFrame;
+            break;
+
+        case InkyRefreshStep::TransferFrame:
+            // Keep the frame transfer in one SPI transaction. Splitting it
+            // requires controller-specific proof that RAM writes can resume.
+            sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
+            inky_refresh_step = InkyRefreshStep::PowerOn;
+            break;
+
+        case InkyRefreshStep::PowerOn:
+            sendInkyCommand(0x04); // PON
+            beginInkyIdleWait(InkyRefreshStep::PowerOnWait, 300);
+            break;
+
+        case InkyRefreshStep::PowerOnWait:
+            serviceInkyIdleWait(InkyRefreshStep::BoosterSetup, 300);
+            break;
+
+        case InkyRefreshStep::BoosterSetup: {
+            static const uint8_t booster_after_power[] = {0x6F, 0x1F, 0x17, 0x49};
+            sendInkyCommand(0x06, booster_after_power, sizeof(booster_after_power));
+            sendInkyCommand(0x12, power, sizeof(power)); // DRF
+            inky_step_started = millis();
+            inky_refresh_step = InkyRefreshStep::WaitBusyAssert;
+            break;
+        }
+
+        case InkyRefreshStep::WaitBusyAssert:
+            if (inkyBusy()) {
+                inky_refresh_step = InkyRefreshStep::WaitBusyClear;
+            } else if ((uint32_t)(millis() - inky_step_started) >= cfg.busy_timeout) {
+                inky_refresh_failed = true;
+                inky_refresh_step = InkyRefreshStep::PowerOff;
+            }
+            break;
+
+        case InkyRefreshStep::WaitBusyClear:
+            if (!inkyBusy()) {
+                inky_refresh_step = InkyRefreshStep::PowerOff;
+            } else if ((uint32_t)(millis() - inky_step_started) >= cfg.busy_timeout) {
+                // Leave power and the controller untouched while BUSY remains active.
+                failInkyAsync("refresh timed out while BUSY remained active");
+            }
+            break;
+
+        case InkyRefreshStep::PowerOff:
+            sendInkyCommand(0x02, power, sizeof(power)); // POF
+            beginInkyIdleWait(InkyRefreshStep::PowerOffWait, 300);
+            break;
+
+        case InkyRefreshStep::PowerOffWait:
+            serviceInkyIdleWait(InkyRefreshStep::PowerSave, 300);
+            break;
+
+        case InkyRefreshStep::PowerSave: {
+            static const uint8_t power_save[] = {0x4F, 0x6E};
+            sendInkyCommand(0x00, power_save, sizeof(power_save)); // PSR
+            beginInkyIdleWait(InkyRefreshStep::PowerSaveWait, 300);
+            break;
+        }
+
+        case InkyRefreshStep::PowerSaveWait:
+            if (serviceInkyIdleWait(InkyRefreshStep::Complete, 300)) {
+                if (inky_refresh_failed) {
+                    inky_refresh_step = InkyRefreshStep::Failed;
+                    inky_async_status = UNIVERSAL_UPDATE_FAILED;
+                    AddLog(3, "UDisplay: Inky refresh failed: panel did not start refreshing");
+                } else {
+                    inky_async_status = UNIVERSAL_UPDATE_COMPLETE;
+                    AddLog(2, "UDisplay: Inky refresh complete");
+                }
+            }
+            break;
+
+        default:
+            failInkyAsync("invalid refresh state");
+            break;
+    }
 }
 
 void EPDPanel::sendInkyCommand(uint8_t command, const uint8_t* data, uint32_t len) {

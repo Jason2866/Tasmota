@@ -90,6 +90,10 @@ public:
     bool invertDisplay(bool invert) override;
     bool setRotation(uint8_t rotation) override;
     bool updateFrame() override;
+    bool canStartAsyncUpdate() override;
+    bool startAsyncUpdate() override;
+    void serviceAsyncUpdate() override;
+    uint8_t asyncUpdateStatus() override;
 
     // EPD-specific public methods (for uDisplay wrapper compatibility)
     bool resetDisplay();
@@ -122,6 +126,32 @@ private:
     uint8_t rotation; // Current rotation (0-3)
     bool busy_pin_configured;
     bool reset_pin_configured;
+    enum class InkyRefreshStep : uint8_t {
+        Idle,
+        WaitReady,
+        ResetHigh,
+        ResetLow,
+        ResetWait,
+        Initialize,
+        TransferFrame,
+        PowerOn,
+        PowerOnWait,
+        BoosterSetup,
+        WaitBusyAssert,
+        WaitBusyClear,
+        PowerOff,
+        PowerOffWait,
+        PowerSave,
+        PowerSaveWait,
+        Complete,
+        Failed
+    };
+    InkyRefreshStep inky_refresh_step = InkyRefreshStep::Idle;
+    uint8_t inky_async_status = UNIVERSAL_UPDATE_IDLE;
+    uint32_t inky_step_started = 0;
+    uint32_t inky_deadline = 0;
+    bool inky_idle_settle = false;
+    bool inky_refresh_failed = false;
 
     // Address window for pushColors
     int16_t window_x1 = 0;
@@ -135,6 +165,10 @@ private:
     void waitBusy();
     void drawAbsolutePixel(int x, int y, uint16_t color);
     bool updateInky();
+    void failInkyAsync(const char* reason);
+    bool inkyBusy();
+    void beginInkyIdleWait(InkyRefreshStep wait_step, uint32_t timeout_ms);
+    bool serviceInkyIdleWait(InkyRefreshStep next_step, uint32_t timeout_ms);
     void sendInkyCommand(uint8_t command, const uint8_t* data = nullptr, uint32_t len = 0);
     bool waitInkyIdle(uint32_t timeout_ms);
     bool waitInkyReady(uint32_t timeout_ms);

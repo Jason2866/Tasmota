@@ -99,6 +99,21 @@ bool Renderer::UpdateframeChecked() {
   return true;
 }
 
+bool Renderer::CanStartUpdateFrameAsync() {
+  return false;
+}
+
+bool Renderer::StartUpdateFrameAsync() {
+  return false;
+}
+
+void Renderer::ServiceUpdateFrameAsync() {
+}
+
+uint8_t Renderer::GetUpdateFrameAsyncStatus() {
+  return RENDERER_UPDATE_UNSUPPORTED;
+}
+
 void Renderer::TS_RotConvert(int16_t *x, int16_t *y) {
 
 }
