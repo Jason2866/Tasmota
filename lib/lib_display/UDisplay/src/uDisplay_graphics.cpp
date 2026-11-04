@@ -182,6 +182,17 @@ void uDisplay::setRotation(uint8_t rotation) {
 }
 
 void uDisplay::Updateframe(void) {
+#ifndef ESP8266
+    if (ep_mode == 4 && universal_panel) {
+        if (universal_panel->canStartAsyncUpdate() && universal_panel->startAsyncUpdate()) {
+            return;
+        }
+        if (universal_panel->asyncUpdateStatus() == UNIVERSAL_UPDATE_RUNNING) {
+            static_cast<EPDPanel*>(universal_panel)->queueUpdateAfterAsync();
+            return;
+        }
+    }
+#endif
     UpdateframeChecked();
 }
 

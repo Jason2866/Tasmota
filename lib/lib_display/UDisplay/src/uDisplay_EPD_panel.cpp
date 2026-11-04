@@ -288,10 +288,10 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
 
 // ===== UniversalPanel Interface Implementation =====
 
+// Inky transfers the framebuffer synchronously in one service step. Between
+// service calls, new drawing can update it; Updateframe queues another refresh
+// if the current transfer has already consumed the frame.
 bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
-#ifndef ESP8266
-    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
-#endif
     if (!fb_buffer) return false;
 
     // Get rotated dimensions for bounds check
@@ -330,9 +330,6 @@ bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
 }
 
 bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
-#ifndef ESP8266
-    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
-#endif
     // Use drawPixel to handle rotation properly
     for (int16_t yp = y; yp < y + h; yp++) {
         for (int16_t xp = x; xp < x + w; xp++) {
@@ -344,7 +341,6 @@ bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
 
 bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
 #ifndef ESP8266
-    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
     if (cfg.ep_mode == 4) {
         if (!fb_buffer) return false;
         while (push_y < window_y2 && len > 0) {
@@ -389,9 +385,6 @@ bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
 }
 
 bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
-#ifndef ESP8266
-    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
-#endif
     // Save window coordinates for pushColors
     window_x1 = x0;
     window_y1 = y0;
@@ -403,9 +396,6 @@ bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
 }
 
 bool EPDPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
-#ifndef ESP8266
-    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
-#endif
     while (w--) {
         drawPixel(x, y, color);
         x++;
@@ -414,9 +404,6 @@ bool EPDPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
 }
 
 bool EPDPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
-#ifndef ESP8266
-    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
-#endif
     while (h--) {
         drawPixel(x, y, color);
         y++;
@@ -454,9 +441,6 @@ bool EPDPanel::invertDisplay(bool invert) {
 }
 
 bool EPDPanel::setRotation(uint8_t rot) {
-#ifndef ESP8266
-    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
-#endif
     rotation = rot & 3;  // Store rotation (0-3)
     return true;
 }
@@ -518,7 +502,16 @@ bool EPDPanel::startAsyncUpdate() {
     inky_deadline = inky_step_started + 300;
     inky_idle_settle = false;
     inky_refresh_failed = false;
+    inky_update_pending = false;
     return true;
+}
+
+void EPDPanel::queueUpdateAfterAsync() {
+    // TransferFrame consumes requests made before it reads the framebuffer;
+    // later requests need another refresh after the active update completes.
+    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) {
+        inky_update_pending = true;
+    }
 }
 
 uint8_t EPDPanel::asyncUpdateStatus() {
@@ -563,7 +556,13 @@ bool EPDPanel::serviceInkyIdleWait(InkyRefreshStep next_step, uint32_t timeout_m
 }
 
 void EPDPanel::serviceAsyncUpdate() {
-    if (inky_async_status != UNIVERSAL_UPDATE_RUNNING) return;
+    if (inky_async_status != UNIVERSAL_UPDATE_RUNNING) {
+        if (inky_update_pending && canStartAsyncUpdate()) {
+            inky_update_pending = false;
+            startAsyncUpdate();
+        }
+        return;
+    }
 
     static const uint8_t power[] = {0x00};
     switch (inky_refresh_step) {
@@ -615,6 +614,7 @@ void EPDPanel::serviceAsyncUpdate() {
             // Keep the frame transfer in one SPI transaction. Splitting it
             // requires controller-specific proof that RAM writes can resume.
             sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
+            inky_update_pending = false;
             inky_refresh_step = InkyRefreshStep::PowerOn;
             break;
 

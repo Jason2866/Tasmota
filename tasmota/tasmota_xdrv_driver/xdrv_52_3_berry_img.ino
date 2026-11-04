@@ -745,18 +745,17 @@ extern "C" {
       }
       if (scale_provided && scale <= 0) {
         size_t free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-        // On boards with <= 2MB PSRAM, reserve ~1.3MB for display/resize buffers
-        if (free_psram < 3000000) {
-          size_t max_allowed = free_psram > 1300000 ? free_psram - 1300000 : 500000;
-          size_t unscaled_size = (size_t)w * h * img->bpp;
-          if (unscaled_size > max_allowed) {
-            if (unscaled_size / 4 <= max_allowed) {
-              scale = 2;
-            } else if (unscaled_size / 16 <= max_allowed) {
-              scale = 4;
-            } else {
-              scale = 8;
-            }
+        // Smaller PSRAM boards reserve ~1.3MB for display/resize buffers.
+        size_t reserve = free_psram < 3000000 ? 1300000 : 0;
+        size_t max_allowed = free_psram > reserve ? free_psram - reserve : 500000;
+        size_t unscaled_size = (size_t)w * h * img->bpp;
+        if (unscaled_size > max_allowed) {
+          if (unscaled_size / 4 <= max_allowed) {
+            scale = 2;
+          } else if (unscaled_size / 16 <= max_allowed) {
+            scale = 4;
+          } else {
+            scale = 8;
           }
         }
       }

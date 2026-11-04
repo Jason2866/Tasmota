@@ -94,6 +94,9 @@ public:
     bool startAsyncUpdate() override;
     void serviceAsyncUpdate() override;
     uint8_t asyncUpdateStatus() override;
+#ifndef ESP8266
+    void queueUpdateAfterAsync();
+#endif
 
     // EPD-specific public methods (for uDisplay wrapper compatibility)
     bool resetDisplay();
@@ -154,6 +157,7 @@ private:
     uint32_t inky_deadline = 0;
     bool inky_idle_settle = false;
     bool inky_refresh_failed = false;
+    bool inky_update_pending = false;
 #endif
 
     // Address window for pushColors
