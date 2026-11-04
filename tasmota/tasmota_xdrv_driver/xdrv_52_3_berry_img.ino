@@ -26,13 +26,12 @@
 
 #include "esp_camera.h"
 #include "JPEGDEC.h"
-#ifdef ESP32
-char get_jpeg_size(unsigned char *data, unsigned int data_size,
-                   unsigned short *width, unsigned short *height);
-#endif
 #ifdef USE_UNIVERSAL_DISPLAY
 #include <uDisplay.h>
 #endif
+
+char get_jpeg_size(unsigned char *data, unsigned int data_size,
+                   unsigned short *width, unsigned short *height);
 
 /*********************************************************************************************\
  * typedefs
@@ -430,15 +429,7 @@ struct be_img_util {
   }
 
   static bool jpeg_size(uint8_t *buffer, size_t data_size, uint16_t *width, uint16_t *height) {
-#ifdef ESP32
       return get_jpeg_size(buffer, (unsigned int)data_size, width, height);
-#else
-      (void)buffer;
-      (void)data_size;
-      (void)width;
-      (void)height;
-      return false;
-#endif
   }
 
 };
