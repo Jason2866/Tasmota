@@ -112,7 +112,7 @@ extern "C" {
     be_pushbool(vm, true);
     be_return(vm);
 #else
-    be_raise(vm, "feature_error", "JPEG display requires universal display, filesystem, JPEG_PICTS and ESP32 support");
+    be_raise(vm, "feature_error", "JPEG display requires universal display, filesystem, JPEG_PICTS support");
 #endif
   }
 
