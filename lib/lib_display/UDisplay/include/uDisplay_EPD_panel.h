@@ -126,6 +126,7 @@ private:
     uint8_t rotation; // Current rotation (0-3)
     bool busy_pin_configured;
     bool reset_pin_configured;
+#ifndef ESP8266
     enum class InkyRefreshStep : uint8_t {
         Idle,
         WaitReady,
@@ -153,6 +154,7 @@ private:
     uint32_t inky_deadline = 0;
     bool inky_idle_settle = false;
     bool inky_refresh_failed = false;
+#endif
 
     // Address window for pushColors
     int16_t window_x1 = 0;
@@ -165,6 +167,7 @@ private:
     // Private helpers
     void waitBusy();
     void drawAbsolutePixel(int x, int y, uint16_t color);
+#ifndef ESP8266
     bool updateInky();
     void failInkyAsync(const char* reason);
     bool inkyBusy();
@@ -174,6 +177,7 @@ private:
     bool waitInkyIdle(uint32_t timeout_ms);
     bool waitInkyReady(uint32_t timeout_ms);
     bool waitInkyRefresh(uint32_t timeout_ms);
+#endif
     void sendYColumnAsXRow(const uint8_t* y_column_buffer, uint16_t buffer_width,
                            uint16_t rows, uint16_t cols_bytes);
 };

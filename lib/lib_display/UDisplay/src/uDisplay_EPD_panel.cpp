@@ -38,6 +38,7 @@ EPDPanel::EPDPanel(const EPDPanelConfig& config,
     // Don't do automatic initialization here - let the descriptor init commands handle it
     // The uDisplay framework will call send_spi_cmds() after panel creation
     // which will handle reset, LUT setup, and initial display state
+#ifndef ESP8266
     if (cfg.ep_mode == 4) {
         if (!busy_pin_configured) {
             AddLog(3, "UDisplay: Inky BUSY pin is not configured");
@@ -49,6 +50,7 @@ EPDPanel::EPDPanel(const EPDPanelConfig& config,
             pinMode(cfg.busy_pin, INPUT_PULLUP);
         }
     }
+#endif
 }
 
 EPDPanel::~EPDPanel() {
@@ -86,24 +88,37 @@ void EPDPanel::delay_sync(int32_t ms) {
 }
 
 bool EPDPanel::resetDisplay() {
+#ifndef ESP8266
     if (cfg.ep_mode == 4 && (!busy_pin_configured || !reset_pin_configured)) return false;
     if (cfg.ep_mode != 4 && !reset_pin_configured) {
         return true;
     }
+#else
+    if (!reset_pin_configured) return true;
+#endif
 
     pinMode(cfg.reset_pin, OUTPUT);
     digitalWrite(cfg.reset_pin, HIGH);
+#ifndef ESP8266
     delay(cfg.ep_mode == 4 ? 30 : 10);
+#else
+    delay(10);
+#endif
     digitalWrite(cfg.reset_pin, LOW);
+#ifndef ESP8266
     delay(cfg.ep_mode == 4 ? 30 : 10);
+#else
+    delay(10);
+#endif
     digitalWrite(cfg.reset_pin, HIGH);
+#ifndef ESP8266
     if (cfg.ep_mode == 4) {
         delay(30);
         return waitInkyIdle(300);
-    } else {
-        delay(10);
-        delay_sync(100); // Use delay_sync instead of waitBusy
     }
+#endif
+    delay(10);
+    delay_sync(100); // Use delay_sync instead of waitBusy
     return true;
 }
 
@@ -229,6 +244,7 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
     //
     // setFrameMemory() will convert Y-column to X-row format when sending to hardware.
 
+#ifndef ESP8266
     if (cfg.ep_mode == 4) {
         // Inky Impression accepts six native colors in a 4-bit pixel slot.
         // Store two row-major pixels per byte, first pixel in the high nibble.
@@ -261,6 +277,7 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
         }
         return;
     }
+#endif
 
     if (color) {
         fb_buffer[x + (y / 8) * cfg.width] |= (1 << (y & 7));
@@ -272,7 +289,9 @@ void EPDPanel::drawAbsolutePixel(int x, int y, uint16_t color) {
 // ===== UniversalPanel Interface Implementation =====
 
 bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
+#ifndef ESP8266
     if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
+#endif
     if (!fb_buffer) return false;
 
     // Get rotated dimensions for bounds check
@@ -302,12 +321,18 @@ bool EPDPanel::drawPixel(int16_t x, int16_t y, uint16_t color) {
     }
 
     // Color EPDs consume RGB565 colors; legacy EPDs consume monochrome values.
+#ifndef ESP8266
     drawAbsolutePixel(x, y, cfg.ep_mode == 4 ? color : (color != 0 ? 1 : 0));
+#else
+    drawAbsolutePixel(x, y, color != 0 ? 1 : 0);
+#endif
     return true;
 }
 
 bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
+#ifndef ESP8266
     if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
+#endif
     // Use drawPixel to handle rotation properly
     for (int16_t yp = y; yp < y + h; yp++) {
         for (int16_t xp = x; xp < x + w; xp++) {
@@ -318,6 +343,7 @@ bool EPDPanel::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
 }
 
 bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
+#ifndef ESP8266
     if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
     if (cfg.ep_mode == 4) {
         if (!fb_buffer) return false;
@@ -335,6 +361,7 @@ bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
         }
         return true;
     }
+#endif
 
     // Convert RGB565 to monochrome and write to framebuffer
     // Pixel is white if at least one of the 3 RGB components is above 50%
@@ -362,7 +389,9 @@ bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
 }
 
 bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+#ifndef ESP8266
     if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
+#endif
     // Save window coordinates for pushColors
     window_x1 = x0;
     window_y1 = y0;
@@ -374,7 +403,9 @@ bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
 }
 
 bool EPDPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
+#ifndef ESP8266
     if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
+#endif
     while (w--) {
         drawPixel(x, y, color);
         x++;
@@ -383,7 +414,9 @@ bool EPDPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
 }
 
 bool EPDPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
+#ifndef ESP8266
     if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
+#endif
     while (h--) {
         drawPixel(x, y, color);
         y++;
@@ -397,11 +430,13 @@ bool EPDPanel::displayOnff(int8_t on) {
 }
 
 bool EPDPanel::invertDisplay(bool invert) {
+#ifndef ESP8266
     if (cfg.ep_mode == 4) {
         // The Inky controller has no display inversion command. Avoid applying
         // the monochrome framebuffer inversion to the packed color buffer.
         return true;
     }
+#endif
 
     // Toggle color inversion logic
     cfg.invert_colors = invert;
@@ -419,7 +454,9 @@ bool EPDPanel::invertDisplay(bool invert) {
 }
 
 bool EPDPanel::setRotation(uint8_t rot) {
+#ifndef ESP8266
     if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return true;
+#endif
     rotation = rot & 3;  // Store rotation (0-3)
     return true;
 }
@@ -427,10 +464,12 @@ bool EPDPanel::setRotation(uint8_t rot) {
 bool EPDPanel::updateFrame() {
     if (!fb_buffer) return false;
 
+#ifndef ESP8266
     if (cfg.ep_mode == 4) {
         if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) return false;
         return updateInky();
     }
+#endif
 
     // Handle different EPD modes
     if (cfg.ep_mode == 1 || cfg.ep_mode == 3) {
@@ -459,6 +498,7 @@ bool EPDPanel::updateFrame() {
     return true;
 }
 
+#ifndef ESP8266
 bool EPDPanel::inkyBusy() {
     const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
     return digitalRead(cfg.busy_pin) == busy_level;
@@ -771,6 +811,12 @@ bool EPDPanel::updateInky() {
     }
     return refresh_completed;
 }
+#else
+bool EPDPanel::canStartAsyncUpdate() { return false; }
+bool EPDPanel::startAsyncUpdate() { return false; }
+void EPDPanel::serviceAsyncUpdate() {}
+uint8_t EPDPanel::asyncUpdateStatus() { return UNIVERSAL_UPDATE_UNSUPPORTED; }
+#endif
 
 // ===== ep_mode 2 Support (5-LUT mode) =====
 

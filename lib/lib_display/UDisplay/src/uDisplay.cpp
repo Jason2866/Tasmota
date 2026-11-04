@@ -913,6 +913,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
       ep_mode = 3;
     }
 
+#ifndef ESP8266
     // Four bits per pixel selects the color EPD path used by Inky Impression
     // panels with the E673 controller.
     if (bpp == 4) {
@@ -920,15 +921,20 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
       // Refresh takes ~32 s; leave margin so a slow refresh is not reported as failed.
       panel_config->epd.busy_timeout = 45000;
     }
+#endif
   }
 
   // Resolve 4-bpp colors after EPD mode detection; only Inky maps foreground to white.
   if (bpp == 4) {
+#ifndef ESP8266
     if (ep_mode == 4) {
       fg_col = fg_col ? 0xFFFF : 0;
     } else {
       fg_col = GetColorFromIndex(fg_col);
     }
+#else
+    fg_col = GetColorFromIndex(fg_col);
+#endif
     bg_col = GetColorFromIndex(bg_col);
   }
 
@@ -1207,6 +1213,7 @@ Renderer *uDisplay::Init(void) {
     return NULL;
   }
 
+#ifndef ESP8266
   if (ep_mode == 4) {
     if (reset < 0) {
       AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires a reset pin");
@@ -1217,6 +1224,7 @@ Renderer *uDisplay::Init(void) {
       return NULL;
     }
   }
+#endif
 
   #ifdef UDSP_DEBUG
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Dsp Init 1 start");
@@ -1243,10 +1251,13 @@ Renderer *uDisplay::Init(void) {
     } else {
       framebuffer = (uint8_t*)calloc(framebuffer_size, 1);
     }
+#ifndef ESP8266
     if (!framebuffer && ep_mode == 4) {
       framebuffer = (uint8_t*)calloc(framebuffer_size, 1);
     }
+#endif
 #endif // ESP8266
+#ifndef ESP8266
     if (framebuffer && ep_mode == 4) {
       // Inky pixel value 1 is white; initialize the image buffer to white.
       memset(framebuffer, 0x11, framebuffer_size);
@@ -1255,6 +1266,7 @@ Renderer *uDisplay::Init(void) {
       AddLog(LOG_LEVEL_ERROR, "UDisplay: unable to allocate Inky framebuffer (%u bytes)", framebuffer_size);
       return NULL;
     }
+#endif
   }
   frame_buffer = framebuffer;
 
@@ -1300,14 +1312,20 @@ if (interface == _UDSP_SPI) {
 
     HandeBP(-1);
 
+#ifndef ESP8266
     if (ep_mode == 4) {
       // The Inky E673 Python driver uses SPI mode 0.
       spiController->setMode(SPI_MODE0);
     }
+#endif
 
     spiController->beginTransaction();
  
+#ifdef ESP8266
+    if (reset >= 0) {
+#else
     if (reset >= 0 && ep_mode != 4) {
+#endif
       pinMode(reset, OUTPUT);
       digitalWrite(reset, HIGH);
       delay(50);
@@ -1339,9 +1357,13 @@ if (interface == _UDSP_SPI) {
         // Create EPD panel BEFORE sending init commands (send_spi_cmds needs universal_panel)
         universal_panel = new EPDPanel(panel_config->epd, spiController, frame_buffer);
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
+#ifndef ESP8266
         // Inky reset and register setup run immediately before each frame,
         // matching the Pimoroni E673 update lifecycle.
         if (ep_mode != 4) {
+#else
+        {
+#endif
           send_spi_cmds(0, dsp_ncmds);
 
           // After descriptor init commands, do initial EPD setup
@@ -1529,12 +1551,14 @@ if (interface == _UDSP_SPI) {
 
 void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
   if (p != DISPLAY_INIT_MODE && ep_mode) {
+#ifndef ESP8266
     if (ep_mode == 4) {
       if (universal_panel) {
         universal_panel->updateFrame();
       }
       return;
     }
+#endif
     if (p == DISPLAY_INIT_PARTIAL) {
       if (universal_panel) {
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
