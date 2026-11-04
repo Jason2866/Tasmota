@@ -28,10 +28,10 @@ Renderer *Init_uDisplay(const char *desc);
 extern Renderer *renderer;
 #endif //  USE_UNIVERSAL_DISPLAY
 
-#if defined(USE_UNIVERSAL_DISPLAY) && defined(USE_UFILESYS) && defined(JPEG_PICTS) && defined(ESP32)
+#if defined(USE_UNIVERSAL_DISPLAY) && defined(USE_UFILESYS) && defined(JPEG_PICTS)
 extern bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys, bool allow_url);
 #endif
-#if defined(USE_UNIVERSAL_DISPLAY) && defined(ESP32)
+#if defined(USE_UNIVERSAL_DISPLAY)
 extern void BrTimeoutReset(void);
 extern void BrTimeoutStart(void);
 #endif
@@ -86,7 +86,7 @@ extern "C" {
   // `display.draw_jpg(path:string) -> bool` draws a filesystem JPEG at (0, 0)
   // and refreshes the active universal display.
   int be_ntv_display_draw_jpg(struct bvm *vm) {
-#if defined(USE_UNIVERSAL_DISPLAY) && defined(USE_UFILESYS) && defined(JPEG_PICTS) && defined(ESP32)
+#if defined(USE_UNIVERSAL_DISPLAY) && defined(USE_UFILESYS) && defined(JPEG_PICTS)
     int32_t argc = be_top(vm);
     if (argc != 1 || !be_isstring(vm, 1)) {
       be_raise(vm, kTypeError, nullptr);
@@ -116,7 +116,7 @@ extern "C" {
 #endif
   }
 
-#if defined(USE_UNIVERSAL_DISPLAY) && defined(ESP32)
+#if defined(USE_UNIVERSAL_DISPLAY)
   static void be_ntv_display_validate_rgb888(struct bvm *vm, int32_t argc,
                                               const uint8_t **pixels, int32_t *width, int32_t *height) {
     if (argc != 3 || !be_isbytes(vm, 1) || !be_isint(vm, 2) || !be_isint(vm, 3)) {
@@ -169,7 +169,7 @@ extern "C" {
   // `display.draw_rgb888(pixels:bytes, width:int, height:int) -> bool`
   // draws a full logical RGB888 frame and refreshes the active display.
   int be_ntv_display_draw_rgb888(struct bvm *vm) {
-#if defined(USE_UNIVERSAL_DISPLAY) && defined(ESP32)
+#if defined(USE_UNIVERSAL_DISPLAY)
     int32_t argc = be_top(vm);
     const uint8_t *pixels;
     int32_t width, height;
@@ -193,7 +193,7 @@ extern "C" {
   // `display.draw_rgb888_async(pixels:bytes, width:int, height:int) -> bool`
   // draws a full logical RGB888 frame and starts a cooperative display refresh.
   int be_ntv_display_draw_rgb888_async(struct bvm *vm) {
-#if defined(USE_UNIVERSAL_DISPLAY) && defined(ESP32)
+#if defined(USE_UNIVERSAL_DISPLAY)
     int32_t argc = be_top(vm);
     const uint8_t *pixels;
     int32_t width, height;
@@ -223,7 +223,7 @@ extern "C" {
 
   // `display.refresh_status() -> string` reports the asynchronous refresh state.
   int be_ntv_display_refresh_status(struct bvm *vm) {
-#if defined(USE_UNIVERSAL_DISPLAY) && defined(ESP32)
+#if defined(USE_UNIVERSAL_DISPLAY)
     if (be_top(vm) != 0) {
       be_raise(vm, kTypeError, nullptr);
     }
@@ -240,7 +240,7 @@ extern "C" {
     be_pushstring(vm, status);
     be_return(vm);
 #else
-    be_raise(vm, "feature_error", "asynchronous display status requires universal display and ESP32 support");
+    be_raise(vm, "feature_error", "asynchronous display status requires universal display");
 #endif
   }
 
