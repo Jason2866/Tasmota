@@ -30,6 +30,10 @@
 char get_jpeg_size(unsigned char *data, unsigned int data_size,
                    unsigned short *width, unsigned short *height);
 #endif
+#ifdef ESP32
+char get_berry_jpeg_size(unsigned char *data, unsigned int data_size,
+                         unsigned short *width, unsigned short *height);
+#endif
 #ifdef USE_UNIVERSAL_DISPLAY
 #include <uDisplay.h>
 #endif
@@ -432,6 +436,8 @@ struct be_img_util {
   static bool jpeg_size(uint8_t *buffer, size_t data_size, uint16_t *width, uint16_t *height) {
 #if defined(ESP32) && defined(JPEG_PICTS)
       return get_jpeg_size(buffer, (unsigned int)data_size, width, height);
+#elif defined(ESP32)
+      return get_berry_jpeg_size(buffer, (unsigned int)data_size, width, height);
 #else
       (void)buffer;
       (void)data_size;
@@ -636,6 +642,8 @@ extern "C" {
         // Smaller PSRAM boards reserve ~1.3MB for display/resize buffers.
         size_t reserve = free_psram < 3000000 ? 1300000 : 0;
         size_t max_allowed = free_psram > reserve ? free_psram - reserve : 500000;
+        size_t largest_psram_block = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+        if (max_allowed > largest_psram_block) max_allowed = largest_psram_block;
         size_t unscaled_size = (size_t)w * h * img->bpp;
         if (unscaled_size > max_allowed) {
           if (unscaled_size / 4 <= max_allowed) {

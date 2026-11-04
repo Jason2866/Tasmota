@@ -95,7 +95,7 @@ public:
     void serviceAsyncUpdate() override;
     uint8_t asyncUpdateStatus() override;
 #ifndef ESP8266
-    void queueUpdateAfterAsync();
+    bool queueUpdateAfterAsync();
 #endif
 
     // EPD-specific public methods (for uDisplay wrapper compatibility)

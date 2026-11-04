@@ -142,11 +142,13 @@ bool jpg2rgb888(const uint8_t *src, size_t src_len, uint8_t * out, jpg_scale_t s
     return true;
 }
 #endif //USE_NEW_JPG
+#endif // JPEG_PICTS
 
 
+#if defined(JPEG_PICTS) || defined(USE_BERRY_IMAGE)
 // Parses JPEG dimensions and rejects progressive JPEGs.
-char get_jpeg_size(unsigned char *buffer, unsigned int data_size,
-                   unsigned short *width, unsigned short *height) {
+static char parse_jpeg_size(unsigned char *buffer, unsigned int data_size,
+                            unsigned short *width, unsigned short *height) {
    if (!buffer || !width || !height || data_size < 4 ||
        buffer[0] != 0xFF || buffer[1] != 0xD8) {
       return false;
@@ -216,8 +218,21 @@ char get_jpeg_size(unsigned char *buffer, unsigned int data_size,
    return false;
 }
 
+#ifdef JPEG_PICTS
+char get_jpeg_size(unsigned char *buffer, unsigned int data_size,
+                   unsigned short *width, unsigned short *height) {
+   return parse_jpeg_size(buffer, data_size, width, height);
+}
+#endif
 
-#endif // JPEG_PICTS
+#ifdef USE_BERRY_IMAGE
+char get_berry_jpeg_size(unsigned char *buffer, unsigned int data_size,
+                         unsigned short *width, unsigned short *height) {
+   return parse_jpeg_size(buffer, data_size, width, height);
+}
+#endif
+#endif // JPEG_PICTS || USE_BERRY_IMAGE
+
 #endif //ESP32
 
 #ifdef USE_DISPLAY_DUMP

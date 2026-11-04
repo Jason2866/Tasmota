@@ -187,10 +187,7 @@ void uDisplay::Updateframe(void) {
         if (universal_panel->canStartAsyncUpdate() && universal_panel->startAsyncUpdate()) {
             return;
         }
-        if (universal_panel->asyncUpdateStatus() == UNIVERSAL_UPDATE_RUNNING) {
-            static_cast<EPDPanel*>(universal_panel)->queueUpdateAfterAsync();
-            return;
-        }
+        if (static_cast<EPDPanel*>(universal_panel)->queueUpdateAfterAsync()) return;
     }
 #endif
     UpdateframeChecked();

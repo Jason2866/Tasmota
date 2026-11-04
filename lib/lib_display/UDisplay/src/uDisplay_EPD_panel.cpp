@@ -506,12 +506,16 @@ bool EPDPanel::startAsyncUpdate() {
     return true;
 }
 
-void EPDPanel::queueUpdateAfterAsync() {
-    // TransferFrame consumes requests made before it reads the framebuffer;
-    // later requests need another refresh after the active update completes.
-    if (inky_async_status == UNIVERSAL_UPDATE_RUNNING) {
+bool EPDPanel::queueUpdateAfterAsync() {
+    // A request made during an async refresh needs a follow-up frame. A busy
+    // panel without a tracked async refresh needs the same retry once it clears.
+    if (cfg.ep_mode == 4 &&
+        (inky_async_status == UNIVERSAL_UPDATE_RUNNING ||
+         (busy_pin_configured && inkyBusy()))) {
         inky_update_pending = true;
+        return true;
     }
+    return false;
 }
 
 uint8_t EPDPanel::asyncUpdateStatus() {
