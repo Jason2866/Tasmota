@@ -26,6 +26,10 @@
 
 #include "esp_camera.h"
 #include "JPEGDEC.h"
+#if defined(ESP32) && defined(JPEG_PICTS)
+char get_jpeg_size(unsigned char *data, unsigned int data_size,
+                   unsigned short *width, unsigned short *height);
+#endif
 #ifdef USE_UNIVERSAL_DISPLAY
 #include <uDisplay.h>
 #endif
@@ -137,7 +141,7 @@ struct be_img_util {
    */
   static bool from_jpg(image_t *img, uint8_t* buffer, size_t len) {
     uint16_t width, height;
-    if(jpeg_size(buffer, len, &width, &height, nullptr) != true){
+    if(jpeg_size(buffer, len, &width, &height) != true){
       return false;
     }
     pixformat_t format = PIXFORMAT_JPEG;
@@ -160,7 +164,7 @@ struct be_img_util {
     }
     if (f == PIXFORMAT_JPEG) {
       uint16_t jpeg_width, jpeg_height;
-      if (!jpeg_size(buffer, len, &jpeg_width, &jpeg_height, nullptr) || jpeg_width != w || jpeg_height != h) {
+      if (!jpeg_size(buffer, len, &jpeg_width, &jpeg_height) || jpeg_width != w || jpeg_height != h) {
         return false;
       }
     } else {
@@ -391,7 +395,7 @@ struct be_img_util {
       // Parse JPEG dimensions to check for mismatch
       uint16_t jpeg_width, jpeg_height;
       bool crop_enabled = false;
-      if (jpeg_size(input_buf, len, &jpeg_width, &jpeg_height, nullptr)) {
+      if (jpeg_size(input_buf, len, &jpeg_width, &jpeg_height)) {
           if (scale_opt & JPEG_SCALE_HALF) { jpeg_width = (jpeg_width + 1) / 2; jpeg_height = (jpeg_height + 1) / 2; }
           else if (scale_opt & JPEG_SCALE_QUARTER) { jpeg_width = (jpeg_width + 3) / 4; jpeg_height = (jpeg_height + 3) / 4; }
           else if (scale_opt & JPEG_SCALE_EIGHTH) { jpeg_width = (jpeg_width + 7) / 8; jpeg_height = (jpeg_height + 7) / 8; }
@@ -425,129 +429,18 @@ struct be_img_util {
       return ok;
   }
 
-  /**
-   * @brief Extracts width and height from JPEG buffer
-   * @param buffer JPEG data buffer
-   * @param data_size Buffer size
-   * @param width Output: image width
-   * @param height Output: image height
-   * @return true if valid JPEG and dimensions extracted, false otherwise
-   */
-  static bool jpeg_size(uint8_t* buffer, size_t data_size, uint16_t *width, uint16_t *height,
-                        bool *is_progressive) {
-    if (is_progressive) {
-      *is_progressive = false;
-    }
-    if (!buffer || !width || !height || data_size < 4 ||
-        buffer[0] != 0xFF || buffer[1] != 0xD8) {
+  static bool jpeg_size(uint8_t *buffer, size_t data_size, uint16_t *width, uint16_t *height) {
+#if defined(ESP32) && defined(JPEG_PICTS)
+      return get_jpeg_size(buffer, (unsigned int)data_size, width, height);
+#else
+      (void)buffer;
+      (void)data_size;
+      (void)width;
+      (void)height;
       return false;
-    }
-
-    size_t offset = 2;
-    const size_t data_end = data_size;
-    uint16_t parsed_width = 0;
-    uint16_t parsed_height = 0;
-    bool found_scan = false;
-    bool in_scan = false;
-    while (offset < data_end) {
-      if (in_scan) {
-        while (offset < data_end) {
-          if (buffer[offset] != 0xFF) {
-            offset++;
-            continue;
-          }
-
-          const size_t marker_start = offset;
-          while (offset < data_end && buffer[offset] == 0xFF) {
-            offset++;
-          }
-          if (offset >= data_end) {
-            return false;
-          }
-          const uint8_t scan_marker = buffer[offset++];
-          // FF00 is byte-stuffed image data; TEM and restart markers stay in the scan.
-          if (scan_marker == 0x00 || scan_marker == 0x01 ||
-              (scan_marker >= 0xD0 && scan_marker <= 0xD7)) {
-            continue;
-          }
-          if (scan_marker == 0xD9) {
-            *width = parsed_width;
-            *height = parsed_height;
-            return true;
-          }
-
-          // Hand other markers (including progressive JPEG's next scan) to the parser.
-          offset = marker_start;
-          in_scan = false;
-          break;
-        }
-        if (in_scan || offset >= data_end) {
-          return false;
-        }
-      }
-
-      if (buffer[offset] != 0xFF) {
-        return false;
-      }
-      while (offset < data_end && buffer[offset] == 0xFF) {
-        offset++;
-      }
-      if (offset >= data_end) {
-        return false;
-      }
-
-      const uint8_t marker = buffer[offset++];
-      if (marker == 0xD9) {
-        return false;
-      }
-      if (marker == 0xD8 || marker == 0x00) {
-        return false;
-      }
-      // TEM and restart markers do not contain a segment length.
-      if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) {
-        continue;
-      }
-      if (data_end - offset < 2) {
-        return false;
-      }
-
-      const uint16_t segment_length = ((uint16_t)buffer[offset] << 8) | buffer[offset + 1];
-      if (segment_length < 2 || segment_length > data_end - offset) {
-        return false;
-      }
-      if (marker == 0xC0 || marker == 0xC2) {
-        if (marker == 0xC2 && is_progressive) {
-          *is_progressive = true;
-        }
-        if (segment_length < 8) {
-          return false;
-        }
-        const uint8_t components = buffer[offset + 7];
-        if (components == 0 || segment_length < 8 + (uint16_t)components * 3) {
-          return false;
-        }
-        parsed_height = ((uint16_t)buffer[offset + 3] << 8) | buffer[offset + 4];
-        parsed_width = ((uint16_t)buffer[offset + 5] << 8) | buffer[offset + 6];
-        if (parsed_width == 0 || parsed_height == 0) {
-          return false;
-        }
-      }
-
-      const size_t segment_end = offset + segment_length;
-      if (marker == 0xDA) {
-        if (parsed_width == 0 || parsed_height == 0) {
-          return false;
-        }
-        found_scan = true;
-        offset = segment_end;
-        in_scan = true;
-      } else {
-        offset = segment_end;
-        in_scan = found_scan;
-      }
-    }
-    return false;
+#endif
   }
+
 };
 
 /*********************************************************************************************\
@@ -725,14 +618,9 @@ extern "C" {
 
       bool success = false;
       uint16_t w,h;
-      bool is_progressive = false;
-      if (be_img_util::jpeg_size(src_buf, src_buf_len, &w, &h, &is_progressive) == false){
+      if (be_img_util::jpeg_size(src_buf, src_buf_len, &w, &h) == false){
         be_raise(vm, "img_error", "no compatible jpg buffer");
         be_return_nil(vm); //do not destroy the old image
-      }
-      if (is_progressive) {
-        be_raise(vm, "img_error", "unsupported progressive JPEG");
-        be_return_nil(vm);
       }
 
       be_img_util::setFormat(img, pixformat_t(format));

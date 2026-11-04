@@ -144,47 +144,74 @@ bool jpg2rgb888(const uint8_t *src, size_t src_len, uint8_t * out, jpg_scale_t s
 #endif //USE_NEW_JPG
 
 
-// https://web.archive.org/web/20131016210645/http://www.64lines.com/jpeg-width-height
-// Gets the JPEG size from the array of data passed to the function, file reference: http://www.obrador.com/essentialjpeg/headerinfo.htm
-char get_jpeg_size(unsigned char* data, unsigned int data_size, unsigned short *width, unsigned short *height) {
-   if (!width || !height) return false;
+// Parses JPEG dimensions and rejects progressive JPEGs.
+char get_jpeg_size(unsigned char *buffer, unsigned int data_size,
+                   unsigned short *width, unsigned short *height) {
+   if (!buffer || !width || !height || data_size < 4 ||
+       buffer[0] != 0xFF || buffer[1] != 0xD8) {
+      return false;
+   }
+
    *width = 0;
    *height = 0;
-   if (!data || data_size < 4) return false;
-
-   // Check for a valid JPEG SOI and APP0 marker.
-   if (data[0] != 0xFF || data[1] != 0xD8 || data[2] != 0xFF || data[3] != 0xE0) return false;
-
-   size_t offset = 4;
-   size_t remaining = data_size - offset;
-   // Read the APP0 length and the complete JFIF identifier before accessing it.
-   if (remaining < 7) return false;
-   if (data[offset + 2] != 'J' || data[offset + 3] != 'F' ||
-       data[offset + 4] != 'I' || data[offset + 5] != 'F' || data[offset + 6] != 0x00) return false;
-
-   size_t block_length = (data[offset] << 8) | data[offset + 1];
-   if (block_length < 7 || block_length > remaining) return false;
-   offset += block_length;
-
+   size_t offset = 2;
+   bool found_scan = false;
+   bool in_scan = false;
    while (offset < data_size) {
-      remaining = data_size - offset;
-      // Every segment starts with a two-byte marker.
-      if (remaining < 2 || data[offset] != 0xFF) return false;
-      if (data[offset + 1] == 0xC0) {
-         // SOF0 needs its length, precision, and both dimensions in the buffer.
-         if (remaining < 4) return false;
-         block_length = (data[offset + 2] << 8) | data[offset + 3];
-         if (block_length < 7 || block_length > remaining - 2) return false;
-         *height = (data[offset + 5] << 8) | data[offset + 6];
-         *width = (data[offset + 7] << 8) | data[offset + 8];
-         return true;
+      if (in_scan) {
+         while (offset < data_size) {
+            if (buffer[offset] != 0xFF) {
+               offset++;
+               continue;
+            }
+            const size_t marker_start = offset;
+            while (offset < data_size && buffer[offset] == 0xFF) offset++;
+            if (offset >= data_size) return false;
+            const uint8_t scan_marker = buffer[offset++];
+            if (scan_marker == 0x00 || scan_marker == 0x01 ||
+                (scan_marker >= 0xD0 && scan_marker <= 0xD7)) {
+               continue;
+            }
+            if (scan_marker == 0xD9) return true;
+            offset = marker_start;
+            in_scan = false;
+            break;
+         }
+         if (in_scan || offset >= data_size) return false;
       }
 
-      // Other segments need a complete length field and a fully present payload.
-      if (remaining < 4) return false;
-      block_length = (data[offset + 2] << 8) | data[offset + 3];
-      if (block_length < 2 || block_length > remaining - 2) return false;
-      offset += 2 + block_length;
+      if (buffer[offset] != 0xFF) return false;
+      while (offset < data_size && buffer[offset] == 0xFF) offset++;
+      if (offset >= data_size) return false;
+      const uint8_t marker = buffer[offset++];
+      if (marker == 0xD9 || marker == 0xD8 || marker == 0x00) return false;
+      if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) continue;
+      if (data_size - offset < 2) return false;
+
+      const size_t segment_length = ((size_t)buffer[offset] << 8) | buffer[offset + 1];
+      if (segment_length < 2 || segment_length > data_size - offset) return false;
+      if (marker == 0xC2) {
+         return false;
+      }
+      if (marker == 0xC0) {
+         if (segment_length < 8) return false;
+         const uint8_t components = buffer[offset + 7];
+         if (components == 0 || segment_length < 8 + (size_t)components * 3) return false;
+         *height = ((unsigned short)buffer[offset + 3] << 8) | buffer[offset + 4];
+         *width = ((unsigned short)buffer[offset + 5] << 8) | buffer[offset + 6];
+         if (*width == 0 || *height == 0) return false;
+      }
+
+      const size_t segment_end = offset + segment_length;
+      if (marker == 0xDA) {
+         if (*width == 0 || *height == 0) return false;
+         found_scan = true;
+         offset = segment_end;
+         in_scan = true;
+      } else {
+         offset = segment_end;
+         in_scan = found_scan;
+      }
    }
    return false;
 }
