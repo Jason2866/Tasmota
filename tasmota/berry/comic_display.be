@@ -353,12 +353,29 @@ def display_comic(username, password, series_name)
   var downloaded_bytes = 0
   var result = nil
   var cover_was_under_limit = false
+  var network_failed = false
   var cover_attempt = 0
   while cover_attempt < comic_cover_attempts
     cover_attempt += 1
     print("Fetching a random Metron comic cover (attempt " + str(cover_attempt) + "/" + str(comic_cover_attempts) + ")...")
-    downloaded_bytes = metron_download_cover(username, password,
-                                              series_name, comic_download_path)
+    try
+      downloaded_bytes = metron_download_cover(username, password,
+                                                series_name, comic_download_path)
+    except .. as err, msg
+      if err == "network_error"
+        network_failed = true
+        print("Metron network request failed: " + str(msg) + "; searching for another cover")
+        if path.exists(comic_download_path)
+          path.remove(comic_download_path)
+        end
+        gc.collect()
+        if cover_attempt < comic_cover_attempts
+          continue
+        end
+        break
+      end
+      raise err, msg
+    end
     tasmota.yield()
     if downloaded_bytes > comic_max_source_bytes
       print("Metron cover is " + str(downloaded_bytes) + " bytes; exceeds the 512 KiB limit, searching for another cover")
@@ -407,6 +424,8 @@ def display_comic(username, password, series_name)
   if result == nil
     if cover_was_under_limit
       print("No Metron cover could be processed after " + str(comic_cover_attempts) + " attempts; keeping the current image")
+    elif network_failed
+      print("No usable Metron cover after " + str(comic_cover_attempts) + " attempts (network errors occurred); keeping the current image")
     else
       print("No Metron cover within 512 KiB found after " + str(comic_cover_attempts) + " attempts; keeping the current image")
     end
