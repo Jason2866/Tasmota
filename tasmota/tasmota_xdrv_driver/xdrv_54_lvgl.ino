@@ -687,17 +687,19 @@ bool Xdrv54(uint32_t function) {
         if (TasmotaGlobal.sleep > USE_LVGL_MAX_SLEEP) {
           TasmotaGlobal.sleep = USE_LVGL_MAX_SLEEP;   // sleep is max 10ms
         }
+        if (renderer && renderer->disp_bpp == 4 &&
+            renderer->GetUpdateFrameAsyncStatus() != RENDERER_UPDATE_RUNNING &&
+            lvgl_inky_redraw_pending) {
+          // Queue the redraw before LVGL can flush another frame and start a refresh.
+          lvgl_inky_redraw_pending = false;
+          lvgl_inky_refresh_pending = false;
+          lv_obj_invalidate(lv_screen_active());
+        }
         lv_task_handler();
         if (renderer && renderer->disp_bpp == 4 &&
             renderer->GetUpdateFrameAsyncStatus() != RENDERER_UPDATE_RUNNING) {
-          if (lvgl_inky_redraw_pending) {
-            // Some flushes were acknowledged while the panel owned the frame.
-            // Redraw the latest LVGL state before starting another transfer.
-            lvgl_inky_redraw_pending = false;
-            lvgl_inky_refresh_pending = false;
-            lv_obj_invalidate(lv_screen_active());
-          } else if (lvgl_inky_refresh_pending && renderer->CanStartUpdateFrameAsync() &&
-                     renderer->StartUpdateFrameAsync()) {
+          if (lvgl_inky_refresh_pending && renderer->CanStartUpdateFrameAsync() &&
+              renderer->StartUpdateFrameAsync()) {
             lvgl_inky_refresh_pending = false;
           }
         }
