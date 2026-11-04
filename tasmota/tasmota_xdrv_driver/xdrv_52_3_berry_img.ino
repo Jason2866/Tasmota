@@ -623,20 +623,32 @@ extern "C" {
         scale = be_toint(vm, 4);
       }
       if (scale_provided && scale <= 0) {
+        auto allocation_size_for_scale = [w, h, img](uint32_t divisor) -> uint64_t {
+          const uint64_t scaled_width = ((uint64_t)w + divisor - 1) / divisor;
+          const uint64_t scaled_height = ((uint64_t)h + divisor - 1) / divisor;
+          return scaled_width * scaled_height * img->bpp;
+        };
+
         size_t free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
         // Smaller PSRAM boards reserve ~1.3MB for display/resize buffers.
         size_t reserve = free_psram < 3000000 ? 1300000 : 0;
         size_t max_allowed = free_psram > reserve ? free_psram - reserve : 500000;
         size_t largest_psram_block = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
         if (max_allowed > largest_psram_block) max_allowed = largest_psram_block;
-        size_t unscaled_size = (size_t)w * h * img->bpp;
+        const uint64_t unscaled_size = allocation_size_for_scale(1);
         if (unscaled_size > max_allowed) {
-          if (unscaled_size / 4 <= max_allowed) {
-            scale = 2;
-          } else if (unscaled_size / 16 <= max_allowed) {
-            scale = 4;
-          } else {
-            scale = 8;
+          const uint32_t scale_divisors[] = {2, 4, 8};
+          bool scale_fits = false;
+          for (size_t i = 0; i < sizeof(scale_divisors) / sizeof(scale_divisors[0]); i++) {
+            if (allocation_size_for_scale(scale_divisors[i]) <= max_allowed) {
+              scale = scale_divisors[i];
+              scale_fits = true;
+              break;
+            }
+          }
+          if (!scale_fits) {
+            be_raise(vm, "img_error", "image exceeds available PSRAM");
+            be_return_nil(vm);
           }
         }
       }
