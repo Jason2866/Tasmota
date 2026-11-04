@@ -6,6 +6,7 @@
 static constexpr uint16_t RGB16_TO_MONO      = 0x8410;
 static constexpr uint16_t RGB16_SWAP_TO_MONO = 0x1084;
 
+#ifndef ESP8266
 bool uDisplay::resizeRGB888(const uint8_t *source, uint16_t source_width, uint16_t source_height,
                             uint8_t *output, uint16_t target_width, uint16_t target_height) {
     if (!source || !output || !source_width || !source_height || !target_width || !target_height ||
@@ -44,6 +45,7 @@ bool uDisplay::resizeRGB888(const uint8_t *source, uint16_t source_width, uint16
     }
     return true;
 }
+#endif
 
 void uDisplay::drawPixel(int16_t x, int16_t y, uint16_t color) {
     if (universal_panel->drawPixel(x, y, color)) {
