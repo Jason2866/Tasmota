@@ -186,7 +186,7 @@ extern "C" {
     be_pushbool(vm, true);
     be_return(vm);
 #else
-    be_raise(vm, "feature_error", "RGB888 display requires universal display and ESP32 support");
+    be_raise(vm, "feature_error", "RGB888 display requires universal display support");
 #endif
   }
 
@@ -217,7 +217,7 @@ extern "C" {
     be_pushbool(vm, true);
     be_return(vm);
 #else
-    be_raise(vm, "feature_error", "asynchronous RGB888 display requires universal display and ESP32 support");
+    be_raise(vm, "feature_error", "asynchronous RGB888 display requires universal display support");
 #endif
   }
 
