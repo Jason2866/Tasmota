@@ -95,8 +95,12 @@ def metron_get_json(url, username, password)
     var location_header = wc.get_header("Location")
     wc.close()
     wc = nil
-    if !metron_should_retry(status) || attempt >= metron_retries
-      raise "network_error", metron_status_message(status, server_header, content_type, location_header)
+    var status_message = metron_status_message(status, server_header, content_type, location_header)
+    if !metron_should_retry(status)
+      raise "http_error", status_message
+    end
+    if attempt >= metron_retries
+      raise "network_error", status_message
     end
     print("Metron request failed with " + str(status) + ", retrying (" + str(attempt) + "/" + str(metron_retries) + ")")
     tasmota.delay(500)
@@ -268,7 +272,10 @@ def metron_download_cover(username, password, series_name, output_path)
     end
     image_client.close()
     image_client = nil
-    if !metron_should_retry(status) || attempt >= metron_retries
+    if !metron_should_retry(status)
+      raise "http_error", "Cover download returned HTTP " + str(status)
+    end
+    if attempt >= metron_retries
       raise "network_error", "Cover download returned HTTP " + str(status)
     end
     print("Cover download failed with " + str(status) + ", retrying (" + str(attempt) + "/" + str(metron_retries) + ")")
