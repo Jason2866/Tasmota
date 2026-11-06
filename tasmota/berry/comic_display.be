@@ -87,7 +87,7 @@ def metron_get_json(url, username, password)
     wc.begin(url)
     status = wc.GET()
     tasmota.yield()
-    if status == 200
+    if status >= 200 && status < 300
       break
     end
     var server_header = wc.get_header("Server")
@@ -267,7 +267,7 @@ def metron_download_cover(username, password, series_name, output_path)
     image_client.begin(cover_url)
     status = image_client.GET()
     tasmota.yield()
-    if status == 200
+    if status >= 200 && status < 300
       break
     end
     image_client.close()
