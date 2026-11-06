@@ -647,6 +647,7 @@ extern "C" {
             }
           }
           if (!scale_fits) {
+            be_img_util::clear(img);
             be_raise(vm, "img_error", "image exceeds available PSRAM");
             be_return_nil(vm);
           }
