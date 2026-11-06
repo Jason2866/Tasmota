@@ -6,8 +6,10 @@ All notable changes to this project will be documented in this file.
 ## [16.0.0.2]
 ### Added
 - ESP32 `PsrMode` displaying whether PSRAM is `QIO`/`OPI` (#25213)
+- BME680 IAQ (air quality index) to BMP sensor driver (#25175)
 
 ### Breaking Changed
+- Reduce max number of ZCDimmer PWM channels to 5 due to allocated persistent data size (#25222)
 
 ### Changed
 - ESP8266 platform update from 2026.09.00 to 2026.10.00 (#25196)
@@ -16,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - BLE EQ3-TRV avoid sending of empty status (#25182)
 - GUI allow `;` or `{` in a password saved from the settings page (#25184)
 - ESP32 web login uses own Basic auth instead Arduino (#25210)
+- Refactor JPEG size retrieval function (#25226)
 
 ### Fixed
 - ESP32 `UfsServe` (`UFILESYS_STATIC_SERVING`) compilation, and reject `..` in served paths (#25211)
@@ -23,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - OTA and file upload security issue
 - MiEL HVAC Modbus mirror total energy to holding register 40027 (#25214)
 - Missing NUL terminator for stored `ModbusBridgeSend` command data (#25218)
+- TuyaV1 and TuyaV2 out-of-bounds accessing `tuya_fnid_map[]` (#25222)
 
 ### Removed
 
