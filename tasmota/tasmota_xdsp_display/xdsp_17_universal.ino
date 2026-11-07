@@ -69,6 +69,10 @@ const char DSP_SAMPLE_DESC[] PROGMEM = DSP_ROM_DESC;
 #endif // DSP_ROM_DESC
 /*********************************************************************************************/
 Renderer *Init_uDisplay(const char *desc) {
+  if (renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot reinitialize while an asynchronous display refresh is active"));
+    return nullptr;
+  }
   if (TasmotaGlobal.gpio_optiona.udisplay_driver || desc) {
 
     Settings->display_model = XDSP_17;
@@ -587,6 +591,7 @@ void UDISP_Time(void) {
 
 void UDISP_Refresh(void) {  // Every second
   if (!renderer) return;
+  if (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) return;
   if (DM_TIME == Settings->display_mode) {
     UDISP_Time();
   }
