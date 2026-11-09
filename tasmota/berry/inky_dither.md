@@ -19,19 +19,22 @@
 
 The Inky's `BUSY` signal is a separate panel status output; it is not SPI MISO data. The current uDisplay descriptor uses the Tasmota `SPI MISO` GPIO as the input for this signal, so connect Inky `BUSY` to the ESP GPIO configured as `SPI MISO`. The driver reads that pin as a GPIO while waiting for the panel; it does not read display data over MISO.
 
-Configure the Tasmota GPIO functions to match the signals you wired:
+Configure the Tasmota GPIO functions to match the signals you wired (Example config for ESP32-S3):
 
-| Inky E673 signal | Raspberry Pi header pin | Tasmota GPIO function |
-| --- | --- | --- |
-| `CS` / `CS0` | pin 24 | `SPI CS` |
-| `SCLK` | pin 23 | `SPI CLK` |
-| `MOSI` / `DIN` | pin 19 | `SPI MOSI` |
-| `D/C` | pin 15 | `SPI DC` |
-| `RESET` | pin 13 | `Display Rst` |
-| `BUSY` | pin 11 | `SPI MISO` |
-| `3V3` | pin 1 | `3V3` |
-| `5V` | pin 2 | `5V` |
-| `GND` | pin 6 | `GND` |
+| Inky E673 signal | Raspberry Pi header pin | Tasmota GPIO function | ESP32-S3 GPIO | Dupont Cable color |
+| --- | --- | --- | --- | --- |
+| `CS` / `CS0` | pin 24 | `SPI CS` | `GPIO 10` | grey |
+| `SCLK` | pin 23 | `SPI CLK` | `GPIO 11` | lila |
+| `MOSI` / `DIN` | pin 19 | `SPI MOSI` | `GPIO 12` | green |
+| `D/C` | pin 15 | `SPI DC` | `GPIO 13` | blue |
+| `RESET` | pin 13 | `Display Rst` | `GPIO 14` | yellow |
+| `BUSY` | pin 11 | `SPI MISO` | `GPIO 15` | white |
+| `3V3` | pin 1 | `3V3` | `3V3` | orange |
+| `5V` | pin 2 | `5V` | `5V` | red |
+| `GND` | pin 6 | `GND` | `GND` | brown |
+
+![Raspberry Pi GPIO header pinout](./Raspberry-Pi-GPIO-Header-with-Photo.png)
+![Inky Impression 7.3 GPIO header with connected pins marked](./inky-7-3-back-gpio-pins.png)
 
 Assign each Tasmota function to the ESP GPIO physically wired to that Inky signal, using **Configure Module** (or the equivalent GPIO configuration for your device). The middle column documents the Raspberry Pi 40-pin header locations; these are not ESP32 GPIO numbers. Choose suitable GPIOs for your ESP32 wiring and assign the Tasmota functions accordingly. In particular, ensure that `SPI MISO` is assigned even though the panel has no MISO data output.
 
