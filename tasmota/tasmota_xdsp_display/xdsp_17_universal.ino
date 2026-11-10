@@ -541,6 +541,39 @@ int8_t replacepin(char **cp, int16_t pin) {
 
 #ifdef USE_DISPLAY_MODES1TO5
 
+static char *udisp_pending_log_buffer = nullptr;
+static uint8_t udisp_pending_log_cols = 0;
+static uint8_t udisp_pending_log_idx = 0;
+static uint8_t udisp_pending_log_ptr = 0;
+
+static void UDISP_StageLogLines(void) {
+  uint8_t cols = Settings->display_cols[0] + 1;
+  if (udisp_pending_log_buffer && (udisp_pending_log_idx == udisp_pending_log_ptr) &&
+      (udisp_pending_log_cols != cols)) {
+    free(udisp_pending_log_buffer);
+    udisp_pending_log_buffer = nullptr;
+    udisp_pending_log_cols = 0;
+    udisp_pending_log_idx = 0;
+    udisp_pending_log_ptr = 0;
+  }
+  if (!udisp_pending_log_buffer) {
+    udisp_pending_log_buffer = (char*)calloc(DISPLAY_LOG_ROWS, cols);
+    if (!udisp_pending_log_buffer) return;
+    udisp_pending_log_cols = cols;
+  }
+
+  while (true) {
+    uint8_t next_idx = udisp_pending_log_idx + 1;
+    if (DISPLAY_LOG_ROWS == next_idx) { next_idx = 0; }
+    if (next_idx == udisp_pending_log_ptr) return;  // Leave one slot empty to distinguish full from empty
+
+    char *txt = DisplayLogBuffer('\370');
+    if (!txt) return;
+    strlcpy(udisp_pending_log_buffer + (udisp_pending_log_idx * udisp_pending_log_cols), txt, udisp_pending_log_cols);
+    udisp_pending_log_idx = next_idx;
+  }
+}
+
 void UDISP_PrintLog(void) {
   // This can take over 3 seconds depending on renderer->Updateframe() speed
   //   due to not connected busy pin (configure as MISO)
@@ -554,7 +587,13 @@ void UDISP_PrintLog(void) {
   disp_refresh = Settings->display_refresh;
   if (!disp_screen_buffer_cols) { DisplayAllocScreenBuffer(); }
 
-  char* txt = DisplayLogBuffer('\370');
+  char* txt = nullptr;
+  if (udisp_pending_log_idx != udisp_pending_log_ptr) {
+    txt = udisp_pending_log_buffer + (udisp_pending_log_ptr * udisp_pending_log_cols);
+    if (DISPLAY_LOG_ROWS == ++udisp_pending_log_ptr) { udisp_pending_log_ptr = 0; }
+  } else {
+    txt = DisplayLogBuffer('\370');
+  }
   if (txt != nullptr) {
     uint8_t last_row = Settings->display_rows -1;
 
@@ -591,7 +630,12 @@ void UDISP_Time(void) {
 
 void UDISP_Refresh(void) {  // Every second
   if (!renderer) return;
-  if (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) return;
+  if (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+    if (Settings->display_mode > DM_TIME) {
+      UDISP_StageLogLines();
+    }
+    return;
+  }
   if (DM_TIME == Settings->display_mode) {
     UDISP_Time();
   }

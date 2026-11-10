@@ -1627,8 +1627,15 @@ void DisplayReAllocLogBuffer(void) {
 
 void DisplayLogBufferAdd(char* txt) {
   if (disp_log_buffer_cols) {
-    strlcpy(disp_log_buffer[disp_log_buffer_idx++], txt, disp_log_buffer_cols);  // This preserves the % sign where printf won't
-    if (DISPLAY_LOG_ROWS == disp_log_buffer_idx) { disp_log_buffer_idx = 0; }
+    uint8_t next_idx = disp_log_buffer_idx + 1;
+    if (DISPLAY_LOG_ROWS == next_idx) { next_idx = 0; }
+    if ((next_idx == disp_log_buffer_ptr) && renderer &&
+        (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING)) {
+      // Async display updates can leave this ring unconsumed long enough to wrap.
+      if (DISPLAY_LOG_ROWS == ++disp_log_buffer_ptr) { disp_log_buffer_ptr = 0; }
+    }
+    strlcpy(disp_log_buffer[disp_log_buffer_idx], txt, disp_log_buffer_cols);  // This preserves the % sign where printf won't
+    disp_log_buffer_idx = next_idx;
   }
 }
 

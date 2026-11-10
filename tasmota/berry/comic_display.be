@@ -369,7 +369,7 @@ def display_comic(username, password, series_name)
       downloaded_bytes = metron_download_cover(username, password,
                                                 series_name, comic_download_path)
     except .. as err, msg
-      if err == "network_error"
+      if err == "network_error" || err == "cover_unavailable"
         network_failed = true
         print("Metron network request failed: " + str(msg) + "; searching for another cover")
         if path.exists(comic_download_path)
