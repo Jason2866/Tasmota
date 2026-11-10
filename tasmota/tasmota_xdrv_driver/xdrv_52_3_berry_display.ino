@@ -95,6 +95,9 @@ extern "C" {
       be_raise(vm, "display_error", "universal display is not initialized");
     }
 
+    if (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+      be_raise(vm, "display_error", "display refresh failed");
+    }
     char *file = const_cast<char *>(be_tostring(vm, 1));
     // Inky refresh can take about 32 seconds, longer than Berry's execution
     // timeout. This native call services the display synchronously.
@@ -175,6 +178,9 @@ extern "C" {
     int32_t width, height;
     be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height);
 
+    if (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+      be_raise(vm, "display_error", "display refresh failed");
+    }
     be_ntv_display_push_rgb888(vm, pixels, width, height);
     const bool refreshed = renderer->UpdateframeChecked();
     BrTimeoutStart();
