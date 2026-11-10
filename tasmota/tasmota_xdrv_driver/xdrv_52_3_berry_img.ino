@@ -26,9 +26,7 @@
 
 #include "esp_camera.h"
 #include "JPEGDEC.h"
-#ifdef USE_UNIVERSAL_DISPLAY
-#include <uDisplay.h>
-#endif
+#include "be_img_resize.h"
 
 char get_jpeg_size(unsigned char *data, unsigned int data_size,
                    unsigned short *width, unsigned short *height);
@@ -496,6 +494,12 @@ extern "C" {
    * Berry arguments: (width, height)
    */
   int be_img_resize(struct bvm *vm);
+  static void be_img_resize_service(void) {
+    BrTimeoutYield();
+    OsWatchLoop();
+    yield();
+  }
+
   int be_img_resize(struct bvm *vm) {
     int32_t argc = be_top(vm);
     if (argc < 3 || !be_isint(vm, 2) || !be_isint(vm, 3)) {
@@ -516,6 +520,11 @@ extern "C" {
       be_raise(vm, "img_error", "resize requires a decoded RGB888 image");
       be_return_nil(vm);
     }
+    if ((size_t)img->width > SIZE_MAX / 3 / img->height ||
+        img->len < (size_t)img->width * img->height * 3) {
+      be_raise(vm, "img_error", "invalid RGB888 image buffer");
+      be_return_nil(vm);
+    }
     if (img->width == target_width && img->height == target_height) {
       be_return_nil(vm);
     }
@@ -533,41 +542,9 @@ extern "C" {
       be_return_nil(vm);
     }
 
-#ifdef USE_UNIVERSAL_DISPLAY
-    bool resized = uDisplay::resizeRGB888(img->buf, source_width, source_height, output,
-                                           (uint16_t)target_width, (uint16_t)target_height);
-#else
-    // Bilinear scaling while keeping the large working buffer in native PSRAM instead of Berry bytes.
-    for (int32_t y = 0; y < target_height; ++y) {
-      float sample_y = (((float)y + 0.5f) * source_height / target_height) - 0.5f;
-      if (sample_y < 0.0f) sample_y = 0.0f;
-      if (sample_y > source_height - 1) sample_y = source_height - 1;
-      uint32_t y0 = (uint32_t)sample_y;
-      uint32_t y1 = y0 + 1 < source_height ? y0 + 1 : y0;
-      float fy = sample_y - y0;
-      for (int32_t x = 0; x < target_width; ++x) {
-        float sample_x = (((float)x + 0.5f) * source_width / target_width) - 0.5f;
-        if (sample_x < 0.0f) sample_x = 0.0f;
-        if (sample_x > source_width - 1) sample_x = source_width - 1;
-        uint32_t x0 = (uint32_t)sample_x;
-        uint32_t x1 = x0 + 1 < source_width ? x0 + 1 : x0;
-        float fx = sample_x - x0;
-        size_t source_offset00 = ((size_t)y0 * source_width + x0) * 3;
-        size_t source_offset10 = ((size_t)y0 * source_width + x1) * 3;
-        size_t source_offset01 = ((size_t)y1 * source_width + x0) * 3;
-        size_t source_offset11 = ((size_t)y1 * source_width + x1) * 3;
-        size_t target_offset = ((size_t)y * target_width + x) * 3;
-        for (uint8_t channel = 0; channel < 3; ++channel) {
-          float top = img->buf[source_offset00 + channel] * (1.0f - fx) +
-                      img->buf[source_offset10 + channel] * fx;
-          float bottom = img->buf[source_offset01 + channel] * (1.0f - fx) +
-                         img->buf[source_offset11 + channel] * fx;
-          output[target_offset + channel] = (uint8_t)(top * (1.0f - fy) + bottom * fy + 0.5f);
-        }
-      }
-    }
-    bool resized = true;
-#endif
+    bool resized = be_img_resize_rgb888(img->buf, source_width, source_height, output,
+                                        (uint16_t)target_width, (uint16_t)target_height,
+                                        be_img_resize_service);
     if (!resized) {
       free(output);
       be_raise(vm, "img_error", "could not resize image");
