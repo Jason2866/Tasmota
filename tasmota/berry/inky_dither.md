@@ -7,7 +7,7 @@
 - An ESP32 Tasmota build with features (`USE_DISPLAY`, `USE_UNIVERSAL_DISPLAY`, `USE_UFILESYS`, `USE_BERRY_IMAGE` and `JPEG_PICTS`) enabled. These are compile-time options and cannot be enabled by loading the script. The script sends the quantized RGB888 buffer directly to the universal display and saves a JPEG copy separately.
 - PSRAM is required for the decoded RGB image buffer. An 800 × 480 buffer uses about 1.15 MiB, in addition to memory needed by JPEG decoding and encoding.
 - The source must be a JPEG that decodes to RGB888. Images are resized to the logical dimensions selected by `display.ini` and dithered. uDisplay applies the configured panel rotation when drawing; source-image orientation is not inferred automatically.
-- Firmware must export `display.width()`, `display.height()`, `display.draw_rgb888_async()` and `display.refresh_status()`, and include the current `InkyDither.dither` implementation, which accepts the logical dimensions after rotation (480 × 800 for Inky 7.3 with `DisplayRotate 1`).
+- Firmware must export `display.width()`, `display.height()`, `display.draw_rgb888_async()` and `display.refresh_status()`, and include the current `InkyDither.dither` implementation, which accepts the logical dimensions after rotation (480 × 800 for Inky 7.3 with `DisplayRotate 1`). Disable Tasmota's default startup splash screen using `SetOption135 1`. This disables the splash screen, not the Inky refresh when a new image is displayed.
 - Without an initialized display, the script saves a dithered 480 × 800 image for Inky 7.3 with `DisplayRotate 1` and skips panel drawing. The physical panel resolution is 800 × 480.
 - Berry's `bytes()` limit restricts the compressed source JPEG to 512 KiB. PSRAM is required for this workflow.
 
