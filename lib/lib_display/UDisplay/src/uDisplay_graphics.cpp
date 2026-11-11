@@ -151,7 +151,12 @@ void uDisplay::Updateframe(void) {
 }
 
 bool uDisplay::UpdateframeChecked(void) {
-    return universal_panel && universal_panel->updateFrame();
+    if (!universal_panel) return false;
+    if (interface == _UDSP_QSPI ||
+        (interface == _UDSP_SPI && !ep_mode && bpp >= 16 && !frame_buffer)) {
+        return true;
+    }
+    return universal_panel->updateFrame();
 }
 
 bool uDisplay::CanStartUpdateFrameAsync() {
