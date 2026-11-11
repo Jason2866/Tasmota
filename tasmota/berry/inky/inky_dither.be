@@ -41,10 +41,10 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
     input_file.close()
     raise "io_error", "input JPEG is empty"
   end
-  # Berry limits bytes() to 512 KiB on PSRAM builds and 32 KiB otherwise.
-  if input_size > 512 * 1024
+  # Berry limits bytes() to 1024 KiB on PSRAM builds and 32 KiB otherwise.
+  if input_size > 1024 * 1024
     input_file.close()
-    raise "memory_error", "JPEG exceeds Berry's 512 KiB bytes limit"
+    raise "memory_error", "JPEG exceeds Berry's 1024 KiB bytes limit"
   end
 
   var jpeg_data = nil

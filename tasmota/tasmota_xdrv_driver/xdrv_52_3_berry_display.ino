@@ -53,6 +53,9 @@ extern "C" {
       be_pop(vm, argc);
       Renderer * renderer = Init_uDisplay(desc);
       if (renderer) {
+        if (UsePSRAM() && vm->bytesmaxsize < 1024 * 1024) {
+          vm->bytesmaxsize = 1024 * 1024;
+        }
         be_pushcomptr(vm, renderer);
       } else {
         be_pushnil(vm);
