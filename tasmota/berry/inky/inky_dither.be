@@ -9,14 +9,15 @@
 # (default 85, range 1..100; higher values preserve more detail). With no
 # initialized display, Inky 7.3 with DisplayRotate 1 defaults to 480x800 and
 # only saves the result (the physical panel resolution is 800x480).
-# Optional width, height, and draw_to_display arguments override that behavior.
+# Optional width, height, and draw_to_display arguments override that behavior;
+# strength controls error diffusion from 0.0 to 1.0 (default 1.0).
 
 import path
 import introspect
 import gc
 import display
 
-def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height, draw_to_display)
+def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height, draw_to_display, strength)
   if saturation == nil
     saturation = 0.5
   end
@@ -59,17 +60,6 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
   end
 
   var rgb_format = img.RGB888
-  var jpeg_format = img.JPEG
-  var image = img()
-  image.from_jpg(jpeg_data, rgb_format, 0)
-  jpeg_data = nil
-  gc.collect()
-
-  var info = image.info()
-  if info["bpp"] != 3 || info["width"] <= 0 || info["height"] <= 0
-    raise "value_error", "input JPEG must decode to RGB888"
-  end
-
   # Use dimensions after display.ini rotation when a display is initialized.
   # Without one, process the rotated Inky 7.3 image at 480x800 and save it.
   var use_display = draw_to_display
@@ -105,6 +95,18 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
   if width <= 0 || height <= 0
     raise "value_error", "image dimensions must be positive"
   end
+  gc.collect()
+  var image = img()
+  image.from_jpg(jpeg_data, rgb_format, 0, width, height)
+  jpeg_data = nil
+  gc.collect()
+
+  var info = image.info()
+  if info["bpp"] != 3 || info["width"] <= 0 || info["height"] <= 0
+    raise "value_error", "input JPEG must decode to RGB888"
+  end
+  print("JPEG prepared: " + str(info["width"]) + "x" + str(info["height"]) +
+        "; display: " + str(width) + "x" + str(height))
   image.resize(width, height)
   info = image.info()
   if info["width"] != width || info["height"] != height || info["bpp"] != 3
@@ -117,7 +119,7 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
   height = info["height"]
 
   # Use the C implementation for Floyd-Steinberg dithering
-  InkyDither.dither(pixels, width, height, saturation)
+  InkyDither.dither(pixels, width, height, saturation, strength)
   print("Dithering: " + str(height) + "/" + str(height) + " rows")
 
   # Draw the quantized RGB buffer directly and start an asynchronous panel refresh
@@ -130,28 +132,19 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
   pixels = nil
   gc.collect()
 
-  # JPEG conversion replaces the RGB buffer with the encoded data.
-  image.convert_to(jpeg_format, jpeg_quality)
-  info = image.info()
-  var encoded = bytes(introspect.toptr(info["buf_addr"]), info["size"])
   var temp_path = output_path + ".tmp"
   var backup_path = temp_path + ".bak"
   while temp_path == input_path || backup_path == input_path || path.exists(temp_path) || path.exists(backup_path)
     temp_path += ".tmp"
     backup_path = temp_path + ".bak"
   end
-  var output = open(temp_path, "wb")
-  if output == nil
-    raise "io_error", "could not open temporary output JPEG"
-  end
+  var encoded_size = 0
   try
-    output.write(encoded)
+    encoded_size = image.save_jpg(temp_path, jpeg_quality)
   except .. as err, msg
-    output.close()
     path.remove(temp_path)
     raise err, msg
   end
-  output.close()
 
   var has_previous_output = path.exists(output_path)
   if has_previous_output && !path.rename(output_path, backup_path)
@@ -170,8 +163,6 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
     path.remove(backup_path)
   end
 
-  # Release the decoded and encoded image buffers after saving the JPEG.
-  encoded = nil
   image = nil
   gc.collect()
 
@@ -180,7 +171,7 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
     refresh_status = display.refresh_status()
   end
   return {"width": info["width"], "height": info["height"],
-          "bytes": info["size"], "path": output_path,
+          "bytes": encoded_size, "path": output_path,
           "displayed": refresh_status == "complete",
           "refresh_status": refresh_status}
 end

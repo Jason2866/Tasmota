@@ -44,17 +44,18 @@ struct bvm {
     uint8_t *pixels;
     size_t size;
     int32_t width, height;
-    float saturation;
+    float saturation, strength;
+    int strength_type;
     int fail_alloc;
     const char *error;
     jmp_buf jump;
 };
-int be_top(bvm *vm) { (void)vm; return 4; }
+int be_top(bvm *vm) { return vm->strength_type == -1 ? 4 : 5; }
 int be_isbytes(bvm *vm, int index) { (void)vm; return index == 1; }
 int be_isint(bvm *vm, int index) { (void)vm; return index == 2 || index == 3; }
-int be_isnumber(bvm *vm, int index) { (void)vm; return index == 4; }
-int be_isnil(bvm *vm, int index) { (void)vm; (void)index; return 0; }
-float be_toreal(bvm *vm, int index) { (void)index; return vm->saturation; }
+int be_isnumber(bvm *vm, int index) { return index == 4 || (index == 5 && vm->strength_type == 0); }
+int be_isnil(bvm *vm, int index) { return index == 5 && vm->strength_type == 1; }
+float be_toreal(bvm *vm, int index) { return index == 4 ? vm->saturation : vm->strength; }
 int32_t be_toint(bvm *vm, int index) { return index == 2 ? vm->width : vm->height; }
 void *be_tobytes(bvm *vm, int index, size_t *size) {
     (void)index; *size = vm->size; return vm->pixels;
@@ -68,9 +69,10 @@ void be_os_free(void *ptr) { free(ptr); }
 void yield(void) {}
 int m_inky_dither_dither(bvm *vm);
 int run_dither(uint8_t *pixels, size_t size, int width, int height,
-               float saturation, int fail_alloc) {
+               float saturation, int fail_alloc, float strength, int strength_type) {
     bvm vm = { .pixels = pixels, .size = size, .width = width, .height = height,
-               .saturation = saturation, .fail_alloc = fail_alloc, .error = NULL };
+               .saturation = saturation, .strength = strength, .strength_type = strength_type,
+               .fail_alloc = fail_alloc, .error = NULL };
     fail_allocation = vm.fail_alloc;
     if (setjmp(vm.jump)) return strcmp(vm.error, "memory_error") == 0 ? 2 : 1;
     m_inky_dither_dither(&vm);
@@ -79,7 +81,7 @@ int run_dither(uint8_t *pixels, size_t size, int width, int height,
 """
 
 
-def reference(pixels, width, height, saturation):
+def reference(pixels, width, height, saturation, strength=1.0):
     palette = [tuple(int(panel * saturation + pure * (1 - saturation))
                      for panel, pure in zip(measured, identifier))
                for measured, identifier in zip(PANEL, PALETTE)]
@@ -100,6 +102,8 @@ def reference(pixels, width, height, saturation):
             result[index:index + 3] = bytes(PALETTE[best])
             for channel in range(3):
                 error = color[channel] - palette[best][channel] * 16
+                scaled = error * int(strength * 256 + 0.5)
+                error = abs(scaled) // 256 * (-1 if scaled < 0 else 1)
                 for next_row, next_column, weight in (
                     (row, column + direction, 7),
                     (row + 1, column - direction, 3),
@@ -127,18 +131,20 @@ class InkyDitherTest(unittest.TestCase):
                         str(directory / "harness.c"), "-o", str(library)], check=True)
         cls.lib = ctypes.CDLL(str(library))
         cls.lib.run_dither.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t,
-                                       ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int]
+                                       ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int,
+                                       ctypes.c_float, ctypes.c_int]
         cls.lib.run_dither.restype = ctypes.c_int
 
     @classmethod
     def tearDownClass(cls):
         cls.tempdir.cleanup()
 
-    def run_dither(self, data, width, height, saturation=0.5, size=None, fail_alloc=False):
+    def run_dither(self, data, width, height, saturation=0.5, size=None, fail_alloc=False,
+                   strength=1.0, strength_type=-1):
         storage = (ctypes.c_uint8 * (len(data) + 2))(*([91] + list(data) + [173]))
         pixels = ctypes.cast(ctypes.byref(storage, 1), ctypes.POINTER(ctypes.c_uint8))
         status = self.lib.run_dither(pixels, len(data) if size is None else size,
-                                     width, height, saturation, fail_alloc)
+                                     width, height, saturation, fail_alloc, strength, strength_type)
         self.assertEqual((storage[0], storage[-1]), (91, 173))
         return status, bytearray(storage[1:-1])
 
@@ -163,6 +169,23 @@ class InkyDitherTest(unittest.TestCase):
         self.assertEqual(status, 0)
         for channel in range(3):
             self.assertLess(abs(sum(actual[channel::3]) / (width * height) - 128), 2)
+
+    def test_strength_reference_and_default(self):
+        generator = random.Random(61)
+        for width, height in ((1, 13), (13, 1), (2, 9), (17, 15)):
+            data = bytearray(generator.randrange(256) for _ in range(width * height * 3))
+            for strength in (0.0, 0.25, 0.75, 1.0):
+                status, actual = self.run_dither(data, width, height, strength=strength, strength_type=0)
+                self.assertEqual(status, 0)
+                self.assertEqual(actual, reference(data, width, height, 0.5, strength))
+            self.assertEqual(self.run_dither(data, width, height, strength_type=1),
+                             self.run_dither(data, width, height))
+
+    def test_invalid_strength(self):
+        data = bytearray(range(12))
+        for strength, strength_type in ((-0.1, 0), (1.1, 0), (float("nan"), 0), (0.5, 2)):
+            status, actual = self.run_dither(data, 2, 2, strength=strength, strength_type=strength_type)
+            self.assertEqual((status, actual), (1, data))
 
     def test_validation_and_allocation_failure_leave_pixels_unchanged(self):
         data = bytearray(range(12))

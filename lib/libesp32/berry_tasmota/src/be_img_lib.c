@@ -13,6 +13,7 @@ extern int be_img_from_jpg(bvm *vm);
 extern int be_img_from_buffer(bvm *vm);
 extern int be_img_get_buffer(bvm *vm);
 extern int be_img_convert_to(bvm *vm);
+extern int be_img_save_jpg(bvm *vm);
 extern int be_img_info(bvm *vm);
 extern int be_img_resize(bvm *vm);
 
@@ -32,6 +33,7 @@ class be_class_img (scope: global, name: img, strings: weak) {
   from_buffer, func(be_img_from_buffer)
   get_buffer, func(be_img_get_buffer)
   convert_to, func(be_img_convert_to)
+  save_jpg, func(be_img_save_jpg)
   info, func(be_img_info)
   resize, func(be_img_resize)
 }

@@ -21,6 +21,7 @@
 #ifdef USE_BERRY
 
 #include <berry.h>
+#include "be_sys.h"
 
 #ifdef USE_BERRY_IMAGE
 
@@ -65,6 +66,25 @@ typedef struct {
         size_t output_capacity;
         bool output_failed;
 } be_jpg_encoder_t;
+
+#ifdef USE_UFILESYS
+typedef struct {
+    void *file;
+    size_t written;
+    bool failed;
+} be_jpg_file_encoder_t;
+
+static size_t be_img_jpg_file_cb(void *arg, size_t index, const void *data, size_t len) {
+  be_jpg_file_encoder_t *output = (be_jpg_file_encoder_t *)arg;
+  if (output->failed || index != output->written || len > SIZE_MAX - index ||
+      be_fwrite(output->file, data, len) != len) {
+    output->failed = true;
+    return 0;
+  }
+  output->written += len;
+  return len;
+}
+#endif
 
 typedef struct {
     image_t *img;
@@ -536,7 +556,9 @@ extern "C" {
       be_return_nil(vm);
     }
     const size_t output_size = (size_t)target_width * target_height * 3;
-    uint8_t *output = (uint8_t *)heap_caps_malloc(output_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    const bool in_place = target_width <= source_width && target_height <= source_height;
+    uint8_t *output = in_place ? img->buf :
+        (uint8_t *)heap_caps_malloc(output_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!output) {
       be_raise(vm, "img_error", "not enough memory to resize image");
       be_return_nil(vm);
@@ -546,13 +568,18 @@ extern "C" {
                                         (uint16_t)target_width, (uint16_t)target_height,
                                         be_img_resize_service);
     if (!resized) {
-      free(output);
+      if (!in_place) free(output);
       be_raise(vm, "img_error", "could not resize image");
       be_return_nil(vm);
     }
 
-    free(img->buf);
-    img->buf = output;
+    if (in_place) {
+      uint8_t *smaller = (uint8_t *)heap_caps_realloc(img->buf, output_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (smaller) img->buf = smaller;
+    } else {
+      free(img->buf);
+      img->buf = output;
+    }
     img->width = (uint16_t)target_width;
     img->height = (uint16_t)target_height;
     img->len = output_size;
@@ -600,35 +627,56 @@ extern "C" {
         scale = be_toint(vm, 4);
       }
       if (scale_provided && scale <= 0) {
-        auto allocation_size_for_scale = [w, h, img](uint32_t divisor) -> uint64_t {
-          const uint64_t scaled_width = ((uint64_t)w + divisor - 1) / divisor;
-          const uint64_t scaled_height = ((uint64_t)h + divisor - 1) / divisor;
-          return scaled_width * scaled_height * img->bpp;
-        };
-
         size_t free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-        // Smaller PSRAM boards reserve ~1.3MB for display/resize buffers.
-        size_t reserve = free_psram < 3000000 ? 1300000 : 0;
-        size_t max_allowed = free_psram > reserve ? free_psram - reserve : 500000;
         size_t largest_psram_block = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
-        if (max_allowed > largest_psram_block) max_allowed = largest_psram_block;
-        const uint64_t unscaled_size = allocation_size_for_scale(1);
-        if (unscaled_size > max_allowed) {
-          const uint32_t scale_divisors[] = {2, 4, 8};
-          bool scale_fits = false;
-          for (size_t i = 0; i < sizeof(scale_divisors) / sizeof(scale_divisors[0]); i++) {
-            if (allocation_size_for_scale(scale_divisors[i]) <= max_allowed) {
-              scale = scale_divisors[i];
-              scale_fits = true;
-              break;
-            }
+        uint16_t target_width = 0, target_height = 0;
+        if (argc >= 6 && format == PIXFORMAT_RGB888 && be_isint(vm, 5) && be_isint(vm, 6)) {
+          int32_t requested_width = be_toint(vm, 5);
+          int32_t requested_height = be_toint(vm, 6);
+          if (requested_width > 0 && requested_width <= UINT16_MAX &&
+              requested_height > 0 && requested_height <= UINT16_MAX) {
+            target_width = requested_width;
+            target_height = requested_height;
           }
-          if (!scale_fits) {
-            be_img_util::clear(img);
-            be_raise(vm, "img_error", "image exceeds available PSRAM");
+        }
+        scale = be_img_decode_scale(w, h, img->bpp, free_psram, largest_psram_block,
+                                    target_width, target_height);
+        size_t compact_size = scale != 0 ? be_img_compact_decode_size(
+            w, h, target_width, target_height, free_psram, largest_psram_block) : 0;
+        if (compact_size) {
+          uint8_t *compact = (uint8_t *)heap_caps_realloc(img->buf, compact_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+          if (compact) {
+            img->buf = compact;
+            img->width = w;
+            img->height = h;
+            img->len = (size_t)w * h * 2;
+            be_img_util::setFormat(img, PIXFORMAT_RGB565);
+            if (!be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, RGB565_BIG_ENDIAN, img) ||
+                !be_img_resize_rgb565_inplace(img->buf, w, h, target_width, target_height, be_img_resize_service)) {
+              be_img_util::clear(img);
+              be_raise(vm, "img_error", "could not decode or resize JPEG");
+              be_return_nil(vm);
+            }
+            img->width = target_width;
+            img->height = target_height;
+            img->len = (size_t)target_width * target_height * 3;
+            be_img_util::setFormat(img, PIXFORMAT_RGB888);
+            uint8_t *smaller = (uint8_t *)heap_caps_realloc(img->buf, img->len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (smaller) img->buf = smaller;
+            AddLog(LOG_LEVEL_INFO, PSTR("IMG: JPEG %ux%u decoded at full resolution using RGB565; PSRAM free %u, largest %u"),
+                   w, h, (unsigned)free_psram, (unsigned)largest_psram_block);
             be_return_nil(vm);
           }
         }
+        if (scale < 0) {
+          AddLog(LOG_LEVEL_INFO, PSTR("IMG: JPEG %ux%u does not fit; PSRAM free %u, largest %u"),
+                 w, h, (unsigned)free_psram, (unsigned)largest_psram_block);
+          be_img_util::clear(img);
+          be_raise(vm, "img_error", "image exceeds available PSRAM");
+          be_return_nil(vm);
+        }
+        AddLog(LOG_LEVEL_INFO, PSTR("IMG: JPEG %ux%u decode scale 1/%u; PSRAM free %u, largest %u"),
+               w, h, scale > 0 ? scale : 1, (unsigned)free_psram, (unsigned)largest_psram_block);
       }
 
       if (scale == 2) {
@@ -917,6 +965,54 @@ extern "C" {
       }
     }
     be_return(vm);
+  }
+
+  int be_img_save_jpg(struct bvm *vm);
+  int be_img_save_jpg(struct bvm *vm) {
+#ifdef USE_UFILESYS
+    if (be_top(vm) < 3 || !be_isstring(vm, 2) || !be_isint(vm, 3)) {
+      be_raise(vm, "value_error", "save_jpg expects a path and quality");
+      be_return_nil(vm);
+    }
+    int32_t quality = be_toint(vm, 3);
+    image_t *img = be_get_image_instance(vm);
+    if (quality < 1 || quality > 100 || !img->buf || img->format != PIXFORMAT_RGB888 ||
+        img->bpp != 3 || !img->width || !img->height ||
+        (size_t)img->width > SIZE_MAX / 3 / img->height ||
+        img->len < (size_t)img->width * img->height * 3) {
+      be_raise(vm, "img_error", "save_jpg requires an RGB888 image and quality 1..100");
+      be_return_nil(vm);
+    }
+    void *file = be_fopen(be_tostring(vm, 2), "w");
+    if (!file) {
+      be_raise(vm, "io_error", "could not open JPEG output file");
+      be_return_nil(vm);
+    }
+    be_jpg_file_encoder_t output = {file, 0, false};
+    be_img_util::rgb888_swap_red_blue(img->buf, (size_t)img->width * img->height * 3);
+    bool encoded = fmt2jpg_cb(img->buf, img->len, img->width, img->height, PIXFORMAT_RGB888,
+                              quality, be_img_jpg_file_cb, &output);
+    be_img_util::rgb888_swap_red_blue(img->buf, (size_t)img->width * img->height * 3);
+    be_fclose(file);
+    if (output.failed) {
+      be_raise(vm, "io_error", "could not write complete JPEG output file");
+      be_return_nil(vm);
+    }
+    if (!encoded || !output.written || output.written > INT32_MAX) {
+      AddLog(LOG_LEVEL_INFO, PSTR("IMG: JPEG encoder failed; internal free %u, largest %u; PSRAM free %u, largest %u"),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+      be_raise(vm, "img_error", "jpg encoding failed");
+      be_return_nil(vm);
+    }
+    be_pushint(vm, output.written);
+    be_return(vm);
+#else
+    be_raise(vm, "feature_error", "save_jpg requires filesystem support");
+    be_return_nil(vm);
+#endif
   }
 
   /**

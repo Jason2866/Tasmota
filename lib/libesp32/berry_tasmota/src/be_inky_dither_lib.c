@@ -39,13 +39,14 @@ static int find_closest_color(const int32_t *color, const int32_t *palette) {
     return best;
 }
 
-// InkyDither.dither(pixels:bytes(), width:int, height:int, saturation:float) -> nil
+// InkyDither.dither(pixels:bytes(), width:int, height:int, saturation:float, strength:float) -> nil
 //
 // Perform Floyd-Steinberg dithering on the RGB888 pixel buffer in-place.
 // pixels: bytes object containing RGB888 data (3 bytes per pixel)
 // width: image width in pixels
 // height: image height in pixels
 // saturation: saturation value between 0.0 and 1.0 (default 0.5)
+// strength: error diffusion strength between 0.0 and 1.0 (default 1.0)
 int m_inky_dither_dither(bvm *vm);
 int m_inky_dither_dither(bvm *vm) {
     int32_t argc = be_top(vm);
@@ -67,6 +68,19 @@ int m_inky_dither_dither(bvm *vm) {
             be_raise(vm, "value_error", "saturation must be a number or nil");
         }
     }
+
+    float strength = 1.0f;
+    if (argc >= 5) {
+        if (be_isnumber(vm, 5)) {
+            strength = be_toreal(vm, 5);
+            if (!(strength >= 0.0f && strength <= 1.0f)) {
+                be_raise(vm, "value_error", "strength must be between 0.0 and 1.0");
+            }
+        } else if (!be_isnil(vm, 5)) {
+            be_raise(vm, "value_error", "strength must be a number or nil");
+        }
+    }
+    int32_t strength_fixed = (int32_t)(strength * 256.0f + 0.5f);
 
     // Get width and height
     int32_t width = be_toint(vm, 2);
@@ -135,6 +149,9 @@ int m_inky_dither_dither(bvm *vm) {
             for (int channel = 0; channel < 3; channel++) {
                 int32_t error = color[channel] - palette[best * 3 + channel] * 16;
                 pixels[index + channel] = (uint8_t)desaturated[best * 3 + channel];
+                if (strength_fixed != 256) {
+                    error = error * strength_fixed / 256;
+                }
                 if (offset + 1 < width) {
                     size_t forward = (size_t)(x + direction) * 3 + channel;
                     current_errors[forward] += error * 7;

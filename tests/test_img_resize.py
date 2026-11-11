@@ -26,6 +26,23 @@ extern "C" int resize(const uint8_t *input, uint16_t source_width, uint16_t sour
                                 output, target_width, target_height, service);
 }
 extern "C" unsigned int services() { return service_calls; }
+extern "C" int decode_scale(uint16_t width, uint16_t height, uint8_t bpp,
+                            size_t free_memory, size_t largest_block,
+                            uint16_t target_width, uint16_t target_height) {
+    return be_img_decode_scale(width, height, bpp, free_memory, largest_block,
+                               target_width, target_height);
+}
+extern "C" size_t compact_decode_size(uint16_t width, uint16_t height,
+                                      uint16_t target_width, uint16_t target_height,
+                                      size_t free_memory, size_t largest_block) {
+    return be_img_compact_decode_size(width, height, target_width, target_height,
+                                      free_memory, largest_block);
+}
+extern "C" int resize_compact(uint8_t *pixels, uint16_t source_width, uint16_t source_height,
+                              uint16_t target_width, uint16_t target_height) {
+    return be_img_resize_rgb565_inplace(pixels, source_width, source_height,
+                                       target_width, target_height, service);
+}
 
 enum { PIXFORMAT_RGB888 = 5, MALLOC_CAP_SPIRAM = 1, MALLOC_CAP_8BIT = 2 };
 struct image_t {
@@ -51,6 +68,9 @@ static void be_raise(bvm *, const char *, const char *) { throw 1; }
 static void *heap_caps_malloc(size_t size, int) {
     ++allocations;
     return fail_allocation ? nullptr : malloc(size);
+}
+static void *heap_caps_realloc(void *ptr, size_t size, int) {
+    return fail_allocation ? nullptr : realloc(ptr, size);
 }
 static void BrTimeoutYield() { ++service_calls; }
 static void OsWatchLoop() {}
@@ -133,6 +153,14 @@ class ImageResizeTest(unittest.TestCase):
         cls.lib.resize.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_uint16, ctypes.c_uint16,
                                    ctypes.POINTER(ctypes.c_uint8), ctypes.c_uint16, ctypes.c_uint16]
         cls.lib.resize.restype = ctypes.c_int
+        cls.lib.decode_scale.argtypes = [ctypes.c_uint16, ctypes.c_uint16, ctypes.c_uint8,
+                                         ctypes.c_size_t, ctypes.c_size_t,
+                                         ctypes.c_uint16, ctypes.c_uint16]
+        cls.lib.decode_scale.restype = ctypes.c_int
+        cls.lib.compact_decode_size.argtypes = [ctypes.c_uint16] * 4 + [ctypes.c_size_t] * 2
+        cls.lib.compact_decode_size.restype = ctypes.c_size_t
+        cls.lib.resize_compact.argtypes = [ctypes.POINTER(ctypes.c_uint8)] + [ctypes.c_uint16] * 4
+        cls.lib.resize_compact.restype = ctypes.c_int
         cls.lib.services.restype = ctypes.c_uint
         cls.lib.resize_binding.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t,
                                             ctypes.c_size_t, ctypes.c_uint16, ctypes.c_uint16,
@@ -176,6 +204,73 @@ class ImageResizeTest(unittest.TestCase):
         stripes = bytearray(channel for x in range(20) for channel in [255 * (x % 2)] * 3)
         self.assertEqual(self.resize(stripes, 20, 1, 1, 1), bytes([128, 128, 128]))
 
+    def test_in_place_downscaling(self):
+        generator = random.Random(2027)
+        for source_width in range(1, 10):
+            for source_height in range(1, 10):
+                data = bytearray(generator.randrange(256) for _ in range(source_width * source_height * 3))
+                for target_width in range(1, source_width + 1):
+                    for target_height in range(1, source_height + 1):
+                        expected = self.resize(data, source_width, source_height, target_width, target_height)
+                        storage = (ctypes.c_uint8 * (len(data) + 2))(*([83] + list(data) + [171]))
+                        pixels = ctypes.cast(ctypes.byref(storage, 1), ctypes.POINTER(ctypes.c_uint8))
+                        self.assertEqual(self.lib.resize(pixels, source_width, source_height, pixels,
+                                                         target_width, target_height), 1)
+                        self.assertEqual(bytearray(storage[1:1 + len(expected)]), expected,
+                                         (source_width, source_height, target_width, target_height))
+                        self.assertEqual((storage[0], storage[-1]), (83, 171))
+
+    def test_decode_scale_respects_resize_and_memory(self):
+        scale = self.lib.decode_scale
+        self.assertEqual(scale(600, 923, 3, 2400000, 2000000, 0, 0), 2)
+        self.assertEqual(scale(600, 923, 3, 2400000, 2000000, 480, 800), 0)
+        self.assertEqual(scale(600, 923, 3, 2400000, 1000000, 480, 800), 2)
+        self.assertEqual(scale(600, 923, 3, 1900000, 1900000, 480, 800), 2)
+        self.assertEqual(scale(600, 923, 3, 2400000, 2000000, 700, 800), 2)
+        self.assertEqual(scale(1500, 1000, 3, 4000000, 4000000, 2000, 1000), -1)
+        self.assertEqual(scale(600, 923, 3, 300000, 300000, 480, 800), -1)
+        self.assertEqual(scale(65535, 65535, 3, 1000000, 1000000, 480, 800), -1)
+
+    def test_compact_decode_selection(self):
+        size = self.lib.compact_decode_size
+        self.assertEqual(size(600, 923, 480, 800, 1600000, 1200000), 1152000)
+        self.assertEqual(size(600, 923, 480, 800, 1400000, 1200000), 0)
+        self.assertEqual(size(600, 923, 480, 800, 1600000, 1100000), 0)
+        self.assertEqual(size(600, 923, 700, 800, 3000000, 3000000), 0)
+        self.assertEqual(size(600, 923, 0, 800, 3000000, 3000000), 0)
+
+    def test_compact_resize_against_reference(self):
+        generator = random.Random(812)
+        for source_width in range(1, 7):
+            for source_height in range(1, 7):
+                colors = [generator.randrange(65536) for _ in range(source_width * source_height)]
+                source = bytearray(channel for color in colors for channel in (color >> 8, color & 255))
+                for target_width in range(1, source_width + 1):
+                    for target_height in range(1, source_height + 1):
+                        length = max(len(source), target_width * target_height * 3)
+                        storage = (ctypes.c_uint8 * (length + 2))()
+                        storage[0], storage[-1] = 83, 171
+                        storage[1:1 + len(source)] = source
+                        pixels = ctypes.cast(ctypes.byref(storage, 1), ctypes.POINTER(ctypes.c_uint8))
+                        self.assertEqual(self.lib.resize_compact(pixels, source_width, source_height,
+                                                                 target_width, target_height), 1)
+                        expected = bytearray()
+                        for target_row in range(target_height):
+                            for target_column in range(target_width):
+                                values = []
+                                for shift, mask in ((11, 31), (5, 63), (0, 31)):
+                                    value = sum(((colors[sy * source_width + sx] >> shift) & mask) * wx * wy
+                                                for sy, wy in weights(target_row, source_height, target_height)
+                                                for sx, wx in weights(target_column, source_width, target_width))
+                                    values.append((value + Fraction(1, 2)).numerator //
+                                                  (value + Fraction(1, 2)).denominator)
+                                expected.extend(((values[0] << 3) | (values[0] >> 2),
+                                                 (values[1] << 2) | (values[1] >> 4),
+                                                 (values[2] << 3) | (values[2] >> 2)))
+                        self.assertEqual(bytes(storage[1:1 + len(expected)]), expected,
+                                         (source_width, source_height, target_width, target_height))
+                        self.assertEqual((storage[0], storage[-1]), (83, 171))
+
     def test_solid_colors_and_large_dimensions(self):
         for size in ((1, 1, 17, 15), (11, 9, 3, 2), (12, 3, 2, 12)):
             source_width, source_height, target_width, target_height = size
@@ -206,7 +301,7 @@ class ImageResizeTest(unittest.TestCase):
             (12, 2, 2, 2, 2, 5, 3, 0, 0),
             (11, 2, 2, 2, 2, 5, 3, 0, 1),
             (11, 2, 2, 1, 1, 5, 3, 0, 1),
-            (12, 2, 2, 1, 1, 5, 3, 1, 1),
+            (12, 2, 2, 3, 1, 5, 3, 1, 1),
             (12, 2, 2, 0, 1, 5, 3, 0, 1),
             (12, 2, 2, 65536, 1, 5, 3, 0, 1),
             (12, 2, 2, 1, 1, 1, 3, 0, 1),
@@ -230,7 +325,14 @@ class ImageResizeTest(unittest.TestCase):
         self.assertEqual(self.lib.resize_binding(data, len(original), 12, 2, 2, 1, 1, 5, 3, 0,
                                                  ctypes.byref(size), ctypes.byref(width),
                                                  ctypes.byref(height), ctypes.byref(allocations)), 0)
-        self.assertEqual((size.value, width.value, height.value, allocations.value), (3, 1, 1, 1))
+        self.assertEqual((size.value, width.value, height.value, allocations.value), (3, 1, 1, 0))
+        self.assertEqual(bytes(data)[:3], bytes([5, 6, 7]))
+
+        data = (ctypes.c_uint8 * len(original))(*original)
+        self.assertEqual(self.lib.resize_binding(data, len(original), 12, 2, 2, 1, 1, 5, 3, 1,
+                                                 ctypes.byref(size), ctypes.byref(width),
+                                                 ctypes.byref(height), ctypes.byref(allocations)), 0)
+        self.assertEqual((size.value, width.value, height.value, allocations.value), (3, 1, 1, 0))
         self.assertEqual(bytes(data)[:3], bytes([5, 6, 7]))
 
         data = (ctypes.c_uint8 * (128 * 128 * 3))(*([128] * (128 * 128 * 3)))

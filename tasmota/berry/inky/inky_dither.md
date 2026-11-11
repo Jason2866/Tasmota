@@ -7,8 +7,8 @@
 - An ESP32 Tasmota build with features (`USE_DISPLAY`, `USE_UNIVERSAL_DISPLAY`, `USE_UFILESYS`, `USE_BERRY_IMAGE` and `JPEG_PICTS`) enabled. These are compile-time options and cannot be enabled by loading the script. The script sends the quantized RGB888 buffer directly to the universal display and saves a JPEG copy separately.
 - PSRAM is required for the decoded RGB image buffer. An 800 × 480 buffer uses about 1.15 MiB, in addition to memory needed by JPEG decoding and encoding.
 - The source must be a JPEG that decodes to RGB888. Images are resized to the logical dimensions selected by `display.ini` and dithered. uDisplay applies the configured panel rotation when drawing; source-image orientation is not inferred automatically.
-- Resizing stretches the image to the requested dimensions without preserving its aspect ratio. It averages source pixels when shrinking to reduce aliasing and interpolates when enlarging. JPEG decoding can still select a reduced resolution when PSRAM is limited, which may lose detail before resizing. Source and destination buffers must both fit in PSRAM during resizing.
-- Firmware must export `display.width()`, `display.height()`, `display.draw_rgb888_async()` and `display.refresh_status()`, and include the current `InkyDither.dither` implementation, which accepts the logical dimensions after rotation (480 × 800 for Inky 7.3 with `DisplayRotate 1`). Disable Tasmota's default startup splash screen using `SetOption135 1`. This disables the splash screen, not the Inky refresh when a new image is displayed.
+- Resizing stretches the image to the requested dimensions without preserving its aspect ratio. It averages source pixels when shrinking to reduce aliasing and interpolates when enlarging. Shrinking both dimensions works in place. If full-resolution RGB888 decoding does not fit, the decoder can instead use a smaller RGB565 buffer at the original resolution, resize it in place, and expand it to RGB888; this slightly reduces color precision but retains more spatial detail. If even that buffer does not fit, JPEG decoding can still select a reduced resolution. The original size, selected method, and available PSRAM are logged.
+- Firmware must export `display.width()`, `display.height()`, `display.draw_rgb888_async()`, `display.refresh_status()` and `img.save_jpg()`, and include the current `InkyDither.dither` implementation, which accepts the logical dimensions after rotation (480 × 800 for Inky 7.3 with `DisplayRotate 1`). Disable Tasmota's default startup splash screen using `SetOption135 1`. This disables the splash screen, not the Inky refresh when a new image is displayed.
 - Without an initialized display, the script saves a dithered 480 × 800 image for Inky 7.3 with `DisplayRotate 1` and skips panel drawing. The physical panel resolution is 800 × 480.
 - Berry's `bytes()` limit restricts the compressed source JPEG to 512 KiB. PSRAM is required for this workflow.
 
@@ -51,11 +51,11 @@ var result = inky_dither("/image.jpg", "/image-dithered.jpg")
 print(result)
 ```
 
-The script draws the quantized RGB888 buffer directly to the display before JPEG encoding, so compression cannot change the image shown on the panel. It starts the panel refresh asynchronously, then saves a JPEG copy in the Tasmota filesystem; retrieve it using the device's filesystem access method. JPEG quality only affects this saved copy. Panel BUSY waits are serviced by Tasmota's main loop, so MQTT, rules, and web requests can run during the roughly 32-second physical refresh. The 192,000-byte framebuffer transfer still runs in one synchronous SPI operation.
+The script draws the quantized RGB888 buffer directly to the display before JPEG encoding, so compression cannot change the image shown on the panel. It starts the panel refresh asynchronously, then streams a JPEG copy to a temporary file in the Tasmota filesystem instead of allocating a second large PSRAM buffer. The filesystem must have enough space for the source, the new preview, and any previous preview. JPEG quality only affects the saved copy. Panel BUSY waits are serviced by Tasmota's main loop, so MQTT, rules, and web requests can run during the roughly 32-second physical refresh. The 192,000-byte framebuffer transfer still runs in one synchronous SPI operation.
 
 The returned `refresh_status` is usually `running` when the script finishes. Check it later with `display.refresh_status()`; it changes to `complete` or `failed`. The returned `displayed` field is true only when the refresh has completed by the time the result is assembled. The driver also writes completion or failure to the log. While a refresh is running, drawing, rotation, another refresh, and display reinitialization are rejected or ignored to protect the framebuffer and panel state.
 
-Dithering is performed by the native `InkyDither.dither` class. It uses serpentine Floyd–Steinberg error diffusion with fixed-point error accumulation, reducing directional artifacts and rounding loss. Its two temporary error rows require 24 bytes per image column (about 18.75 KiB at 800 pixels); allocation failure raises `memory_error` before the pixel buffer is changed. Corrected channels are limited to the RGB range before quantization, preventing unbounded error buildup for colors outside the display palette. Image resizing uses the native `img.resize()` method to keep its large working buffer in PSRAM; the firmware must include the updated Berry image module.
+Dithering is performed by the native `InkyDither.dither` class. It uses serpentine Floyd–Steinberg error diffusion with fixed-point error accumulation, reducing directional artifacts and rounding loss. The optional diffusion strength defaults to `1.0`; lower values make comic artwork and flat areas less grainy at the cost of less accurate intermediate colors and gradients. The comic display uses `0.75`. Its two temporary error rows require 24 bytes per image column (about 18.75 KiB at 800 pixels); allocation failure raises `memory_error` before the pixel buffer is changed. Corrected channels are limited to the RGB range before quantization, preventing unbounded error buildup for colors outside the display palette. Image resizing uses the native `img.resize()` method; the firmware must include the updated Berry image module.
 
 When using `img.resize()` directly, discard any `bytes` views mapped to the old `info()["buf_addr"]` before resizing and obtain a fresh address afterward: a successful resize can replace the underlying buffer. If resizing fails, the original image remains unchanged.
 
@@ -66,7 +66,7 @@ If `load("inky_dither.be")` fails with `img undeclared`, the running firmware do
 ## Parameters
 
 ```berry
-inky_dither(input_path, output_path, saturation, jpeg_quality, width, height, draw_to_display)
+inky_dither(input_path, output_path, saturation, jpeg_quality, width, height, draw_to_display, strength)
 ```
 
 - `input_path`: path to the source JPEG on the Tasmota filesystem. The compressed source must not exceed Berry's 512 KiB `bytes()` limit.
@@ -75,6 +75,7 @@ inky_dither(input_path, output_path, saturation, jpeg_quality, width, height, dr
 - `jpeg_quality`: software JPEG encoder quality from `1` to `100`. Higher values preserve more image detail and generally produce larger files. The default is `85`.
 - `width` and `height`: optional logical output dimensions, which must be supplied together. If omitted, the function uses the initialized display dimensions or falls back to 480 × 800 when no display is initialized.
 - `draw_to_display`: optional boolean. Defaults to drawing when display dimensions are detected; with explicit dimensions or the no-display fallback, it defaults to `false` and only saves the JPEG.
+- `strength`: optional error diffusion strength from `0.0` to `1.0`, default `1.0`. Lower values reduce dithering texture but also sacrifice color and gradient fidelity; `0.0` selects the nearest palette color without diffusion.
 
 Berry does not support default values in function declarations. Omit the optional arguments or pass `nil` to use the defaults. For example, `inky_dither("/image.jpg", "/image-dithered.jpg", nil, 90)` uses the default saturation and JPEG quality `90`.
 
