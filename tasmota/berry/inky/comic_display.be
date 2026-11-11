@@ -397,7 +397,7 @@ def display_comic(username, password, series_name)
     tasmota.yield()
     print("Downloaded " + str(downloaded_bytes) + " bytes")
     try
-      result = dither_fn(comic_source_path, comic_dithered_path, 0.5, 85)
+      result = dither_fn(comic_source_path, comic_dithered_path, 0.5, 85, nil, nil, nil, 0.75)
       tasmota.yield()
       break
     except .. as err, msg

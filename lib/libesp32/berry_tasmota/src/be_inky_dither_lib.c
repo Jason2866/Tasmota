@@ -8,69 +8,45 @@
 #include "be_exec.h"
 #include "be_byteslib.h"
 #include <stdint.h>
+#include <string.h>
 
 #ifdef USE_BERRY_IMAGE
+#include "esp32-hal.h"
 
-// Helper function to clamp value to 0-255 range
-static inline int32_t clamp_byte(int32_t value) {
+static inline int32_t clamp_fixed(int32_t value) {
     if (value < 0) return 0;
-    if (value > 255) return 255;
+    if (value > 255 * 16) return 255 * 16;
     return value;
 }
 
-// Helper function to compute absolute value
-static inline int32_t abs_value(int32_t value) {
-    return value < 0 ? -value : value;
+static inline int32_t divide_round_16(int32_t value) {
+    return value < 0 ? -((-value + 8) / 16) : (value + 8) / 16;
 }
 
-// Helper function to compute squared distance
-static inline int32_t squared_distance(int32_t r1, int32_t g1, int32_t b1,
-                                       int32_t r2, int32_t g2, int32_t b2) {
-    int32_t dr = r1 - r2;
-    int32_t dg = g1 - g2;
-    int32_t db = b1 - b2;
-    return dr * dr + dg * dg + db * db;
-}
-
-// Find the closest palette color to the given RGB value
-static void find_closest_color(int32_t red, int32_t green, int32_t blue,
-                                const int32_t *palette,
-                                int32_t *best_r, int32_t *best_g, int32_t *best_b,
-                                int32_t *id_r, int32_t *id_g, int32_t *id_b) {
-    int32_t best_d = squared_distance(red, green, blue, palette[0], palette[1], palette[2]);
-    *best_r = palette[0];
-    *best_g = palette[1];
-    *best_b = palette[2];
-    *id_r = 0;
-    *id_g = 0;
-    *id_b = 0;
-
-    // Check against each palette color
-    for (int i = 1; i < 6; i++) {
-        int32_t d = squared_distance(red, green, blue,
-                                     palette[i * 3], palette[i * 3 + 1], palette[i * 3 + 2]);
-        if (d < best_d) {
-            best_d = d;
-            *best_r = palette[i * 3];
-            *best_g = palette[i * 3 + 1];
-            *best_b = palette[i * 3 + 2];
-            // Set the ID color based on palette index
-            if (i == 1) { *id_r = 255; *id_g = 255; *id_b = 255; }
-            else if (i == 2) { *id_r = 255; *id_g = 255; *id_b = 0; }
-            else if (i == 3) { *id_r = 255; *id_g = 0; *id_b = 0; }
-            else if (i == 4) { *id_r = 0; *id_g = 0; *id_b = 255; }
-            else if (i == 5) { *id_r = 0; *id_g = 255; *id_b = 0; }
+static int find_closest_color(const int32_t *color, const int32_t *palette) {
+    int best = 0;
+    int32_t best_distance = INT32_MAX;
+    for (int index = 0; index < 6; index++) {
+        int32_t red = color[0] - palette[index * 3] * 16;
+        int32_t green = color[1] - palette[index * 3 + 1] * 16;
+        int32_t blue = color[2] - palette[index * 3 + 2] * 16;
+        int32_t distance = red * red + green * green + blue * blue;
+        if (distance < best_distance) {
+            best_distance = distance;
+            best = index;
         }
     }
+    return best;
 }
 
-// InkyDither.dither(pixels:bytes(), width:int, height:int, saturation:float) -> nil
+// InkyDither.dither(pixels:bytes(), width:int, height:int, saturation:float, strength:float) -> nil
 //
 // Perform Floyd-Steinberg dithering on the RGB888 pixel buffer in-place.
 // pixels: bytes object containing RGB888 data (3 bytes per pixel)
 // width: image width in pixels
 // height: image height in pixels
 // saturation: saturation value between 0.0 and 1.0 (default 0.5)
+// strength: error diffusion strength between 0.0 and 1.0 (default 1.0)
 int m_inky_dither_dither(bvm *vm);
 int m_inky_dither_dither(bvm *vm) {
     int32_t argc = be_top(vm);
@@ -85,13 +61,26 @@ int m_inky_dither_dither(bvm *vm) {
     if (argc >= 4) {
         if (be_isnumber(vm, 4)) {
             saturation = be_toreal(vm, 4);
-            if (saturation < 0.0f || saturation > 1.0f) {
+            if (!(saturation >= 0.0f && saturation <= 1.0f)) {
                 be_raise(vm, "value_error", "saturation must be between 0.0 and 1.0");
             }
         } else if (!be_isnil(vm, 4)) {
             be_raise(vm, "value_error", "saturation must be a number or nil");
         }
     }
+
+    float strength = 1.0f;
+    if (argc >= 5) {
+        if (be_isnumber(vm, 5)) {
+            strength = be_toreal(vm, 5);
+            if (!(strength >= 0.0f && strength <= 1.0f)) {
+                be_raise(vm, "value_error", "strength must be between 0.0 and 1.0");
+            }
+        } else if (!be_isnil(vm, 5)) {
+            be_raise(vm, "value_error", "strength must be a number or nil");
+        }
+    }
+    int32_t strength_fixed = (int32_t)(strength * 256.0f + 0.5f);
 
     // Get width and height
     int32_t width = be_toint(vm, 2);
@@ -101,6 +90,9 @@ int m_inky_dither_dither(bvm *vm) {
         be_raise(vm, "value_error", "image dimensions must be positive");
     }
     if ((size_t)width > SIZE_MAX / 3 / (size_t)height) {
+        be_raise(vm, "value_error", "image dimensions too large");
+    }
+    if ((size_t)width > SIZE_MAX / (6 * sizeof(int32_t))) {
         be_raise(vm, "value_error", "image dimensions too large");
     }
 
@@ -117,11 +109,11 @@ int m_inky_dither_dither(bvm *vm) {
     }
 
     // Calculate palette based on saturation
-    const int32_t saturated[18] = {
+    static const int32_t saturated[18] = {
         0, 0, 0, 161, 164, 165, 208, 190, 71,
         156, 72, 75, 61, 59, 94, 58, 91, 70
     };
-    const int32_t desaturated[18] = {
+    static const int32_t desaturated[18] = {
         0, 0, 0, 255, 255, 255, 255, 255, 0,
         255, 0, 0, 0, 0, 255, 0, 255, 0
     };
@@ -133,159 +125,56 @@ int m_inky_dither_dither(bvm *vm) {
     }
 
     size_t stride = (size_t)width * 3;
-    int32_t last_x = width - 1;
-    int32_t last_y = height - 1;
+    size_t error_row_size = stride * sizeof(int32_t);
+    int32_t *error_buffer = be_os_malloc(error_row_size * 2);
+    if (!error_buffer) {
+        be_raise(vm, "memory_error", "cannot allocate dither error buffer");
+    }
+    memset(error_buffer, 0, error_row_size * 2);
+    int32_t *current_errors = error_buffer;
+    int32_t *next_errors = error_buffer + stride;
 
-    // Floyd-Steinberg dithering loop
     for (int32_t y = 0; y < height; y++) {
-        for (int32_t x = 0; x < width; x++) {
-            size_t index = (size_t)y * stride + (size_t)x * 3;
-
-            // Get current pixel
-            int32_t red = pixels[index];
-            int32_t green = pixels[index + 1];
-            int32_t blue = pixels[index + 2];
-
-            // Find closest palette color
-            int32_t pal_r, pal_g, pal_b;
-            int32_t id_r, id_g, id_b;
-            find_closest_color(red, green, blue, palette,
-                             &pal_r, &pal_g, &pal_b,
-                             &id_r, &id_g, &id_b);
-
-            // Write the quantized color (ID color)
-            pixels[index] = id_r;
-            pixels[index + 1] = id_g;
-            pixels[index + 2] = id_b;
-
-            // Calculate error
-            int32_t error_red = red - pal_r;
-            int32_t error_green = green - pal_g;
-            int32_t error_blue = blue - pal_b;
-
-            // Calculate Floyd-Steinberg weights (without floats)
-            int32_t ar = abs_value(error_red);
-            int32_t ag = abs_value(error_green);
-            int32_t ab = abs_value(error_blue);
-
-            int32_t e7r = (ar * 7) >> 4;
-            int32_t e5r = (ar * 5) >> 4;
-            int32_t e3r = (ar * 3) >> 4;
-            int32_t e1r = ar >> 4;
-
-            int32_t e7g = (ag * 7) >> 4;
-            int32_t e5g = (ag * 5) >> 4;
-            int32_t e3g = (ag * 3) >> 4;
-            int32_t e1g = ag >> 4;
-
-            int32_t e7b = (ab * 7) >> 4;
-            int32_t e5b = (ab * 5) >> 4;
-            int32_t e3b = (ab * 3) >> 4;
-            int32_t e1b = ab >> 4;
-
-            if (error_red < 0) {
-                e7r = -e7r; e5r = -e5r; e3r = -e3r; e1r = -e1r;
+        int direction = (y & 1) ? -1 : 1;
+        for (int32_t offset = 0; offset < width; offset++) {
+            int32_t x = direction > 0 ? offset : width - 1 - offset;
+            size_t column = (size_t)x * 3;
+            size_t index = (size_t)y * stride + column;
+            int32_t color[3];
+            for (int channel = 0; channel < 3; channel++) {
+                color[channel] = clamp_fixed((int32_t)pixels[index + channel] * 16 +
+                                             divide_round_16(current_errors[column + channel]));
             }
-            if (error_green < 0) {
-                e7g = -e7g; e5g = -e5g; e3g = -e3g; e1g = -e1g;
-            }
-            if (error_blue < 0) {
-                e7b = -e7b; e5b = -e5b; e3b = -e3b; e1b = -e1b;
-            }
-
-            // Distribute error to neighboring pixels
-            size_t next, down;
-            int32_t r, g, b;
-
-            if (y < last_y && x > 0 && x < last_x) {
-                // Right pixel (7/16)
-                next = index + 3;
-                r = clamp_byte(pixels[next] + e7r);
-                g = clamp_byte(pixels[next + 1] + e7g);
-                b = clamp_byte(pixels[next + 2] + e7b);
-                pixels[next] = r;
-                pixels[next + 1] = g;
-                pixels[next + 2] = b;
-
-                // Down-left pixel (3/16)
-                next = index + stride - 3;
-                r = clamp_byte(pixels[next] + e3r);
-                g = clamp_byte(pixels[next + 1] + e3g);
-                b = clamp_byte(pixels[next + 2] + e3b);
-                pixels[next] = r;
-                pixels[next + 1] = g;
-                pixels[next + 2] = b;
-
-                // Down pixel (5/16)
-                next = index + stride;
-                r = clamp_byte(pixels[next] + e5r);
-                g = clamp_byte(pixels[next + 1] + e5g);
-                b = clamp_byte(pixels[next + 2] + e5b);
-                pixels[next] = r;
-                pixels[next + 1] = g;
-                pixels[next + 2] = b;
-
-                // Down-right pixel (1/16)
-                next = index + stride + 3;
-                r = clamp_byte(pixels[next] + e1r);
-                g = clamp_byte(pixels[next + 1] + e1g);
-                b = clamp_byte(pixels[next + 2] + e1b);
-                pixels[next] = r;
-                pixels[next + 1] = g;
-                pixels[next + 2] = b;
-            } else {
-                // Edge cases
-                if (x < last_x) {
-                    // Right pixel (7/16)
-                    next = index + 3;
-                    r = clamp_byte(pixels[next] + e7r);
-                    g = clamp_byte(pixels[next + 1] + e7g);
-                    b = clamp_byte(pixels[next + 2] + e7b);
-                    pixels[next] = r;
-                    pixels[next + 1] = g;
-                    pixels[next + 2] = b;
+            int best = find_closest_color(color, palette);
+            for (int channel = 0; channel < 3; channel++) {
+                int32_t error = color[channel] - palette[best * 3 + channel] * 16;
+                pixels[index + channel] = (uint8_t)desaturated[best * 3 + channel];
+                if (strength_fixed != 256) {
+                    error = error * strength_fixed / 256;
                 }
-
-                if (y < last_y) {
-                    down = index + stride;
-                    if (x > 0) {
-                        // Down-left pixel (3/16)
-                        next = down - 3;
-                        r = clamp_byte(pixels[next] + e3r);
-                        g = clamp_byte(pixels[next + 1] + e3g);
-                        b = clamp_byte(pixels[next + 2] + e3b);
-                        pixels[next] = r;
-                        pixels[next + 1] = g;
-                        pixels[next + 2] = b;
-                    }
-
-                    // Down pixel (5/16)
-                    r = clamp_byte(pixels[down] + e5r);
-                    g = clamp_byte(pixels[down + 1] + e5g);
-                    b = clamp_byte(pixels[down + 2] + e5b);
-                    pixels[down] = r;
-                    pixels[down + 1] = g;
-                    pixels[down + 2] = b;
-
-                    if (x < last_x) {
-                        // Down-right pixel (1/16)
-                        next = down + 3;
-                        r = clamp_byte(pixels[next] + e1r);
-                        g = clamp_byte(pixels[next + 1] + e1g);
-                        b = clamp_byte(pixels[next + 2] + e1b);
-                        pixels[next] = r;
-                        pixels[next + 1] = g;
-                        pixels[next + 2] = b;
+                if (offset + 1 < width) {
+                    size_t forward = (size_t)(x + direction) * 3 + channel;
+                    current_errors[forward] += error * 7;
+                    if (y + 1 < height) next_errors[forward] += error;
+                }
+                if (y + 1 < height) {
+                    next_errors[column + channel] += error * 5;
+                    if (offset > 0) {
+                        size_t backward = (size_t)(x - direction) * 3 + channel;
+                        next_errors[backward] += error * 3;
                     }
                 }
             }
         }
-
-        // Yield every 16 rows to allow other tasks to run
+        int32_t *previous_errors = current_errors;
+        current_errors = next_errors;
+        next_errors = previous_errors;
+        memset(next_errors, 0, error_row_size);
         if (y % 16 == 0) {
             yield();
         }
     }
+    be_os_free(error_buffer);
 
     be_return_nil(vm);
 }
