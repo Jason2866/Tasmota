@@ -401,10 +401,6 @@ void BerryInit(void) {
     comp_set_strict(berry.vm);  /* Enable strict mode in Berry compiler, equivalent of `import strict` */
     be_set_ctype_func_handler(berry.vm, be_call_ctype_func);
 
-#ifndef BERRY_MAX_BYTES_SIZE_PSRAM
-#define BERRY_MAX_BYTES_SIZE_PSRAM   (1024 * 1024)
-#endif
-
     if (UsePSRAM()) {     // if PSRAM is available, raise the max size to 1024kb
       berry.vm->bytesmaxsize = BERRY_MAX_BYTES_SIZE_PSRAM;
     }

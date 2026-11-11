@@ -36,10 +36,6 @@ extern void BrTimeoutReset(void);
 extern void BrTimeoutStart(void);
 #endif
 
-#ifndef BERRY_MAX_BYTES_SIZE_PSRAM
-#define BERRY_MAX_BYTES_SIZE_PSRAM   (1024 * 1024)
-#endif
-
 extern "C" {
   /*********************************************************************************************\
    * Native functions mapped to Berry functions
