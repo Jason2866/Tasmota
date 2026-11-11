@@ -4,6 +4,7 @@
 import ctypes
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -132,7 +133,9 @@ class ImageJpegTest(unittest.TestCase):
         (directory / "jpegdec_scalar.cpp").write_text(
             '#include "JPEGDEC.h"\n#undef HAS_NEON\n#include "JPEGDEC.cpp"\n')
         library = directory / "jpeg.so"
-        subprocess.run(["c++", "-std=c++11", "-O2", "-shared", "-fPIC", "-DNO_SIMD", "-I", str(directory),
+        platform_flags = ["-D__LINUX__"] if sys.platform.startswith("linux") else []
+        subprocess.run(["c++", "-std=c++11", "-O2", "-shared", "-fPIC", "-DNO_SIMD", *platform_flags,
+                        "-I", str(directory),
                         "-I", str(JPEGDEC), "-I", str(ROOT / "lib/libesp32/berry_tasmota/src"),
                         str(directory / "harness.cpp"),
                         str(directory / "jpegdec_scalar.cpp"), "-o", str(library)], check=True)
