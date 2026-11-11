@@ -88,13 +88,14 @@ def reference(pixels, width, height, saturation, strength=1.0):
     result = bytearray(pixels)
     errors = [[[0, 0, 0] for _ in range(width)] for _ in range(height)]
     for row in range(height):
-        direction = 1 if row % 2 == 0 else -1
-        for column in range(0, width) if direction == 1 else range(width - 1, -1, -1):
+        direction = -1 if row % 2 == 1 else 1
+        for offset in range(width):
+            column = offset if direction > 0 else (width - 1 - offset)
             index = (row * width + column) * 3
             color = []
             for channel in range(3):
                 value = errors[row][column][channel]
-                rounded = (abs(value) + 8) // 16 * (-1 if value < 0 else 1)
+                rounded = (abs(value) + 24) // 48 * (-1 if value < 0 else 1)
                 color.append(max(0, min(4080, pixels[index + channel] * 16 + rounded)))
             best = min(range(6), key=lambda candidate: sum(
                 (color[channel] - palette[candidate][channel] * 16) ** 2
@@ -104,14 +105,26 @@ def reference(pixels, width, height, saturation, strength=1.0):
                 error = color[channel] - palette[best][channel] * 16
                 scaled = error * int(strength * 256 + 0.5)
                 error = abs(scaled) // 256 * (-1 if scaled < 0 else 1)
-                for next_row, next_column, weight in (
-                    (row, column + direction, 7),
-                    (row + 1, column - direction, 3),
-                    (row + 1, column, 5),
-                    (row + 1, column + direction, 1),
-                ):
-                    if next_row < height and 0 <= next_column < width:
-                        errors[next_row][next_column][channel] += error * weight
+                # Current row (ahead in scan direction)
+                for next_col, weight in ((column + direction, 7), (column + 2 * direction, 5)):
+                    if 0 <= next_col < width:
+                        errors[row][next_col][channel] += error * weight
+                # Next row (row + 1)
+                if row + 1 < height:
+                    for next_col, weight in (
+                        (column - 2, 3), (column - 1, 5), (column, 7),
+                        (column + 1, 5), (column + 2, 3)
+                    ):
+                        if 0 <= next_col < width:
+                            errors[row + 1][next_col][channel] += error * weight
+                # Row + 2
+                if row + 2 < height:
+                    for next_col, weight in (
+                        (column - 2, 1), (column - 1, 3), (column, 5),
+                        (column + 1, 3), (column + 2, 1)
+                    ):
+                        if 0 <= next_col < width:
+                            errors[row + 2][next_col][channel] += error * weight
     return result
 
 

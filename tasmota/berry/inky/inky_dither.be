@@ -1,4 +1,4 @@
-# Floyd-Steinberg quantization for Inky Impression 7.3 (E673 / Spectra 6).
+# Jarvis-Judice-Ninke serpentine error diffusion quantization for Inky Impression 7.3 (E673 / Spectra 6).
 # Load this file in the Berry console, then call:
 #   inky_dither("/image.jpg", "/image-dithered.jpg")
 # Explicit offline processing for Inky 7.3:
@@ -118,7 +118,7 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
   width = info["width"]
   height = info["height"]
 
-  # Use the C implementation for Floyd-Steinberg dithering
+  # Use the C implementation for Serpentine Jarvis-Judice-Ninke dithering
   InkyDither.dither(pixels, width, height, saturation, strength)
   print("Dithering: " + str(height) + "/" + str(height) + " rows")
 

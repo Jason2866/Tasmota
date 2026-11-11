@@ -1,7 +1,8 @@
 /********************************************************************
  * Berry class `inky_dither`
  *
- * Floyd-Steinberg dithering for the Inky 7.3" Pimoroni display palette
+ * Serpentine Jarvis-Judice-Ninke error diffusion dithering for the
+ * Inky 7.3" Pimoroni display palette.
  *******************************************************************/
 #include "be_constobj.h"
 #include "be_mem.h"
@@ -19,8 +20,8 @@ static inline int32_t clamp_fixed(int32_t value) {
     return value;
 }
 
-static inline int32_t divide_round_16(int32_t value) {
-    return value < 0 ? -((-value + 8) / 16) : (value + 8) / 16;
+static inline int32_t divide_round_48(int32_t value) {
+    return value < 0 ? -((-value + 24) / 48) : (value + 24) / 48;
 }
 
 static int find_closest_color(const int32_t *color, const int32_t *palette) {
@@ -41,7 +42,8 @@ static int find_closest_color(const int32_t *color, const int32_t *palette) {
 
 // InkyDither.dither(pixels:bytes(), width:int, height:int, saturation:float, strength:float) -> nil
 //
-// Perform Floyd-Steinberg dithering on the RGB888 pixel buffer in-place.
+// Perform Serpentine Jarvis-Judice-Ninke error diffusion dithering on the RGB888
+// pixel buffer in-place.
 // pixels: bytes object containing RGB888 data (3 bytes per pixel)
 // width: image width in pixels
 // height: image height in pixels
@@ -92,7 +94,7 @@ int m_inky_dither_dither(bvm *vm) {
     if ((size_t)width > SIZE_MAX / 3 / (size_t)height) {
         be_raise(vm, "value_error", "image dimensions too large");
     }
-    if ((size_t)width > SIZE_MAX / (6 * sizeof(int32_t))) {
+    if ((size_t)width > SIZE_MAX / (9 * sizeof(int32_t))) {
         be_raise(vm, "value_error", "image dimensions too large");
     }
 
@@ -126,13 +128,14 @@ int m_inky_dither_dither(bvm *vm) {
 
     size_t stride = (size_t)width * 3;
     size_t error_row_size = stride * sizeof(int32_t);
-    int32_t *error_buffer = be_os_malloc(error_row_size * 2);
+    int32_t *error_buffer = be_os_malloc(error_row_size * 3);
     if (!error_buffer) {
         be_raise(vm, "memory_error", "cannot allocate dither error buffer");
     }
-    memset(error_buffer, 0, error_row_size * 2);
-    int32_t *current_errors = error_buffer;
-    int32_t *next_errors = error_buffer + stride;
+    memset(error_buffer, 0, error_row_size * 3);
+    int32_t *row0_errors = error_buffer;
+    int32_t *row1_errors = error_buffer + stride;
+    int32_t *row2_errors = error_buffer + stride * 2;
 
     for (int32_t y = 0; y < height; y++) {
         int direction = (y & 1) ? -1 : 1;
@@ -143,7 +146,7 @@ int m_inky_dither_dither(bvm *vm) {
             int32_t color[3];
             for (int channel = 0; channel < 3; channel++) {
                 color[channel] = clamp_fixed((int32_t)pixels[index + channel] * 16 +
-                                             divide_round_16(current_errors[column + channel]));
+                                             divide_round_48(row0_errors[column + channel]));
             }
             int best = find_closest_color(color, palette);
             for (int channel = 0; channel < 3; channel++) {
@@ -153,23 +156,32 @@ int m_inky_dither_dither(bvm *vm) {
                     error = error * strength_fixed / 256;
                 }
                 if (offset + 1 < width) {
-                    size_t forward = (size_t)(x + direction) * 3 + channel;
-                    current_errors[forward] += error * 7;
-                    if (y + 1 < height) next_errors[forward] += error;
+                    row0_errors[(size_t)(x + direction) * 3 + channel] += error * 7;
+                    if (offset + 2 < width) {
+                        row0_errors[(size_t)(x + 2 * direction) * 3 + channel] += error * 5;
+                    }
                 }
                 if (y + 1 < height) {
-                    next_errors[column + channel] += error * 5;
-                    if (offset > 0) {
-                        size_t backward = (size_t)(x - direction) * 3 + channel;
-                        next_errors[backward] += error * 3;
-                    }
+                    if (x >= 2) row1_errors[(size_t)(x - 2) * 3 + channel] += error * 3;
+                    if (x >= 1) row1_errors[(size_t)(x - 1) * 3 + channel] += error * 5;
+                    row1_errors[column + channel] += error * 7;
+                    if (x + 1 < width) row1_errors[(size_t)(x + 1) * 3 + channel] += error * 5;
+                    if (x + 2 < width) row1_errors[(size_t)(x + 2) * 3 + channel] += error * 3;
+                }
+                if (y + 2 < height) {
+                    if (x >= 2) row2_errors[(size_t)(x - 2) * 3 + channel] += error * 1;
+                    if (x >= 1) row2_errors[(size_t)(x - 1) * 3 + channel] += error * 3;
+                    row2_errors[column + channel] += error * 5;
+                    if (x + 1 < width) row2_errors[(size_t)(x + 1) * 3 + channel] += error * 3;
+                    if (x + 2 < width) row2_errors[(size_t)(x + 2) * 3 + channel] += error * 1;
                 }
             }
         }
-        int32_t *previous_errors = current_errors;
-        current_errors = next_errors;
-        next_errors = previous_errors;
-        memset(next_errors, 0, error_row_size);
+        int32_t *temp = row0_errors;
+        row0_errors = row1_errors;
+        row1_errors = row2_errors;
+        row2_errors = temp;
+        memset(row2_errors, 0, error_row_size);
         if (y % 16 == 0) {
             yield();
         }
