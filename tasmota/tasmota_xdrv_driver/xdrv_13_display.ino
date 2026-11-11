@@ -672,10 +672,6 @@ void DisplayText(void)
             break;
 #ifdef USE_MULTI_DISPLAY
           case 'S':
-            if (renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
-              AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot switch displays while an asynchronous refresh is active"));
-              break;
-            }
             { int16_t rot = -1, srot, model;
               var = atoiv(cp, &temp);
               cp += var;
@@ -687,6 +683,12 @@ void DisplayText(void)
                 cp++;
                 var = atoiv(cp, &rot);
                 cp += var;
+              }
+              if (renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+                AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot switch displays while an asynchronous refresh is active"));
+                char *ep = strchr(cp, ':');
+                cp = ep ? ep + 1 : cp + strlen(cp);
+                break;
               }
               if (*cp == ':') {
                 cp++;
