@@ -36,6 +36,10 @@ extern void BrTimeoutReset(void);
 extern void BrTimeoutStart(void);
 #endif
 
+#ifndef BERRY_MAX_BYTES_SIZE_PSRAM
+#define BERRY_MAX_BYTES_SIZE_PSRAM   (1024 * 1024)
+#endif
+
 extern "C" {
   /*********************************************************************************************\
    * Native functions mapped to Berry functions
@@ -53,8 +57,8 @@ extern "C" {
       be_pop(vm, argc);
       Renderer * renderer = Init_uDisplay(desc);
       if (renderer) {
-        if (UsePSRAM() && vm->bytesmaxsize < 1024 * 1024) {
-          vm->bytesmaxsize = 1024 * 1024;
+        if (UsePSRAM() && vm->bytesmaxsize < BERRY_MAX_BYTES_SIZE_PSRAM) {
+          vm->bytesmaxsize = BERRY_MAX_BYTES_SIZE_PSRAM;
         }
         be_pushcomptr(vm, renderer);
       } else {
