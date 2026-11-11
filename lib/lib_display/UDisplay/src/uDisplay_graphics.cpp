@@ -65,8 +65,6 @@ void uDisplay::fillScreen(uint16_t color) {
     fillRect(0, 0, width(), height(), color);
 }
 
-static inline void lvgl_color_swap(uint16_t *data, uint16_t len) { for (uint32_t i = 0; i < len; i++) (data[i] = data[i] << 8 | data[i] >> 8); }
-
 void uDisplay::pushColors(uint16_t *data, uint32_t len, boolean not_swapped) {  //not_swapped is always true in call form LVGL driver!!!!
 
     if (lvgl_param.swap_color) {
