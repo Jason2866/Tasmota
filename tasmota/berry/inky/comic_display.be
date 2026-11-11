@@ -273,7 +273,7 @@ def metron_download_cover(username, password, series_name, output_path)
     image_client.close()
     image_client = nil
     if !metron_should_retry(status)
-      raise "http_error", "Cover download returned HTTP " + str(status)
+      raise "cover_unavailable", "Cover download returned HTTP " + str(status)
     end
     if attempt >= metron_retries
       raise "network_error", "Cover download returned HTTP " + str(status)
@@ -409,9 +409,9 @@ def display_comic(username, password, series_name)
           raise "io_error", "Could not restore the previous comic image"
         end
       end
-      if err == "img_error" && msg == "no compatible jpg buffer"
+      if err == "img_error" && (msg == "no compatible jpg buffer" || msg == "jpg decoding failed" || msg == "could not decode or resize JPEG" || msg == "image exceeds available PSRAM" || msg == "reallocation failed")
         gc.collect()
-        print("Metron cover is not a compatible JPEG; searching for another cover")
+        print("Could not decode this Metron cover (" + str(msg) + "); searching for another cover")
         if cover_attempt < comic_cover_attempts
           continue
         end
