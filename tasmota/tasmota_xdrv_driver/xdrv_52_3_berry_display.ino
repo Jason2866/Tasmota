@@ -53,6 +53,9 @@ extern "C" {
       be_pop(vm, argc);
       Renderer * renderer = Init_uDisplay(desc);
       if (renderer) {
+        if (UsePSRAM() && vm->bytesmaxsize < BERRY_MAX_BYTES_SIZE_PSRAM) {
+          vm->bytesmaxsize = BERRY_MAX_BYTES_SIZE_PSRAM;
+        }
         be_pushcomptr(vm, renderer);
       } else {
         be_pushnil(vm);

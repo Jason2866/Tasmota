@@ -10,7 +10,7 @@
 - Resizing stretches the image to the requested dimensions without preserving its aspect ratio. It averages source pixels when shrinking to reduce aliasing and interpolates when enlarging. Shrinking both dimensions works in place. If full-resolution RGB888 decoding does not fit, the decoder can instead use a smaller RGB565 buffer at the original resolution, resize it in place, and expand it to RGB888; this slightly reduces color precision but retains more spatial detail. If even that buffer does not fit, JPEG decoding can still select a reduced resolution. The original size, selected method, and available PSRAM are logged.
 - Firmware must export `display.width()`, `display.height()`, `display.draw_rgb888_async()`, `display.refresh_status()` and `img.save_jpg()`, and include the current `InkyDither.dither` implementation, which accepts the logical dimensions after rotation (480 × 800 for Inky 7.3 with `DisplayRotate 1`). Disable Tasmota's default startup splash screen using `SetOption135 1`. This disables the splash screen, not the Inky refresh when a new image is displayed.
 - Without an initialized display, the script saves a dithered 480 × 800 image for Inky 7.3 with `DisplayRotate 1` and skips panel drawing. The physical panel resolution is 800 × 480.
-- Berry's `bytes()` limit restricts the compressed source JPEG to 512 KiB. PSRAM is required for this workflow.
+- Berry's `bytes()` limit restricts the compressed source JPEG to 1024 KiB. PSRAM is required for this workflow.
 
 ## Inky Impression 7.3-inch display
 
@@ -69,7 +69,7 @@ If `load("inky_dither.be")` fails with `img undeclared`, the running firmware do
 inky_dither(input_path, output_path, saturation, jpeg_quality, width, height, draw_to_display, strength)
 ```
 
-- `input_path`: path to the source JPEG on the Tasmota filesystem. The compressed source must not exceed Berry's 512 KiB `bytes()` limit.
+- `input_path`: path to the source JPEG on the Tasmota filesystem. The compressed source must not exceed Berry's 1024 KiB `bytes()` limit.
 - `output_path`: destination path for the dithered JPEG. It may be the same as the input path.
 - `saturation`: palette blend from `0.0` to `1.0`. `0.5` matches the Python driver's default. Lower values use the desaturated palette; higher values increase saturation.
 - `jpeg_quality`: software JPEG encoder quality from `1` to `100`. Higher values preserve more image detail and generally produce larger files. The default is `85`.

@@ -25,7 +25,7 @@ var comic_source_path = "/metron_comic.jpg"
 var comic_download_path = "/metron_comic.download"
 var comic_backup_path = "/metron_comic.backup"
 var comic_dithered_path = "/metron_comic_dithered.jpg"
-var comic_max_source_bytes = 512 * 1024
+var comic_max_source_bytes = 1024 * 1024
 var comic_cover_attempts = 5
 
 def metron_new_client(username, password)
@@ -385,7 +385,7 @@ def display_comic(username, password, series_name)
     end
     tasmota.yield()
     if downloaded_bytes > comic_max_source_bytes
-      print("Metron cover is " + str(downloaded_bytes) + " bytes; exceeds the 512 KiB limit, searching for another cover")
+      print("Metron cover is " + str(downloaded_bytes) + " bytes; exceeds the 1024 KiB limit, searching for another cover")
       if path.exists(comic_download_path)
         path.remove(comic_download_path)
       end
@@ -434,7 +434,7 @@ def display_comic(username, password, series_name)
     elif network_failed
       print("No usable Metron cover after " + str(comic_cover_attempts) + " attempts (network errors occurred); keeping the current image")
     else
-      print("No Metron cover within 512 KiB found after " + str(comic_cover_attempts) + " attempts; keeping the current image")
+      print("No Metron cover within 1024 KiB found after " + str(comic_cover_attempts) + " attempts; keeping the current image")
     end
     return nil
   end
