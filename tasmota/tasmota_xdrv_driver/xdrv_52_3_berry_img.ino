@@ -21,11 +21,16 @@
 #ifdef USE_BERRY
 
 #include <berry.h>
+#include "be_sys.h"
 
 #ifdef USE_BERRY_IMAGE
 
 #include "esp_camera.h"
 #include "JPEGDEC.h"
+#include "be_img_resize.h"
+
+char get_jpeg_size(unsigned char *data, unsigned int data_size,
+                   unsigned short *width, unsigned short *height);
 
 /*********************************************************************************************\
  * typedefs
@@ -58,10 +63,31 @@ typedef struct {
         const uint8_t *input;
         uint8_t *output;
         size_t output_len;
+        size_t output_capacity;
+        bool output_failed;
 } be_jpg_encoder_t;
 
-typedef struct { 
-    image_t *img; 
+#ifdef USE_UFILESYS
+typedef struct {
+    void *file;
+    size_t written;
+    bool failed;
+} be_jpg_file_encoder_t;
+
+static size_t be_img_jpg_file_cb(void *arg, size_t index, const void *data, size_t len) {
+  be_jpg_file_encoder_t *output = (be_jpg_file_encoder_t *)arg;
+  if (output->failed || index != output->written || len > SIZE_MAX - index ||
+      be_fwrite(output->file, data, len) != len) {
+    output->failed = true;
+    return 0;
+  }
+  output->written += len;
+  return len;
+}
+#endif
+
+typedef struct {
+    image_t *img;
     int stride;
     size_t buf_size;
     bool crop_enabled;
@@ -150,19 +176,43 @@ struct be_img_util {
    * @return true on success, false on failure
    */
   static bool from_buffer(image_t *img, uint8_t* buffer, size_t len, uint16_t w, uint16_t h, pixformat_t f) {
-    if(img->buf != nullptr) {
+    if (!buffer || len == 0 || w == 0 || h == 0 || len > SIZE_MAX - 4) {
+      return false;
+    }
+    if (f == PIXFORMAT_JPEG) {
+      uint16_t jpeg_width, jpeg_height;
+      if (!jpeg_size(buffer, len, &jpeg_width, &jpeg_height) || jpeg_width != w || jpeg_height != h) {
+        return false;
+      }
+    } else {
+      size_t bpp;
+      switch (f) {
+        case PIXFORMAT_GRAYSCALE: bpp = 1; break;
+        case PIXFORMAT_RGB565:
+        case PIXFORMAT_YUV422: bpp = 2; break;
+        case PIXFORMAT_RGB888: bpp = 3; break;
+        default: return false;
+      }
+      size_t pixel_count = (size_t)w * h;
+      if (pixel_count > SIZE_MAX / bpp || len != pixel_count * bpp) {
+        return false;
+      }
+    }
+
+    uint8_t *new_buf = (uint8_t *)heap_caps_malloc(len + 4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!new_buf) {
+      return false;
+    }
+    memcpy(new_buf, buffer, len);
+    if (img->buf != nullptr) {
       free(img->buf);
     }
-    img->buf = (uint8_t *)heap_caps_malloc((len)+4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if(img->buf) {
-      memcpy(img->buf,buffer,len);
-      img->len = len;
-      setFormat(img, f);
-      img->width = w;
-      img->height = h;
-      return true;
-    }
-    return false;
+    img->buf = new_buf;
+    img->len = len;
+    setFormat(img, f);
+    img->width = w;
+    img->height = h;
+    return true;
   }
 
   /**
@@ -181,8 +231,21 @@ struct be_img_util {
   }
 
   /**
-   * @brief Converts RGB888 to RGB565 in-place (produces little endian)
-   * @param buffer RGB888 buffer
+   * @brief Swaps red and blue channels in an RGB888 buffer
+   * @param buffer RGB888 pixel data
+   * @param buffer_len Buffer length in bytes
+   */
+  static void rgb888_swap_red_blue(uint8_t * buffer, size_t buffer_len){
+    for (size_t i=0; i + 2 < buffer_len; i+=3) {
+      uint8_t red = buffer[i];
+      buffer[i] = buffer[i+2];
+      buffer[i+2] = red;
+    }
+  }
+
+  /**
+   * @brief Converts normalized RGB888 to RGB565 in-place (produces little endian)
+   * @param buffer RGB888 buffer in red, green, blue channel order
    * @param buffer_len Buffer length in bytes
    */
   static void rgb888_to_565_inplace(uint8_t * buffer, size_t buffer_len){
@@ -195,9 +258,9 @@ struct be_img_util {
     uint16_t r, g, b;
     int j = 0;
     for (uint32_t i=0; i < buffer_len; i+=3) {
-      blu = temp_buf[i];
+      red = temp_buf[i];
       grn = temp_buf[i+1];
-      red = temp_buf[i+2];
+      blu = temp_buf[i+2];
       b = (blu >> 3) & 0x1f;
       g = ((grn >> 2) & 0x3f) << 5;
       r = ((red >> 3) & 0x1f) << 11;
@@ -227,7 +290,34 @@ struct be_img_util {
    * @return Number of bytes written
    */
   static size_t _jpg_out_cb(void * arg, size_t index, const void* data, size_t len){
-    be_jpg_encoder_t *jpeg = (be_jpg_encoder_t *)arg; 
+    be_jpg_encoder_t *jpeg = (be_jpg_encoder_t *)arg;
+    if (jpeg->output_failed || len > SIZE_MAX - index) {
+      jpeg->output_failed = true;
+      return 0;
+    }
+    if (index > jpeg->output_capacity || len > jpeg->output_capacity - index) {
+      const size_t required = index + len;
+      size_t step = (jpeg->output_capacity < 128 * 1024) ? jpeg->output_capacity : 32 * 1024;
+      if (step < 4096) step = 4096;
+      size_t new_capacity = jpeg->output_capacity + step;
+      if (new_capacity < required) {
+        new_capacity = required + 4096;
+      }
+      uint8_t *new_output = (uint8_t *)heap_caps_realloc(
+          jpeg->output, new_capacity, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (new_output == nullptr) {
+        // Fallback: try allocating just the exact required size
+        new_capacity = required;
+        new_output = (uint8_t *)heap_caps_realloc(
+            jpeg->output, new_capacity, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      }
+      if (new_output == nullptr) {
+        jpeg->output_failed = true;
+        return 0;
+      }
+      jpeg->output = new_output;
+      jpeg->output_capacity = new_capacity;
+    }
     memcpy(jpeg->output + index, data, len);
     jpeg->output_len = index+len;
     return len;
@@ -242,16 +332,19 @@ struct be_img_util {
       be_jpg_decode_ctx_t *ctx = (be_jpg_decode_ctx_t*)pDraw->pUser;
       if (!ctx || !ctx->img || !ctx->img->buf) return 0;
       image_t *img = ctx->img;
-      
+
+      if (pDraw->x < 0 || pDraw->y < 0) return 0;
+      if (pDraw->x >= img->width || pDraw->y >= img->height) return 1;
+
       // Crop check - skip MCUs outside target area (top-left crop)
       if (ctx->crop_enabled) {
           if (pDraw->x >= ctx->target_width || pDraw->y >= ctx->target_height) {
               return 1;  // Skip this MCU entirely
           }
       }
-      
+
       // Calculate actual copy dimensions (handle partial MCUs at edges)
-      int copy_width = pDraw->iWidth;
+      int copy_width = pDraw->iWidthUsed;
       int copy_height = pDraw->iHeight;
       if (ctx->crop_enabled) {
           if (pDraw->x + copy_width > ctx->target_width) {
@@ -261,14 +354,25 @@ struct be_img_util {
               copy_height = ctx->target_height - pDraw->y;
           }
       }
-      
+      if (copy_width > img->width - pDraw->x) {
+          copy_width = img->width - pDraw->x;
+      }
+      if (copy_height > img->height - pDraw->y) {
+          copy_height = img->height - pDraw->y;
+      }
+      if (copy_width <= 0 || copy_height <= 0) return 1;
+
+      size_t dst_offset = ((size_t)pDraw->y * ctx->stride) + ((size_t)pDraw->x * img->bpp);
+      size_t last_row_offset = ((size_t)(pDraw->y + copy_height - 1) * ctx->stride) +
+                               ((size_t)pDraw->x * img->bpp) + ((size_t)copy_width * img->bpp);
+      if (last_row_offset > ctx->buf_size) return 0;
+
       // Check if we're converting RGB8888 -> RGB888
       if (img->bpp == 3 && pDraw->iBpp == 32) {  // 32 bits = 4 bytes
           // Convert 4-byte pixels to 3-byte pixels on the fly
-          size_t dst_offset = (pDraw->y * ctx->stride) + (pDraw->x * img->bpp);
           uint8_t *dst = img->buf + dst_offset;
           const uint8_t *src = (const uint8_t*)pDraw->pPixels;
-          
+
           for (int y = 0; y < copy_height; ++y) {
               for (int x = 0; x < copy_width; ++x) {
                   dst[(y * ctx->stride) + (x * 3) + 0] = src[(y * pDraw->iWidth * 4) + (x * 4) + 0];
@@ -279,18 +383,11 @@ struct be_img_util {
           }
       } else {
           // Normal case - direct copy
-          size_t dst_offset = (pDraw->y * ctx->stride) + (pDraw->x * img->bpp);
-          // Check bounds for actual copy area, not full stride
-          size_t last_row_offset = ((pDraw->y + copy_height - 1) * ctx->stride) + (pDraw->x * img->bpp) + (copy_width * img->bpp);
-          if (last_row_offset > ctx->buf_size) {
-              return 0;
-          }
-          
           uint8_t *dst = img->buf + dst_offset;
           const uint8_t *src = (const uint8_t*)pDraw->pPixels;
-          
+
           for (int y = 0; y < copy_height; ++y) {
-              memcpy(dst + y * ctx->stride, 
+              memcpy(dst + y * ctx->stride,
                     src + y * pDraw->iWidth * img->bpp,
                     copy_width * img->bpp);
           }
@@ -307,23 +404,26 @@ struct be_img_util {
    * @param img Image structure (must have width, height, bpp pre-set)
    * @return true on success, false on failure
    */
-  static bool jpeg_decode_one_image(uint8_t *input_buf, int len, uint8_t *output_buf, 
-                                      int type, image_t *img) {
+  static bool jpeg_decode_one_image(uint8_t *input_buf, int len, uint8_t *output_buf,
+                                      int type, image_t *img, int scale_opt = 0) {
       if (!input_buf || len <= 0 || !output_buf || !img) return false;
       if (img->bpp == 0) return false;
-      
+
       // Parse JPEG dimensions to check for mismatch
       uint16_t jpeg_width, jpeg_height;
       bool crop_enabled = false;
       if (jpeg_size(input_buf, len, &jpeg_width, &jpeg_height)) {
+          if (scale_opt & JPEG_SCALE_HALF) { jpeg_width = (jpeg_width + 1) / 2; jpeg_height = (jpeg_height + 1) / 2; }
+          else if (scale_opt & JPEG_SCALE_QUARTER) { jpeg_width = (jpeg_width + 3) / 4; jpeg_height = (jpeg_height + 3) / 4; }
+          else if (scale_opt & JPEG_SCALE_EIGHTH) { jpeg_width = (jpeg_width + 7) / 8; jpeg_height = (jpeg_height + 7) / 8; }
           if (jpeg_width != img->width || jpeg_height != img->height) {
               // Dimension mismatch - enable cropping
               crop_enabled = true;
-              AddLog(LOG_LEVEL_DEBUG, PSTR("IMG: JPEG crop %dx%d -> %dx%d"), 
+              AddLog(LOG_LEVEL_DEBUG, PSTR("IMG: JPEG crop %dx%d -> %dx%d"),
                      jpeg_width, jpeg_height, img->width, img->height);
           }
       }
-      
+
       img->buf = output_buf;
       int stride = img->width * img->bpp;
       size_t buf_size = img->width * img->height * img->bpp;
@@ -331,7 +431,7 @@ struct be_img_util {
 
       JPEGDEC *jpeg = new JPEGDEC();
       if (!jpeg) return false;
-      
+
       int result = jpeg->openRAM(input_buf, len, jpeg_draw_mcu);
       if (result <= 0) {
           delete jpeg;
@@ -339,60 +439,17 @@ struct be_img_util {
       }
       jpeg->setUserPointer(&ctx);
       jpeg->setPixelType(type);
-      bool ok = jpeg->decode(0, 0, 0);
-      
+      bool ok = jpeg->decode(0, 0, scale_opt);
+
       jpeg->close();
       delete jpeg;
       return ok;
   }
 
-  /**
-   * @brief Extracts width and height from JPEG buffer
-   * @param buffer JPEG data buffer
-   * @param data_size Buffer size
-   * @param width Output: image width
-   * @param height Output: image height
-   * @return true if valid JPEG and dimensions extracted, false otherwise
-   */
-  static bool jpeg_size(uint8_t* buffer, size_t data_size, uint16_t *width, uint16_t *height) {
-    union{
-      uint8_t * data;
-      uint16_t * data16;
-      uint32_t * data32;
-    };
-    data = buffer;
-    if(data[data_size-2] != 0xff ||  data[data_size-1] != 0xd9){
-      return false; // quick check for correct termination
-    }
-    if(data32[0] == 0xE0FFD8FF) {
-      // Check for valid JPEG header (null terminated JFIF)
-      // if(data[i+2] == 'J' && data[i+3] == 'F' && data[i+4] == 'I' && data[i+5] == 'F' && data[i+6] == 0x00) {
-      if(data16[3] == 0x464a && data16[4] == 0x4649) {
-          //Retrieve the block length of the first block since the first block will not contain the size of file
-        int i = 20;
-        uint16_t block_length = 0;
-        while(i<data_size) {
-          i+=block_length;               //Increase the file index to get to the next block
-          if(i >= data_size) {
-            return false;}   //Check to protect against segmentation faults
-          if (data[i] != 0xFF) {
-            return false;}
-          if(data[i+1] == 0xC0 || data[i+1] == 0xC2) {   //0xFFC0 or 0xFFC2 is the "Start of frame" marker which contains the file size
-            //The structure of the 0xFFC0 block is quite simple [0xFFC0][ushort length][uchar precision][ushort x][ushort y]
-            *height = data[i+5]*256 + data[i+6];
-            *width = data[i+7]*256 + data[i+8];
-            return true;
-          }
-          else
-          {
-            i+=2;                              //Skip the block marker
-            block_length = data[i] * 256 + data[i+1];   //Go to the next block
-          }
-        }
-      }
-    }
-    return false;               //Not a valid SOI header
+  static bool jpeg_size(uint8_t *buffer, size_t data_size, uint16_t *width, uint16_t *height) {
+      return get_jpeg_size(buffer, (unsigned int)data_size, width, height);
   }
+
 };
 
 /*********************************************************************************************\
@@ -451,6 +508,85 @@ extern "C" {
   }
 
   /**
+   * @brief Resize an RGB888 image to the requested dimensions
+   * @param vm Berry VM pointer
+   * @return Berry nil
+   * Berry arguments: (width, height)
+   */
+  int be_img_resize(struct bvm *vm);
+  static void be_img_resize_service(void) {
+    BrTimeoutYield();
+    OsWatchLoop();
+    yield();
+  }
+
+  int be_img_resize(struct bvm *vm) {
+    int32_t argc = be_top(vm);
+    if (argc < 3 || !be_isint(vm, 2) || !be_isint(vm, 3)) {
+      be_raise(vm, "img_error", "resize expects width and height");
+      be_return_nil(vm);
+    }
+
+    image_t *img = be_get_image_instance(vm);
+    int32_t target_width = be_toint(vm, 2);
+    int32_t target_height = be_toint(vm, 3);
+    if (target_width <= 0 || target_width > UINT16_MAX ||
+        target_height <= 0 || target_height > UINT16_MAX) {
+      be_raise(vm, "img_error", "invalid resize dimensions");
+      be_return_nil(vm);
+    }
+    if (!img->buf || img->bpp != 3 || img->format != PIXFORMAT_RGB888 ||
+        img->width == 0 || img->height == 0) {
+      be_raise(vm, "img_error", "resize requires a decoded RGB888 image");
+      be_return_nil(vm);
+    }
+    if ((size_t)img->width > SIZE_MAX / 3 / img->height ||
+        img->len < (size_t)img->width * img->height * 3) {
+      be_raise(vm, "img_error", "invalid RGB888 image buffer");
+      be_return_nil(vm);
+    }
+    if (img->width == target_width && img->height == target_height) {
+      be_return_nil(vm);
+    }
+
+    const uint16_t source_width = img->width;
+    const uint16_t source_height = img->height;
+    if ((size_t)target_width > SIZE_MAX / 3 / (size_t)target_height) {
+      be_raise(vm, "img_error", "resize dimensions too large");
+      be_return_nil(vm);
+    }
+    const size_t output_size = (size_t)target_width * target_height * 3;
+    const bool in_place = target_width <= source_width && target_height <= source_height;
+    uint8_t *output = in_place ? img->buf :
+        (uint8_t *)heap_caps_malloc(output_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!output) {
+      be_raise(vm, "img_error", "not enough memory to resize image");
+      be_return_nil(vm);
+    }
+
+    bool resized = be_img_resize_rgb888(img->buf, source_width, source_height, output,
+                                        (uint16_t)target_width, (uint16_t)target_height,
+                                        be_img_resize_service);
+    if (!resized) {
+      if (!in_place) free(output);
+      be_raise(vm, "img_error", "could not resize image");
+      be_return_nil(vm);
+    }
+
+    if (in_place) {
+      uint8_t *smaller = (uint8_t *)heap_caps_realloc(img->buf, output_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (smaller) img->buf = smaller;
+    } else {
+      free(img->buf);
+      img->buf = output;
+    }
+    img->width = (uint16_t)target_width;
+    img->height = (uint16_t)target_height;
+    img->len = output_size;
+    be_return_nil(vm);
+  }
+
+  /**
    * @brief Loads image from JPEG buffer, optionally decoding to specified format
    * @param vm Berry VM pointer
    * @return Berry nil
@@ -463,7 +599,7 @@ extern "C" {
       size_t src_buf_len;
       uint8_t* src_buf = (uint8_t*) be_tobytes(vm, 2, &src_buf_len);
       int format = -1;
-      if(argc == 3 && be_isint(vm, 3)){
+      if(argc >= 3 && be_isint(vm, 3)){
         format =  be_toint(vm, 3);
       }
       image_t * img = be_get_image_instance(vm);
@@ -474,17 +610,97 @@ extern "C" {
           be_return_nil(vm); // done
         }
       }
-      
+
       bool success = false;
       uint16_t w,h;
       if (be_img_util::jpeg_size(src_buf, src_buf_len, &w, &h) == false){
         be_raise(vm, "img_error", "no compatible jpg buffer");
         be_return_nil(vm); //do not destroy the old image
       }
-      
+
       be_img_util::setFormat(img, pixformat_t(format));
-      const size_t newSize = w * h * img->bpp;
-      
+
+      int scale_opt = 0;
+      int scale = 0;
+      bool scale_provided = argc >= 4 && be_isint(vm, 4);
+      if (scale_provided) {
+        scale = be_toint(vm, 4);
+      }
+      if (scale_provided && scale <= 0) {
+        size_t free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        size_t largest_psram_block = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+        uint16_t target_width = 0, target_height = 0;
+        if (argc >= 6 && format == PIXFORMAT_RGB888 && be_isint(vm, 5) && be_isint(vm, 6)) {
+          int32_t requested_width = be_toint(vm, 5);
+          int32_t requested_height = be_toint(vm, 6);
+          if (requested_width > 0 && requested_width <= UINT16_MAX &&
+              requested_height > 0 && requested_height <= UINT16_MAX) {
+            target_width = requested_width;
+            target_height = requested_height;
+          }
+        }
+        scale = be_img_decode_scale(w, h, img->bpp, free_psram, largest_psram_block,
+                                    target_width, target_height);
+        size_t compact_size = scale != 0 ? be_img_compact_decode_size(
+            w, h, target_width, target_height, free_psram, largest_psram_block) : 0;
+        if (compact_size) {
+          uint8_t *compact = (uint8_t *)heap_caps_realloc(img->buf, compact_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+          if (compact) {
+            img->buf = compact;
+            img->width = w;
+            img->height = h;
+            img->len = (size_t)w * h * 2;
+            be_img_util::setFormat(img, PIXFORMAT_RGB565);
+            if (!be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, RGB565_BIG_ENDIAN, img) ||
+                !be_img_resize_rgb565_inplace(img->buf, w, h, target_width, target_height, be_img_resize_service)) {
+              be_img_util::clear(img);
+              be_raise(vm, "img_error", "could not decode or resize JPEG");
+              be_return_nil(vm);
+            }
+            img->width = target_width;
+            img->height = target_height;
+            img->len = (size_t)target_width * target_height * 3;
+            be_img_util::setFormat(img, PIXFORMAT_RGB888);
+            uint8_t *smaller = (uint8_t *)heap_caps_realloc(img->buf, img->len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (smaller) img->buf = smaller;
+            AddLog(LOG_LEVEL_INFO, PSTR("IMG: JPEG %ux%u decoded at full resolution using RGB565; PSRAM free %u, largest %u"),
+                   w, h, (unsigned)free_psram, (unsigned)largest_psram_block);
+            be_return_nil(vm);
+          }
+        }
+        if (scale < 0) {
+          AddLog(LOG_LEVEL_INFO, PSTR("IMG: JPEG %ux%u does not fit; PSRAM free %u, largest %u"),
+                 w, h, (unsigned)free_psram, (unsigned)largest_psram_block);
+          be_img_util::clear(img);
+          be_raise(vm, "img_error", "image exceeds available PSRAM");
+          be_return_nil(vm);
+        }
+        AddLog(LOG_LEVEL_INFO, PSTR("IMG: JPEG %ux%u decode scale 1/%u; PSRAM free %u, largest %u"),
+               w, h, scale > 0 ? scale : 1, (unsigned)free_psram, (unsigned)largest_psram_block);
+      }
+
+      if (scale == 2) {
+        scale_opt = JPEG_SCALE_HALF;
+        w = (w + 1) / 2;
+        h = (h + 1) / 2;
+      } else if (scale == 4) {
+        scale_opt = JPEG_SCALE_QUARTER;
+        w = (w + 3) / 4;
+        h = (h + 3) / 4;
+      } else if (scale == 8) {
+        scale_opt = JPEG_SCALE_EIGHTH;
+        w = (w + 7) / 8;
+        h = (h + 7) / 8;
+      }
+
+      if ((size_t)w * h > SIZE_MAX / img->bpp) {
+        be_img_util::clear(img);
+        be_raise(vm, "img_error", "image too large");
+        be_return_nil(vm);
+      }
+
+      const size_t newSize = (size_t)w * h * img->bpp;
+
       if(newSize != img->len){
         img->buf = (uint8_t*)heap_caps_realloc((void*)img->buf, newSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if(!img->buf){
@@ -493,28 +709,28 @@ extern "C" {
           be_return_nil(vm);
         }
       }
-      
+
       img->width = w;
       img->height = h;
-      
+
       if(format == PIXFORMAT_GRAYSCALE) {
-        success = be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, EIGHT_BIT_GRAYSCALE, img);
+        success = be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, EIGHT_BIT_GRAYSCALE, img, scale_opt);
       }
       else if(format == PIXFORMAT_RGB565) { // Format 0: RGB565 big endian
-        success = be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, RGB565_BIG_ENDIAN, img);
+        success = be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, RGB565_BIG_ENDIAN, img, scale_opt);
       }
       else if(format == 1) { // Format 1: RGB565 little endian (RGB565LE)
-        success = be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, RGB565_LITTLE_ENDIAN, img);
+        success = be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, RGB565_LITTLE_ENDIAN, img, scale_opt);
       }
       else if(format == PIXFORMAT_RGB888) {
-        success = be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, RGB8888, img);
+        success = be_img_util::jpeg_decode_one_image(src_buf, src_buf_len, img->buf, RGB8888, img, scale_opt);
       }
       else {
         be_img_util::clear(img);
         be_raise(vm, "img_error", "unsupported format");
         be_return_nil(vm);
       }
-      
+
       if(success){
         img->len = newSize;
       } else {
@@ -543,12 +759,14 @@ extern "C" {
       // be_pop(vm, 2);
       image_t * img = be_get_image_instance(vm);
       if(img){
-        if(img->buf != nullptr){
-          free(img->buf);
-        }
-        uint16_t width = be_toint(vm, 3);
-        uint16_t height = be_toint(vm, 4);
+        int32_t width_arg = be_toint(vm, 3);
+        int32_t height_arg = be_toint(vm, 4);
         int format = be_toint(vm, 5);
+        if (width_arg <= 0 || width_arg > UINT16_MAX || height_arg <= 0 || height_arg > UINT16_MAX) {
+          be_raise(vm, "img_error", "invalid image dimensions");
+        }
+        uint16_t width = width_arg;
+        uint16_t height = height_arg;
         if(be_img_util::from_buffer(img, src_buf, src_buf_len, width, height, (pixformat_t)format) == false){
           be_raise(vm, "img_error", "could not store from byte buffer");
         }
@@ -606,7 +824,7 @@ extern "C" {
         }
       }
     }
-    
+
     be_pushbytes(vm, roi_buf, roi_size);
     free(roi_buf);
     be_return(vm);
@@ -657,7 +875,7 @@ extern "C" {
           be_img_util::rgb565_swap_bytes(img->buf, img->len);
           swapped = true;
         }
-        
+
         pixformat_t src_format = (img->format == PIXFORMAT_YUV422) ? PIXFORMAT_RGB565 : img->format;
         if(!fmt2rgb888((const uint8_t *)img->buf, img->len, src_format, temp_buf)) {
           if(swapped) {
@@ -667,6 +885,11 @@ extern "C" {
           be_raise(vm, "img_error", "not enough heap");
           be_return_nil(vm);
         }
+        // fmt2rgb888 emits BGR for RGB565 and YUV422 input. JPEG output is already RGB888.
+        // Normalize BGR output here so all later conversions operate on RGB888 data.
+        if (src_format == PIXFORMAT_RGB565 || src_format == PIXFORMAT_YUV422) {
+          be_img_util::rgb888_swap_red_blue(temp_buf, temp_buf_len);
+        }
       }
       be_jpg_encoder_t jpeg;
       jpeg.width = 0;
@@ -674,6 +897,8 @@ extern "C" {
       jpeg.input = img->buf;
       jpeg.output = temp_buf;
       jpeg.output_len = 0;
+      jpeg.output_capacity = temp_buf_len + 4;
+      jpeg.output_failed = false;
       switch(format){
         case PIXFORMAT_GRAYSCALE: // always from temporary RGB888
           be_img_util::rgb888_to_grayscale_inplace(temp_buf,temp_buf_len);
@@ -703,7 +928,23 @@ extern "C" {
               be_img_util::rgb565_swap_bytes(temp_buf, img->len); // Swap LE to BE in temp buffer
               encode_format = PIXFORMAT_RGB565;
             }
-            fmt2jpg_cb(img->buf, img->len, img->width, img->height, encode_format, quality, be_img_util::_jpg_out_cb, (void *)&jpeg);
+            // esp32-camera's fmt2jpg_cb() treats PIXFORMAT_RGB888 input as
+            // BGR and reverses the outer channels while encoding. Berry's
+            // RGB888 buffers are RGB, so adapt the input and restore it.
+            bool rgb888_swapped = encode_format == PIXFORMAT_RGB888;
+            if(rgb888_swapped) {
+              be_img_util::rgb888_swap_red_blue(img->buf, pixel_count * 3);
+            }
+            bool encoded = fmt2jpg_cb(img->buf, img->len, img->width, img->height, encode_format, quality, be_img_util::_jpg_out_cb, (void *)&jpeg);
+            if(rgb888_swapped) {
+              be_img_util::rgb888_swap_red_blue(img->buf, pixel_count * 3);
+            }
+            if (!encoded || jpeg.output_failed || jpeg.output_len == 0) {
+              free(jpeg.output);
+              be_raise(vm, "img_error", "jpg encoding failed");
+              be_return_nil(vm);
+            }
+            temp_buf = jpeg.output;
             temp_buf_len = jpeg.output_len;
           }
           break;
@@ -724,6 +965,54 @@ extern "C" {
       }
     }
     be_return(vm);
+  }
+
+  int be_img_save_jpg(struct bvm *vm);
+  int be_img_save_jpg(struct bvm *vm) {
+#ifdef USE_UFILESYS
+    if (be_top(vm) < 3 || !be_isstring(vm, 2) || !be_isint(vm, 3)) {
+      be_raise(vm, "value_error", "save_jpg expects a path and quality");
+      be_return_nil(vm);
+    }
+    int32_t quality = be_toint(vm, 3);
+    image_t *img = be_get_image_instance(vm);
+    if (quality < 1 || quality > 100 || !img->buf || img->format != PIXFORMAT_RGB888 ||
+        img->bpp != 3 || !img->width || !img->height ||
+        (size_t)img->width > SIZE_MAX / 3 / img->height ||
+        img->len < (size_t)img->width * img->height * 3) {
+      be_raise(vm, "img_error", "save_jpg requires an RGB888 image and quality 1..100");
+      be_return_nil(vm);
+    }
+    void *file = be_fopen(be_tostring(vm, 2), "w");
+    if (!file) {
+      be_raise(vm, "io_error", "could not open JPEG output file");
+      be_return_nil(vm);
+    }
+    be_jpg_file_encoder_t output = {file, 0, false};
+    be_img_util::rgb888_swap_red_blue(img->buf, (size_t)img->width * img->height * 3);
+    bool encoded = fmt2jpg_cb(img->buf, img->len, img->width, img->height, PIXFORMAT_RGB888,
+                              quality, be_img_jpg_file_cb, &output);
+    be_img_util::rgb888_swap_red_blue(img->buf, (size_t)img->width * img->height * 3);
+    be_fclose(file);
+    if (output.failed) {
+      be_raise(vm, "io_error", "could not write complete JPEG output file");
+      be_return_nil(vm);
+    }
+    if (!encoded || !output.written || output.written > INT32_MAX) {
+      AddLog(LOG_LEVEL_INFO, PSTR("IMG: JPEG encoder failed; internal free %u, largest %u; PSRAM free %u, largest %u"),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+      be_raise(vm, "img_error", "jpg encoding failed");
+      be_return_nil(vm);
+    }
+    be_pushint(vm, output.written);
+    be_return(vm);
+#else
+    be_raise(vm, "feature_error", "save_jpg requires filesystem support");
+    be_return_nil(vm);
+#endif
   }
 
   /**

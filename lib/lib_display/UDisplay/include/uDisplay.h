@@ -113,6 +113,11 @@ class uDisplay : public Renderer {
   Renderer *Init(void);
   void DisplayInit(int8_t p,int8_t size,int8_t rot,int8_t font);
   void Updateframe();
+  bool UpdateframeChecked() override;
+  bool CanStartUpdateFrameAsync() override;
+  bool StartUpdateFrameAsync() override;
+  void ServiceUpdateFrameAsync() override;
+  uint8_t GetUpdateFrameAsyncStatus() override;
   void DisplayOnff(int8_t on);
   void HandeBP(int8_t on);
   void Splash(void);

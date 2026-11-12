@@ -34,7 +34,7 @@ void uDisplay::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
 }
 
 void uDisplay::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
-    if (framebuffer) {
+    if (framebuffer && ep_mode != 4) {
         Renderer::drawFastVLine(x, y, h, color);
         return;
     }
@@ -64,8 +64,6 @@ void uDisplay::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t col
 void uDisplay::fillScreen(uint16_t color) {
     fillRect(0, 0, width(), height(), color);
 }
-
-static inline void lvgl_color_swap(uint16_t *data, uint16_t len) { for (uint32_t i = 0; i < len; i++) (data[i] = data[i] << 8 | data[i] >> 8); }
 
 void uDisplay::pushColors(uint16_t *data, uint32_t len, boolean not_swapped) {  //not_swapped is always true in call form LVGL driver!!!!
 
@@ -115,6 +113,7 @@ void uDisplay::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 }
 
 void uDisplay::setRotation(uint8_t rotation) {
+    if (GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) return;
     cur_rot = rotation;
     if (universal_panel->setRotation(rotation)) {
         // Update Renderer dimensions based on rotation
@@ -140,5 +139,38 @@ void uDisplay::setRotation(uint8_t rotation) {
 }
 
 void uDisplay::Updateframe(void) {
-    universal_panel->updateFrame();
+#ifndef ESP8266
+    if (ep_mode == 4 && universal_panel) {
+        if (universal_panel->canStartAsyncUpdate() && universal_panel->startAsyncUpdate()) {
+            return;
+        }
+        if (static_cast<EPDPanel*>(universal_panel)->queueUpdateAfterAsync()) return;
+    }
+#endif
+    UpdateframeChecked();
+}
+
+bool uDisplay::UpdateframeChecked(void) {
+    if (!universal_panel) return false;
+    if (interface == _UDSP_QSPI ||
+        (interface == _UDSP_SPI && !ep_mode && bpp >= 16 && !frame_buffer)) {
+        return true;
+    }
+    return universal_panel->updateFrame();
+}
+
+bool uDisplay::CanStartUpdateFrameAsync() {
+    return universal_panel && universal_panel->canStartAsyncUpdate();
+}
+
+bool uDisplay::StartUpdateFrameAsync() {
+    return universal_panel && universal_panel->startAsyncUpdate();
+}
+
+void uDisplay::ServiceUpdateFrameAsync() {
+    if (universal_panel) universal_panel->serviceAsyncUpdate();
+}
+
+uint8_t uDisplay::GetUpdateFrameAsyncStatus() {
+    return universal_panel ? universal_panel->asyncUpdateStatus() : RENDERER_UPDATE_UNSUPPORTED;
 }
