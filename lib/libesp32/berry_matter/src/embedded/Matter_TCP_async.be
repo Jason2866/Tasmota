@@ -27,8 +27,8 @@ import matter
 #   1 = connected   (tcp_connected == true)
 #   2 = finished    (tcp_connected == false and result in response)
 #  -1 = DNS failed  (tcp_connected == false)
-#  -2 = refused     (tcp_connecetd == false)
-#  -3 = timeout     (tcp_connecetd == false)
+#  -2 = refused     (tcp_connected == false)
+#  -3 = timeout     (tcp_connected == false)
 #  -4 = error       communication error
 
 class Matter_TCP_async
@@ -107,7 +107,7 @@ class Matter_TCP_async
   end
 
   #############################################################
-  # send_http
+  # close the connection, remove the loop callback, fire event_closed if it was connected
   def close()
     self.tcp.close()
     if self.fast_loop
@@ -153,9 +153,11 @@ class Matter_TCP_async
 
     if (tasmota.millis() - self.time_start) > self.timeout
       # connection timeout (either while connecting or after established)
-      self.close()
+      # mark as failed and not connected BEFORE `close()`, otherwise `close()` fires
+      # `event_closed()` which subclasses (HTTP) report as a successful completion
       self.status = -3
       self.tcp_connected = false        # force to false
+      self.close()
       self.event_timeout()
       return
     end

@@ -179,7 +179,7 @@ matter.ClusterPathIB = Matter_ClusterPathIB
 #################################################################################
 class Matter_DataVersionFilterIB : Matter_IM_base
   var path                        # false if none
-  var data_version                # u64 as bytes
+  var data_version                # u32
 
   # decode from TLV
   def from_TLV(val)
@@ -336,7 +336,7 @@ class Matter_EventDataIB : Matter_IM_base
     if val == nil   return nil end
     self.path = matter.EventPathIB().from_TLV(val.findsub(0))
     self.event_number = val.findsubval(1) # u64
-    self.priority = val.findsubval(2) # u64
+    self.priority = val.findsubval(2) # u8
     self.epoch_timestamp = val.findsubval(3) # u64
     self.system_timestamp = val.findsubval(4) # u64
     self.delta_epoch_timestamp = val.findsubval(5) # u64
@@ -766,7 +766,7 @@ class Matter_InvokeRequestMessage_solo : Matter_Path
 
   def from_raw(raw, idx)
     self.reset()
-    # must start with 15360017
+    # must start with 0x15 (anonymous struct)
     var sz = size(raw)
     var val
 
@@ -927,6 +927,51 @@ class Matter_SubscribeRequestMessage : Matter_IM_Message_base
   var event_filters               # array of EventFilterIB
   var fabric_filtered             # bool
   var data_version_filters        # array of DataVersionFilterIB
+
+  # Parse a raw SubscribeRequest without keeping DataVersionFilters in the TLV tree,
+  # they are not used for reports: each filter is parsed and dropped, tag 8 stays
+  # an empty array (so `data_version_filters` is empty, and a duplicate tag 8 is still ignored)
+  # Returns [val, raw offset of filters] for `validate_raw_filters()` after the ACK
+  static def parse_raw(raw, idx)
+    var TLV = matter.TLV
+    if idx == nil   idx = 0 end
+    if raw[idx] != 0x15 #-TLV.STRUCT, anonymous-#
+      return [TLV.parse(raw, idx), nil]
+    end
+    var val = TLV.Matter_TLV_struct()
+    var versions_idx = nil
+    idx += 1
+    while raw[idx] != 0x18 #-TLV.EOC-#
+      if raw.get(idx, -2) == 0x3608 && val.findsub(8) == nil
+        var versions = val.add_array(8)
+        idx += 2
+        versions_idx = idx
+        while raw[idx] != 0x18 #-TLV.EOC-#
+          var filter = TLV.parse(raw, idx)
+          idx = filter.next_idx
+          filter = nil
+        end
+        idx += 1
+        versions.next_idx = idx
+      else
+        var item = TLV.parse(raw, idx, val)
+        idx = item.next_idx
+        val.val.push(item)
+      end
+    end
+    val.next_idx = idx + 1
+    return [val, versions_idx]
+  end
+
+  # Decode the DataVersionFilters skipped by `parse_raw()` one at a time, raises on invalid filter
+  static def validate_raw_filters(raw, idx)
+    while raw[idx] != 0x18 #-TLV.EOC-#
+      var filter = matter.TLV.parse(raw, idx)
+      idx = filter.next_idx
+      matter.DataVersionFilterIB().from_TLV(filter)
+      filter = nil
+    end
+  end
 
   # decode from TLV
   def from_TLV(val)

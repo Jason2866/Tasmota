@@ -24,24 +24,20 @@
 # Device Type Revision: 3 (Matter 1.4.1)
 # Class: Simple | Scope: Endpoint
 #
-# CLUSTERS (Server):
+# CLUSTERS (Server), implemented: 0x0006 On/Off. Inherited: 0x001D, 0x0003, 0x0004, 0x0062.
 # - 0x0003: Identify (M)
 # - 0x0004: Groups (M)
 # - 0x0062: Scenes Management (P, M)
 # - 0x0006: On/Off (M)
-# - 0x0008: Level Control (O)
-# - 0x0406: Occupancy Sensing (C, O)
 #
 # ELEMENT OVERRIDES:
 # - Identify: TriggerEffect cmd M
 # - Scenes Management: CopyScene cmd P, M
 # - On/Off: Lighting feature M
-# - Level Control: OnOff feature M, Lighting feature M, CurrentLevel 1-254, MinLevel 1, MaxLevel 254
 #
 # NOTES:
 # - Base class for all lighting devices
 # - Supports basic on/off control
-# - Can optionally support dimming via Level Control cluster
 #################################################################################
 
 #################################################################################
@@ -140,6 +136,7 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
   var tasmota_relay_index                             # Relay number in Tasmota (1 based), may be nil for Lights 1/2/3 internal
   var light_index                                   # index number when using `light.get()` and `light.set()`
   var shadow_onoff                                    # (bool) status of the light power on/off
+  var on_hold                                         # (int or nil) "Lights delayed on": millis when an On was held, see Light1 `hold_on()`
 
   #############################################################
   # Constructor
@@ -155,7 +152,7 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
   # Parse configuration map
   def parse_configuration(config)
     super(self).parse_configuration(config)
-    # with Light0 we always need relay number but we don't for Light1/2/3 so self.tasmota_relay_index may be `nil`
+    # The relay number is optional. When it is nil, set_onoff() and update_shadow() drive the light object at light_index.
     self.tasmota_relay_index = int(config.find('relay', nil))
     if (self.tasmota_relay_index != nil && self.tasmota_relay_index <= 0)    self.tasmota_relay_index = 1    end
   end
@@ -206,6 +203,15 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
   end
 
   #############################################################
+  # hold_on
+  #
+  # Returns true if a received On is held instead of sent (see Light1)
+  # Light0 has no Level Control, so an On is never held
+  def hold_on()
+    return false
+  end
+
+  #############################################################
   # read an attribute
   #
   def read_attribute(session, ctx, tlv_solo)
@@ -219,9 +225,9 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
         return tlv_solo.set(0x08 #-TLV.BOOL-#, self.shadow_onoff)
       elif attribute == 0x4000          #  ---------- GlobalSceneControl / bool ----------
         return tlv_solo.set(0x08 #-TLV.BOOL-#, true)
-      elif attribute == 0x4001          #  ---------- OnTime / u2 ----------
+      elif attribute == 0x4001          #  ---------- OnTime / uint16 ----------
         return tlv_solo.set(0x06 #-TLV.U4-#, 0)
-      elif attribute == 0x4002          #  ---------- OffWaitTime / u2 ----------
+      elif attribute == 0x4002          #  ---------- OffWaitTime / uint16 ----------
         return tlv_solo.set(0x06 #-TLV.U4-#, 0)
       elif attribute == 0x4003          #  ---------- StartUpOnOff / enum8 nullable ----------
         return tlv_solo.set(0x14 #-TLV.NULL-#, nil)
@@ -244,7 +250,13 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
     # ====================================================================================================
     if   cluster == 0x0006              # ========== On/Off 1.5 p.48 ==========
       if !self.mqtt_command_ready(ctx)   return nil   end
-      self.update_shadow_lazy()
+      if command == 0x0001 && (self.on_hold != nil || self.hold_on())
+        ctx.log = "delayed"             # sent with a following level command, or when the delay expires
+        return true
+      end
+      var held = (self.on_hold != nil)  # any other On/Off command sets the state itself,
+      self.on_hold = nil                # relative to the On already reported for a held On
+      if !held   self.update_shadow_lazy()   end
       if   command == 0x0000            # ---------- Off ----------
         self.set_onoff(false)
         self.publish_command('Power', 0)
@@ -280,7 +292,7 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
   # Update internal state for virtual devices
   def update_virtual(payload)
     var val_onoff = payload.find("Power")
-    if val_onoff != nil
+    if val_onoff != nil && (self.on_hold == nil || bool(val_onoff))    # delayed On: not switched on yet
       self.set_onoff(bool(val_onoff))
     end
     super(self).update_virtual(payload)
@@ -290,7 +302,7 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
   # For Zigbee devices
   #############################################################
   #############################################################
-  # attributes_refined
+  # zigbee_received
   #
   # Filtered to only events for this endpoint
   # Contains common code for Light 0/1/2/3 to avoid code duplication
@@ -307,7 +319,7 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
         update_list['Power'] = int(entry.val)
       end
       if (entry.key == "Dimmer")
-        update_list['Dimmer'] = int(entry.val)
+        update_list['Bri'] = int(entry.val)   # Zigbee Dimmer is 0..254, same scale as Matter Bri, read by Light1/Light2 update_virtual()
       end
       if (entry.key == "CT")
         update_list['CT'] = int(entry.val)
@@ -324,9 +336,9 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
   # For Bridge devices
   #############################################################
   #############################################################
-  # Stub for updating shadow values (local copies of what we published to the Matter gateway)
+  # Update shadow values from Status 11 (local copies of what we published to the Matter gateway)
   #
-  # This call is synnchronous and blocking.
+  # This call is synchronous and blocking.
   def parse_status(data, index)
     if index == 11                              # Status 11
       var power_key = "POWER" + str(self.tasmota_relay_index)
@@ -336,6 +348,7 @@ class Matter_Plugin_Light0 : Matter_Plugin_Device
       end
       if !data.contains(power_key)   return   end
       var state = (data.find(power_key) == "ON")
+      if self.on_hold != nil && !state   return   end      # delayed On: the remote is not switched on yet
 
       if self.shadow_onoff != bool(state)
         self.attribute_updated(0x0006, 0x0000)

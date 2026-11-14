@@ -715,11 +715,6 @@ char* SettingsText(uint32_t index) {
  * Config Save - Save parameters to Flash ONLY if any parameter has changed
 \*********************************************************************************************/
 
-void UpdateBackwardCompatibility(void) {
-  // Perform updates for backward compatibility
-  strlcpy(Settings->user_template_name, SettingsText(SET_TEMPLATE_NAME), sizeof(Settings->user_template_name));
-}
-
 uint32_t GetSettingsAddress(void) {
   return settings_location * SPI_FLASH_SEC_SIZE;
 }
@@ -735,7 +730,6 @@ void SettingsSave(uint8_t rotate) {
  */
 #ifndef FIRMWARE_MINIMAL
   XsnsXdrvCall(FUNC_SAVE_SETTINGS);
-  UpdateBackwardCompatibility();
   if ((GetSettingsCrc32() != settings_crc32) || rotate) {
     if (1 == rotate) {                                 // Use eeprom flash slot only and disable flash rotate from now on (upgrade)
       TasmotaGlobal.stop_flash_rotate = 1;
@@ -1716,6 +1710,14 @@ void SettingsDelta(void) {
           Settings->shutter_options[shutter_idx] |= 16;
         }
       }
+    }
+    if (Settings->version < 0x10000004) {  // 16.0.0.4
+#ifdef ESP8266
+      // Ex gpio16_converted and free_esp8266_3D0 now hold the packed device local pose (USE_LOCATION).
+      // Clear once as it may hold the gpio16 conversion marker or ex_friendlyname text from before v9.1.
+      // Kept on downgrade and re-upgrade
+      memset(Settings->location_packed, 0, sizeof(Settings->location_packed));
+#endif  // ESP8266
     }
 
     Settings->version = TASMOTA_VERSION;

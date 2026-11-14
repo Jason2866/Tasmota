@@ -927,6 +927,13 @@ void MqttShowState(void)
       ipaddress = (uint32_t)WiFi.localIP();
     }
   }
+#ifdef USE_LOCATION
+  if (Settings->flag6.location_tele) {       // SetOption166 - (Location) Add device location/pose to tele/STATE
+    ResponseAppend_P(PSTR(","));
+    LocationResponseAppend();
+  }
+#endif  // USE_LOCATION
+
   // I only want to show one active connection for device access
   ResponseAppend_P(PSTR(",\"" D_CMND_HOSTNAME "\":\"%s\",\"" D_CMND_IPADDRESS "\":\"%_I\""),
     hostname, ipaddress);
@@ -1691,12 +1698,11 @@ void Every250mSeconds(void)
 #ifdef USE_WEBSERVER
         if (Settings->webserver) {
 
-#ifdef ESP8266
-          if (!WifiIsInManagerMode()) { StartWebserver(Settings->webserver); }
-#endif  // ESP8266
-#ifdef ESP32
-          StartWebserver(Settings->webserver);
-#endif  // ESP32
+          bool start_webserver = !WifiIsInManagerMode();  // Keep WifiManager pages while active
+#if defined(ESP32) && defined(USE_ETHERNET)
+          if (EthernetHasIP()) { start_webserver = true; }  // Unless Ethernet is up and needs the normal pages
+#endif  // ESP32 and USE_ETHERNET
+          if (start_webserver) { StartWebserver(Settings->webserver); }
 
 #ifdef USE_DISCOVERY
 #ifdef WEBSERVER_ADVERTISE

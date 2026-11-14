@@ -23,7 +23,7 @@ import matter
 
 class Matter_MessageHandler
   # callback for sending messages
-  var device              # `tansport.msg_send(raw:bytes() [,...]) -> bool` true if succeeded
+  var device              # `device.msg_send(frame)`: sends a matter.Frame through the UDP server
 
   # handlers
   var commissioning       # Commissioning Context instance, handling the PASE/CASE phases
@@ -31,7 +31,7 @@ class Matter_MessageHandler
   var control_message     # Instance of `matter.Control_Message` for MCSP
 
   # cache for decryption bytes
-  var _n_bytes            # size 16 minimal, used by frame_buffer for decryption
+  var _n_bytes            # size 16 minimal, nonce scratch buffer for Matter_Frame.decrypt and encrypt
 
   #############################################################
   def init(device)
@@ -48,7 +48,7 @@ class Matter_MessageHandler
   # reliable: do we send as reliable message
   #
   def send_simple_ack(frame, reliable)
-    if frame.x_flag_r                   # nothing to respond, check if we need a standalone ack
+    if frame.x_flag_r                   # reliable frame (R flag set): send a standalone ack
       var resp = frame.build_standalone_ack(reliable)
       # special case, the local_session_id is not the one from the session
       resp.local_session_id = frame.local_session_id
@@ -68,7 +68,7 @@ class Matter_MessageHandler
   # reliable: do we send as reliable message
   #
   def send_encrypted_ack(frame, reliable)
-    if frame.x_flag_r                   # nothing to respond, check if we need a standalone ack
+    if frame.x_flag_r                   # reliable frame (R flag set): send a standalone ack
       var resp = frame.build_standalone_ack(reliable)
       resp.encode_frame()
       resp.encrypt()
@@ -84,7 +84,7 @@ class Matter_MessageHandler
   #############################################################
   # Called when a message is received
   #
-  # Find or create a session for the message
+  # Find the session of an encrypted message, or create one for an unsecured message
   # and dispacth to appropriate handler
   #
   def msg_received(raw, addr, port)
@@ -100,10 +100,13 @@ class Matter_MessageHandler
 
       # do we need decryption?
       if frame.sec_p
-        # Control message
-        # log("MTR: CONTROL MESSAGE=" + matter.inspect(frame), 4)
-        var session = self.device.sessions.find_session_source_id_unsecure(frame.source_node_id, 90)    # 90 seconds max
-        # log("MTR: find session by source_node_id = " + str(frame.source_node_id) + " session_id = " + str(session.local_session_id), 4)
+        # Privacy flag (P, bit 7 of security flags) is not supported: CHIP does not use privacy
+        # on unicast sessions, and group transport is disabled. Drop the message without
+        # allocating any session.
+        log("MTR: ignoring message with privacy flag set (not supported)", 3)
+        return false
+      elif frame.sec_c
+        # Control message (C, bit 6 of security flags), used by MCSP
         return self.control_message.process_incoming_control_message(frame)
       elif frame.local_session_id == 0 && frame.sec_sesstype == 0
         #############################################################
@@ -164,12 +167,27 @@ class Matter_MessageHandler
           return false
         end
         # matter.profiler.log("msg_received_session_found")
-        if addr     session._ip = addr     end
-        if port     session._port = port   end
-        session._message_handler = self
-        frame.session = session   # keep a pointer of the session in the message
-       
-        # check if it's a duplicate
+        frame.session = session   # keep a pointer of the session in the message, needed by `decrypt()`
+
+        # Authenticate BEFORE touching any session state.
+        # The session id and message counter are sent in clear, so an unauthenticated
+        # packet must not be able to move the receive counter (which would make
+        # legitimate messages look like replays) nor change the peer address
+        # (which would redirect subscription reports). Only a packet with a valid
+        # MIC can update the session.
+        var decrypt_ok = frame.decrypt()
+        # matter.profiler.log("msg_received_header_frame_decrypted")
+        if !decrypt_ok     return false end
+
+        # matter.profiler.log("msg_received_payload_undecoded")
+
+        # continue decoding, also needed before the duplicate check
+        # so that the Ack below has the R flag and exchange id
+        # log(format("MTR: idx=%i clear=%s", frame.payload_idx, frame.raw.tohex()), 4)
+        frame.decode_payload()
+        # matter.profiler.log("msg_received_payload_decoded")
+
+        # check if it's a duplicate, this commits the counter so it must come after authentication
         if !session.counter_rcv_validate(frame.message_counter, true)
 #if USE_BERRY_DEBUG
           if tasmota.loglevel(4)
@@ -179,17 +197,11 @@ class Matter_MessageHandler
           self.send_encrypted_ack(frame, false #-not reliable-#)
           return false
         end
-        
-        var decrypt_ok = frame.decrypt()
-        # matter.profiler.log("msg_received_header_frame_decrypted")
-        if !decrypt_ok     return false end
 
-        # matter.profiler.log("msg_received_payload_undecoded")
-
-        # continue decoding
-        # log(format("MTR: idx=%i clear=%s", frame.payload_idx, frame.raw.tohex()), 4)
-        frame.decode_payload()
-        # matter.profiler.log("msg_received_payload_decoded")
+        # message is authentic and new: record where the peer can be reached
+        if addr     session._ip = addr     end
+        if port     session._port = port   end
+        session._message_handler = self
 #if USE_BERRY_DEBUG
         if tasmota.loglevel(4)
           log("MTR: >          Decrypted message: protocol_id:"+str(frame.protocol_id)+" opcode="+str(frame.opcode)+" exchange_id="+str(frame.exchange_id & 0xFFFF), 4)
@@ -203,7 +215,7 @@ class Matter_MessageHandler
         # dispatch according to protocol_id
         var protocol_id = frame.protocol_id
         if protocol_id == 0x0000    # PROTOCOL_ID_SECURE_CHANNEL
-          # it should not be encrypted
+          # secure channel messages (for example the MRP ack) are handled here after decryption
           # log("MTR: PROTOCOL_ID_SECURE_CHANNEL " + matter.inspect(frame), 3)
           if frame.opcode == 0x10                             # MRPStandaloneAcknowledgement
             ret = self.im.process_incoming_ack(frame)
@@ -265,7 +277,7 @@ class Matter_MessageHandler
   end
 
   #############################################################
-  # placeholder, nothing to run for now
+  # call every_second() of the commissioning context and of the IM
   def every_second()
     self.commissioning.every_second()
     self.im.every_second()
