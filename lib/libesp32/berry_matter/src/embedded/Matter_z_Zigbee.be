@@ -20,9 +20,10 @@
 import matter
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# IMPORTANT: this class is included in build only if `#define USE_ZIGBEE` is defined in `C`
+# IMPORTANT: the class is always compiled, but the `matter_zigbee` module is only registered
+# when `USE_ZIGBEE` is defined (lib/libesp32/berry/default/be_modtab.c, `#ifdef USE_ZIGBEE`).
 #
-# This is managed in matter_module with includes
+# Matter detects it at runtime with `is_zigbee_present()`.
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
@@ -61,6 +62,12 @@ class Matter_Zigbee_Mapper
   def parse_configuration(config)
     import zigbee
     import string
+    # reset cached resolution, `parse_configuration()` is also called when the config is edited in place
+    # otherwise `resolve_zb_device()` keeps the previous device and endpoint
+    self.zigbee_device = nil
+    self.shortaddr = nil
+    self.endpoint = nil
+    self.device_arg_str = nil
     self.device_arg = config.find('zigbee_device', nil)
     # parse optional ":<endpoint>" explicit suffix
     if (type(self.device_arg) == 'string')
@@ -249,7 +256,7 @@ class Matter_Zigbee
 
 
   #############################################################
-  # attributes_refined
+  # attributes_final
   #
   # Called by Zigbee mapping whenever a new event is received
   def attributes_final(event_type, frame, attr_list, shortaddr)
