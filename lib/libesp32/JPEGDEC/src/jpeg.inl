@@ -4622,7 +4622,7 @@ static void JPEGPutMCU12(JPEGIMAGE *pJPEG, int x, int iPitch)
             JPEGPixelBE(pOutput, Y1, Cb, Cr);
             JPEGPixelBE(pOutput + iPitch, Y2, Cb, Cr);
         } else { // RGB8888
-            JPEGPixelRGB((uint32_t *)&pOutput, Y1, Cb, Cr);
+            JPEGPixelRGB((uint32_t *)pOutput, Y1, Cb, Cr);
             JPEGPixelRGB((uint32_t *)&pOutput[iPitch*2], Y2, Cb, Cr);
         }
         Y1 = pY[1] << 12;
