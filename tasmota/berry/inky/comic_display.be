@@ -10,6 +10,16 @@
 #
 # For correct Inky output orientation, set the Tasmota command DisplayRotate 1
 # (90 degrees) before running this script.
+#
+# SECURITY NOTE: the default Berry webclient() (HttpClientLight) accepts ANY TLS
+# certificate, so your Metron credentials could be captured by a man-in-the-middle
+# on an untrusted network. Only run this on networks you trust. Firmware built
+# with USE_BERRY_WEBCLIENT_ASYNC additionally supports wc.tls_pin_pubkey() for
+# public-key pinning, which this script does not use.
+#
+# Credentials are only sent to https://metron.cloud API endpoints. The cover
+# image download never sends credentials, and HTTP redirects are not followed,
+# so the Authorization header cannot leak to another host.
 
 import path
 import json
@@ -34,6 +44,9 @@ def metron_new_client(username, password)
   # metron.cloud HTTPS/TLS and surfaces as HTP: Connection error -2.
   wc.set_useragent(metron_user_agent)
   wc.set_timeouts(metron_http_timeout_ms, metron_connect_timeout_ms)
+  # Keep redirects disabled (the default) so credentials are never forwarded
+  # to a different host if metron.cloud ever answers with a redirect.
+  wc.set_follow_redirects(false)
   if username != nil && size(username) > 0
     wc.set_auth(username, password)
   end
@@ -335,6 +348,7 @@ def display_comic(username, password, series_name)
   if username == nil || password == nil || size(username) == 0 || size(password) == 0
     raise "value_error", "Pass your Metron username and password"
   end
+  print("WARNING: webclient() does not verify TLS certificates; only use Metron credentials on trusted networks")
 
   # inky_dither normalizes the source to the logical display dimensions, dithers it, then refreshes Inky.
   var dither_fn = nil

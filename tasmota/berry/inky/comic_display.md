@@ -10,6 +10,8 @@ Fetches a random issue from Metron and displays its cover on the Inky Impression
 - PSRAM, for decoding and resizing the cover image
 - The updated Tasmota firmware containing `img.resize()` and `InkyDither.dither()`
 
+> **Security note:** the default Berry `webclient()` does not verify TLS certificates (it accepts any certificate), so your Metron credentials could be intercepted by a man-in-the-middle on an untrusted network. Only run this script on networks you trust. Credentials are sent only to `metron.cloud` API endpoints; the cover image download never sends credentials and HTTP redirects are not followed.
+
 ## Usage
 
 Before running the script, enter `DisplayRotate 1` in the Tasmota console. This sets the 90° software rotation needed for the Metron covers to display in the correct orientation on the Inky panel.
