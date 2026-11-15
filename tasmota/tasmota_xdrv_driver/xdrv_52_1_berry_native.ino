@@ -113,7 +113,7 @@ void BrTimeoutStart(void)  {
   yield();
 }
 
-void BrTimeoutYield(void) {
+extern "C" void BrTimeoutYield(void) {
   if (0 != berry.timeout) {
     BrTimeoutStart();
   }
