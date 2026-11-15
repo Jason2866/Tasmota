@@ -213,7 +213,11 @@ def metron_download_cover(username, password, series_name, output_path)
   var issue_url = metron_api + "?series_id=" + str(series_id) + "&page_size=1"
   var first_issue_page = metron_get_json(issue_url, username, password)
   var issue_count = first_issue_page.find("count", 0)
+  var issue_page_size = size(first_issue_page.find("results", []))
   var issue_page_count = issue_count
+  if issue_page_size > 0 && issue_count != nil
+    issue_page_count = (issue_count + issue_page_size - 1) / issue_page_size
+  end
   if issue_page_count == nil || issue_page_count < 1
     issue_page_count = 1
   end
