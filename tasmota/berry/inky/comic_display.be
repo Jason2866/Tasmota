@@ -207,18 +207,23 @@ def metron_download_cover(username, password, series_name, output_path)
   end
   print("Searching issues in " + str(series_title) + " (series " + str(series_id) + ")")
 
-  var total_issues = series.find("issue_count", 0)
-  if total_issues == nil || total_issues < 1
-    total_issues = 20
-  end
-
-  # The issue-list filter takes 'series_id', not 'series'. Query specific issue numbers
-  # and keep the response small.
+  # The issue-list filter takes 'series_id', not 'series'. Use pagination because
+  # issue_count is a count, not a range of valid issue numbers.
   var issue = nil
+  var issue_url = metron_api + "?series_id=" + str(series_id) + "&page_size=1"
+  var first_issue_page = metron_get_json(issue_url, username, password)
+  var issue_count = first_issue_page.find("count", 0)
+  var issue_page_count = issue_count
+  if issue_page_count == nil || issue_page_count < 1
+    issue_page_count = 1
+  end
   for attempt : range(0, 3)
-    var candidate_number = ((seed % total_issues + attempt * 37) % total_issues) + 1
-    var issue_url = metron_api + "?series_id=" + str(series_id) + "&number=" + str(candidate_number) + "&page_size=1"
-    var issue_data = metron_get_json(issue_url, username, password)
+    var issue_page = ((seed % issue_page_count + attempt) % issue_page_count) + 1
+    var issue_data = first_issue_page
+    if issue_page > 1
+      issue_url = metron_api + "?series_id=" + str(series_id) + "&page=" + str(issue_page) + "&page_size=1"
+      issue_data = metron_get_json(issue_url, username, password)
+    end
     var issue_results = issue_data.find("results")
     if issue_results != nil && size(issue_results) > 0
       issue = issue_results[seed % size(issue_results)]
@@ -251,7 +256,7 @@ def metron_download_cover(username, password, series_name, output_path)
   end
 
   if cover_url == nil
-    raise "value_error", "Metron issue has no cover image URL"
+    raise "cover_unavailable", "Metron issue has no cover image URL"
   end
 
   # Cover images are normally hosted separately and do not need API credentials.

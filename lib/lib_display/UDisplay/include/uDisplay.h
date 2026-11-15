@@ -118,6 +118,7 @@ class uDisplay : public Renderer {
   bool StartUpdateFrameAsync() override;
   void ServiceUpdateFrameAsync() override;
   uint8_t GetUpdateFrameAsyncStatus() override;
+  void WaitForDMATransfer() override;
   void DisplayOnff(int8_t on);
   void HandeBP(int8_t on);
   void Splash(void);

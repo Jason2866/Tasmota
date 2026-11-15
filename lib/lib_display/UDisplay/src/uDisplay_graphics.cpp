@@ -113,7 +113,6 @@ void uDisplay::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 }
 
 void uDisplay::setRotation(uint8_t rotation) {
-    if (GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) return;
     cur_rot = rotation;
     if (universal_panel->setRotation(rotation)) {
         // Update Renderer dimensions based on rotation
@@ -173,4 +172,15 @@ void uDisplay::ServiceUpdateFrameAsync() {
 
 uint8_t uDisplay::GetUpdateFrameAsyncStatus() {
     return universal_panel ? universal_panel->asyncUpdateStatus() : RENDERER_UPDATE_UNSUPPORTED;
+}
+
+void uDisplay::WaitForDMATransfer() {
+#ifdef ESP32
+    if (spiController) spiController->dmaWait();
+#ifdef UDISPLAY_I80
+    if (universal_panel && (interface == _UDSP_PAR8 || interface == _UDSP_PAR16)) {
+        static_cast<I80Panel*>(universal_panel)->dmaWait();
+    }
+#endif
+#endif
 }

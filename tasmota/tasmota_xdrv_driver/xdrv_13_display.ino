@@ -2712,6 +2712,8 @@ bool Draw_JPG_from_URL(char *url, uint16_t xp, uint16_t yp, uint8_t scale) {
       WiFiClient *stream = http.getStreamPtr();
       int32_t len = http.getSize();
       if (len < 0) len = 99999999;
+      uint32_t last_data_time = millis();
+      bool timed_out = false;
       while (http.connected() && (len > 0) && (jpgsize < JPG_DEFSIZE)) {
         size_t size = stream->available();
         if (size) {
@@ -2724,9 +2726,19 @@ bool Draw_JPG_from_URL(char *url, uint16_t xp, uint16_t yp, uint8_t scale) {
           len -= read;
           jpgp  += read;
           jpgsize += read;
+          last_data_time = millis();
           //AddLog(LOG_LEVEL_INFO,PSTR("HTTP read %d - %d"), read, jpgsize);
+        } else if (millis() - last_data_time >= 10000) {
+          timed_out = true;
+          break;
         }
         delayMicroseconds(1);
+      }
+      if (timed_out) {
+        http.end();
+        http_client.stop();
+        free(mem);
+        return false;
       }
     }
   } else {

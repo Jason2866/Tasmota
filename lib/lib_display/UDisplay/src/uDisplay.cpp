@@ -1553,9 +1553,7 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
   if (p != DISPLAY_INIT_MODE && ep_mode) {
 #ifndef ESP8266
     if (ep_mode == 4) {
-      if (universal_panel) {
-        universal_panel->updateFrame();
-      }
+      Updateframe();
       return;
     }
 #endif

@@ -152,6 +152,7 @@ extern "C" {
 
     BrTimeoutReset();
     for (int32_t y = 0; y < height; y++) {
+      renderer->WaitForDMATransfer();
       const uint8_t *source = pixels + (size_t)y * width * 3;
       for (int32_t x = 0; x < width; x++) {
         const uint8_t red = source[x * 3];
@@ -164,6 +165,7 @@ extern "C" {
       renderer->pushColors(row, width, true);
       OsWatchLoop();
     }
+    renderer->WaitForDMATransfer();
     renderer->setAddrWindow(0, 0, 0, 0);
     free(row);
   }
