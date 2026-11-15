@@ -381,6 +381,19 @@ struct be_img_util {
                   // Skip 4th byte
               }
           }
+      } else if (img->bpp == 3 && pDraw->iBpp == 8) {
+          // Grayscale JPEG decoded as 8-bit gray; expand to RGB888 on the fly
+          uint8_t *dst = img->buf + dst_offset;
+          const uint8_t *src = (const uint8_t*)pDraw->pPixels;
+
+          for (int y = 0; y < copy_height; ++y) {
+              for (int x = 0; x < copy_width; ++x) {
+                  uint8_t g = src[(y * pDraw->iWidth) + x];
+                  dst[(y * ctx->stride) + (x * 3) + 0] = g;
+                  dst[(y * ctx->stride) + (x * 3) + 1] = g;
+                  dst[(y * ctx->stride) + (x * 3) + 2] = g;
+              }
+          }
       } else {
           // Normal case - direct copy
           uint8_t *dst = img->buf + dst_offset;
@@ -438,7 +451,13 @@ struct be_img_util {
           return false;
       }
       jpeg->setUserPointer(&ctx);
-      jpeg->setPixelType(type);
+      // RGB8888 output is not supported for grayscale JPEGs; decode as
+      // 8-bit gray instead and let jpeg_draw_mcu() expand to RGB888
+      if (type == RGB8888 && jpeg->getSubSample() == 0) {
+        jpeg->setPixelType(EIGHT_BIT_GRAYSCALE);
+      } else {
+        jpeg->setPixelType(type);
+      }
       bool ok = jpeg->decode(0, 0, scale_opt);
 
       jpeg->close();
