@@ -13,6 +13,7 @@
 
 #ifdef USE_BERRY_IMAGE
 #include "esp32-hal.h"
+extern void BrTimeoutYield(void);
 
 static inline int32_t clamp_fixed(int32_t value) {
     if (value < 0) return 0;
@@ -183,7 +184,7 @@ int m_inky_dither_dither(bvm *vm) {
         row2_errors = temp;
         memset(row2_errors, 0, error_row_size);
         if (y % 16 == 0) {
-            yield();
+            BrTimeoutYield();
         }
     }
     be_os_free(error_buffer);
