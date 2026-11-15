@@ -70,13 +70,13 @@ String wc_UrlEncode(const String& text) {
 	int len = text.length();
 	int i = 0;
 	while (i < len)	{
-		char decodedChar = text.charAt(i++);
+		unsigned char decodedChar = (unsigned char)text.charAt(i++);
 
     if (('a' <= decodedChar && decodedChar <= 'z') ||
         ('A' <= decodedChar && decodedChar <= 'Z') ||
         ('0' <= decodedChar && decodedChar <= '9') ||
         ('=' == decodedChar)) {
-      encoded += decodedChar;
+      encoded += (char)decodedChar;
 		} else {
       encoded += '%';
 			encoded += hex[decodedChar >> 4];

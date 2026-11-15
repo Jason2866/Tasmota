@@ -122,7 +122,12 @@ extern "C" {
       }
       if(img){
         if(format < 0 || format == PIXFORMAT_JPEG){
-          be_img_util::from_buffer(img,wc_fb->buf, wc_fb->len, wc_fb->width, wc_fb->height, PIXFORMAT_JPEG);
+          if (!be_img_util::from_buffer(img, wc_fb->buf, wc_fb->len, wc_fb->width, wc_fb->height, PIXFORMAT_JPEG)) {
+            be_img_util::clear(img);
+            esp_camera_fb_return(wc_fb);    // be_raise does not return
+            be_raise(vm, "cam_error", "could not store JPEG frame");
+            be_return_nil(vm);
+          }
         } 
         else {
           bool success = false;
