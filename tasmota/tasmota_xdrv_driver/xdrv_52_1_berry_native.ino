@@ -105,7 +105,7 @@ extern "C" {
  * Manage timeout for Berry code
  *
 \*********************************************************************************************/
-void BrTimeoutStart(void)  {
+extern "C" void BrTimeoutStart(void)  {
   berry.timeout = millis() + USE_BERRY_TIMEOUT;
   if (0 == berry.timeout) {
     berry.timeout = 1;    // rare case when value accidentally computes to zero
@@ -119,7 +119,7 @@ extern "C" void BrTimeoutYield(void) {
   }
 }
 
-void BrTimeoutReset(void)  {
+extern "C" void BrTimeoutReset(void)  {
   berry.timeout = 0;      // remove timer
 }
 
