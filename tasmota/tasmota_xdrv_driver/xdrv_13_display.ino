@@ -2466,7 +2466,7 @@ char get_jpeg_size(unsigned char* data, unsigned int data_size, unsigned short *
 extern FS *ufsp;
 #define XBUFF_LEN 128
 bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys, bool allow_url ) {
-  if (!renderer) return false;
+  if (!renderer || !ufsp) return false;
   File fp;
   if (!file || !file[0]) return false;
   const char *dot = strrchr(file, '.');
