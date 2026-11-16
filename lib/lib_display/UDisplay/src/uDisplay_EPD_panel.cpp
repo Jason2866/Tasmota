@@ -491,15 +491,15 @@ bool EPDPanel::inkyBusy() {
 bool EPDPanel::canStartAsyncUpdate() {
     return cfg.ep_mode == 4 && fb_buffer && busy_pin_configured && reset_pin_configured &&
            cfg.send_cmds_callback && cfg.init_cmd_count &&
-           inky_async_status != UNIVERSAL_UPDATE_RUNNING && !inkyBusy();
+           inky_async_status != UNIVERSAL_UPDATE_RUNNING;
 }
 
 bool EPDPanel::startAsyncUpdate() {
     if (!canStartAsyncUpdate()) return false;
     inky_async_status = UNIVERSAL_UPDATE_RUNNING;
-    inky_refresh_step = InkyRefreshStep::WaitReady;
+    inky_refresh_step = InkyRefreshStep::ResetStart;
     inky_step_started = millis();
-    inky_deadline = inky_step_started + 300;
+    inky_deadline = inky_step_started;
     inky_idle_settle = false;
     inky_refresh_failed = false;
     inky_update_pending = false;
@@ -507,11 +507,14 @@ bool EPDPanel::startAsyncUpdate() {
 }
 
 bool EPDPanel::queueUpdateAfterAsync() {
-    // A request made during an async refresh needs a follow-up frame. A busy
-    // panel without a tracked async refresh needs the same retry once it clears.
+    // Coalesce requests during a refresh and bound any request that cannot be
+    // admitted immediately.
     if (cfg.ep_mode == 4 &&
         (inky_async_status == UNIVERSAL_UPDATE_RUNNING ||
          (busy_pin_configured && inkyBusy()))) {
+        if (!inky_update_pending) {
+            inky_pending_deadline = millis() + cfg.busy_timeout;
+        }
         inky_update_pending = true;
         return true;
     }
@@ -561,24 +564,27 @@ bool EPDPanel::serviceInkyIdleWait(InkyRefreshStep next_step, uint32_t timeout_m
 
 void EPDPanel::serviceAsyncUpdate() {
     if (inky_async_status != UNIVERSAL_UPDATE_RUNNING) {
-        if (inky_update_pending && canStartAsyncUpdate()) {
-            inky_update_pending = false;
-            startAsyncUpdate();
+        if (inky_update_pending) {
+            if (canStartAsyncUpdate()) {
+                inky_update_pending = false;
+                startAsyncUpdate();
+            } else if ((int32_t)(millis() - inky_pending_deadline) >= 0) {
+                inky_update_pending = false;
+                failInkyAsync("panel did not become ready before queued update");
+            }
         }
         return;
     }
 
     static const uint8_t power[] = {0x00};
     switch (inky_refresh_step) {
-        case InkyRefreshStep::WaitReady:
-            if (!inkyBusy()) {
-                pinMode(cfg.reset_pin, OUTPUT);
-                digitalWrite(cfg.reset_pin, HIGH);
-                inky_refresh_step = InkyRefreshStep::ResetHigh;
-                inky_deadline = millis() + 30;
-            } else if ((uint32_t)(millis() - inky_step_started) >= 300) {
-                failInkyAsync("panel remained busy before reset");
-            }
+        case InkyRefreshStep::ResetStart:
+            // E673 reset overrides a stale BUSY state, including at power-on.
+            // Admission is still serialized by UNIVERSAL_UPDATE_RUNNING.
+            pinMode(cfg.reset_pin, OUTPUT);
+            digitalWrite(cfg.reset_pin, HIGH);
+            inky_refresh_step = InkyRefreshStep::ResetHigh;
+            inky_deadline = millis() + 30;
             break;
 
         case InkyRefreshStep::ResetHigh:

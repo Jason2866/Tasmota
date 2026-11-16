@@ -2594,6 +2594,7 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
               if (esp_jpeg_decode(&jpeg_cfg, &outimg) == ESP_OK) {
                 renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
                 renderer->pushColors(out_buf, outsize / 2, true);
+                renderer->WaitForDMATransfer();
                 renderer->setAddrWindow(0, 0, 0, 0);
                 drawn = true;
               }
@@ -2608,6 +2609,7 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
                 if (jpg2rgb888(mem, size, out_buf, (jpg_scale_t)JPG_SCALE_NONE)) {
                   //renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
                   for (int32_t j = 0; j < ysize; j++) {
+                    renderer->WaitForDMATransfer();
                     if (inverted == false) {
                       rgb888_to_565(ob, pixb, xsize);
                     } else {
@@ -2618,6 +2620,7 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
                     renderer->pushColors(pixb, xsize, true);
                     OsWatchLoop();
                   }
+                  renderer->WaitForDMATransfer();
                   renderer->setAddrWindow(0, 0, 0, 0);
                   drawn = true;
                 }
@@ -2678,6 +2681,7 @@ bool Draw_jpeg(uint8_t *mem, uint32_t jpgsize, uint16_t xp, uint16_t yp, uint8_t
       if (esp_jpeg_decode(&jpeg_cfg, &outimg) == ESP_OK) {
         renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
         renderer->pushColors(rgbmem, osize / 2, true);
+        renderer->WaitForDMATransfer();
         drawn = true;
       }
       free(rgbmem);
@@ -2693,6 +2697,7 @@ bool Draw_jpeg(uint8_t *mem, uint32_t jpgsize, uint16_t xp, uint16_t yp, uint8_t
           renderer->pushColors((uint16_t*)ob, xsize, true);
           ob += xsize;
         }
+        renderer->WaitForDMATransfer();
         drawn = true;
       }
       free(rgbmem);

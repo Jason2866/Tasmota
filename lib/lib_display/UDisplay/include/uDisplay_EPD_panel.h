@@ -132,7 +132,7 @@ private:
 #ifndef ESP8266
     enum class InkyRefreshStep : uint8_t {
         Idle,
-        WaitReady,
+        ResetStart,
         ResetHigh,
         ResetLow,
         ResetSettle,
@@ -155,6 +155,7 @@ private:
     uint8_t inky_async_status = UNIVERSAL_UPDATE_IDLE;
     uint32_t inky_step_started = 0;
     uint32_t inky_deadline = 0;
+    uint32_t inky_pending_deadline = 0;
     bool inky_idle_settle = false;
     bool inky_refresh_failed = false;
     bool inky_update_pending = false;

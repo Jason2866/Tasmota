@@ -437,6 +437,13 @@ struct be_img_util {
           delete jpeg;
           return false;
       }
+      // JPEGPutMCU12 has an invalid RGB8888 output pointer at quarter scale.
+      // Reject only that decoder combination before it writes to the buffer.
+      if (type == RGB8888 && (scale_opt & JPEG_SCALE_QUARTER) && jpeg->getSubSample() == 0x12) {
+          jpeg->close();
+          delete jpeg;
+          return false;
+      }
       jpeg->setUserPointer(&ctx);
       jpeg->setPixelType(type);
       bool ok = jpeg->decode(0, 0, scale_opt);

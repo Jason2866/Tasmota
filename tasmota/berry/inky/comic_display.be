@@ -123,6 +123,13 @@ def metron_get_json(url, username, password)
 
   var response_size = wc.get_size()
   print("Metron API response size: " + str(response_size) + " bytes")
+  # get_size() is negative when the response has no Content-Length, including
+  # chunked responses. Berry's get_string()/write_file() have no caller-set
+  # total-byte limit, so reject these bodies before an unbounded read.
+  if response_size < 0
+    wc.close()
+    raise "network_error", "Metron API response has no Content-Length; refusing an unbounded download"
+  end
   if response_size > comic_max_api_bytes
     wc.close()
     raise "value_error", "Metron API response exceeds 128 KB; check the API filters"
@@ -325,6 +332,11 @@ def metron_download_cover(username, password, series_name, output_path)
     tasmota.delay(500)
   end
   var response_size = image_client.get_size()
+  # write_file() cannot cap an unknown-length response while streaming it.
+  if response_size < 0
+    image_client.close()
+    raise "network_error", "Cover response has no Content-Length; refusing an unbounded download"
+  end
   if response_size > comic_max_source_bytes
     image_client.close()
     return response_size
