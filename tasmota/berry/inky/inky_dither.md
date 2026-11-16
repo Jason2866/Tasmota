@@ -34,8 +34,8 @@ Configure the Tasmota GPIO functions to match the signals you wired (Example con
 | `5V` | pin 2 | `5V` | `5V` | red |
 | `GND` | pin 6 | `GND` | `GND` | brown |
 
-![Raspberry Pi GPIO header pinout](./Raspberry-Pi-GPIO-Header-with-Photo.png)
-![Inky Impression 7.3 GPIO header with connected pins marked](./inky-7-3-back-gpio-pins.png)
+![Raspberry Pi GPIO header pinout](./Raspberry-Pi-GPIO-Header-with-Photo.jpg)
+![Inky Impression 7.3 GPIO header with connected pins marked](./inky-7-3-back-gpio-pins.jpg)
 
 Assign each Tasmota function to the ESP GPIO physically wired to that Inky signal, using **Configure Module** (or the equivalent GPIO configuration for your device). The middle column documents the Raspberry Pi 40-pin header locations; these are not ESP32 GPIO numbers. Choose suitable GPIOs for your ESP32 wiring and assign the Tasmota functions accordingly. In particular, ensure that `SPI MISO` is assigned even though the panel has no MISO data output.
 
