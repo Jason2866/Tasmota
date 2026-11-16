@@ -1658,10 +1658,17 @@ char* DisplayLogBuffer(char temp_code) {
   return result;
 }
 
+#ifdef USE_UNIVERSAL_DISPLAY
+void UDISP_StagedLogReset(void);
+#endif  // USE_UNIVERSAL_DISPLAY
+
 void DisplayLogBufferInit(void) {
   if (Settings->display_mode) {
     disp_log_buffer_idx = 0;
     disp_log_buffer_ptr = 0;
+#ifdef USE_UNIVERSAL_DISPLAY
+    UDISP_StagedLogReset();
+#endif  // USE_UNIVERSAL_DISPLAY
     disp_refresh = Settings->display_refresh;
 
     snprintf_P(disp_temp, sizeof(disp_temp), PSTR("%c"), TempUnit());

@@ -546,6 +546,13 @@ static uint8_t udisp_pending_log_cols = 0;
 static uint8_t udisp_pending_log_idx = 0;
 static uint8_t udisp_pending_log_ptr = 0;
 
+// Called by DisplayLogBufferInit() when the log buffer is rebuilt, so staged
+// rows from a previous sensor mode are not printed afterwards.
+void UDISP_StagedLogReset(void) {
+  udisp_pending_log_idx = 0;
+  udisp_pending_log_ptr = 0;
+}
+
 static void UDISP_StageLogLines(void) {
   uint8_t cols = Settings->display_cols[0] + 1;
   if (udisp_pending_log_buffer && (udisp_pending_log_idx == udisp_pending_log_ptr) &&

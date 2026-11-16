@@ -640,7 +640,8 @@ extern "C" {
           }
         }
         scale = be_img_decode_scale(w, h, img->bpp, free_psram, largest_psram_block,
-                                    target_width, target_height);
+                                    target_width, target_height,
+                                    img->buf ? img->len : 0);
         size_t compact_size = scale != 0 ? be_img_compact_decode_size(
             w, h, target_width, target_height, free_psram, largest_psram_block) : 0;
         if (compact_size) {

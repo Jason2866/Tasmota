@@ -6,7 +6,8 @@
 
 static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t bpp,
                                       size_t free_psram, size_t largest_block,
-                                      uint16_t target_width, uint16_t target_height) {
+                                      uint16_t target_width, uint16_t target_height,
+                                      size_t reusable_size = 0) {
   const uint32_t divisors[] = {1, 2, 4, 8};
   for (size_t index = 0; index < sizeof(divisors) / sizeof(divisors[0]); ++index) {
     uint32_t divisor = divisors[index];
@@ -18,6 +19,9 @@ static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t b
     if (has_target && !in_place) reserve += (uint64_t)target_width * target_height * bpp;
     size_t max_allowed = free_psram > reserve ? free_psram - (size_t)reserve : (has_target ? 0 : 500000);
     if (max_allowed > largest_block) max_allowed = largest_block;
+    // An existing image buffer can be shrunk or reused in place, so its
+    // capacity does not need to come out of free PSRAM.
+    if (reusable_size > max_allowed) max_allowed = reusable_size;
     if ((uint64_t)scaled_width * scaled_height * bpp <= max_allowed) {
       return divisor == 1 ? 0 : (int)divisor;
     }
