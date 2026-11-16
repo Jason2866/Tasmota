@@ -69,6 +69,9 @@ static void lvbe_debug(lv_log_level_t, const char *msg) {
 /************************************************************
  * Main screen refresh function
  ************************************************************/
+static bool lvgl_inky_refresh_pending = false;
+static bool lvgl_inky_redraw_pending = false;
+
 // This is the flush function required for LittlevGL screen updates.
 // It receives a bounding rect and an array of pixel data (conveniently
 // already in 565 format, so the Earth was lucky there).
@@ -98,17 +101,33 @@ void lv_flush_callback(lv_display_t *disp, const lv_area_t *area, uint8_t *color
 
   uint32_t pixels_len = width * height;
   uint32_t chrono_start = micros();
-  renderer->setAddrWindow(area->x1, area->y1, area->x1+width, area->y1+height);
-  renderer->pushColors((uint16_t *)color_p, pixels_len, true);
-  renderer->setAddrWindow(0,0,0,0);
-  renderer->Updateframe();
+  const bool inky = renderer->disp_bpp == 4;
+  const uint8_t update_status = inky ? renderer->GetUpdateFrameAsyncStatus() : RENDERER_UPDATE_UNSUPPORTED;
+  if (inky && update_status == RENDERER_UPDATE_RUNNING) {
+    // The EPD owns its framebuffer until the asynchronous transfer completes.
+    // Defer this flush and redraw the current LVGL screen after that transfer.
+    lvgl_inky_refresh_pending = true;
+    lvgl_inky_redraw_pending = true;
+  } else {
+    renderer->setAddrWindow(area->x1, area->y1, area->x1+width, area->y1+height);
+    renderer->pushColors((uint16_t *)color_p, pixels_len, true);
+    renderer->setAddrWindow(0,0,0,0);
+  }
+  if (!inky || (update_status == RENDERER_UPDATE_UNSUPPORTED && lv_disp_flush_is_last(disp))) {
+    renderer->Updateframe();
+  } else if (update_status != RENDERER_UPDATE_RUNNING && lv_disp_flush_is_last(disp)) {
+    lvgl_inky_refresh_pending = true;
+    if (renderer->CanStartUpdateFrameAsync() && renderer->StartUpdateFrameAsync()) {
+      lvgl_inky_refresh_pending = false;
+    }
+  }
   uint32_t chrono_time = micros() - chrono_start;
 
   lv_disp_flush_ready(disp);
 
   if (pixels_len >= 10000 && (!renderer->lvgl_param.use_dma)) {
     if (HighestLogLevel() >= LOG_LEVEL_DEBUG_MORE) {
-      AddLog(LOG_LEVEL_DEBUG_MORE, D_LOG_LVGL "Refreshed %d pixels in %d us (%i pix/ms)", pixels_len, chrono_time,
+      AddLog(LOG_LEVEL_DEBUG_MORE, D_LOG_LVGL "Flushed %d pixels in %d us (%i pix/ms)", pixels_len, chrono_time,
               chrono_time > 0 ? (pixels_len * 1000 / chrono_time) : -1);
     }
   }
@@ -484,11 +503,12 @@ bool start_lvgl(const char * uconfig) {
   }
 
   if (!renderer || uconfig) {
-    renderer  = Init_uDisplay((char*)uconfig);
-    if (!renderer) {
+    Renderer *newrenderer = Init_uDisplay((char*)uconfig);
+    if (!newrenderer) {
       AddLog(LOG_LEVEL_ERROR, "LVG: Could not start Universal Display");
       return false;
     }
+    renderer = newrenderer;
   }
 
   renderer->DisplayOnff(true);
@@ -667,7 +687,22 @@ bool Xdrv54(uint32_t function) {
         if (TasmotaGlobal.sleep > USE_LVGL_MAX_SLEEP) {
           TasmotaGlobal.sleep = USE_LVGL_MAX_SLEEP;   // sleep is max 10ms
         }
+        if (renderer && renderer->disp_bpp == 4 &&
+            renderer->GetUpdateFrameAsyncStatus() != RENDERER_UPDATE_RUNNING &&
+            lvgl_inky_redraw_pending) {
+          // Queue the redraw before LVGL can flush another frame and start a refresh.
+          lvgl_inky_redraw_pending = false;
+          lvgl_inky_refresh_pending = false;
+          lv_obj_invalidate(lv_screen_active());
+        }
         lv_task_handler();
+        if (renderer && renderer->disp_bpp == 4 &&
+            renderer->GetUpdateFrameAsyncStatus() != RENDERER_UPDATE_RUNNING) {
+          if (lvgl_inky_refresh_pending && renderer->CanStartUpdateFrameAsync() &&
+              renderer->StartUpdateFrameAsync()) {
+            lvgl_inky_refresh_pending = false;
+          }
+        }
       }
       break;
     case FUNC_ACTIVE:
