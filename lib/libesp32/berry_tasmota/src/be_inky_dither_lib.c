@@ -12,8 +12,8 @@
 #include <string.h>
 
 #ifdef USE_BERRY_IMAGE
-#include "esp32-hal.h"
 extern void BrTimeoutYield(void);
+extern buf_impl m_read_attributes(bvm *vm, int idx);
 
 static inline int32_t clamp_fixed(int32_t value) {
     if (value < 0) return 0;
