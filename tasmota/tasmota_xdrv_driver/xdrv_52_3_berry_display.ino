@@ -32,8 +32,7 @@ extern Renderer *renderer;
 extern bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys, bool allow_url);
 #endif
 #if defined(USE_UNIVERSAL_DISPLAY)
-extern void BrTimeoutReset(void);
-extern void BrTimeoutStart(void);
+extern "C" void BrTimeoutYield(void);
 #endif
 
 extern "C" {
@@ -83,9 +82,9 @@ extern "C" {
     return 0;
   }
 
-  // `display.draw_jpg(path:string) -> bool` draws a filesystem JPEG at (0, 0)
-  // and refreshes the active universal display.
-  int be_ntv_display_draw_jpg(struct bvm *vm) {
+  // `display.draw_jpg(path:string) -> bool` draws a filesystem JPEG at (0, 0).
+  // It starts a cooperative refresh on displays that support asynchronous updates.
+  static int be_ntv_display_draw_jpg_common(struct bvm *vm, bool async_only) {
 #if defined(USE_UNIVERSAL_DISPLAY) && defined(USE_UFILESYS) && defined(JPEG_PICTS)
     int32_t argc = be_top(vm);
     if (argc != 1 || !be_isstring(vm, 1)) {
@@ -95,28 +94,43 @@ extern "C" {
       be_raise(vm, "display_error", "universal display is not initialized");
     }
 
-    if (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
-      be_raise(vm, "display_error", "display refresh failed");
+    const bool supports_async = renderer->GetUpdateFrameAsyncStatus() != RENDERER_UPDATE_UNSUPPORTED;
+    if (supports_async && !renderer->CanStartUpdateFrameAsync()) {
+      be_pop(vm, argc);
+      be_pushbool(vm, false);
+      be_return(vm);
     }
+    if (async_only && !supports_async) {
+      be_pop(vm, argc);
+      be_pushbool(vm, false);
+      be_return(vm);
+    }
+
     char *file = const_cast<char *>(be_tostring(vm, 1));
-    // Inky refresh can take about 32 seconds, longer than Berry's execution
-    // timeout. This native call services the display synchronously.
-    BrTimeoutReset();
     if (!Draw_RGB_Bitmap(file, 0, 0, 0, false, 0, 0, false)) {
-      BrTimeoutStart();
       be_raise(vm, "display_error", "could not decode the dithered JPEG");
     }
-    if (!renderer->UpdateframeChecked()) {
-      BrTimeoutStart();
+
+    const bool refreshed = supports_async ? renderer->StartUpdateFrameAsync() : renderer->UpdateframeChecked();
+    if (!refreshed) {
       be_raise(vm, "display_error", "display refresh failed");
     }
     be_pop(vm, argc);
-    BrTimeoutStart();
     be_pushbool(vm, true);
     be_return(vm);
 #else
     be_raise(vm, "feature_error", "JPEG display requires universal display, filesystem, JPEG_PICTS support");
 #endif
+  }
+
+  int be_ntv_display_draw_jpg(struct bvm *vm) {
+    return be_ntv_display_draw_jpg_common(vm, false);
+  }
+
+  // `display.draw_jpg_async(path:string) -> bool` draws a filesystem JPEG and
+  // starts a cooperative display refresh, returning false if unavailable or busy.
+  int be_ntv_display_draw_jpg_async(struct bvm *vm) {
+    return be_ntv_display_draw_jpg_common(vm, true);
   }
 
 #if defined(USE_UNIVERSAL_DISPLAY)
@@ -150,7 +164,6 @@ extern "C" {
       be_raise(vm, "memory_error", "could not allocate RGB565 display row");
     }
 
-    BrTimeoutReset();
     for (int32_t y = 0; y < height; y++) {
       renderer->WaitForDMATransfer();
       const uint8_t *source = pixels + (size_t)y * width * 3;
@@ -164,6 +177,7 @@ extern "C" {
       renderer->setAddrWindow(0, y, width, y + 1);
       renderer->pushColors(row, width, true);
       OsWatchLoop();
+      BrTimeoutYield();
     }
     renderer->WaitForDMATransfer();
     renderer->setAddrWindow(0, 0, 0, 0);
@@ -172,7 +186,7 @@ extern "C" {
 #endif
 
   // `display.draw_rgb888(pixels:bytes, width:int, height:int) -> bool`
-  // draws a full logical RGB888 frame and refreshes the active display.
+  // draws a full logical RGB888 frame. Async-capable displays refresh cooperatively.
   int be_ntv_display_draw_rgb888(struct bvm *vm) {
 #if defined(USE_UNIVERSAL_DISPLAY)
     int32_t argc = be_top(vm);
@@ -180,12 +194,14 @@ extern "C" {
     int32_t width, height;
     be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height);
 
-    if (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
-      be_raise(vm, "display_error", "display refresh failed");
+    const bool supports_async = renderer->GetUpdateFrameAsyncStatus() != RENDERER_UPDATE_UNSUPPORTED;
+    if (supports_async && !renderer->CanStartUpdateFrameAsync()) {
+      be_pop(vm, argc);
+      be_pushbool(vm, false);
+      be_return(vm);
     }
     be_ntv_display_push_rgb888(vm, pixels, width, height);
-    const bool refreshed = renderer->UpdateframeChecked();
-    BrTimeoutStart();
+    const bool refreshed = supports_async ? renderer->StartUpdateFrameAsync() : renderer->UpdateframeChecked();
     if (!refreshed) {
       be_raise(vm, "display_error", "display refresh failed");
     }
@@ -213,7 +229,6 @@ extern "C" {
     }
 
     be_ntv_display_push_rgb888(vm, pixels, width, height);
-    BrTimeoutStart();
     const bool started = renderer->StartUpdateFrameAsync();
     if (!started) {
       be_pop(vm, argc);
