@@ -733,19 +733,6 @@ bool EPDPanel::waitInkyIdle(uint32_t timeout_ms) {
     return true;
 }
 
-bool EPDPanel::waitInkyReady(uint32_t timeout_ms) {
-    const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
-    uint32_t started = millis();
-    while (digitalRead(cfg.busy_pin) == busy_level) {
-        if ((millis() - started) >= timeout_ms) {
-            AddLog(3, "UDisplay: Inky panel still busy; skipping update");
-            return false;
-        }
-        delay(1);
-    }
-    return true;
-}
-
 bool EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
     const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
     uint32_t started = millis();
@@ -770,14 +757,10 @@ bool EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
 bool EPDPanel::updateInky() {
     if (!busy_pin_configured || !reset_pin_configured) return false;
 
-    // A previous refresh may have timed out while BUSY remained asserted.
-    // Do not reset the controller or send another frame until it is safe.
-    if (!waitInkyReady(300)) {
-        return false;
-    }
-
     // The Inky Pimoroni driver resets and replays the E673 register setup before
     // every frame update, so repeated refreshes follow the same lifecycle.
+    // Reset first even if BUSY is stale; resetDisplay waits for BUSY to clear
+    // before returning, so no SPI command is sent before the panel is ready.
     if (!resetDisplay()) {
         return false;
     }

@@ -180,7 +180,6 @@ private:
     bool serviceInkyIdleWait(InkyRefreshStep next_step, uint32_t timeout_ms);
     void sendInkyCommand(uint8_t command, const uint8_t* data = nullptr, uint32_t len = 0);
     bool waitInkyIdle(uint32_t timeout_ms);
-    bool waitInkyReady(uint32_t timeout_ms);
     bool waitInkyRefresh(uint32_t timeout_ms);
 #endif
     void sendYColumnAsXRow(const uint8_t* y_column_buffer, uint16_t buffer_width,
