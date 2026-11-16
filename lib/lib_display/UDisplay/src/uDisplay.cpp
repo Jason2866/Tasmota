@@ -924,17 +924,9 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
 #endif
   }
 
-  // Resolve 4-bpp colors after EPD mode detection; only Inky maps foreground to white.
+  // Resolve 4-bpp colors after EPD mode detection.
   if (bpp == 4) {
-#ifndef ESP8266
-    if (ep_mode == 4) {
-      fg_col = fg_col ? 0xFFFF : 0;
-    } else {
-      fg_col = GetColorFromIndex(fg_col);
-    }
-#else
     fg_col = GetColorFromIndex(fg_col);
-#endif
     bg_col = GetColorFromIndex(bg_col);
   }
 
