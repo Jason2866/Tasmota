@@ -24,7 +24,7 @@ Use this as the authoring prompt for a new file in `tasmota/displaydesc/`. It de
 | `RGB` | `de,vsync,hsync,pclk,bl,B0..B4,G0..G5,R0..R4,mhz` | ESP32-S3; use explicit pins. Also write `:V`; use `:B,...,02` for this pin order. |
 | `DSI` | `lanes,te,bl,rst,ldo_ch,ldo_mv,pclk_hz,lane_mbps,rgb_order,endian` | ESP32-P4 only. `pclk_hz` is Hz; `te`, `rgb_order`, and `endian` are presently unused. Also write `:V`. |
 
-`name` is at most 15 characters. `width`/`height` are unrotated pixels. Use `bpp=1` for monochrome and `16` for color.
+`name` is at most 15 characters. `width`/`height` are unrotated pixels. Use `bpp=1` for monochrome and `16` for standard color panels. The Inky E673 uses `bpp=4` and requires the explicit `:E,673` marker; `bpp=4` alone does not select an E-paper controller.
 
 ```ini
 :H,SSD1306,128,64,1,I2C,3C,*,*,*
@@ -89,6 +89,7 @@ Write only options that apply to the chosen bus/controller. For a color SPI/PAR 
 | `:D` | `opcode` (H) | Dimmer command plus brightness byte; SPI/QSPI/I2C only. |
 | `:b` | `flags` (H) | Backlight: bit `01` active low; bit `02` digital on/off only. |
 | `:B` | `lines,flags` (D) | LVGL buffer lines (default 40). Flags: `02` swap color bytes, `08` e-paper BUSY active low, `16` invert monochrome B/W, `32` use PSRAM buffers. Bit `01` DMA has no current effect. |
+| `:E` | `controller` (D) | SPI e-paper controller selector. `673` selects the Inky E673 path and requires `bpp=4`. |
 | `:V` RGB | `hpol,hfp,hpw,hbp,vpol,vfp,vpw,vbp,pclk_neg` (D) | `0` polarity means idle low. |
 | `:V` DSI | `hfp,vfp,hbp,hsw,vsw,vbp` (D) | DSI order differs from RGB. |
 | `:r` | `0..3` (D) | Initial rotation, overriding `DisplayRotate`. |
@@ -96,7 +97,9 @@ Write only options that apply to the chosen bus/controller. For a color SPI/PAR 
 
 Touch transform is the fourth field of `:0`–`:3`, applied after `:M`. Values: `0` normal, `1` y/H−x, `2` W−x/H−y, `3` W−y/x, `4` W−x/y, `5` x/H−y; add `80` to swap x/y first.
 
-## 4. E-paper only (`SPI`, `bpp=1`)
+## 4. E-paper only (`SPI`)
+
+Monochrome e-paper descriptors use `bpp=1`. The Inky Impression E673 uses `bpp=4` with the explicit `:E,673` controller marker:
 
 - Use SPI `miso` for BUSY and add `:B,lines,08` when BUSY is active low.
 - `:T,full,partial,after` provides fallback waits in units of 10 ms. Defaults are `350,35,10`.
@@ -112,6 +115,12 @@ Touch transform is the fourth field of `:0`–`:3`, applied after `:M`. Values: 
 | `66,00` / `67,00` | Send framebuffer / clear RAM to `FF`. |
 | `68,00` | Complete send-frame sequence. |
 | `69,01,X` / `6A,01,X` | Stop when reset reason equals / differs from `X`. |
+
+```ini
+:H,INKYE673,800,480,4,SPI,1,*,*,*,*,*,*,*,10
+:E,673
+:B,0,8
+```
 
 In 2-LUT and command-only modes, opcodes `60`–`6A` are reserved pseudo-opcodes: do not send real controller commands in that range.
 

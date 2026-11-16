@@ -76,6 +76,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   // busy_pin = -1;  // MOVED to EPDPanelConfig.busy_pin
   spec_init = -1;
   ep_mode = 0;
+  epd_e673 = false;
   fg_col = 1;
   bg_col = 0;
   splash_font = -1;
@@ -806,6 +807,9 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             lvgl_param.use_dma = false; // temporary fix to disable DMA due to a problem in esp-idf 5.3
 #endif
             break;
+          case 'E':
+            epd_e673 = (next_val(&lp1) == 673);
+            break;
           case 'M':
             rotmap_xmin = next_val(&lp1);
             rotmap_xmax = next_val(&lp1);
@@ -914,9 +918,8 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
     }
 
 #ifndef ESP8266
-    // Four bits per pixel selects the color EPD path used by Inky Impression
-    // panels with the E673 controller.
-    if (bpp == 4) {
+    // The descriptor marker explicitly selects the Inky E673 controller.
+    if (epd_e673 && interface == _UDSP_SPI && bpp == 4) {
       ep_mode = 4;
       // Refresh takes ~32 s; leave margin so a slow refresh is not reported as failed.
       panel_config->epd.busy_timeout = 45000;
@@ -1206,6 +1209,10 @@ Renderer *uDisplay::Init(void) {
   }
 
 #ifndef ESP8266
+  if (epd_e673 && (interface != _UDSP_SPI || bpp != 4)) {
+    AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires SPI and bpp=4");
+    return NULL;
+  }
   if (ep_mode == 4) {
     if (reset < 0) {
       AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires a reset pin");
@@ -1215,6 +1222,11 @@ Renderer *uDisplay::Init(void) {
       AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires a BUSY pin on SPI MISO");
       return NULL;
     }
+  }
+#else
+  if (epd_e673) {
+    AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 is not supported on ESP8266");
+    return NULL;
   }
 #endif
 

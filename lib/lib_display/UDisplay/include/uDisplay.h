@@ -216,6 +216,7 @@ private:
     uint8_t inv_off;
     uint8_t sa_mode;
     uint8_t dim_op;
+    bool epd_e673;
     // uint8_t lutfsize;  // MOVED to EPDPanelConfig.lutfsize
     // uint8_t lutpsize;  // MOVED to EPDPanelConfig.lutpsize
     // uint8_t lut_siz_full;  // Local variable only

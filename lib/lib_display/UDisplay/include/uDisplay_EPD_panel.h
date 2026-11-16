@@ -14,7 +14,7 @@
 struct EPDPanelConfig {
     uint16_t width;
     uint16_t height;
-    uint8_t bpp;  // 1 for monochrome EPDs, 4 for Inky Impression Spectra 6
+    uint8_t bpp;  // 1 for monochrome EPDs, 4 for Inky E673 (selected by :E,673)
     uint8_t ep_mode; // 1=2-LUT, 2=5-LUT, 3=command-based, 4=Inky Impression E673
 
     // Timing
