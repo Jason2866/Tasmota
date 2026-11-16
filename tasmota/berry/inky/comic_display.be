@@ -35,7 +35,9 @@ var comic_source_path = "/metron_comic.jpg"
 var comic_download_path = "/metron_comic.download"
 var comic_backup_path = "/metron_comic.backup"
 var comic_dithered_path = "/metron_comic_dithered.jpg"
+var comic_api_response_path = "/metron_api_response.json"
 var comic_max_source_bytes = 1024 * 1024
+var comic_max_api_bytes = 128 * 1024
 var comic_cover_attempts = 5
 
 def metron_new_client(username, password)
@@ -121,11 +123,30 @@ def metron_get_json(url, username, password)
 
   var response_size = wc.get_size()
   print("Metron API response size: " + str(response_size) + " bytes")
-  if response_size >= 32767
+  if response_size > comic_max_api_bytes
     wc.close()
-    raise "value_error", "Metron API response exceeds Berry's 32 KB limit; check the API filters"
+    raise "value_error", "Metron API response exceeds 128 KB; check the API filters"
   end
-  var response = wc.get_string()
+  var response = nil
+  if response_size >= 32767
+    # wc.get_string() refuses bodies >= 32 KB, but Berry strings allow far more.
+    # Stream the body to a file and read it back instead.
+    var saved = wc.write_file(comic_api_response_path)
+    tasmota.yield()
+    if saved <= 0
+      wc.close()
+      if path.exists(comic_api_response_path)
+        path.remove(comic_api_response_path)
+      end
+      raise "network_error", "Could not save the Metron API response"
+    end
+    var response_file = open(comic_api_response_path, "rb")
+    response = response_file.read()
+    response_file.close()
+    path.remove(comic_api_response_path)
+  else
+    response = wc.get_string()
+  end
   tasmota.yield()
   var transfer_encoding = wc.get_header("Transfer-Encoding")
   var connection_header = wc.get_header("Connection")
