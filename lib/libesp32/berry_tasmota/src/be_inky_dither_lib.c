@@ -99,7 +99,11 @@ int m_inky_dither_dither(bvm *vm) {
         be_raise(vm, "value_error", "image dimensions too large");
     }
 
-    // Get pixel buffer
+    // Get pixel buffer; reject read-only (solidified) bytes before writing
+    buf_impl pixels_attr = m_read_attributes(vm, 1);
+    if (pixels_attr.solidified) {
+        be_raise(vm, "value_error", "pixel buffer is read only");
+    }
     size_t pixel_size = 0;
     uint8_t *pixels = (uint8_t *) be_tobytes(vm, 1, &pixel_size);
     if (!pixels) {
