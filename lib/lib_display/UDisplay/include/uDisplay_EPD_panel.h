@@ -159,6 +159,7 @@ private:
     bool inky_idle_settle = false;
     bool inky_refresh_failed = false;
     bool inky_update_pending = false;
+    bool inky_pof_required = false;
 #endif
 
     // Address window for pushColors

@@ -503,6 +503,7 @@ bool EPDPanel::startAsyncUpdate() {
     inky_idle_settle = false;
     inky_refresh_failed = false;
     inky_update_pending = false;
+    inky_pof_required = false;
     return true;
 }
 
@@ -526,6 +527,12 @@ uint8_t EPDPanel::asyncUpdateStatus() {
 }
 
 void EPDPanel::failInkyAsync(const char* reason) {
+    if (inky_pof_required) {
+        inky_refresh_failed = true;
+        inky_refresh_step = InkyRefreshStep::PowerOff;
+        AddLog(3, "UDisplay: Inky refresh failed; powering panel off: %s", reason);
+        return;
+    }
     inky_refresh_step = InkyRefreshStep::Failed;
     inky_async_status = UNIVERSAL_UPDATE_FAILED;
     AddLog(3, "UDisplay: Inky refresh failed: %s", reason);
@@ -623,6 +630,7 @@ void EPDPanel::serviceAsyncUpdate() {
         case InkyRefreshStep::TransferFrame:
             // Keep the frame transfer in one SPI transaction. Splitting it
             // requires controller-specific proof that RAM writes can resume.
+            inky_pof_required = true;
             sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
             inky_update_pending = false;
             inky_refresh_step = InkyRefreshStep::PowerOn;
@@ -659,13 +667,13 @@ void EPDPanel::serviceAsyncUpdate() {
             if (!inkyBusy()) {
                 inky_refresh_step = InkyRefreshStep::PowerOff;
             } else if ((uint32_t)(millis() - inky_step_started) >= cfg.busy_timeout) {
-                // Leave power and the controller untouched while BUSY remains active.
                 failInkyAsync("refresh timed out while BUSY remained active");
             }
             break;
 
         case InkyRefreshStep::PowerOff:
             sendInkyCommand(0x02, power, sizeof(power)); // POF
+            inky_pof_required = false;
             beginInkyIdleWait(InkyRefreshStep::PowerOffWait, 300);
             break;
 
@@ -776,24 +784,19 @@ bool EPDPanel::updateInky() {
     sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
 
     sendInkyCommand(0x04);                 // PON
-    if (!waitInkyIdle(300)) {
-        return false;
+    const bool power_on_ready = waitInkyIdle(300);
+    bool refresh_completed = false;
+    if (power_on_ready) {
+        static const uint8_t booster_after_power[] = {0x6F, 0x1F, 0x17, 0x49};
+        sendInkyCommand(0x06, booster_after_power, sizeof(booster_after_power));
+        static const uint8_t refresh[] = {0x00};
+        sendInkyCommand(0x12, refresh, sizeof(refresh)); // DRF
+        refresh_completed = waitInkyRefresh(cfg.busy_timeout);
     }
 
-    static const uint8_t booster_after_power[] = {0x6F, 0x1F, 0x17, 0x49};
-    sendInkyCommand(0x06, booster_after_power, sizeof(booster_after_power));
-    static const uint8_t refresh[] = {0x00};
-    sendInkyCommand(0x12, refresh, sizeof(refresh)); // DRF
-    const bool refresh_completed = waitInkyRefresh(cfg.busy_timeout);
-    if (!refresh_completed) {
-        const uint8_t busy_level = cfg.busy_invert ? LOW : HIGH;
-        if (busy_pin_configured && digitalRead(cfg.busy_pin) == busy_level) {
-            // Do not power down the controller while the panel is still refreshing.
-            return false;
-        }
-    }
-
-    sendInkyCommand(0x02, refresh, sizeof(refresh)); // POF
+    // Always power down after writing the frame, including BUSY timeouts.
+    static const uint8_t power[] = {0x00};
+    sendInkyCommand(0x02, power, sizeof(power)); // POF
     if (!waitInkyIdle(300)) {
         return false;
     }
