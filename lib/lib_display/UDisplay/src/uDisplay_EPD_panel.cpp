@@ -502,9 +502,7 @@ bool EPDPanel::hasInkyCommandSequences() {
 
 void EPDPanel::sendInkySequence(uint16_t offset, uint16_t count) {
     if (!cfg.send_cmds_callback || !count) return;
-    spi->beginTransaction();
     cfg.send_cmds_callback(offset, count);
-    spi->endTransaction();
 }
 
 bool EPDPanel::startAsyncUpdate() {

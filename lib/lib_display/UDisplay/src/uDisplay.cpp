@@ -1124,6 +1124,12 @@ uint16_t index = 0;
 #endif
   while (1) {
     uint8_t iob;
+    const bool inky_command = ep_mode == 4;
+    if (inky_command) {
+      // The former Inky driver sent each command in its own SPI transaction.
+      // Keep that framing while taking the command bytes from display.ini.
+      spiController->beginTransaction();
+    }
     spiController->csLow();
     iob = dsp_cmds[cmd_offset++];
     index++;
@@ -1235,6 +1241,9 @@ uint16_t index = 0;
         }
       }
       spiController->csHigh();
+      if (inky_command) {
+        spiController->endTransaction();
+      }
       if (args & 0x80) {  // delay after the command
         delay_arg(args);
       }
