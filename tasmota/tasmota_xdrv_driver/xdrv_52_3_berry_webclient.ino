@@ -1076,13 +1076,15 @@ extern "C" {
 #ifdef USE_BERRY_WEBCLIENT_ASYNC // No sense closing cl wheen using stream!
     (void) be_pushbytes(vm, nullptr, sz);
     StreamBeBytesWriter memory_writer(vm);
-    (void) cl->writeToStream(&memory_writer);
+    int32_t written = cl->writeToStream(&memory_writer);
+    if (written < 0) be_raise(vm, "value_error", "response body read failed");
     be_return(vm);
 #else
     uint8_t * buf = (uint8_t*) be_pushbytes(vm, nullptr, sz);
     StreamBeBytesWriter memory_writer(vm);
     int32_t written = cl->writeToStream(&memory_writer);
     cl->end();  // free allocated memory ~16KB
+    if (written < 0) be_raise(vm, "value_error", "response body read failed");
     be_return(vm);  /* return code */
 #endif
     
