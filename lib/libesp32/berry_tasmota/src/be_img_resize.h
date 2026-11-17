@@ -20,15 +20,13 @@ static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t b
     reserve += output_reserve;
     size_t max_allowed = free_psram > reserve ? free_psram - (size_t)reserve : (has_target ? 0 : 500000);
     if (max_allowed > largest_block) max_allowed = largest_block;
-    // Reusing a buffer can bypass the largest-block limit for decoding, but
-    // out-of-place resizing still needs free space for both buffers.
-    size_t reusable_limit = reusable_size;
-    if (output_reserve) {
-      size_t free_for_decode = free_psram > reserve ? free_psram - (size_t)reserve : 0;
-      if (reusable_limit > free_for_decode) reusable_limit = free_for_decode;
-    }
-    if (reusable_limit > max_allowed) max_allowed = reusable_limit;
-    if ((uint64_t)scaled_width * scaled_height * bpp <= max_allowed) {
+    // max_allowed is the budget for additional decode allocation; the reusable
+    // buffer is already allocated. Out-of-place output and the reserve must
+    // still fit in free PSRAM independently of that buffer.
+    uint64_t decode_size = (uint64_t)scaled_width * scaled_height * bpp;
+    uint64_t additional_decode = decode_size > reusable_size ? decode_size - reusable_size : 0;
+    bool output_fits = !output_reserve || free_psram > reserve;
+    if (output_fits && additional_decode <= max_allowed) {
       return divisor == 1 ? 0 : (int)divisor;
     }
   }
