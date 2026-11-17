@@ -66,6 +66,17 @@ struct EPDPanelConfig {
     uint8_t epc_part_cnt = 0;             // Count of partial update commands
     uint16_t init_cmd_count = 0;          // Number of bytes in the panel init sequence
 
+    // Inky E673 command sequences configured by the display descriptor.
+    uint8_t inky_write_ram_command = 0xFF;
+    uint16_t inky_power_on_offset = 0;
+    uint16_t inky_power_on_count = 0;
+    uint16_t inky_refresh_offset = 0;
+    uint16_t inky_refresh_count = 0;
+    uint16_t inky_power_off_offset = 0;
+    uint16_t inky_power_off_count = 0;
+    uint16_t inky_power_save_offset = 0;
+    uint16_t inky_power_save_count = 0;
+
     // Callback to send command sequences from descriptor
     std::function<void(uint16_t offset, uint16_t count)> send_cmds_callback;
 };
@@ -177,6 +188,8 @@ private:
     bool updateInky();
     void failInkyAsync(const char* reason);
     bool inkyBusy();
+    bool hasInkyCommandSequences();
+    void sendInkySequence(uint16_t offset, uint16_t count);
     void beginInkyIdleWait(InkyRefreshStep wait_step, uint32_t timeout_ms);
     bool serviceInkyIdleWait(InkyRefreshStep next_step, uint32_t timeout_ms);
     void sendInkyCommand(uint8_t command, const uint8_t* data = nullptr, uint32_t len = 0);

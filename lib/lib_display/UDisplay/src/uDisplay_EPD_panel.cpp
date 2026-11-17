@@ -490,8 +490,21 @@ bool EPDPanel::inkyBusy() {
 
 bool EPDPanel::canStartAsyncUpdate() {
     return cfg.ep_mode == 4 && fb_buffer && busy_pin_configured && reset_pin_configured &&
-           cfg.send_cmds_callback && cfg.init_cmd_count &&
+           cfg.send_cmds_callback && cfg.init_cmd_count && hasInkyCommandSequences() &&
            inky_async_status != UNIVERSAL_UPDATE_RUNNING;
+}
+
+bool EPDPanel::hasInkyCommandSequences() {
+    return cfg.inky_write_ram_command != 0xFF &&
+           cfg.inky_power_on_count && cfg.inky_refresh_count &&
+           cfg.inky_power_off_count && cfg.inky_power_save_count;
+}
+
+void EPDPanel::sendInkySequence(uint16_t offset, uint16_t count) {
+    if (!cfg.send_cmds_callback || !count) return;
+    spi->beginTransaction();
+    cfg.send_cmds_callback(offset, count);
+    spi->endTransaction();
 }
 
 bool EPDPanel::startAsyncUpdate() {
@@ -583,7 +596,6 @@ void EPDPanel::serviceAsyncUpdate() {
         return;
     }
 
-    static const uint8_t power[] = {0x00};
     switch (inky_refresh_step) {
         case InkyRefreshStep::ResetStart:
             // E673 reset overrides a stale BUSY state, including at power-on.
@@ -621,9 +633,7 @@ void EPDPanel::serviceAsyncUpdate() {
             break;
 
         case InkyRefreshStep::Initialize:
-            spi->beginTransaction();
-            cfg.send_cmds_callback(0, cfg.init_cmd_count);
-            spi->endTransaction();
+            sendInkySequence(0, cfg.init_cmd_count);
             inky_refresh_step = InkyRefreshStep::TransferFrame;
             break;
 
@@ -631,13 +641,13 @@ void EPDPanel::serviceAsyncUpdate() {
             // Keep the frame transfer in one SPI transaction. Splitting it
             // requires controller-specific proof that RAM writes can resume.
             inky_pof_required = true;
-            sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
+            sendInkyCommand(cfg.inky_write_ram_command, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
             inky_update_pending = false;
             inky_refresh_step = InkyRefreshStep::PowerOn;
             break;
 
         case InkyRefreshStep::PowerOn:
-            sendInkyCommand(0x04); // PON
+            sendInkySequence(cfg.inky_power_on_offset, cfg.inky_power_on_count);
             beginInkyIdleWait(InkyRefreshStep::PowerOnWait, 300);
             break;
 
@@ -646,9 +656,7 @@ void EPDPanel::serviceAsyncUpdate() {
             break;
 
         case InkyRefreshStep::BoosterSetup: {
-            static const uint8_t booster_after_power[] = {0x6F, 0x1F, 0x17, 0x49};
-            sendInkyCommand(0x06, booster_after_power, sizeof(booster_after_power));
-            sendInkyCommand(0x12, power, sizeof(power)); // DRF
+            sendInkySequence(cfg.inky_refresh_offset, cfg.inky_refresh_count);
             inky_step_started = millis();
             inky_refresh_step = InkyRefreshStep::WaitBusyAssert;
             break;
@@ -672,7 +680,7 @@ void EPDPanel::serviceAsyncUpdate() {
             break;
 
         case InkyRefreshStep::PowerOff:
-            sendInkyCommand(0x02, power, sizeof(power)); // POF
+            sendInkySequence(cfg.inky_power_off_offset, cfg.inky_power_off_count);
             inky_pof_required = false;
             beginInkyIdleWait(InkyRefreshStep::PowerOffWait, 300);
             break;
@@ -682,8 +690,7 @@ void EPDPanel::serviceAsyncUpdate() {
             break;
 
         case InkyRefreshStep::PowerSave: {
-            static const uint8_t power_save[] = {0x4F, 0x6E};
-            sendInkyCommand(0x00, power_save, sizeof(power_save)); // PSR
+            sendInkySequence(cfg.inky_power_save_offset, cfg.inky_power_save_count);
             beginInkyIdleWait(InkyRefreshStep::PowerSaveWait, 300);
             break;
         }
@@ -772,36 +779,29 @@ bool EPDPanel::updateInky() {
     if (!resetDisplay()) {
         return false;
     }
-    if (!cfg.send_cmds_callback || !cfg.init_cmd_count) {
-        AddLog(3, "UDisplay: Inky init command sequence is missing");
+    if (!cfg.send_cmds_callback || !cfg.init_cmd_count || !hasInkyCommandSequences()) {
+        AddLog(3, "UDisplay: Inky command sequences are missing from the display descriptor");
         return false;
     }
-    spi->beginTransaction();
-    cfg.send_cmds_callback(0, cfg.init_cmd_count);
-    spi->endTransaction();
+    sendInkySequence(0, cfg.init_cmd_count);
 
     // The Inky E673 has one RAM plane with two 4-bit color indices per byte.
-    sendInkyCommand(0x10, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
+    sendInkyCommand(cfg.inky_write_ram_command, fb_buffer, ((uint32_t)cfg.width * cfg.height) / 2);
 
-    sendInkyCommand(0x04);                 // PON
+    sendInkySequence(cfg.inky_power_on_offset, cfg.inky_power_on_count);
     const bool power_on_ready = waitInkyIdle(300);
     bool refresh_completed = false;
     if (power_on_ready) {
-        static const uint8_t booster_after_power[] = {0x6F, 0x1F, 0x17, 0x49};
-        sendInkyCommand(0x06, booster_after_power, sizeof(booster_after_power));
-        static const uint8_t refresh[] = {0x00};
-        sendInkyCommand(0x12, refresh, sizeof(refresh)); // DRF
+        sendInkySequence(cfg.inky_refresh_offset, cfg.inky_refresh_count);
         refresh_completed = waitInkyRefresh(cfg.busy_timeout);
     }
 
     // Always power down after writing the frame, including BUSY timeouts.
-    static const uint8_t power[] = {0x00};
-    sendInkyCommand(0x02, power, sizeof(power)); // POF
+    sendInkySequence(cfg.inky_power_off_offset, cfg.inky_power_off_count);
     if (!waitInkyIdle(300)) {
         return false;
     }
-    static const uint8_t power_save[] = {0x4F, 0x6E};
-    sendInkyCommand(0x00, power_save, sizeof(power_save)); // PSR
+    sendInkySequence(cfg.inky_power_save_offset, cfg.inky_power_save_count);
     if (!waitInkyIdle(300)) {
         return false;
     }

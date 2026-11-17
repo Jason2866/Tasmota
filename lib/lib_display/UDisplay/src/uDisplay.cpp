@@ -86,6 +86,9 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   startline = 0xA1;
   uint8_t section = 0;
   dsp_ncmds = 0;
+  uint16_t inky_sequence_bytes = 0;
+  uint8_t inky_sequence_phase = 0xFF;
+  bool inky_sequence_header = false;
   lut_num = 0;
   lvgl_param.data = 0;
   lvgl_param.flushlines = 40;
@@ -121,6 +124,11 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
         // id line
         lp1++;
         section = *lp1++;
+        if (section == 'X' && epd_e673) {
+          if (*lp1 == ',') lp1++;
+          inky_sequence_phase = next_val(&lp1);
+          inky_sequence_header = true;
+        }
         if (section == 'I') {
 
           if (*lp1 == 'C') {
@@ -453,6 +461,47 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                     dsp_cmds[dsp_ncmds++] = strtol(ibuff, 0, 16);
                   } else {
                     break;
+                  }
+                }
+              }
+            }
+            break;
+          case 'X':
+            // E673 descriptor phases: 0=frame RAM opcode, 1=power-on,
+            // 2=refresh, 3=power-off, 4=power-save. Command phases use
+            // the standard SPI tuples consumed by send_spi_cmds().
+            if (epd_e673 && inky_sequence_header) {
+              inky_sequence_header = false;
+              if (inky_sequence_phase == 0) {
+                panel_config->epd.inky_write_ram_command = next_hex(&lp1);
+              } else {
+                uint16_t *sequence_offset = nullptr;
+                uint16_t *sequence_count = nullptr;
+                switch (inky_sequence_phase) {
+                  case 1:
+                    sequence_offset = &panel_config->epd.inky_power_on_offset;
+                    sequence_count = &panel_config->epd.inky_power_on_count;
+                    break;
+                  case 2:
+                    sequence_offset = &panel_config->epd.inky_refresh_offset;
+                    sequence_count = &panel_config->epd.inky_refresh_count;
+                    break;
+                  case 3:
+                    sequence_offset = &panel_config->epd.inky_power_off_offset;
+                    sequence_count = &panel_config->epd.inky_power_off_count;
+                    break;
+                  case 4:
+                    sequence_offset = &panel_config->epd.inky_power_save_offset;
+                    sequence_count = &panel_config->epd.inky_power_save_count;
+                    break;
+                }
+                if (sequence_offset && sequence_count) {
+                  *sequence_offset = dsp_ncmds + inky_sequence_bytes;
+                  *sequence_count = 0;
+                  while (dsp_ncmds + inky_sequence_bytes < sizeof(dsp_cmds)) {
+                    if (str2c(&lp1, ibuff, sizeof(ibuff))) break;
+                    dsp_cmds[dsp_ncmds + inky_sequence_bytes++] = strtol(ibuff, 0, 16);
+                    (*sequence_count)++;
                   }
                 }
               }

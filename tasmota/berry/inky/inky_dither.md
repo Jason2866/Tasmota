@@ -14,7 +14,7 @@
 
 ## Inky Impression 7.3-inch display
 
-- `Inky_Impression_7_3_display.ini` supports the 800x480 Inky Impression 7.3-inch Spectra 6 display with the E673 controller. It uses the universal uDisplay SPI driver and expects the display reset pin and the active-low BUSY signal to be configured to the usual display `SPI` pins. With a 90° or 270° rotation in `display.ini`, the logical image dimensions become 480 × 800.
+- `Inky_Impression_7_3_display.ini` supports the 800x480 Inky Impression 7.3-inch Spectra 6 display with the E673 controller. It uses the universal uDisplay SPI driver and expects the display reset pin and the active-low BUSY signal to be configured to the usual display `SPI` pins. The controller's register setup and fixed refresh commands are defined in the descriptor; the driver retains the framebuffer transfer and BUSY-controlled refresh sequencing. With a 90° or 270° rotation in `display.ini`, the logical image dimensions become 480 × 800.
 
 ### Tasmota GPIO configuration and wiring
 
