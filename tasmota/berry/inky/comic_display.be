@@ -11,11 +11,9 @@
 # For correct Inky output orientation, set the Tasmota command DisplayRotate 1
 # (90 degrees) before running this script.
 #
-# SECURITY NOTE: the default Berry webclient() (HttpClientLight) accepts ANY TLS
-# certificate, so your Metron credentials could be captured by a man-in-the-middle
-# on an untrusted network. Only run this on networks you trust. Firmware built
-# with USE_BERRY_WEBCLIENT_ASYNC additionally supports wc.tls_pin_pubkey() for
-# public-key pinning, which this script does not use.
+# SECURITY NOTE: async webclient builds pin the Metron API public key before
+# sending credentials. Other builds keep the legacy webclient behavior, which
+# accepts any TLS certificate; use those builds only on trusted networks.
 #
 # Credentials are only sent to https://metron.cloud API endpoints. The cover
 # image download never sends credentials, and HTTP redirects are not followed,
@@ -31,6 +29,11 @@ var metron_user_agent = "TasmotaComicDisplay/1.0"
 var metron_http_timeout_ms = 15000
 var metron_connect_timeout_ms = 10000
 var metron_retries = 3
+# BearSSL SHA-1 public-key pin for metron.cloud, captured after hostname and
+# certificate-chain validation on 2026-11-17. A key rotation requires updating it.
+var metron_tls_pubkey_pin = "057743768c452c97d36a7b8cda80a5a551f664cf"
+var metron_async_available = false
+var metron_security_warning_printed = false
 var comic_source_path = "/metron_comic.jpg"
 var comic_download_path = "/metron_comic.download"
 var comic_backup_path = "/metron_comic.backup"
@@ -40,8 +43,31 @@ var comic_max_source_bytes = 1024 * 1024
 var comic_max_api_bytes = 128 * 1024
 var comic_cover_attempts = 5
 
-def metron_new_client(username, password)
+def metron_new_client(username, password, pin_metron, async_body_limit)
   var wc = webclient()
+  var async_client = false
+  try
+    # This call both detects async TLS support and pins the API connection.
+    # Pin before setting credentials or beginning the request.
+    wc.tls_pin_pubkey(metron_tls_pubkey_pin)
+    async_client = true
+    if !pin_metron
+      # Cover hosts are independent and receive no credentials.
+      wc.tls_clear_pins()
+    end
+  except .. as err, msg
+    if err != "attribute_error" && msg != "wc_tls_pin_pubkey command unavailable in non-async webclient build."
+      raise err, msg
+    end
+  end
+  if async_client
+    wc.async_set_body_limit(async_body_limit)
+  end
+  metron_async_available = async_client
+  if !async_client && username != nil && size(username) > 0 && !metron_security_warning_printed
+    print("WARNING: this firmware lacks async TLS pinning; webclient() accepts any TLS certificate")
+    metron_security_warning_printed = true
+  end
   # Berry webclient defaults to a 2 s connect timeout, which is too short for
   # metron.cloud HTTPS/TLS and surfaces as HTP: Connection error -2.
   wc.set_useragent(metron_user_agent)
@@ -53,6 +79,22 @@ def metron_new_client(username, password)
     wc.set_auth(username, password)
   end
   return wc
+end
+
+def metron_http_get(wc)
+  if !metron_async_available
+    return wc.GET()
+  end
+  var rc = wc.async_get_start()
+  if rc != 1
+    return rc
+  end
+  var state = wc.async_state()
+  while state == 1
+    tasmota.yield()
+    state = wc.async_state()
+  end
+  return wc.last_code
 end
 
 def metron_should_retry(status)
@@ -81,9 +123,10 @@ def diagnose_network()
   var names = ["example.com", "metron.cloud"]
   var i = 0
   while i < size(targets)
-    var wc = metron_new_client(nil, nil)
+    var body_limit = targets[i] == "https://metron.cloud/" ? comic_max_api_bytes : 16384
+    var wc = metron_new_client(nil, nil, targets[i] == "https://metron.cloud/", body_limit)
     wc.begin(targets[i])
-    var status = wc.GET()
+    var status = metron_http_get(wc)
     tasmota.yield()
     wc.close()
     print(names[i] + " -> " + str(status))
@@ -97,10 +140,10 @@ def metron_get_json(url, username, password)
   var attempt = 0
   while attempt < metron_retries
     attempt += 1
-    wc = metron_new_client(username, password)
+    wc = metron_new_client(username, password, true, comic_max_api_bytes)
     wc.collect_headers("Server", "Content-Type", "Location", "Transfer-Encoding", "Connection")
     wc.begin(url)
-    status = wc.GET()
+    status = metron_http_get(wc)
     tasmota.yield()
     if status >= 200 && status < 300
       break
@@ -124,8 +167,8 @@ def metron_get_json(url, username, password)
   var response_size = wc.get_size()
   print("Metron API response size: " + str(response_size) + " bytes")
   # get_size() is negative when the response has no Content-Length, including
-  # chunked responses. Berry's get_string()/write_file() have no caller-set
-  # total-byte limit, so reject these bodies before an unbounded read.
+  # chunked responses. Reject these before reading because the legacy webclient
+  # has no bounded-response API.
   if response_size < 0
     wc.close()
     raise "network_error", "Metron API response has no Content-Length; refusing an unbounded download"
@@ -165,6 +208,10 @@ def metron_get_json(url, username, password)
           ", size=" + str(response_size) + ", transfer-encoding=" + transfer_encoding +
           ", connection=" + connection_header + ", server=" + server_header +
           ", content-type=" + content_type + ")"
+  end
+  if size(response) != response_size
+    raise "network_error", "Metron API response was truncated (expected " + str(response_size) +
+          " bytes, received " + str(size(response)) + ")"
   end
 
   var data = json.load(response)
@@ -313,9 +360,9 @@ def metron_download_cover(username, password, series_name, output_path)
   var attempt = 0
   while attempt < metron_retries
     attempt += 1
-    image_client = metron_new_client(nil, nil)
+    image_client = metron_new_client(nil, nil, false, comic_max_source_bytes)
     image_client.begin(cover_url)
-    status = image_client.GET()
+    status = metron_http_get(image_client)
     tasmota.yield()
     if status >= 200 && status < 300
       break
@@ -344,11 +391,11 @@ def metron_download_cover(username, password, series_name, output_path)
   var written = image_client.write_file(output_path)
   tasmota.yield()
   image_client.close()
-  if written <= 0
+  if written != response_size
     if path.exists(output_path)
       path.remove(output_path)
     end
-    raise "network_error", "Could not save the Metron cover image"
+    raise "network_error", "Metron cover was truncated or could not be saved"
   end
   return written
 end
@@ -381,8 +428,6 @@ def display_comic(username, password, series_name)
   if username == nil || password == nil || size(username) == 0 || size(password) == 0
     raise "value_error", "Pass your Metron username and password"
   end
-  print("WARNING: webclient() does not verify TLS certificates; only use Metron credentials on trusted networks")
-
   # inky_dither normalizes the source to the logical display dimensions, dithers it, then refreshes Inky.
   var dither_fn = nil
   import global

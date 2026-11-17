@@ -10,7 +10,7 @@ Fetches a random issue from Metron and displays its cover on the Inky Impression
 - PSRAM, for decoding and resizing the cover image
 - The updated Tasmota firmware containing `img.resize()` and `InkyDither.dither()`
 
-> **Security note:** the default Berry `webclient()` does not verify TLS certificates (it accepts any certificate), so your Metron credentials could be intercepted by a man-in-the-middle on an untrusted network. Only run this script on networks you trust. Credentials are sent only to `metron.cloud` API endpoints; the cover image download never sends credentials and HTTP redirects are not followed.
+> **Security note:** when built with `USE_BERRY_WEBCLIENT_ASYNC`, the script uses the async webclient and pins the `metron.cloud` API public key before sending credentials. The pin must be updated if Metron rotates its key. Other builds retain the legacy webclient behavior, which accepts any TLS certificate; use those builds only on trusted networks. Credentials are sent only to `metron.cloud` API endpoints; cover downloads do not send credentials, and HTTP redirects are not followed.
 
 ## Usage
 
