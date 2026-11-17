@@ -100,6 +100,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
 
   // Allocate panel_config once at the beginning
   panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
+  panel_config->epd.inky_write_ram_command = 0xFF;
   // Set EPD timing defaults (will be used if EPD mode is detected)
   panel_config->epd.lut_full_time = 350;
   panel_config->epd.lut_partial_time = 35;
