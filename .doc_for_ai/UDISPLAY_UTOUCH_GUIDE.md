@@ -123,6 +123,30 @@ Monochrome e-paper descriptors use `bpp=1`. The Inky Impression E673 uses `bpp=4
 :I
 ```
 
+### Inky Impression E673 runtime commands (`:X`)
+
+Keep the E673 register setup under `:I`. Put the runtime command groups in `:X` records; the phase number is decimal and command/data bytes are hexadecimal:
+
+| Record | Purpose | Data format |
+|---|---|---|
+| `:X,0,10` | Frame RAM write opcode | One command byte only; this example selects `0x10`. |
+| `:X,1,...` | Power on | One or more standard SPI command tuples. |
+| `:X,2,...` | Booster setup and refresh activation | One or more standard SPI command tuples. |
+| `:X,3,...` | Power off | One or more standard SPI command tuples. |
+| `:X,4,...` | Power save | One or more standard SPI command tuples. |
+
+Phases 1–4 use the same `CMD,CNT[,ARG...]` tuples as `:I`; `CNT` is the five-bit argument count plus delay bits. Define phase 0 and all four command phases: the E673 update path rejects a descriptor if the RAM opcode is missing (`FF`) or any command phase is empty.
+
+```ini
+:X,0,10
+:X,1,04,00
+:X,2,06,04,6F,1F,17,49,12,01,00
+:X,3,02,01,00
+:X,4,00,02,4F,6E
+```
+
+For each frame update, the driver resets the panel, replays `:I`, writes the framebuffer using the phase-0 opcode, then runs phases 1 through 4 in order with BUSY/idle waits between them. Each SPI tuple in `:I` and phases 1–4 gets its own SPI transaction and CS pulse; a delay in `CNT` happens after that transaction. The framebuffer RAM write remains one transaction.
+
 In 2-LUT and command-only modes, opcodes `60`–`6A` are reserved pseudo-opcodes: do not send real controller commands in that range.
 
 ## 5. uTouch (`:UTI`, `:UTT`, `:UTX`, `:UTY`)
