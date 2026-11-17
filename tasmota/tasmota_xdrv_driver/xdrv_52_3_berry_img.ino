@@ -173,18 +173,19 @@ struct be_img_util {
    * @param w Image width
    * @param h Image height
    * @param f Pixel format
+   * @param validate_jpeg Whether to parse JPEG data to validate its dimensions
    * @return true on success, false on failure
    */
-  static bool from_buffer(image_t *img, uint8_t* buffer, size_t len, uint16_t w, uint16_t h, pixformat_t f) {
+  static bool from_buffer(image_t *img, uint8_t* buffer, size_t len, uint16_t w, uint16_t h, pixformat_t f, bool validate_jpeg = true) {
     if (!buffer || len == 0 || w == 0 || h == 0 || len > SIZE_MAX - 4) {
       return false;
     }
-    if (f == PIXFORMAT_JPEG) {
+    if (f == PIXFORMAT_JPEG && validate_jpeg) {
       uint16_t jpeg_width, jpeg_height;
       if (!jpeg_size(buffer, len, &jpeg_width, &jpeg_height) || jpeg_width != w || jpeg_height != h) {
         return false;
       }
-    } else {
+    } else if (f != PIXFORMAT_JPEG) {
       size_t bpp;
       switch (f) {
         case PIXFORMAT_GRAYSCALE: bpp = 1; break;
