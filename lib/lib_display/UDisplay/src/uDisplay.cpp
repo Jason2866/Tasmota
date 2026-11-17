@@ -584,7 +584,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             if (interface == _UDSP_SPI || interface == _UDSP_QSPI) {
               panel_config->spi.cmd_memory_access = next_hex(&lp1);
               panel_config->spi.cmd_startline = next_hex(&lp1);
-            } 
+            }
 #ifdef UDISPLAY_I80
             else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
               panel_config->i80.cmd_madctl = next_hex(&lp1);
@@ -603,7 +603,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[0] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[0] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[0] = next_hex(&lp1);
-              } 
+              }
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
                 // Parse directly into I80 config
@@ -626,7 +626,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[1] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[1] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[1] = next_hex(&lp1);
-              } 
+              }
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
                 // Parse directly into I80 config
@@ -649,7 +649,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[2] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[2] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[2] = next_hex(&lp1);
-              } 
+              }
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
                 // Parse directly into I80 config
@@ -672,7 +672,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[3] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[3] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[3] = next_hex(&lp1);
-              } 
+              }
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
                 // Parse directly into I80 config
@@ -952,9 +952,9 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
       ep_mode = 1;
     }
 
-    if (panel_config && panel_config->epd.lut_cnt_data[0] > 0 && 
-        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[2] && 
-        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[3] && 
+    if (panel_config && panel_config->epd.lut_cnt_data[0] > 0 &&
+        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[2] &&
+        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[3] &&
         panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[4]) {
       // 5 table mode
       ep_mode = 2;
@@ -1126,7 +1126,7 @@ uint16_t index = 0;
     uint8_t iob;
     const bool inky_command = ep_mode == 4;
     if (inky_command) {
-      // The former Inky driver sent each command in its own SPI transaction.
+      // The Inky driver sent each command in its own SPI transaction.
       // Keep that framing while taking the command bytes from display.ini.
       spiController->beginTransaction();
     }
@@ -1137,7 +1137,7 @@ uint16_t index = 0;
       // epaper pseudo opcodes
       if (!universal_panel) return;
       EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
-      
+
       uint8_t args = dsp_cmds[cmd_offset++];
       index++;
 #ifdef UDSP_DEBUG
@@ -1365,7 +1365,7 @@ Renderer *uDisplay::Init(void) {
       panel_config->i2c.cmd_display_off = dsp_off;
       panel_config->i2c.init_commands = dsp_cmds;
       panel_config->i2c.init_commands_count = dsp_ncmds;
-      
+
       universal_panel = new i2c_panel(panel_config->i2c, frame_buffer);
     }
   }
@@ -1382,7 +1382,7 @@ if (interface == _UDSP_SPI) {
 #endif
 
     spiController->beginTransaction();
- 
+
 #ifdef ESP8266
     if (reset >= 0) {
 #else
@@ -1396,7 +1396,7 @@ if (interface == _UDSP_SPI) {
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: SPI resetting device on pin %d", reset);
 #endif
     }
-    
+
     if (ep_mode) {
         // Populate remaining EPD config fields (LUT data already parsed into union)
         panel_config->epd.width = gxs;
@@ -1410,12 +1410,12 @@ if (interface == _UDSP_SPI) {
         panel_config->epd.invert_colors = true; // IF_INVERT_COLOR was hardcoded to 1
         panel_config->epd.invert_framebuffer = true; // TODO: maybe use lvgl_param.invert_bw for per-display config?
         panel_config->epd.busy_invert = (bool)lvgl_param.busy_invert;
-        
+
         // Set callback for sending command sequences
         panel_config->epd.send_cmds_callback = [this](uint16_t offset, uint16_t count) {
             this->send_spi_cmds(offset, count);
         };
-        
+
         // Create EPD panel BEFORE sending init commands (send_spi_cmds needs universal_panel)
         universal_panel = new EPDPanel(panel_config->epd, spiController, frame_buffer);
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
@@ -1444,7 +1444,7 @@ if (interface == _UDSP_SPI) {
           // Set update mode to partial for subsequent updates
           epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
         }
-    } else {   
+    } else {
         AddLog(2,"DSP: SPI Panel");
         // Populate remaining SPI config fields (most already parsed directly into union)
         panel_config->spi.width = gxs;
@@ -1455,9 +1455,9 @@ if (interface == _UDSP_SPI) {
         panel_config->spi.reset_pin = reset;
         panel_config->spi.bpanel = bpanel;
         panel_config->spi.all_commands_mode = allcmd_mode;
-        
+
         send_spi_cmds(0, dsp_ncmds);  // Send init commands for regular SPI
-      
+
         universal_panel = new SPIPanel(panel_config->spi, spiController, frame_buffer);
 #ifdef ESP32
         spiController->initDMA(panel_config->spi.width, lvgl_param.flushlines, lvgl_param.data);
@@ -1465,7 +1465,7 @@ if (interface == _UDSP_SPI) {
     }
 
     spiController->endTransaction();
-    
+
     // EPD LUT initialization is now handled inside EPDPanel constructor
     // so we don't need to call Init_EPD here anymore
 }
@@ -1553,14 +1553,14 @@ if (interface == _UDSP_SPI) {
         // Pass init commands to DSI panel config
         panel_config->dsi.init_commands = dsp_cmds;
         panel_config->dsi.init_commands_count = dsp_ncmds;
-               
+
         // Pass display on/off commands from descriptor
         panel_config->dsi.cmd_display_on = dsp_on;
         panel_config->dsi.cmd_display_off = dsp_off;
-        
+
         universal_panel = new DSIPanel(panel_config->dsi);
         rgb_fb = universal_panel->framebuffer;
-                
+
         HandeBP(-1);
      }
 #endif
@@ -1577,7 +1577,7 @@ if (interface == _UDSP_SPI) {
           AddLog(LOG_LEVEL_DEBUG, "UDisplay: PAR resetting device on pin %d", reset);
 #endif
       }
-      
+
       // Populate remaining I80 config fields (most already parsed directly into union)
       // Control and data pins already parsed directly into config during INI parsing
       panel_config->i80.width = gxs;
@@ -1593,14 +1593,14 @@ if (interface == _UDSP_SPI) {
       }
       panel_config->i80.init_commands = dsp_cmds;
       panel_config->i80.init_commands_count = dsp_ncmds;
-      
+
       universal_panel = new I80Panel(panel_config->i80);
 
       HandeBP(-1);
 
   #endif
   }
-  
+
   if(!universal_panel){
     return NULL;
   }
