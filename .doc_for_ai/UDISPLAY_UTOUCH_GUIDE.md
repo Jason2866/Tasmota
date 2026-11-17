@@ -120,6 +120,7 @@ Monochrome e-paper descriptors use `bpp=1`. The Inky Impression E673 uses `bpp=4
 :H,INKYE673,800,480,4,SPI,1,*,*,*,*,*,*,*,10
 :E,673
 :B,0,8
+:I
 ```
 
 In 2-LUT and command-only modes, opcodes `60`–`6A` are reserved pseudo-opcodes: do not send real controller commands in that range.
