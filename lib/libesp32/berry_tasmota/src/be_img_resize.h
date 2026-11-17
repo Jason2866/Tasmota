@@ -15,13 +15,19 @@ static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t b
     uint32_t scaled_height = ((uint32_t)height + divisor - 1) / divisor;
     bool has_target = target_width && target_height;
     bool in_place = has_target && scaled_width >= target_width && scaled_height >= target_height;
+    uint64_t output_reserve = has_target && !in_place ? (uint64_t)target_width * target_height * bpp : 0;
     uint64_t reserve = has_target ? 300000 : (free_psram < 3000000 ? 1300000 : 0);
-    if (has_target && !in_place) reserve += (uint64_t)target_width * target_height * bpp;
+    reserve += output_reserve;
     size_t max_allowed = free_psram > reserve ? free_psram - (size_t)reserve : (has_target ? 0 : 500000);
     if (max_allowed > largest_block) max_allowed = largest_block;
-    // An existing image buffer can be shrunk or reused in place, so its
-    // capacity does not need to come out of free PSRAM.
-    if (reusable_size > max_allowed) max_allowed = reusable_size;
+    // Reusing a buffer can bypass the largest-block limit for decoding, but
+    // out-of-place resizing still needs free space for both buffers.
+    size_t reusable_limit = reusable_size;
+    if (output_reserve) {
+      size_t free_for_decode = free_psram > reserve ? free_psram - (size_t)reserve : 0;
+      if (reusable_limit > free_for_decode) reusable_limit = free_for_decode;
+    }
+    if (reusable_limit > max_allowed) max_allowed = reusable_limit;
     if ((uint64_t)scaled_width * scaled_height * bpp <= max_allowed) {
       return divisor == 1 ? 0 : (int)divisor;
     }
