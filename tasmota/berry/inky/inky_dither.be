@@ -124,9 +124,11 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
 
   # Draw the quantized RGB buffer directly and start an asynchronous panel refresh
   # so JPEG encoding cannot alter the panel image or block Tasmota during BUSY waits.
+  var refresh_started = false
   if use_display
-    if !display.draw_rgb888_async(pixels, width, height)
-      raise "display_error", "could not draw the dithered RGB image"
+    refresh_started = display.draw_rgb888_async(pixels, width, height)
+    if !refresh_started
+      print("Display refresh is busy or unavailable; saving the dithered JPEG without starting a refresh")
     end
   end
   pixels = nil
@@ -167,8 +169,10 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
   gc.collect()
 
   var refresh_status = "not_requested"
-  if use_display
+  if refresh_started
     refresh_status = display.refresh_status()
+  elif use_display
+    refresh_status = "not_started"
   end
   return {"width": info["width"], "height": info["height"],
           "bytes": encoded_size, "path": output_path,

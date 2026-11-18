@@ -558,6 +558,8 @@ def display_comic(username, password, series_name)
     print("Metron cover RGB buffer refresh started; JPEG saved: " + str(image_path))
   elif refresh == "failed"
     print("Metron cover JPEG saved, but RGB buffer display refresh failed: " + str(image_path))
+  elif refresh == "not_started"
+    print("Metron cover refresh was not started (display busy or unavailable); JPEG saved: " + str(image_path))
   else
     print("Dithered Metron cover JPEG saved without a display refresh: " + str(image_path))
   end
@@ -583,6 +585,9 @@ def start(username, password, series_name)
   elif refresh == "failed"
     status = "refresh_failed"
     print("Comic cover was saved, but the display refresh failed.")
+  elif refresh == "not_started"
+    status = "refresh_not_started"
+    print("Comic cover saved; display refresh was not started because the display is busy or unavailable.")
   else
     print("Comic cover dithered and saved; no display is initialized.")
   end
