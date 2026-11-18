@@ -831,6 +831,7 @@ int AsyncHttpClientLight::startJob(Job::Fn fn, void* arg, AsyncOp_t op) {
   _asyncOp = op;
   _asyncHttpCode = HTTPC_ERROR_NOT_CONNECTED;
   _asyncRxBytes = -1;
+  _asyncBodyError = false;
 
   // long live Job on heap – released in asyncState() after done
   _asyncJob = ahcl_new_obj<Job>();
@@ -1465,7 +1466,7 @@ int AsyncHttpClientLight::Job_AsyncGET(void* arg) {
   (void)self->_asyncBody.reserve(expected + 1);
 
   int r = self->readBodyToStreamString(self->_asyncBody, (int)self->_asyncBodyLimit);
-  if (r < 0) { self->_asyncHttpCode = r; self->_asyncRxBytes = r; return r; }
+  if (r < 0) { self->_asyncBodyError = true; self->_asyncRxBytes = r; return r; }
   self->_asyncRxBytes = r;
 
   if (!self->_reuse || !self->_canReuse) {
@@ -1519,7 +1520,7 @@ int AsyncHttpClientLight::Job_AsyncPOST_Buf(void* arg) {
   (void)self->_asyncBody.reserve(expected + 1);
 
   int r = self->readBodyToStreamString(self->_asyncBody, (int)self->_asyncBodyLimit);
-  if (r < 0) { self->_asyncHttpCode = r; self->_asyncRxBytes = r; return r; }
+  if (r < 0) { self->_asyncBodyError = true; self->_asyncRxBytes = r; return r; }
   self->_asyncRxBytes = r;
 
   if (!self->_reuse || !self->_canReuse) {
@@ -1568,7 +1569,7 @@ int AsyncHttpClientLight::Job_AsyncPOST_Str(void* arg) {
   (void)self->_asyncBody.reserve(expected + 1);
 
   int r = self->readBodyToStreamString(self->_asyncBody, (int)self->_asyncBodyLimit);
-  if (r < 0) { self->_asyncHttpCode = r; self->_asyncRxBytes = r; return r; }
+  if (r < 0) { self->_asyncBodyError = true; self->_asyncRxBytes = r; return r; }
   self->_asyncRxBytes = r;
 
   if (!self->_reuse || !self->_canReuse) {
@@ -1645,7 +1646,8 @@ AsyncHttpClientLight::asyncState(int* httpCodeOut, int* bytesOut) const {
 
       // result set in _asyncHttpCode/_asyncRxBytes/_asyncBody
       if (aborted) self->_asyncState = ASYNC_ABORTED;
-      else self->_asyncState = (self->_asyncHttpCode >= 0 ? ASYNC_DONE : ASYNC_ERROR);
+      else if (self->_asyncHttpCode < 200 || self->_asyncHttpCode >= 300) self->_asyncState = ASYNC_ERROR;
+      else self->_asyncState = (self->_asyncBodyError ? ASYNC_ERROR : ASYNC_DONE);
       // the shared header/send loops test the flag: keep it for this job only
       self->_asyncAbortReq = false;
 

@@ -345,6 +345,7 @@ private:
   // HTTP result and metadata after completion (or on error)
   int           _asyncHttpCode = HTTPC_ERROR_NOT_CONNECTED;
   int           _asyncRxBytes  = -1;
+  bool          _asyncBodyError = false;
 
   // RAM buffer for the response body in async mode (bounded to protect the heap)
   static constexpr size_t kDefaultAsyncBodyLimit = 16384;

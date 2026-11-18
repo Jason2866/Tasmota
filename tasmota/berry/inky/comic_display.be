@@ -250,8 +250,10 @@ def metron_download_cover(username, password, series_name, output_path)
   var seed = int(tasmota.millis()) & 0x7FFFFFFF
   var series_data = nil
   var series_url = nil
-  if series_name == nil || size(series_name) == 0
-    var first_page = metron_get_json(metron_series_api + "?page_size=1", username, password)
+  var random_series = series_name == nil || size(series_name) == 0
+  var series_offset = 0
+  if random_series
+    var first_page = metron_get_json(metron_series_api + "?page_size=20", username, password)
     var first_page_results = first_page.find("results")
     var series_count = first_page.find("count", 0)
     if first_page_results == nil || size(first_page_results) == 0 || series_count == nil || series_count < 1
@@ -259,12 +261,14 @@ def metron_download_cover(username, password, series_name, output_path)
     end
     var page_size = size(first_page_results)
     var page_count = int((series_count + page_size - 1) / page_size)
-    var series_page = (seed % page_count) + 1
+    var series_index = seed % series_count
+    var series_page = int(series_index / page_size) + 1
+    series_offset = series_index % page_size
     print("Searching a random Metron series (page " + str(series_page) + " of " + str(page_count) + ")")
     if series_page == 1
       series_data = first_page
     else
-      series_url = metron_series_api + "?page=" + str(series_page) + "&page_size=1"
+      series_url = metron_series_api + "?page=" + str(series_page) + "&page_size=" + str(page_size)
       series_data = metron_get_json(series_url, username, password)
     end
   else
@@ -284,7 +288,15 @@ def metron_download_cover(username, password, series_name, output_path)
   end
 
   # Metron series endpoint returns the title under 'series' (or fallback 'name')
-  var series = series_results[seed % size(series_results)]
+  var series = nil
+  if random_series
+    if series_offset >= size(series_results)
+      raise "value_error", "Metron series page changed during selection"
+    end
+    series = series_results[series_offset]
+  else
+    series = series_results[seed % size(series_results)]
+  end
   var series_id = series.find("id")
   if series_id == nil
     raise "value_error", "Metron series result has no ID"
@@ -297,30 +309,26 @@ def metron_download_cover(username, password, series_name, output_path)
 
   # The issue-list filter takes 'series_id', not 'series'. Use pagination because
   # issue_count is a count, not a range of valid issue numbers.
-  var issue = nil
-  var issue_url = metron_api + "?series_id=" + str(series_id) + "&page_size=1"
+  var issue_url = metron_api + "?series_id=" + str(series_id) + "&page_size=20"
   var first_issue_page = metron_get_json(issue_url, username, password)
   var issue_count = first_issue_page.find("count", 0)
-  var issue_page_size = size(first_issue_page.find("results", []))
-  var issue_page_count = issue_count
-  if issue_page_size > 0 && issue_count != nil
-    issue_page_count = (issue_count + issue_page_size - 1) / issue_page_size
+  var first_issue_results = first_issue_page.find("results", [])
+  var issue_page_size = size(first_issue_results)
+  if issue_count == nil || issue_count < 1 || issue_page_size < 1
+    raise "value_error", "No Metron issues found in series: " + str(series_title)
   end
-  if issue_page_count == nil || issue_page_count < 1
-    issue_page_count = 1
+  var issue_index = seed % issue_count
+  var issue_page = int(issue_index / issue_page_size) + 1
+  var issue_offset = issue_index % issue_page_size
+  var issue_data = first_issue_page
+  if issue_page > 1
+    issue_url = metron_api + "?series_id=" + str(series_id) + "&page=" + str(issue_page) + "&page_size=" + str(issue_page_size)
+    issue_data = metron_get_json(issue_url, username, password)
   end
-  for attempt : range(0, 3)
-    var issue_page = ((seed % issue_page_count + attempt) % issue_page_count) + 1
-    var issue_data = first_issue_page
-    if issue_page > 1
-      issue_url = metron_api + "?series_id=" + str(series_id) + "&page=" + str(issue_page) + "&page_size=1"
-      issue_data = metron_get_json(issue_url, username, password)
-    end
-    var issue_results = issue_data.find("results")
-    if issue_results != nil && size(issue_results) > 0
-      issue = issue_results[seed % size(issue_results)]
-      break
-    end
+  var issue_results = issue_data.find("results", [])
+  var issue = nil
+  if issue_offset < size(issue_results)
+    issue = issue_results[issue_offset]
   end
 
   if issue == nil
@@ -545,13 +553,13 @@ def display_comic(username, password, series_name)
   var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
   var refresh = result.find("refresh_status", "not_requested")
   if refresh == "complete"
-    print("Displayed Metron cover: " + str(image_path))
+    print("Displayed Metron cover from RGB buffer; JPEG saved: " + str(image_path))
   elif refresh == "running"
-    print("Metron cover refresh started: " + str(image_path))
+    print("Metron cover RGB buffer refresh started; JPEG saved: " + str(image_path))
   elif refresh == "failed"
-    print("Metron cover was saved, but the display refresh failed: " + str(image_path))
+    print("Metron cover JPEG saved, but RGB buffer display refresh failed: " + str(image_path))
   else
-    print("Dithered Metron cover saved without a display: " + str(image_path))
+    print("Dithered Metron cover JPEG saved without a display refresh: " + str(image_path))
   end
   return result
 end

@@ -51,6 +51,7 @@
 #ifdef USE_BERRY
 
 #include <berry.h>
+#include "be_vm.h"
 // ASYNC EXT
 #ifdef USE_BERRY_WEBCLIENT_ASYNC
 #include "AsyncHttpClientLight.h"
@@ -1058,9 +1059,11 @@ extern "C" {
     HTTPClientLight * cl = wc_getclient(vm);
 #endif
     int32_t sz = cl->getSize();
+    // default to 1K starter if contetn-length not present
+    if (sz < 0) sz = 1024;
 #ifdef USE_BERRY_WEBCLIENT_ASYNC
-    if (sz > 1048576) {
-      be_raise(vm, "value_error", "response size too big (>1MB)");
+    if ((size_t)sz > vm->bytesmaxsize) {
+      be_raise(vm, "value_error", "response size exceeds Berry bytes capacity");
     }
 #else
     // abort if we exceed 32KB size, things will not go well otherwise
@@ -1068,8 +1071,6 @@ extern "C" {
       be_raise(vm, "value_error", "response size too big (>32KB)");
     }
 #endif
-    // default to 1K starter if contetn-length not present
-    if (sz < 0) sz = 1024;
     // create a bytes object at top of stack.
     // the streamwriter knows how to get it. 
 

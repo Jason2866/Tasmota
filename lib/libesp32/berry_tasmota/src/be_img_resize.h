@@ -26,7 +26,8 @@ static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t b
     uint64_t decode_size = (uint64_t)scaled_width * scaled_height * bpp;
     uint64_t additional_decode = decode_size > reusable_size ? decode_size - reusable_size : 0;
     bool output_fits = !output_reserve || free_psram > reserve;
-    if (output_fits && additional_decode <= max_allowed) {
+    bool decode_fits = decode_size <= reusable_size || decode_size <= largest_block;
+    if (output_fits && decode_fits && additional_decode <= max_allowed) {
       return divisor == 1 ? 0 : (int)divisor;
     }
   }
