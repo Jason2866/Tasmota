@@ -486,7 +486,7 @@ uint16_t GetColorFromIndex(uint32_t index) {
   }
 }
 
-void DisplayText(void)
+bool DisplayText(void)
 {
   uint8_t lpos;
   uint8_t escape = 0;
@@ -686,9 +686,7 @@ void DisplayText(void)
               }
               if (renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
                 AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot switch displays while an asynchronous refresh is active"));
-                char *ep = strchr(cp, ':');
-                cp = ep ? ep + 1 : cp + strlen(cp);
-                break;
+                return false;
               }
               if (*cp == ':') {
                 cp++;
@@ -1302,12 +1300,13 @@ extern FS *ffsp;
       if (renderer) renderer->Updateframe();
       //else DisplayDrawFrame();
     }
+  return true;
 }
 
 #ifdef USE_UFILESYS
-void Display_Text_From_File(const char *file) {
+bool Display_Text_From_File(const char *file) {
   File fp;
-  if (!ufsp) return;
+  if (!ufsp) return true;
   fp = ufsp->open(file, FS_FILE_READ);
   if (fp > 0) {
     char *savptr = XdrvMailbox.data;
@@ -1335,11 +1334,16 @@ void Display_Text_From_File(const char *file) {
       // execute display text here
       XdrvMailbox.data = cp;
       XdrvMailbox.data_len = 0;
-      DisplayText();
+      if (!DisplayText()) {
+        XdrvMailbox.data = savptr;
+        fp.close();
+        return false;
+      }
     }
     XdrvMailbox.data = savptr;
     fp.close();
   }
+  return true;
 }
 #endif // USE_UFILESYS
 
@@ -2281,10 +2285,15 @@ void CmndDisplayBlinkrate(void) {
 #ifdef USE_UFILESYS
 void CmndDisplayBatch(void) {
   if (XdrvMailbox.data_len > 0) {
+    bool result = true;
     if (!Settings->display_mode) {
-      Display_Text_From_File(XdrvMailbox.data);
+      result = Display_Text_From_File(XdrvMailbox.data);
     }
-    ResponseCmndChar(XdrvMailbox.data);
+    if (result) {
+      ResponseCmndChar(XdrvMailbox.data);
+    } else {
+      ResponseCmndChar_P(PSTR("Busy"));
+    }
   }
 }
 #endif
@@ -2294,7 +2303,10 @@ void CmndDisplayText(void) {
     if(Settings->display_model == 15 || Settings->display_model == 20) {
       XdspCall(FUNC_DISPLAY_SEVENSEG_TEXT);
     } else {
-      DisplayText();
+      if (!DisplayText()) {
+        ResponseCmndChar_P(PSTR("Busy"));
+        return;
+      }
     }
     ResponseCmndChar(XdrvMailbox.data);
   }
