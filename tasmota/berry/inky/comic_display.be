@@ -2,11 +2,12 @@
 #
 # Usage:
 #   load("comic_display.be")
+#   display_comic_from_config()
+#
+# The scheduled wrapper reads credentials from /metron_comic_account.json.
+# Pass nil or an empty string to choose a random series when using start().
+#
 #   start("METRON_USERNAME", "METRON_PASSWORD", "Batman")
-#
-# Pass nil or an empty string to choose a random series.
-#
-#   start("METRON_USERNAME", "METRON_PASSWORD", nil)
 #
 # For correct Inky output orientation, set the Tasmota command DisplayRotate 1
 # (90 degrees) before running this script.
@@ -40,10 +41,12 @@ var comic_download_path = "/metron_comic.download"
 var comic_backup_path = "/metron_comic.backup"
 var comic_dithered_path = "/metron_comic_dithered.jpg"
 var comic_api_response_path = "/metron_api_response.json"
+var comic_account_path = "/metron_comic_account.json"
 var comic_max_source_bytes = 1024 * 1024
 var comic_max_api_bytes = 128 * 1024
 var comic_cover_attempts = 5
 var metron_body_limit_error = -13
+var metron_async_display
 
 def metron_new_client(username, password, pin_metron, async_body_limit)
   var wc = webclient()
@@ -577,7 +580,7 @@ def metron_async_cover_complete(username, password, series_name, dither_fn, atte
   end
 end
 
-def metron_async_display(username, password, series_name, dither_fn, attempt)
+metron_async_display = def (username, password, series_name, dither_fn, attempt)
   if attempt > comic_cover_attempts
     return {"status": "no_suitable_cover"}
   end
@@ -760,6 +763,33 @@ def display_comic(username, password, series_name)
   return result
 end
 
+def display_comic_from_config()
+  var account_file = nil
+  var account = nil
+  try
+    account_file = open(comic_account_path, "r")
+    account = json.load(account_file.read())
+    account_file.close()
+    account_file = nil
+  except .. as err, msg
+    if account_file != nil
+      account_file.close()
+    end
+    raise "value_error", "Could not read Metron account configuration at " + comic_account_path
+  end
+
+  if !isinstance(account, map)
+    raise "value_error", "Metron account configuration must be a JSON object"
+  end
+  var username = account.find("username")
+  var password = account.find("password")
+  if type(username) != "string" || size(username) == 0 ||
+     type(password) != "string" || size(password) == 0
+    raise "value_error", "Metron account configuration needs non-empty username and password strings"
+  end
+  return display_comic(username, password, nil)
+end
+
 def start(username, password, series_name)
   print("Starting Metron comic display")
   var result = display_comic(username, password, series_name)
@@ -775,10 +805,10 @@ def start(username, password, series_name)
   var status = "saved"
   if refresh == "complete"
     status = "displayed"
-    print("Comic displayed. Schedule display_comic(username, password, series) with a Tasmota rule for updates.")
+    print("Comic displayed. Schedule display_comic_from_config() with a Tasmota rule for updates.")
   elif refresh == "running"
     status = "started"
-    print("Comic display refresh started. Schedule display_comic(username, password, series) with a Tasmota rule for updates.")
+    print("Comic display refresh started. Schedule display_comic_from_config() with a Tasmota rule for updates.")
   elif refresh == "failed"
     status = "refresh_failed"
     print("Comic cover was saved, but the display refresh failed.")

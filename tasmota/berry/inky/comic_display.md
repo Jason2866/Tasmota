@@ -16,29 +16,34 @@ Fetches a random issue from Metron and displays its cover on the Inky Impression
 
 Before running the script, enter `DisplayRotate 1` in the Tasmota console. This sets the 90° software rotation needed for the Metron covers to display in the correct orientation on the Inky panel.
 
-Upload [comic_display.be](./comic_display.be) and [inky_dither.be](./inky_dither.be) to the Tasmota filesystem, then run:
+Upload [comic_display.be](./comic_display.be) and [inky_dither.be](./inky_dither.be) to the Tasmota filesystem. Set a non-empty `WebPassword` so filesystem access requires authentication, then create `/metron_comic_account.json` on the device with your Metron credentials:
+
+```json
+{
+  "username": "METRON_USERNAME",
+  "password": "METRON_PASSWORD"
+}
+```
+
+Keep the account file on the device filesystem, do not commit it, and do not expose it through an unauthenticated `UFSServe` mapping. Load the scripts and display a random cover with:
 
 ```berry
 load("comic_display.be")
-start("METRON_USERNAME", "METRON_PASSWORD", "Batman")
+display_comic_from_config()
 ```
 
-Pass `nil` or an empty string to use a random comic series:
+The explicit `start(username, password, series_name)` and `display_comic(username, password, series_name)` interfaces remain available for interactive use. Pass `nil` or an empty string as `series_name` to choose a random series. The parameterless `display_comic_from_config()` wrapper reads `username` and `password` from the account file and calls `display_comic()` with a random series.
 
-```berry
-start("METRON_USERNAME", "METRON_PASSWORD", nil)
-```
+`load("comic_display.be")` defines `start()`, `display_comic()`, and `display_comic_from_config()` in the global Berry context. Use the parameterless wrapper for scheduled refreshes so credentials do not appear in rule text.
 
-`load("comic_display.be")` defines `start()` and `display_comic()` in the global Berry context. To refresh the cover later, call `display_comic(username, password, series_name)` from a Tasmota rule. Keep the Metron credentials in the rule configuration you control.
-
-To refresh the cover every 15 minutes, enter this rule in the Tasmota console, replacing the credential placeholders with your Metron account details:
+To refresh the cover every 15 minutes, enter this rule in the Tasmota console:
 
 ```text
-Rule1 ON System#Boot DO Br load("comic_display.be") ENDON ON Time#Minute|15 DO Br display_comic("METRON_USERNAME","METRON_PASSWORD",nil) ENDON
+Rule1 ON System#Boot DO Br load("comic_display.be") ENDON ON Time#Minute|15 DO Br display_comic_from_config() ENDON
 Rule1 1
 ```
 
-The rule loads the Berry script at boot and calls `display_comic()` at minutes 00, 15, 30, and 45. To load the script immediately without rebooting, run `Br load("comic_display.be")` once in the console.
+The rule loads the Berry script at boot and calls `display_comic_from_config()` at minutes 00, 15, 30, and 45. To load the script immediately without rebooting, run `Br load("comic_display.be")` once in the console, then run `Br display_comic_from_config()`.
 
 ## Processing
 
