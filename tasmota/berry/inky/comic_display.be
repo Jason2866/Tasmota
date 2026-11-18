@@ -100,10 +100,14 @@ def metron_http_status(wc, state)
   return status
 end
 
-def metron_http_poll(wc, on_complete)
+def metron_http_poll(wc, on_complete, poll_count)
   var state = wc.async_state()
   if state == 1
-    tasmota.set_timer(50, def () metron_http_poll(wc, on_complete) end)
+    # Release temporary callback objects during long cover downloads.
+    if poll_count % 10 == 0
+      gc.collect()
+    end
+    tasmota.set_timer(50, def () metron_http_poll(wc, on_complete, poll_count + 1) end)
     return
   end
   on_complete(metron_http_status(wc, state))
@@ -117,7 +121,7 @@ def metron_http_get(wc, on_complete)
   if rc != 1
     return rc
   end
-  tasmota.set_timer(50, def () metron_http_poll(wc, on_complete) end)
+  tasmota.set_timer(50, def () metron_http_poll(wc, on_complete, 1) end)
   return nil
 end
 
@@ -561,8 +565,10 @@ def metron_async_cover_complete(username, password, series_name, dither_fn, atte
     return
   end
 
+  var installed = false
   try
     install_downloaded_cover()
+    installed = true
     var result = dither_fn(comic_source_path, comic_dithered_path, 0.5, 85, nil, nil, nil, 0.75)
     tasmota.yield()
     if result == nil
@@ -585,12 +591,14 @@ def metron_async_cover_complete(username, password, series_name, dither_fn, atte
       print("Dithered Metron cover JPEG saved without a display refresh: " + str(image_path))
     end
   except .. as err, msg
-    if path.exists(comic_source_path)
-      path.remove(comic_source_path)
-    end
-    if path.exists(comic_backup_path)
-      if !path.rename(comic_backup_path, comic_source_path)
-        raise "io_error", "Could not restore the previous comic image"
+    if installed
+      if path.exists(comic_source_path)
+        path.remove(comic_source_path)
+      end
+      if path.exists(comic_backup_path)
+        if !path.rename(comic_backup_path, comic_source_path)
+          raise "io_error", "Could not restore the previous comic image"
+        end
       end
     end
     if err == "img_error"
@@ -819,6 +827,9 @@ def start(username, password, series_name)
     return {"status": "no_suitable_cover"}
   end
   if result.find("status") == "pending"
+    return result
+  end
+  if result.find("status") == "no_suitable_cover"
     return result
   end
   var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
