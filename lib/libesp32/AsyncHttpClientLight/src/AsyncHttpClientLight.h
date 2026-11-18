@@ -141,7 +141,7 @@ public:
   int sendRequest(const char * type, Stream * stream, size_t size = 0);
 
   int    getSize(void) const { return _size; }
-  String getString(void);                 
+  String getString(int* errorOut = nullptr);
   int    writeToStream(Stream * stream);
 
   void   addHeader(const String& name, const String& value, bool first=false, bool replace=true);

@@ -83,19 +83,7 @@ def metron_new_client(username, password, pin_metron, async_body_limit)
   return wc
 end
 
-def metron_http_get(wc)
-  if !metron_async_available
-    return wc.GET()
-  end
-  var rc = wc.async_get_start()
-  if rc != 1
-    return rc
-  end
-  var state = wc.async_state()
-  while state == 1
-    tasmota.yield()
-    state = wc.async_state()
-  end
+def metron_http_status(wc, state)
   var status = wc.last_code
   if status >= 200 && status < 300
     var received = wc.last_rx
@@ -107,6 +95,27 @@ def metron_http_get(wc)
     end
   end
   return status
+end
+
+def metron_http_poll(wc, on_complete)
+  var state = wc.async_state()
+  if state == 1
+    tasmota.set_timer(50, def () metron_http_poll(wc, on_complete) end)
+    return
+  end
+  on_complete(metron_http_status(wc, state))
+end
+
+def metron_http_get(wc, on_complete)
+  if !metron_async_available
+    return wc.GET()
+  end
+  var rc = wc.async_get_start()
+  if rc != 1
+    return rc
+  end
+  tasmota.set_timer(50, def () metron_http_poll(wc, on_complete) end)
+  return nil
 end
 
 def metron_should_retry(status)
@@ -141,7 +150,7 @@ def diagnose_network()
     var body_limit = targets[i] == "https://metron.cloud/" ? comic_max_api_bytes : 16384
     var wc = metron_new_client(nil, nil, targets[i] == "https://metron.cloud/", body_limit)
     wc.begin(targets[i])
-    var status = metron_http_get(wc)
+    var status = wc.GET()
     tasmota.yield()
     wc.close()
     print(names[i] + " -> " + str(status))
@@ -158,7 +167,7 @@ def metron_get_json(url, username, password)
     wc = metron_new_client(username, password, true, comic_max_api_bytes)
     wc.collect_headers("Server", "Content-Type", "Location", "Transfer-Encoding", "Connection")
     wc.begin(url)
-    status = metron_http_get(wc)
+    status = wc.GET()
     tasmota.yield()
     if status >= 200 && status < 300
       break
@@ -265,7 +274,7 @@ def metron_get_cover_url(issue_detail)
   return nil
 end
 
-def metron_download_cover(username, password, series_name, output_path)
+def metron_download_cover(username, password, series_name, output_path, on_complete)
   var seed = int(tasmota.millis()) & 0x7FFFFFFF
   var series_data = nil
   var series_url = nil
@@ -407,7 +416,16 @@ def metron_download_cover(username, password, series_name, output_path)
     attempt += 1
     image_client = metron_new_client(nil, nil, false, comic_max_source_bytes)
     image_client.begin(cover_url)
-    status = metron_http_get(image_client)
+    if on_complete != nil
+      status = metron_http_get(image_client, def (completed_status)
+        on_complete(image_client, completed_status)
+      end)
+      if status == nil
+        return "pending"
+      end
+    else
+      status = image_client.GET()
+    end
     tasmota.yield()
     if status >= 200 && status < 300
       break
@@ -473,6 +491,118 @@ def install_downloaded_cover()
   end
 end
 
+def metron_async_retry(username, password, series_name, dither_fn, attempt, reason)
+  if attempt < comic_cover_attempts
+    print(reason + "; searching for another cover")
+    gc.collect()
+    tasmota.set_timer(500, def ()
+      metron_async_display(username, password, series_name, dither_fn, attempt + 1)
+    end)
+  else
+    print("No Metron cover could be processed after " + str(comic_cover_attempts) + " attempts; keeping the current image")
+  end
+end
+
+def metron_async_cover_complete(username, password, series_name, dither_fn, attempt, image_client, status)
+  if status < 200 || status >= 300
+    image_client.close()
+    if path.exists(comic_download_path)
+      path.remove(comic_download_path)
+    end
+    metron_async_retry(username, password, series_name, dither_fn, attempt,
+                       "Metron cover request failed with HTTP " + str(status))
+    return
+  end
+
+  var response_size = image_client.last_rx
+  if response_size < 0 || response_size > comic_max_source_bytes
+    image_client.close()
+    if path.exists(comic_download_path)
+      path.remove(comic_download_path)
+    end
+    metron_async_retry(username, password, series_name, dither_fn, attempt,
+                       "Metron cover response has an invalid size: " + str(response_size))
+    return
+  end
+
+  var written = image_client.write_file(comic_download_path)
+  image_client.close()
+  if written != response_size
+    if path.exists(comic_download_path)
+      path.remove(comic_download_path)
+    end
+    metron_async_retry(username, password, series_name, dither_fn, attempt,
+                       "Metron cover was truncated or could not be saved")
+    return
+  end
+
+  try
+    install_downloaded_cover()
+    var result = dither_fn(comic_source_path, comic_dithered_path, 0.5, 85, nil, nil, nil, 0.75)
+    tasmota.yield()
+    if result == nil
+      raise "img_error", "dithering failed"
+    end
+    if path.exists(comic_backup_path)
+      path.remove(comic_backup_path)
+    end
+    var image_path = result.find("path", comic_dithered_path)
+    var refresh = result.find("refresh_status", "not_requested")
+    if refresh == "complete"
+      print("Displayed Metron cover from RGB buffer; JPEG saved: " + str(image_path))
+    elif refresh == "running"
+      print("Metron cover RGB buffer refresh started; JPEG saved: " + str(image_path))
+    elif refresh == "failed"
+      print("Metron cover JPEG saved, but RGB buffer display refresh failed: " + str(image_path))
+    elif refresh == "not_started"
+      print("Metron cover refresh was not started (display busy or unavailable); JPEG saved: " + str(image_path))
+    else
+      print("Dithered Metron cover JPEG saved without a display refresh: " + str(image_path))
+    end
+  except .. as err, msg
+    if path.exists(comic_source_path)
+      path.remove(comic_source_path)
+    end
+    if path.exists(comic_backup_path)
+      if !path.rename(comic_backup_path, comic_source_path)
+        raise "io_error", "Could not restore the previous comic image"
+      end
+    end
+    if err == "img_error"
+      metron_async_retry(username, password, series_name, dither_fn, attempt,
+                         "Could not process this Metron cover (" + str(msg) + ")")
+    else
+      print("Could not display the Metron cover: " + str(err) + " - " + str(msg))
+    end
+  end
+end
+
+def metron_async_display(username, password, series_name, dither_fn, attempt)
+  if attempt > comic_cover_attempts
+    return {"status": "no_suitable_cover"}
+  end
+  print("Fetching a random Metron comic cover (attempt " + str(attempt) + "/" + str(comic_cover_attempts) + ")...")
+  try
+    var downloaded = metron_download_cover(username, password, series_name, comic_download_path,
+      def (image_client, status)
+        metron_async_cover_complete(username, password, series_name, dither_fn,
+                                    attempt, image_client, status)
+      end)
+    if downloaded == "pending"
+      return {"status": "pending"}
+    end
+    return {"status": "pending"}
+  except .. as err, msg
+    if err == "selection_error" || err == "body_too_large" || err == "network_error" || err == "cover_unavailable"
+      metron_async_retry(username, password, series_name, dither_fn, attempt,
+                         "Metron request failed: " + str(msg))
+      return {"status": "pending"}
+    end
+    print("Could not fetch a Metron cover: " + str(err) + " - " + str(msg))
+    return {"status": "no_suitable_cover"}
+  end
+end
+
 def display_comic(username, password, series_name)
   if username == nil || password == nil || size(username) == 0 || size(password) == 0
     raise "value_error", "Pass your Metron username and password"
@@ -507,6 +637,13 @@ def display_comic(username, password, series_name)
     raise "value_error", "inky_dither function is not loaded. Upload or run load('inky_dither.be') first."
   end
 
+  # Detect async support before choosing the cover-download path on the first run.
+  var capability_client = metron_new_client(username, password, true, comic_max_api_bytes)
+  capability_client.close()
+  if metron_async_available
+    return metron_async_display(username, password, series_name, dither_fn, 1)
+  end
+
   var downloaded_bytes = 0
   var result = nil
   var cover_was_under_limit = false
@@ -517,7 +654,7 @@ def display_comic(username, password, series_name)
     print("Fetching a random Metron comic cover (attempt " + str(cover_attempt) + "/" + str(comic_cover_attempts) + ")...")
     try
       downloaded_bytes = metron_download_cover(username, password,
-                                                series_name, comic_download_path)
+                                                series_name, comic_download_path, nil)
     except .. as err, msg
       if err == "selection_error"
         print("Metron pagination changed during selection; retrying with a new selection")
@@ -628,6 +765,9 @@ def start(username, password, series_name)
   var result = display_comic(username, password, series_name)
   if result == nil
     return {"status": "no_suitable_cover"}
+  end
+  if result.find("status") == "pending"
+    return result
   end
   var image_path = result != nil ? result.find("path", comic_dithered_path) : comic_dithered_path
   var refresh = result.find("refresh_status", "not_requested")

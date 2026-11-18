@@ -844,9 +844,20 @@ extern "C" {
       be_raise(vm, "value_error", "response size too big (>32KB)");
     }
 #endif
-    String payload = cl->getString();
-    be_pushstring(vm, payload.c_str());
+    String payload;
+#ifdef USE_BERRY_WEBCLIENT_ASYNC
+    int body_error = 0;
+    payload = cl->getString(&body_error);
+    if (body_error == HTTPC_ERROR_ASYNC_BUSY) {
+      be_raise(vm, "value_error", "async request is in progress");
+    }
     cl->end();  // free allocated memory ~16KB
+    if (body_error < 0) be_raise(vm, "value_error", "response body read failed");
+#else
+    payload = cl->getString();
+    cl->end();  // free allocated memory ~16KB
+#endif
+    be_pushstring(vm, payload.c_str());
     be_return(vm);  /* return code */
   }
 
