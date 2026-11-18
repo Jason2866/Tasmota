@@ -34,11 +34,11 @@ start("METRON_USERNAME", "METRON_PASSWORD", nil)
 To refresh the cover every 15 minutes, enter this rule in the Tasmota console, replacing the credential placeholders with your Metron account details:
 
 ```text
-Rule1 ON System#Boot DO BrRun load("comic_display.be") ENDON ON Time#Minute|15 DO BrRun display_comic("METRON_USERNAME","METRON_PASSWORD",nil) ENDON
+Rule1 ON System#Boot DO Br load("comic_display.be") ENDON ON Time#Minute|15 DO Br display_comic("METRON_USERNAME","METRON_PASSWORD",nil) ENDON
 Rule1 1
 ```
 
-The rule loads the Berry script at boot and calls `display_comic()` at minutes 00, 15, 30, and 45. To load the script immediately without rebooting, run `BrRun load("comic_display.be")` once in the console.
+The rule loads the Berry script at boot and calls `display_comic()` at minutes 00, 15, 30, and 45. To load the script immediately without rebooting, run `Br load("comic_display.be")` once in the console.
 
 ## Processing
 
