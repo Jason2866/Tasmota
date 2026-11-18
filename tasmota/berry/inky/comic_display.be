@@ -22,6 +22,7 @@
 import path
 import json
 import gc
+import math
 
 var metron_api = "https://metron.cloud/api/issue/"
 var metron_series_api = "https://metron.cloud/api/series/"
@@ -42,6 +43,7 @@ var comic_api_response_path = "/metron_api_response.json"
 var comic_max_source_bytes = 1024 * 1024
 var comic_max_api_bytes = 128 * 1024
 var comic_cover_attempts = 5
+var metron_body_limit_error = -13
 
 def metron_new_client(username, password, pin_metron, async_body_limit)
   var wc = webclient()
@@ -94,10 +96,23 @@ def metron_http_get(wc)
     tasmota.yield()
     state = wc.async_state()
   end
-  return wc.last_code
+  var status = wc.last_code
+  if status >= 200 && status < 300
+    var received = wc.last_rx
+    if received == metron_body_limit_error
+      return metron_body_limit_error
+    end
+    if state != 2 || received < 0
+      return received < 0 ? received : -11
+    end
+  end
+  return status
 end
 
 def metron_should_retry(status)
+  if status == metron_body_limit_error
+    return false
+  end
   return status < 100 || status == 408 || status == 429 || status >= 500
 end
 
@@ -147,6 +162,10 @@ def metron_get_json(url, username, password)
     tasmota.yield()
     if status >= 200 && status < 300
       break
+    end
+    if status == metron_body_limit_error
+      wc.close()
+      raise "value_error", "Metron API response exceeds the configured body limit"
     end
     var server_header = wc.get_header("Server")
     var content_type = wc.get_header("Content-Type")
@@ -252,6 +271,7 @@ def metron_download_cover(username, password, series_name, output_path)
   var series_url = nil
   var random_series = series_name == nil || size(series_name) == 0
   var series_offset = 0
+  var series_page = 1
   if random_series
     var first_page = metron_get_json(metron_series_api + "?page_size=20", username, password)
     var first_page_results = first_page.find("results")
@@ -262,7 +282,7 @@ def metron_download_cover(username, password, series_name, output_path)
     var page_size = size(first_page_results)
     var page_count = int((series_count + page_size - 1) / page_size)
     var series_index = seed % series_count
-    var series_page = int(series_index / page_size) + 1
+    series_page = int(series_index / page_size) + 1
     series_offset = series_index % page_size
     print("Searching a random Metron series (page " + str(series_page) + " of " + str(page_count) + ")")
     if series_page == 1
@@ -280,7 +300,13 @@ def metron_download_cover(username, password, series_name, output_path)
     series_data = metron_get_json(series_url, username, password)
   end
   var series_results = series_data.find("results")
-  if series_results == nil || size(series_results) == 0
+  if series_results == nil
+    raise "value_error", "Metron series response has no results"
+  end
+  if size(series_results) == 0
+    if random_series && series_page > 1
+      raise "selection_error", "Metron series page changed during selection"
+    end
     if series_name == nil || size(series_name) == 0
       raise "value_error", "No Metron series found"
     end
@@ -291,7 +317,7 @@ def metron_download_cover(username, password, series_name, output_path)
   var series = nil
   if random_series
     if series_offset >= size(series_results)
-      raise "value_error", "Metron series page changed during selection"
+      raise "selection_error", "Metron series page changed during selection"
     end
     series = series_results[series_offset]
   else
@@ -317,7 +343,7 @@ def metron_download_cover(username, password, series_name, output_path)
   if issue_count == nil || issue_count < 1 || issue_page_size < 1
     raise "value_error", "No Metron issues found in series: " + str(series_title)
   end
-  var issue_index = seed % issue_count
+  var issue_index = math.rand() % issue_count
   var issue_page = int(issue_index / issue_page_size) + 1
   var issue_offset = issue_index % issue_page_size
   var issue_data = first_issue_page
@@ -325,14 +351,25 @@ def metron_download_cover(username, password, series_name, output_path)
     issue_url = metron_api + "?series_id=" + str(series_id) + "&page=" + str(issue_page) + "&page_size=" + str(issue_page_size)
     issue_data = metron_get_json(issue_url, username, password)
   end
-  var issue_results = issue_data.find("results", [])
+  var issue_results = issue_data.find("results")
+  if issue_results == nil
+    raise "value_error", "Metron issue page has no results"
+  end
+  if size(issue_results) == 0
+    if issue_page > 1
+      raise "selection_error", "Metron issue page changed during selection"
+    end
+    raise "value_error", "No Metron issues found in series: " + str(series_title)
+  end
   var issue = nil
   if issue_offset < size(issue_results)
     issue = issue_results[issue_offset]
+  else
+    raise "selection_error", "Metron issue page changed during selection"
   end
 
   if issue == nil
-    raise "value_error", "No Metron issues found in series: " + str(series_title)
+    raise "value_error", "Metron issue response is invalid"
   end
   if issue.find("id") == nil
     raise "value_error", "Metron issue result has no ID"
@@ -374,6 +411,10 @@ def metron_download_cover(username, password, series_name, output_path)
     tasmota.yield()
     if status >= 200 && status < 300
       break
+    end
+    if status == metron_body_limit_error
+      image_client.close()
+      raise "body_too_large", "Cover response exceeds the configured body limit"
     end
     image_client.close()
     image_client = nil
@@ -478,6 +519,22 @@ def display_comic(username, password, series_name)
       downloaded_bytes = metron_download_cover(username, password,
                                                 series_name, comic_download_path)
     except .. as err, msg
+      if err == "selection_error"
+        print("Metron pagination changed during selection; retrying with a new selection")
+        gc.collect()
+        if cover_attempt < comic_cover_attempts
+          continue
+        end
+        break
+      end
+      if err == "body_too_large"
+        print("Metron cover exceeds the 1024 KiB limit; searching for another cover")
+        gc.collect()
+        if cover_attempt < comic_cover_attempts
+          continue
+        end
+        break
+      end
       if err == "network_error" || err == "cover_unavailable"
         network_failed = true
         print("Metron network request failed: " + str(msg) + "; searching for another cover")

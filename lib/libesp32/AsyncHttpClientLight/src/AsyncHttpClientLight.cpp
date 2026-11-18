@@ -606,8 +606,8 @@ int AsyncHttpClientLight::writeToStream(Stream * stream) {
 #ifdef ESP32
   (void)asyncState();   // a finished async job not polled yet: use its body
 #endif
-  // FAST-PATH: async DONE → from internal buffer
-  if (_asyncState == ASYNC_DONE) {
+  // FAST-PATH: a complete async body is available regardless of HTTP status.
+  if (_asyncBodyComplete && !_asyncBodyError && !_asyncAbortReq && _asyncState != ASYNC_ABORTED) {
     const String& s = _asyncBody;
     size_t n = s.length();
     if (n == 0) return 0;
@@ -624,8 +624,8 @@ String AsyncHttpClientLight::getString(void) {
 #ifdef ESP32
   (void)asyncState();   // a finished async job not polled yet: use its body
 #endif
-  // FAST-PATH: async DONE → return from internal buffer
-  if (_asyncState == ASYNC_DONE) {
+  // FAST-PATH: a complete async body is available regardless of HTTP status.
+  if (_asyncBodyComplete && !_asyncBodyError && !_asyncAbortReq && _asyncState != ASYNC_ABORTED) {
     return String(_asyncBody);
   }
 
@@ -780,6 +780,7 @@ int AsyncHttpClientLight::runJob(Job::Fn fn, void* arg) {
   // a new sync request supersedes the last async result (getString() and
   // writeToStream() only get here when it is not ASYNC_DONE)
   _asyncState = ASYNC_IDLE;
+  _asyncBodyComplete = false;
 
   if (_busy) xSemaphoreTake(_busy, portMAX_DELAY);
 
@@ -832,6 +833,7 @@ int AsyncHttpClientLight::startJob(Job::Fn fn, void* arg, AsyncOp_t op) {
   _asyncHttpCode = HTTPC_ERROR_NOT_CONNECTED;
   _asyncRxBytes = -1;
   _asyncBodyError = false;
+  _asyncBodyComplete = false;
 
   // long live Job on heap – released in asyncState() after done
   _asyncJob = ahcl_new_obj<Job>();
@@ -1468,6 +1470,7 @@ int AsyncHttpClientLight::Job_AsyncGET(void* arg) {
   int r = self->readBodyToStreamString(self->_asyncBody, (int)self->_asyncBodyLimit);
   if (r < 0) { self->_asyncBodyError = true; self->_asyncRxBytes = r; return r; }
   self->_asyncRxBytes = r;
+  self->_asyncBodyComplete = true;
 
   if (!self->_reuse || !self->_canReuse) {
     if (self->_transport) self->_transport->stop();
@@ -1522,6 +1525,7 @@ int AsyncHttpClientLight::Job_AsyncPOST_Buf(void* arg) {
   int r = self->readBodyToStreamString(self->_asyncBody, (int)self->_asyncBodyLimit);
   if (r < 0) { self->_asyncBodyError = true; self->_asyncRxBytes = r; return r; }
   self->_asyncRxBytes = r;
+  self->_asyncBodyComplete = true;
 
   if (!self->_reuse || !self->_canReuse) {
     if (self->_transport) self->_transport->stop();
@@ -1571,6 +1575,7 @@ int AsyncHttpClientLight::Job_AsyncPOST_Str(void* arg) {
   int r = self->readBodyToStreamString(self->_asyncBody, (int)self->_asyncBodyLimit);
   if (r < 0) { self->_asyncBodyError = true; self->_asyncRxBytes = r; return r; }
   self->_asyncRxBytes = r;
+  self->_asyncBodyComplete = true;
 
   if (!self->_reuse || !self->_canReuse) {
     if (self->_transport) self->_transport->stop();
@@ -1647,7 +1652,8 @@ AsyncHttpClientLight::asyncState(int* httpCodeOut, int* bytesOut) const {
       // result set in _asyncHttpCode/_asyncRxBytes/_asyncBody
       if (aborted) self->_asyncState = ASYNC_ABORTED;
       else if (self->_asyncHttpCode < 200 || self->_asyncHttpCode >= 300) self->_asyncState = ASYNC_ERROR;
-      else self->_asyncState = (self->_asyncBodyError ? ASYNC_ERROR : ASYNC_DONE);
+      else if (self->_asyncBodyError || !self->_asyncBodyComplete) self->_asyncState = ASYNC_ERROR;
+      else self->_asyncState = ASYNC_DONE;
       // the shared header/send loops test the flag: keep it for this job only
       self->_asyncAbortReq = false;
 

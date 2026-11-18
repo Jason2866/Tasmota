@@ -458,6 +458,20 @@ struct be_img_util {
       return get_jpeg_size(buffer, (unsigned int)data_size, width, height);
   }
 
+  static bool jpeg_quarter_scale_compatible(uint8_t *input_buf, int len, int type) {
+      if (type != RGB8888) return true;
+      JPEGDEC *jpeg = new JPEGDEC();
+      if (!jpeg) return false;
+      if (jpeg->openRAM(input_buf, len, jpeg_draw_mcu) <= 0) {
+          delete jpeg;
+          return false;
+      }
+      bool compatible = jpeg->getSubSample() != 0x12;
+      jpeg->close();
+      delete jpeg;
+      return compatible;
+  }
+
 };
 
 /*********************************************************************************************\
@@ -647,9 +661,15 @@ extern "C" {
             target_height = requested_height;
           }
         }
+        size_t reusable_size = img->buf ? img->len : 0;
         scale = be_img_decode_scale(w, h, img->bpp, free_psram, largest_psram_block,
                                     target_width, target_height,
-                                    img->buf ? img->len : 0);
+                                    reusable_size);
+        if (scale == 4 && format == PIXFORMAT_RGB888 &&
+            !be_img_util::jpeg_quarter_scale_compatible(src_buf, src_buf_len, RGB8888)) {
+          scale = be_img_decode_scale(w, h, img->bpp, free_psram, largest_psram_block,
+                                      target_width, target_height, reusable_size, false);
+        }
         size_t compact_size = scale != 0 ? be_img_compact_decode_size(
             w, h, target_width, target_height, free_psram, largest_psram_block) : 0;
         if (compact_size) {

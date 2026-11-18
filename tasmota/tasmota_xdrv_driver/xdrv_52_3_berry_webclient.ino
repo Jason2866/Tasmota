@@ -913,8 +913,7 @@ public:
     return size;
   }
   size_t write(uint8_t data) override {
-    write(&data, 1);
-    return 1;
+    return write(&data, 1);
   }
 
   int available() override { return 0; }
@@ -993,7 +992,7 @@ public:
     be_pop(vm, 1);  /* bytes() instance is at top */
 
     // if it won't fit, make the bytes object bigger
-    if (offset + size > signed_size){
+    if (signed_size < 0 || offset > (size_t)signed_size || size > (size_t)signed_size - offset){
       int newsize = offset + size + incr;
       AddLog(LOG_LEVEL_INFO, "BE: realloc bytes in StreamBeBytesWriter newsize=%i", newsize);
       be_getmember(vm, -1, "resize");
@@ -1006,14 +1005,10 @@ public:
       be_getmember(vm, -1, ".size");
       signed_size = be_toint(vm, -1);
       be_pop(vm, 1);  /* bytes() instance is at top */
-      if (offset + size > signed_size){
-        // what should we raise here???
-        be_raise(vm, "alloc_error", "did not get enough extra bytes");
-      }
     }
 
     // AddLog(LOG_LEVEL_INFO, "FLASH: addr=%p  hex=%*_H  size=%i", addr_start + offset, 32, buffer, size);
-    if (offset + size > signed_size){
+    if (signed_size < 0 || offset > (size_t)signed_size || size > (size_t)signed_size - offset){
       AddLog(LOG_LEVEL_ERROR, "BERRYWC: buffer overrun");
       return 0;
     }

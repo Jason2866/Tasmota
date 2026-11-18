@@ -7,7 +7,8 @@
 static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t bpp,
                                       size_t free_psram, size_t largest_block,
                                       uint16_t target_width, uint16_t target_height,
-                                      size_t reusable_size = 0) {
+                                      size_t reusable_size = 0,
+                                      bool quarter_scale_compatible = true) {
   const uint32_t divisors[] = {1, 2, 4, 8};
   for (size_t index = 0; index < sizeof(divisors) / sizeof(divisors[0]); ++index) {
     uint32_t divisor = divisors[index];
@@ -25,8 +26,10 @@ static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t b
     // still fit in free PSRAM independently of that buffer.
     uint64_t decode_size = (uint64_t)scaled_width * scaled_height * bpp;
     uint64_t additional_decode = decode_size > reusable_size ? decode_size - reusable_size : 0;
-    bool output_fits = !output_reserve || free_psram > reserve;
-    bool decode_fits = decode_size <= reusable_size || decode_size <= largest_block;
+    bool output_fits = !output_reserve ||
+        (free_psram > reserve && largest_block >= additional_decode + output_reserve);
+    bool decode_fits = (divisor != 4 || quarter_scale_compatible) &&
+        (decode_size <= reusable_size || decode_size <= largest_block);
     if (output_fits && decode_fits && additional_decode <= max_allowed) {
       return divisor == 1 ? 0 : (int)divisor;
     }
