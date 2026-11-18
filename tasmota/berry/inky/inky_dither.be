@@ -97,6 +97,7 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
   end
   gc.collect()
   var image = img()
+  try
   image.from_jpg(jpeg_data, rgb_format, 0, width, height)
   jpeg_data = nil
   gc.collect()
@@ -165,6 +166,7 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
     path.remove(backup_path)
   end
 
+  image.deinit()
   image = nil
   gc.collect()
 
@@ -178,6 +180,14 @@ def inky_dither(input_path, output_path, saturation, jpeg_quality, width, height
           "bytes": encoded_size, "path": output_path,
           "displayed": refresh_status == "complete",
           "refresh_status": refresh_status}
+  except .. as err, msg
+    if image != nil
+      image.deinit()
+      image = nil
+    end
+    gc.collect()
+    raise err, msg
+  end
 end
 
 return inky_dither

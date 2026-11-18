@@ -86,6 +86,13 @@ def metron_new_client(username, password, pin_metron, async_body_limit)
   return wc
 end
 
+def metron_close_client(wc)
+  if wc != nil
+    wc.close()
+    wc.deinit()
+  end
+end
+
 def metron_http_status(wc, state)
   var status = wc.last_code
   if status >= 200 && status < 300
@@ -159,7 +166,7 @@ def diagnose_network()
     wc.begin(targets[i])
     var status = wc.GET()
     tasmota.yield()
-    wc.close()
+    metron_close_client(wc)
     print(names[i] + " -> " + str(status))
     i += 1
   end
@@ -180,13 +187,13 @@ def metron_get_json(url, username, password)
       break
     end
     if status == metron_body_limit_error
-      wc.close()
+      metron_close_client(wc)
       raise "value_error", "Metron API response exceeds the configured body limit"
     end
     var server_header = wc.get_header("Server")
     var content_type = wc.get_header("Content-Type")
     var location_header = wc.get_header("Location")
-    wc.close()
+    metron_close_client(wc)
     wc = nil
     var status_message = metron_status_message(status, server_header, content_type, location_header)
     if !metron_should_retry(status)
@@ -205,11 +212,11 @@ def metron_get_json(url, username, password)
   # chunked responses. Reject these before reading because the legacy webclient
   # has no bounded-response API.
   if response_size < 0
-    wc.close()
+    metron_close_client(wc)
     raise "network_error", "Metron API response has no Content-Length; refusing an unbounded download"
   end
   if response_size > comic_max_api_bytes
-    wc.close()
+    metron_close_client(wc)
     raise "value_error", "Metron API response exceeds 128 KB; check the API filters"
   end
   var response = nil
@@ -219,7 +226,7 @@ def metron_get_json(url, username, password)
     var saved = wc.write_file(comic_api_response_path)
     tasmota.yield()
     if saved <= 0
-      wc.close()
+      metron_close_client(wc)
       if path.exists(comic_api_response_path)
         path.remove(comic_api_response_path)
       end
@@ -237,7 +244,7 @@ def metron_get_json(url, username, password)
   var connection_header = wc.get_header("Connection")
   var server_header = wc.get_header("Server")
   var content_type = wc.get_header("Content-Type")
-  wc.close()
+  metron_close_client(wc)
   if response == nil || size(response) == 0
     raise "network_error", "Metron API returned an empty response (HTTP " + str(status) +
           ", size=" + str(response_size) + ", transfer-encoding=" + transfer_encoding +
@@ -460,10 +467,10 @@ def metron_download_cover(username, password, series_name, output_path, on_compl
       break
     end
     if status == metron_body_limit_error
-      image_client.close()
+      metron_close_client(image_client)
       raise "body_too_large", "Cover response exceeds the configured body limit"
     end
-    image_client.close()
+    metron_close_client(image_client)
     image_client = nil
     if !metron_should_retry(status)
       raise "cover_unavailable", "Cover download returned HTTP " + str(status)
@@ -477,16 +484,16 @@ def metron_download_cover(username, password, series_name, output_path, on_compl
   var response_size = image_client.get_size()
   # write_file() cannot cap an unknown-length response while streaming it.
   if response_size < 0
-    image_client.close()
+    metron_close_client(image_client)
     raise "network_error", "Cover response has no Content-Length; refusing an unbounded download"
   end
   if response_size > comic_max_source_bytes
-    image_client.close()
+    metron_close_client(image_client)
     return response_size
   end
   var written = image_client.write_file(output_path)
   tasmota.yield()
-  image_client.close()
+  metron_close_client(image_client)
   if written != response_size
     if path.exists(output_path)
       path.remove(output_path)
@@ -534,7 +541,7 @@ end
 
 def metron_async_cover_complete(username, password, series_name, dither_fn, attempt, image_client, status)
   if status < 200 || status >= 300
-    image_client.close()
+    metron_close_client(image_client)
     if path.exists(comic_download_path)
       path.remove(comic_download_path)
     end
@@ -545,7 +552,7 @@ def metron_async_cover_complete(username, password, series_name, dither_fn, atte
 
   var response_size = image_client.last_rx
   if response_size < 0 || response_size > comic_max_source_bytes
-    image_client.close()
+    metron_close_client(image_client)
     if path.exists(comic_download_path)
       path.remove(comic_download_path)
     end
@@ -555,7 +562,7 @@ def metron_async_cover_complete(username, password, series_name, dither_fn, atte
   end
 
   var written = image_client.write_file(comic_download_path)
-  image_client.close()
+  metron_close_client(image_client)
   if written != response_size
     if path.exists(comic_download_path)
       path.remove(comic_download_path)
@@ -672,7 +679,7 @@ def display_comic(username, password, series_name)
 
   # Detect async support before choosing the cover-download path on the first run.
   var capability_client = metron_new_client(username, password, true, comic_max_api_bytes)
-  capability_client.close()
+  metron_close_client(capability_client)
   if metron_async_available
     return metron_async_display(username, password, series_name, dither_fn, 1)
   end
