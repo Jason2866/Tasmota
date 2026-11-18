@@ -332,6 +332,14 @@ void AsyncHttpClientLight::end() {
   _transport.reset();
   _headers = ""; _base64Authorization = ""; _size = -1; _returnCode = 0; _location = "";
   _bodyPending = false; // BODY_PENDING reset
+  _asyncBody = StreamString();
+  _asyncOp = AOP_NONE;
+  _asyncState = ASYNC_IDLE;
+  _asyncAbortReq = false;
+  _asyncHttpCode = HTTPC_ERROR_NOT_CONNECTED;
+  _asyncRxBytes = -1;
+  _asyncBodyError = false;
+  _asyncBodyComplete = false;
 }
 
 bool AsyncHttpClientLight::connected() {

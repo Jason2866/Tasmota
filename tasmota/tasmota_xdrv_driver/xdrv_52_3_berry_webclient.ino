@@ -956,6 +956,14 @@ extern "C" {
         be_raisef(vm, "value_error", "invalid flash address, must be at %iKB boundary 0x%04X", SPI_FLASH_SEC_SIZE/1024, addr);
       }
       int32_t size = cl->getSize();
+#ifdef USE_BERRY_WEBCLIENT_ASYNC
+      int rx_bytes = -1;
+      AsyncHttpClientLight::AsyncState_t state = cl->asyncState(nullptr, &rx_bytes);
+      if (state != AsyncHttpClientLight::ASYNC_IDLE &&
+          (state != AsyncHttpClientLight::ASYNC_DONE || size <= 0 || rx_bytes != size)) {
+        be_raisef(vm, "internal_error", "async response is incomplete or body size does not match");
+      }
+#endif
       if (size <= 0 || addr+size >= 0x400000) {
         be_raisef(vm, "value_error", "invalid flash size 0x%04X", size);
       }
