@@ -71,6 +71,9 @@ static void lvbe_debug(lv_log_level_t, const char *msg) {
  ************************************************************/
 static bool lvgl_inky_refresh_pending = false;
 static bool lvgl_inky_redraw_pending = false;
+static bool lvgl_inky_request_active = false;
+static uint8_t lvgl_inky_retry_count = 0;
+static const uint8_t LVGL_INKY_MAX_RETRIES = 2;
 
 // This is the flush function required for LittlevGL screen updates.
 // It receives a bounding rect and an array of pixel data (conveniently
@@ -116,9 +119,12 @@ void lv_flush_callback(lv_display_t *disp, const lv_area_t *area, uint8_t *color
   if (!inky || (update_status == RENDERER_UPDATE_UNSUPPORTED && lv_disp_flush_is_last(disp))) {
     renderer->Updateframe();
   } else if (update_status != RENDERER_UPDATE_RUNNING && lv_disp_flush_is_last(disp)) {
+    lvgl_inky_retry_count = 0;
+    lvgl_inky_redraw_pending = false;
     lvgl_inky_refresh_pending = true;
     if (renderer->CanStartUpdateFrameAsync() && renderer->StartUpdateFrameAsync()) {
       lvgl_inky_refresh_pending = false;
+      lvgl_inky_request_active = true;
     }
   }
   uint32_t chrono_time = micros() - chrono_start;
@@ -687,13 +693,26 @@ bool Xdrv54(uint32_t function) {
         if (TasmotaGlobal.sleep > USE_LVGL_MAX_SLEEP) {
           TasmotaGlobal.sleep = USE_LVGL_MAX_SLEEP;   // sleep is max 10ms
         }
-        if (renderer && renderer->disp_bpp == 4 &&
-            renderer->GetUpdateFrameAsyncStatus() != RENDERER_UPDATE_RUNNING &&
-            lvgl_inky_redraw_pending) {
-          // Queue the redraw before LVGL can flush another frame and start a refresh.
-          lvgl_inky_redraw_pending = false;
-          lvgl_inky_refresh_pending = false;
-          lv_obj_invalidate(lv_screen_active());
+        if (renderer && renderer->disp_bpp == 4) {
+          uint8_t update_status = renderer->GetUpdateFrameAsyncStatus();
+          if (lvgl_inky_request_active && update_status != RENDERER_UPDATE_RUNNING) {
+            lvgl_inky_request_active = false;
+            if (update_status == RENDERER_UPDATE_FAILED) {
+              if (!lvgl_inky_redraw_pending && lvgl_inky_retry_count < LVGL_INKY_MAX_RETRIES) {
+                lvgl_inky_retry_count++;
+                lvgl_inky_refresh_pending = true;
+              }
+            } else if (update_status == RENDERER_UPDATE_COMPLETE) {
+              lvgl_inky_retry_count = 0;
+            }
+          }
+          if (update_status != RENDERER_UPDATE_RUNNING && lvgl_inky_redraw_pending) {
+            // Queue the redraw before LVGL can flush another frame and start a refresh.
+            lvgl_inky_redraw_pending = false;
+            lvgl_inky_refresh_pending = false;
+            lvgl_inky_retry_count = 0;
+            lv_obj_invalidate(lv_screen_active());
+          }
         }
         lv_task_handler();
         if (renderer && renderer->disp_bpp == 4 &&
@@ -701,6 +720,7 @@ bool Xdrv54(uint32_t function) {
           if (lvgl_inky_refresh_pending && renderer->CanStartUpdateFrameAsync() &&
               renderer->StartUpdateFrameAsync()) {
             lvgl_inky_refresh_pending = false;
+            lvgl_inky_request_active = true;
           }
         }
       }
