@@ -246,6 +246,8 @@ def metron_get_json(url, username, password)
   end
 
   var data = json.load(response)
+  response = nil
+  gc.collect()
   if data == nil
     raise "value_error", "Could not parse Metron API response"
   end
@@ -284,9 +286,11 @@ def metron_download_cover(username, password, series_name, output_path, on_compl
   var random_series = series_name == nil || size(series_name) == 0
   var series_offset = 0
   var series_page = 1
+  var first_page = nil
+  var first_page_results = nil
   if random_series
-    var first_page = metron_get_json(metron_series_api + "?page_size=20", username, password)
-    var first_page_results = first_page.find("results")
+    first_page = metron_get_json(metron_series_api + "?page_size=20", username, password)
+    first_page_results = first_page.find("results")
     var series_count = first_page.find("count", 0)
     if first_page_results == nil || size(first_page_results) == 0 || series_count == nil || series_count < 1
       raise "value_error", "No Metron series found"
@@ -344,6 +348,12 @@ def metron_download_cover(username, password, series_name, output_path, on_compl
     series_title = series.find("name", str(series_id))
   end
   print("Searching issues in " + str(series_title) + " (series " + str(series_id) + ")")
+  series = nil
+  series_results = nil
+  series_data = nil
+  first_page = nil
+  first_page_results = nil
+  gc.collect()
 
   # The issue-list filter takes 'series_id', not 'series'. Use pagination because
   # issue_count is a count, not a range of valid issue numbers.
@@ -397,16 +407,28 @@ def metron_download_cover(username, password, series_name, output_path, on_compl
 
   # Check if issue summary already contains the cover URL (avoids extra 21KB API call)
   var cover_url = metron_get_cover_url(issue)
+  var issue_id = issue.find("id")
+  var issue_detail_data = nil
+  var issue_detail = nil
   if cover_url == nil
-    var issue_detail_url = metron_api + str(issue.find("id")) + "/"
-    var issue_detail_data = metron_get_json(issue_detail_url, username, password)
-    var issue_detail = issue_detail_data.find("results", issue_detail_data)
+    var issue_detail_url = metron_api + str(issue_id) + "/"
+    issue_detail_data = metron_get_json(issue_detail_url, username, password)
+    issue_detail = issue_detail_data.find("results", issue_detail_data)
     cover_url = metron_get_cover_url(issue_detail)
   end
 
   if cover_url == nil
     raise "cover_unavailable", "Metron issue has no cover image URL"
   end
+  first_issue_page = nil
+  first_issue_results = nil
+  issue_data = nil
+  issue_results = nil
+  issue = nil
+  issue_name = nil
+  issue_detail = nil
+  issue_detail_data = nil
+  gc.collect()
 
   # Cover images are normally hosted separately and do not need API credentials.
   if path.exists(output_path)
