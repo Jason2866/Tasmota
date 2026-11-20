@@ -1129,6 +1129,9 @@ int AsyncHttpClientLight::Job_WriteToStream(void* arg) {
   if (!a || !a->self || !a->self->_lastStream) return HTTPC_ERROR_NO_STREAM;
   if (a->self->_returnCode == 204 || a->self->_returnCode == 304) {
     a->self->_bodyPending = false;
+    if (!a->self->_reuse || !a->self->_canReuse) {
+      a->self->_transport->stop();
+    }
     return 0;
   }
 
@@ -1246,6 +1249,9 @@ int AsyncHttpClientLight::Job_GetString(void* arg) {
   if (a->self->_returnCode == 204 || a->self->_returnCode == 304) {
     a->self->_bodyPending = false;
     a->self->_lastString = String();
+    if (!a->self->_reuse || !a->self->_canReuse) {
+      a->self->_transport->stop();
+    }
     return 0;
   }
 
