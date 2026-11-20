@@ -14,7 +14,7 @@
  *
  * Async extensions
  * - asyncGETStart(), asyncPOSTStart(): launch a request in the background (FreeRTOS worker), non-blocking for the caller
- * - asyncState(): query status; after a complete body read you can use getString()/writeToStream() without further I/O, even for non-2xx HTTP status
+ * - asyncState(): query status; after a complete body read you can use getString()/writeToStream() without further I/O
  * - asyncAbort(): best-effort cancellation of an in-flight async request
  * Note: in async mode the response body is stored in a bounded RAM buffer (16 KB by default, configurable per client).
  *

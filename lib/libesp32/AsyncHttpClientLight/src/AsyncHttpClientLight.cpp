@@ -530,8 +530,8 @@ int AsyncHttpClientLight::handleHeaderResponse() {
     if (!readLine(line)) return HTTPC_ERROR_READ_TIMEOUT;
 
     if (line.length() == 0) {
-      // These responses have no message body, regardless of a representation
-      // length advertised by a 304 response.
+      // 204 and 304 responses have no message body. For 304, Content-Length
+      // may describe the selected representation rather than a response body.
       if (_returnCode == 204 || _returnCode == 304) {
         _size = 0;
         _transferEncoding = HTTPC_TE_IDENTITY;
@@ -1245,7 +1245,7 @@ int AsyncHttpClientLight::Job_WriteToStream(void* arg) {
   a->self->_bodyPending = false;
 
   if (!a->self->_reuse || !a->self->_canReuse) {
-    a->self->_transport->stop();
+    if (a->self->_transport) a->self->_transport->stop();
   }
   return ret;
 }
@@ -1368,7 +1368,7 @@ int AsyncHttpClientLight::Job_GetString(void* arg) {
   a->self->_bodyPending = false;
 
   if (!a->self->_reuse || !a->self->_canReuse) {
-    a->self->_transport->stop();
+    if (a->self->_transport) a->self->_transport->stop();
   }
 
   a->self->_lastString = (String)s;
