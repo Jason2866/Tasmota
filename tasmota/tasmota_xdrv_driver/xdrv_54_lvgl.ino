@@ -122,7 +122,7 @@ void lv_flush_callback(lv_display_t *disp, const lv_area_t *area, uint8_t *color
     lvgl_inky_retry_count = 0;
     lvgl_inky_redraw_pending = false;
     lvgl_inky_refresh_pending = true;
-    if (renderer->CanStartUpdateFrameAsync() && renderer->StartUpdateFrameAsync()) {
+    if (renderer->StartUpdateFrameAsync()) {
       lvgl_inky_refresh_pending = false;
       lvgl_inky_request_active = true;
     }
@@ -715,13 +715,10 @@ bool Xdrv54(uint32_t function) {
           }
         }
         lv_task_handler();
-        if (renderer && renderer->disp_bpp == 4 &&
-            renderer->GetUpdateFrameAsyncStatus() != RENDERER_UPDATE_RUNNING) {
-          if (lvgl_inky_refresh_pending && renderer->CanStartUpdateFrameAsync() &&
-              renderer->StartUpdateFrameAsync()) {
-            lvgl_inky_refresh_pending = false;
-            lvgl_inky_request_active = true;
-          }
+        if (renderer && renderer->disp_bpp == 4 && lvgl_inky_refresh_pending &&
+            renderer->StartUpdateFrameAsync()) {
+          lvgl_inky_refresh_pending = false;
+          lvgl_inky_request_active = true;
         }
       }
       break;

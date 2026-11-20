@@ -501,7 +501,6 @@ bool EPDPanel::hasInkyCommandSequences() {
 }
 
 void EPDPanel::sendInkySequence(uint16_t offset, uint16_t count) {
-    if (!cfg.send_cmds_callback || !count) return;
     cfg.send_cmds_callback(offset, count);
 }
 
@@ -509,8 +508,6 @@ bool EPDPanel::startAsyncUpdate() {
     if (!canStartAsyncUpdate()) return false;
     inky_async_status = UNIVERSAL_UPDATE_RUNNING;
     inky_refresh_step = InkyRefreshStep::ResetStart;
-    inky_step_started = millis();
-    inky_deadline = inky_step_started;
     inky_idle_settle = false;
     inky_refresh_failed = false;
     inky_update_pending = false;
