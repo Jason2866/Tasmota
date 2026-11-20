@@ -583,10 +583,8 @@ bool EPDPanel::serviceInkyIdleWait(InkyRefreshStep next_step, uint32_t timeout_m
 void EPDPanel::serviceAsyncUpdate() {
     if (inky_async_status != UNIVERSAL_UPDATE_RUNNING) {
         if (inky_update_pending) {
-            if (canStartAsyncUpdate()) {
-                inky_update_pending = false;
-                startAsyncUpdate();
-            } else if ((int32_t)(millis() - inky_pending_deadline) >= 0) {
+            if (!startAsyncUpdate() &&
+                (int32_t)(millis() - inky_pending_deadline) >= 0) {
                 inky_update_pending = false;
                 failInkyAsync("panel did not become ready before queued update");
             }
