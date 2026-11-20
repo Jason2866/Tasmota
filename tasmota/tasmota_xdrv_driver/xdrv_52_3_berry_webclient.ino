@@ -833,7 +833,13 @@ extern "C" {
 #else
     HTTPClientLight * cl = wc_getclient(vm);
 #endif
+#ifdef USE_BERRY_WEBCLIENT_ASYNC
     int32_t sz = cl->getSize();
+#else
+    const int responseCode = cl->getResponseCode();
+    const bool bodyless = responseCode == 204 || responseCode == 304;
+    int32_t sz = bodyless ? 0 : cl->getSize();
+#endif
 #ifdef USE_BERRY_WEBCLIENT_ASYNC
     if (sz > 1048576) {
       be_raise(vm, "value_error", "response size too big (>1MB)");
@@ -854,7 +860,9 @@ extern "C" {
     cl->end();  // free allocated memory ~16KB
     if (body_error < 0) be_raise(vm, "value_error", "response body read failed");
 #else
-    payload = cl->getString();
+    if (!bodyless) {
+      payload = cl->getString();
+    }
     cl->end();  // free allocated memory ~16KB
 #endif
     be_pushstring(vm, payload.c_str());
@@ -1072,7 +1080,13 @@ extern "C" {
 #else
     HTTPClientLight * cl = wc_getclient(vm);
 #endif
+#ifdef USE_BERRY_WEBCLIENT_ASYNC
     int32_t sz = cl->getSize();
+#else
+    const int responseCode = cl->getResponseCode();
+    const bool bodyless = responseCode == 204 || responseCode == 304;
+    int32_t sz = bodyless ? 0 : cl->getSize();
+#endif
     // default to 1K starter if contetn-length not present
     if (sz < 0) sz = 1024;
 #ifdef USE_BERRY_WEBCLIENT_ASYNC
@@ -1100,7 +1114,7 @@ extern "C" {
 #else
     uint8_t * buf = (uint8_t*) be_pushbytes(vm, nullptr, sz);
     StreamBeBytesWriter memory_writer(vm);
-    int32_t written = cl->writeToStream(&memory_writer);
+    int32_t written = bodyless ? 0 : cl->writeToStream(&memory_writer);
     cl->end();  // free allocated memory ~16KB
     if (written < 0) be_raise(vm, "value_error", "response body read failed");
     be_pushint(vm, written);

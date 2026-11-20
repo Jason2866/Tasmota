@@ -182,5 +182,10 @@ void uDisplay::WaitForDMATransfer() {
         static_cast<I80Panel*>(universal_panel)->dmaWait();
     }
 #endif
+#if SOC_MIPI_DSI_SUPPORTED
+    if (universal_panel && interface == _UDSP_DSI) {
+        static_cast<DSIPanel*>(universal_panel)->waitForTransfer();
+    }
+#endif
 #endif
 }

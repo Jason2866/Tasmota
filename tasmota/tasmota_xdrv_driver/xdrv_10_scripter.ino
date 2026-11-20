@@ -2818,8 +2818,9 @@ int32_t fetch_jpg(uint32_t sel, char *url, uint32_t xp, uint32_t yp, uint32_t sc
             if (buff) {
               glob_script_mem.jpg_task.stream.readBytes(buff, size);
             }
-            if (glob_script_mem.jpg_task.draw) {
-              Draw_jpeg(buff, size, glob_script_mem.jpg_task.xp, glob_script_mem.jpg_task.yp, glob_script_mem.jpg_task.scale);
+            if (glob_script_mem.jpg_task.draw &&
+                !Draw_jpeg(buff, size, glob_script_mem.jpg_task.xp, glob_script_mem.jpg_task.yp, glob_script_mem.jpg_task.scale)) {
+              AddLog(LOG_LEVEL_INFO, PSTR("SCR: JPG draw failed"));
             }
             if (buff) {
               free(buff);

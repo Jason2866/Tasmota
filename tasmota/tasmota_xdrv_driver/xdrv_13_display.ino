@@ -2559,6 +2559,7 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
     if (rgb) {
       //uint16_t rgb[xsize];
       for (uint16_t j = 0; j < ysize; j++) {
+        renderer->WaitForDMATransfer();
         if (fp.read((uint8_t*)rgb, xsize * 2) != xsize * 2) {
           drawn = false;
           break;
@@ -2567,6 +2568,7 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
         renderer->pushColors(rgb, xsize, true);
         OsWatchLoop();
       }
+      renderer->WaitForDMATransfer();
       free(rgb);
     }
     renderer->setAddrWindow(0, 0, 0, 0);

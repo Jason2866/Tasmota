@@ -19,6 +19,7 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_mipi_dsi.h"
 #include "esp_ldo_regulator.h"
+#include "esp_attr.h"
 
 struct DSIPanelConfig {
     // Basic display info
@@ -75,6 +76,7 @@ public:
     bool invertDisplay(bool invert) override;
     bool setRotation(uint8_t rotation) override;
     bool updateFrame() override;
+    void waitForTransfer();
     
     // Get direct framebuffer access (for DPI mode)
     uint16_t* framebuffer = nullptr;
@@ -97,6 +99,10 @@ private:
     int16_t window_y1 = 0;
     size_t framebuffer_size = 0;
     uint32_t framebuffer_dirty = false;
+    volatile uint32_t transfer_completed = 0;
+    uint32_t transfer_submitted = 0;
+    bool transfer_callback_registered = false;
+    static bool IRAM_ATTR colorTransDoneCallback(esp_lcd_panel_handle_t panel, esp_lcd_dpi_panel_event_data_t *edata, void *user_ctx);
 };
 
 #endif // SOC_MIPI_DSI_SUPPORTED
