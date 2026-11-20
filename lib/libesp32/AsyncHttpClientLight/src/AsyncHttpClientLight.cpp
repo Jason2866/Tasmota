@@ -14,7 +14,7 @@
  *
  * Async extensions
  * - asyncGETStart(), asyncPOSTStart(): launch a request in the background (FreeRTOS worker), non-blocking for the caller
- * - asyncState(): query status; after ASYNC_DONE you can use getString()/getSize()/writeToStream() without further I/O
+ * - asyncState(): query status; after a complete body read you can use getString()/writeToStream() without further I/O
  * - asyncAbort(): best-effort cancellation of an in-flight async request
  * Note: in async mode the response body is stored in a bounded RAM buffer (16 KB by default, configurable per client).
  *
@@ -642,6 +642,7 @@ int AsyncHttpClientLight::writeToStream(Stream * stream) {
     return _asyncHttpCode < 0 ? _asyncHttpCode : HTTPC_ERROR_CONNECTION_LOST;
   }
 #endif
+  if (!_transport) return HTTPC_ERROR_NOT_CONNECTED;
 
   _lastStream = stream;
   IntOpArg a{ this };
@@ -677,6 +678,10 @@ String AsyncHttpClientLight::getString(int* errorOut) {
     return String();
   }
 #endif
+  if (!_transport) {
+    if (errorOut) *errorOut = HTTPC_ERROR_NOT_CONNECTED;
+    return String();
+  }
 
   _lastString = String();
   IntOpArg a{ this };
@@ -1726,9 +1731,8 @@ AsyncHttpClientLight::asyncState(int* httpCodeOut, int* bytesOut) const {
 
       // result set in _asyncHttpCode/_asyncRxBytes/_asyncBody
       if (aborted) self->_asyncState = ASYNC_ABORTED;
-      else if (self->_asyncHttpCode < 200 || self->_asyncHttpCode >= 300) self->_asyncState = ASYNC_ERROR;
       else if (self->_asyncBodyError || !self->_asyncBodyComplete) self->_asyncState = ASYNC_ERROR;
-      else self->_asyncState = ASYNC_DONE;
+      else self->_asyncState = (self->_asyncHttpCode >= 0 ? ASYNC_DONE : ASYNC_ERROR);
       // the shared header/send loops test the flag: keep it for this job only
       self->_asyncAbortReq = false;
 
@@ -1737,7 +1741,8 @@ AsyncHttpClientLight::asyncState(int* httpCodeOut, int* bytesOut) const {
     }
   }
 
-  if (httpCodeOut) *httpCodeOut = self->_asyncHttpCode;
+  // Preserve the HTTP status unless the body read itself failed.
+  if (httpCodeOut) *httpCodeOut = self->_asyncBodyError ? self->_asyncRxBytes : self->_asyncHttpCode;
   if (bytesOut)    *bytesOut    = self->_asyncRxBytes;
   return self->_asyncState;
 #else
