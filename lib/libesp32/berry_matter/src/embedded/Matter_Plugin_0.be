@@ -115,7 +115,7 @@ class Matter_Plugin
     0x0102: 1 + 4,                          # Window Covering: Lift (bit 0) + PA_LF (bit 2)
     0x0104: 0x01,                           # Closure Control: Positioning (bit 0)
     0x0201: 0x23,                           # Thermostat: HEAT + COOL + AUTO
-    0x0202: 2,                              # Fan Control: Auto (bit 1)
+    # 0x0202: Fan Control: no optional features (Auto is not supported), default `0`
   }
   # `CLUSTER_REVISIONS` contains revision numbers for each cluster, or `1` if not present
   static var CLUSTER_REVISIONS = {
@@ -129,7 +129,7 @@ class Matter_Plugin
     # full 1.6.1 cluster table; the compact spec includes AUX/AuxiliaryACL but
     # does not include cluster revision metadata.
     0x001F: 2,
-    0x0028: 4,                              # Basic Information - Matter 1.6.1
+    0x0028: 6,                              # Basic Information - Matter 1.6.1 (extended CapabilityMinima, ConfigurationVersion)
     # 0x002A: 1,                            # OTA Software Update Requestor - Initial Release
     # 0x002B: 1,                            # Localization Configuration - Initial Release
     # 0x002C: 1,                            # Time Format Localization - Initial Release
@@ -140,14 +140,15 @@ class Matter_Plugin
     # 0x0033: 1,                            # General Diagnostics - Initial Release
     # 0x0034: 1,                            # Software Diagnostics - Initial Release
     0x0038: 2,                              # Time Synchronization
+    0x0039: 6,                              # Bridged Device Basic Information - Matter 1.6.1 (UniqueID mandatory since v4)
     # 0x003B: 1,                            # Switch - Initial Release
     # 0x003C: 1,                            # Administrator Commissioning - Initial Release
     # 0x003E: 1,                            # Node Operational Credentials - Initial Release
-    0x003F: 4,                              # Group Key Management - Matter 1.6.1 (removed GroupKeyMulticastPolicy field in v4)
+    0x003F: 4,                              # Group Key Management - Matter 1.6.1 ("C" quality on GroupKeyMap in v4)
     # 0x0040: 1,                            # Fixed Label - Initial Release
     # 0x0041: 1,                            # User Label - Initial Release
     # 0x0042: 1,                            # Boolean State - Initial Release
-    0x0045: 1,                              # Boolean State - Initial Release
+    0x0045: 3,                              # Boolean State - Matter 1.6.1 (ChangeEvent feature)
     0x0046: 3,                              # ICD Management Cluster revision 3 (Matter 1.4.1)
     # 0x005B: 1,                            # Air Quality - Initial Release
     # 0x005C: 1,                            # Smoke CO Alarm - Initial Release

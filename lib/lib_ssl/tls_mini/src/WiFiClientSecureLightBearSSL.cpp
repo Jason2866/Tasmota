@@ -890,9 +890,17 @@ extern "C" {
   static const uint16_t suites[] = {
     BR_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
     BR_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+#ifdef USE_MQTT_TLS_SHA384
+    // AES-256 for servers that refuse AES-128; listed last so AES-128 stays our first choice
+    BR_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+    BR_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+#endif // USE_MQTT_TLS_SHA384
   };
   static const uint16_t suites_RSA_ONLY[] = {
     BR_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+#ifdef USE_MQTT_TLS_SHA384
+    BR_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+#endif // USE_MQTT_TLS_SHA384
   };
 
   // Default initializion for our SSL clients
@@ -917,11 +925,16 @@ extern "C" {
     // install hashes
     br_ssl_engine_set_hash(&cc->eng, br_sha256_ID, &br_sha256_vtable);
     br_ssl_engine_set_prf_sha256(&cc->eng, &br_tls12_sha256_prf);
+#ifdef USE_MQTT_TLS_SHA384
+    // handshake hash and PRF for the *_SHA384 suites above
+    br_ssl_engine_set_hash(&cc->eng, br_sha384_ID, &br_sha384_vtable);
+    br_ssl_engine_set_prf_sha384(&cc->eng, &br_tls12_sha384_prf);
+#endif // USE_MQTT_TLS_SHA384
 
     // AES CTR/GCM small version, not contstant time (we don't really care here as there is no TPM anyways)
     br_ssl_engine_set_gcm(&cc->eng, &br_sslrec_in_gcm_vtable, &br_sslrec_out_gcm_vtable);
     br_ssl_engine_set_aes_ctr(&cc->eng, &br_aes_small_ctr_vtable);
-    br_ssl_engine_set_ghash(&cc->eng, &br_ghash_ctmul32);
+    br_ssl_engine_set_ghash(&cc->eng, &br_ghash_tasmota);
 
     // Use all supported EC curves (P-256, P-384, P-521, Curve25519) for ECDHE key exchange.
     // Some servers (e.g. with ECDSA P-384 certificates) refuse P-256 for key exchange
@@ -987,6 +1000,11 @@ bool WiFiClientSecure_light::_connectSSL(const char* hostName) {
 #if defined(ESP32) || (defined(ESP8266) && defined(USE_MQTT_TLS_ECDSA))
       if (!_rsa_only) {
         br_x509_minimal_set_ecdsa(x509_minimal, &br_ec_all_m15, &br_ecdsa_i15_vrfy_asn1);
+        // ECDSA P-384 CAs (e.g. LetsEncrypt YE1/E5..E9 and ISRG Root X2) sign with ecdsa-with-SHA384.
+        // Without SHA384 certificate validation fails with BR_ERR_X509_UNSUPPORTED (49)
+#ifdef USE_MQTT_TLS_SHA384
+        br_x509_minimal_set_hash(x509_minimal, br_sha384_ID, &br_sha384_vtable);
+#endif // USE_MQTT_TLS_SHA384
       }
 #endif
       br_ssl_engine_set_x509(_eng, &x509_minimal->vtable);

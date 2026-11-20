@@ -769,7 +769,7 @@ void WifiManagerBegin(bool reset_only) {
 
 void PollDnsWebserver(void) {
   if (DnsServer) { DnsServer->processNextRequest(); }
-  if (Webserver) { Webserver->handleClient(); }
+  if (Webserver && Web.state) { Webserver->handleClient(); }   // handleClient() costs a delay(1)
 }
 
 /*********************************************************************************************/
@@ -2590,10 +2590,26 @@ void HandleWifiConfiguration(void) {
       UdpDisconnect();
 #endif  // USE_EMULATION
       int n = WiFi.scanNetworks(true);
-      while(n<0){
+#ifdef ESP32
+      // The driver refuses to start a scan while the station is connecting (esp_wifi_scan_start fails at
+      // once) and, with a SSID that does not exist, the core reconnects forever, so the scan never starts.
+      // Stop the reconnection and try again; Tasmota reconnects on its own schedule once the page is served.
+      if ((WIFI_SCAN_FAILED == n) && (WL_CONNECTED != WiFi.status())) {
+        WiFi.disconnect();
+        for (uint32_t retry = 0; (WIFI_SCAN_FAILED == n) && (retry < 3); retry++) {
+          delay(200);
+          n = WiFi.scanNetworks(true);
+        }
+      }
+#endif  // ESP32
+      // Wait only while the scan runs. WIFI_SCAN_FAILED (-2) is final: scanComplete() keeps returning it,
+      // so waiting for n >= 0 never ended and froze the main loop (web, MQTT, rules) until a restart.
+      uint32_t scan_started = millis();
+      while ((WIFI_SCAN_RUNNING == n) && (!TimeReached(scan_started + 10000))) {
         delay(50); // some magic number - maybe non optimal
         n = WiFi.scanComplete();
       }
+      if (n < 0) { n = 0; }  // Scan failed or took too long: show the page without the list of networks
       AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_WIFI D_SCAN_DONE));
 
       if (0 == n) {
@@ -4669,7 +4685,7 @@ void CmndWebColor(void) {
 void CmndWebSensor(void) {
   if (XdrvMailbox.index < MAX_XSNS_DRIVERS) {
     if (XdrvMailbox.payload >= 0) {
-      bitWrite(Settings->sensors[1][XdrvMailbox.index / 32], XdrvMailbox.index % 32, XdrvMailbox.payload &1);
+      XsnsSensorSet(1, XdrvMailbox.index, XdrvMailbox.payload &1);
     }
   }
   Response_P(PSTR("{\"" D_CMND_WEBSENSOR "\":"));

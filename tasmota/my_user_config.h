@@ -493,6 +493,8 @@
 // Using TLS starting with version v6.5.0.16 compilation will only work using Core 2.4.2 and 2.5.2. No longer supported: 2.3.0
 //#define USE_MQTT_TLS                             // Use TLS for MQTT connection (+34.5k code, +7.0k mem and +4.8k additional during connection handshake)
  #define USE_MQTT_TLS_ECDSA                     // (ESP8266 only, always on for ESP32) enable ECDSA in addition to RSA (+11.5k code)
+ #define USE_MQTT_TLS_SHA384                    // Validate certificates signed with SHA-384, used by most ECDSA P-384 CAs like LetsEncrypt ISRG Root X2 and E5..E9
+                                                //   (+5.5k code on ESP8266, +2.3k code on ESP32, requires USE_MQTT_TLS_ECDSA on ESP8266)
 //  #define USE_MQTT_TLS_CA_CERT                   // [DEPRECATED] Now TLS supports dual mode using SetOption132 - this flag is now ignored
 //  #define USE_MQTT_AWS_IOT_LIGHT                 // Enable MQTT for AWS IoT in light mode, with user/password instead of private certificate
 //  #define USE_MQTT_CLIENT_CERT                   // Enable MQTT with custom client certificate - requires a private key (+11.9k code, +0.4k mem)
@@ -500,6 +502,7 @@
                                                    //   Note: you need to generate a private key + certificate per device and update 'tasmota/tasmota_aws_iot.cpp'
                                                    //   Full documentation here: https://github.com/arendst/Tasmota/wiki/AWS-IoT
 //  for USE_4K_RSA (support for 4096 bits certificates, instead of 2048), you need to uncommend `-DUSE_4K_RSA` in `build_flags` from `platform.ini` or `platform_override.ini`
+//  without USE_MQTT_TLS_SHA384, certificates signed with SHA-384 fail with BR_ERR_X509_UNSUPPORTED and SHA-384 code is not linked
 
 // -- MQTT - TLS - Azure IoT & IoT Central ---------
 // Starting with version v9.4.0.3 added support for both Azure IoT Hub and IoT Central
@@ -1114,6 +1117,7 @@
   #define USE_ZIGBEE_ZNP                         // Enable ZNP protocol, needed for CC2530/CC2652 based devices
 //  #define USE_ZIGBEE_EZSP                        // Enable EZSP protocol, needed for EFR32 EmberZNet based devices, like Sonoff Zigbee bridge
                                                  // Note: USE_ZIGBEE_ZNP and USE_ZIGBEE_EZSP are mutually incompatible, you must select exactly one
+                                                 // Note: EZSP v8 (EmberZNet 6.9.x) and v13 (EmberZNet 7.4.x) are auto-detected at startup, no option needed
   // #define USE_ZIGBEE_EEPROM                      // Use the EEPROM from the Sonoff ZBBridge to save Zigbee configuration and data
   #define USE_ZIGBEE_CHANNEL  11                 // Zigbee Channel (11-26)
   #define USE_ZIGBEE_TXRADIO_DBM  20             // Tx Radio power in dBm (only for EZSP, EFR32 can go up to 20 dBm)
@@ -1323,6 +1327,7 @@
   // #define USE_BERRY_CRYPTO_EC_P256               // enable EC P256r1
   // #define USE_BERRY_CRYPTO_EC_C25519             // enable Elliptic Curve C C25519
   #define USE_BERRY_CRYPTO_SHA256                // enable SHA256 hash function
+  #define USE_BERRY_CRYPTO_SHA384                // enable SHA384 hash function (+0.4k, the SHA384 code is shared with TLS)
   #define USE_BERRY_CRYPTO_HMAC_SHA256           // enable HMAC SHA256 hash function
   // #define USE_BERRY_CRYPTO_PBKDF2_HMAC_SHA256    // PBKDF2 with HMAC SHA256, used in Matter protocol
   // #define USE_BERRY_CRYPTO_HKDF_SHA256      // HKDF with HMAC SHA256, used in Matter protocol

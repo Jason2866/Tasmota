@@ -3,10 +3,37 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [16.0.0.5]
+## [16.0.0.7]
+### Added
+
+
+### Breaking Changed
+
+
+### Changed
+
+
+### Fixed
+- Removed migration steps from v9.1.0 to v9.5.0.9 as regression from v16.0.0.3 (#25286)
+
+### Removed
+
+
+## [16.0.0.6] 20261120
+### Added
+- Add support for drivers and sensors up to 159
+- Berry `crypto.SHA384` hash class (#25311)
+
+### Changed
+- Allow larger AsyncHttpClientLight response bodies (#25291)
+
+## [16.0.0.5] 20261119
 ### Added
 - IR receive optional check every loop (`#define IR_RCV_IN_LOOP`)  and configurable save buffer (`#define IR_FULL_RCV_SAVE_BUFFER`) (#25268)
 - MQTT optional FileDownload and FileUpload transferring a file system file (`#define USE_UFILESYS_MQTT`) (#25278)
+- Matter Boolean State StateChange event for Contact, Rain and Water Leak sensors (#25286)
+- TLS support for SHA384 and Letsencrypt Root X2 CA (#25302)
+- Zigbee support EZSP V13 (#25225)
 
 ### Breaking Changed
 - Matter lights Level Control MinLevel 1 and On/Off behavior aligned with Matter 1.6.1 (#25279)
@@ -14,13 +41,18 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - ESP32 Platform from 2026.11.50 to 2026.11.51, Framework (Arduino Core) from v3.3.12-2 to v3.3.12-3 and IDF v5.5.5 (#25275)
 - JPEGDEC library from v1.8.4 to v1.8.5 (#25282)
+- Matter cluster and device type revisions aligned with Matter 1.6.1, fixed ReachableChanged for MQTT (#25292)
 
 ### Fixed
 - GPIOViewer fails to execute, regression from platform 2026.11.50 with Framework v3.3.12-2 (#25275)
 - Display palette colors on monochrome universal displays (#25260)
-
-### Removed
-
+- TashMesh and WizMote ESP-NOW support for IDF v5.5.5 (#25289)
+- Matter Fan advertising the unsupported Auto mode (#25293)
+- Matter Air Quality PM1, PM2.5 and PM10 reported in ppm instead of µg/m³, and TVOC in ppm instead of ppb (#25294)
+- Matter MRP sending unacknowledged messages 7 times instead of 5 (#25295)
+- Ethernet share SPI bus 1 with drivers already using it (#25299)
+- Configure Wi-Fi page hang when the Wi-Fi scan cannot start (#25267)
+- OpenTherm no silent cooldown after a lost connection (default 0) (#25296)
 
 ## [16.0.0.4] 20261115
 ### Added

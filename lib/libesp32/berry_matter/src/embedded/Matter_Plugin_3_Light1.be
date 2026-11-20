@@ -1,5 +1,5 @@
 #
-# Matter_Plugin_Light1.be - implements the behavior for a Light with 1 channel (Dimmer)
+# Matter_Plugin_3_Light1.be - implements the behavior for a Light with 1 channel (Dimmer)
 #
 # Copyright (C) 2023  Stephan Hadinger & Theo Arends
 #
@@ -345,6 +345,24 @@ class Matter_Plugin_Light1 : Matter_Plugin_Light0
       self.attribute_updated(0x0008, 0x0000)
       self.shadow_bri = bri_254
     end
+  end
+
+  #############################################################
+  # Set OnOff
+  #
+  # Local light after `Dimmer 0`: Tasmota brightness is 0 and `Power 1` alone keeps the light dark,
+  # while Matter still reports the last level (`shadow_bri`). Restore that level before switching on,
+  # at least Tasmota brightness 1. `light.set({'bri'})` alone does not switch the light on.
+  def set_onoff(pow)
+    if pow && !self.VIRTUAL && !self.BRIDGE
+      import light
+      var st = light.get(self.light_index)
+      if st != nil && st.find('bri', 0) == 0
+        var bri_254 = (type(self.shadow_bri) == 'int') ? self.shadow_bri : 1
+        light.set({'bri': self.bri_to_tasmota(bri_254)}, self.light_index)   # bri_to_tasmota() returns 1..255
+      end
+    end
+    super(self).set_onoff(pow)
   end
 
   #############################################################

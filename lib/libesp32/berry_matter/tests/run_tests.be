@@ -183,6 +183,13 @@ def has_device_type(value, device_type)
   return false
 end
 
+def device_type_revision(value, device_type)
+  for item : value.val
+    if item.findsubval(0) == device_type return item.findsubval(1) end
+  end
+  return nil
+end
+
 class TestMessage
   var exchange_id, session
   def init(exchange_id, session)
@@ -290,6 +297,10 @@ ctx.attribute = 0x0015
 assert(root.read_attribute(session, ctx, TLV.Matter_TLV_item()).val == 0x01060100)
 ctx.attribute = 0x0018
 assert(root.read_attribute(session, ctx, TLV.Matter_TLV_item()).val == 1)
+# ClusterRevision values follow the Matter 1.6.1 data model.
+ctx.attribute = 0xFFFD
+assert(root.read_attribute(session, ctx, TLV.Matter_TLV_item()).val == 6)   # Basic Information
+assert(root.read_attribute(session, matter.Path(0, 0x003F, 0xFFFD), TLV.Matter_TLV_item()).val == 4)  # Group Key Management
 assert(matter.StatusResponseMessage().InteractionModelRevision == 13)
 
 # Descriptor composition is coherent in both global topology modes.
@@ -305,6 +316,9 @@ assert(tlv_values(bridge_aggregator.read_attribute(session, matter.Path(1, 0x001
 assert(bridge_app_2.contains_cluster(0x0039))
 assert(has_device_type(bridge_app_2.read_attribute(session, matter.Path(2, 0x001D, 0), TLV.Matter_TLV_item()), 0x0013))
 assert(tlv_values(bridge_app_2.read_attribute(session, matter.Path(2, 0x001D, 1), TLV.Matter_TLV_item())).find(0x0039) != nil)
+assert(bridge_app_2.read_attribute(session, matter.Path(2, 0x0039, 0xFFFD), TLV.Matter_TLV_item()).val == 6)   # Bridged Device Basic Information
+assert(device_type_revision(bridge_app_2.read_attribute(session, matter.Path(2, 0x001D, 0), TLV.Matter_TLV_item()), 0x0013) == 3)  # Bridged Node
+assert(device_type_revision(bridge_aggregator.read_attribute(session, matter.Path(1, 0x001D, 0), TLV.Matter_TLV_item()), 0x000E) == 2)  # Aggregator
 
 var native_device = TestTopologyDevice(true)
 var native_root = TestRoot()
@@ -1146,6 +1160,283 @@ def test_doorbell()
   print("  Doorbell Binding fabric scoping, validation and persistence: OK")
 end
 test_doorbell()
+
+# Air Quality concentration clusters: MeasurementUnit is UGM3 (4) for PM1, PM2.5
+# and PM10, PPB (1) for TVOC, PPM (0) for CO2 and NO2. MeasurementMedium is Air (0).
+def test_air_quality_units()
+  class TestAirDevice : matter.Device
+    def init() self.plugins = [] end
+    def attribute_updated(endpoint, cluster, attribute, fabric_specific) end
+    def add_read_sensors_schedule(update_time) end
+  end
+  var dev = TestAirDevice()
+  def read(plugin, cluster, attribute)
+    return plugin.read_attribute(nil, matter.Path(plugin.endpoint, cluster, attribute), TLV.Matter_TLV_item()).val
+  end
+  var config = {"co2": "S#CarbonDioxide", "pm1": "S#PM1", "pm2_5": "S#PM2.5", "pm10": "S#PM10",
+                "tvoc": "S#TVOC", "no2": "S#NO2"}
+  var units = {0x040D: 0, 0x042C: 4, 0x042A: 4, 0x042D: 4, 0x042E: 1, 0x0413: 0}
+  # The HTTP bridge variant inherits read_attribute() unchanged and needs a network stack, not tested here
+  for cls : [matter.Plugin_Sensor_Air_Quality, matter.Plugin_Virt_Sensor_Air_Quality]
+    var p = cls(dev, 7, config)
+    for cluster : units.keys()
+      assert(p.get_clusters().contains(cluster))
+      assert(read(p, cluster, 0x0008) == units[cluster], format("cluster 0x%04X MeasurementUnit", cluster))
+      assert(read(p, cluster, 0x0009) == 0)
+    end
+  end
+  print("  Air Quality MeasurementUnit (UGM3 for PM, PPB for TVOC, PPM otherwise): OK")
+end
+test_air_quality_units()
+
+# MRP: a reliable message is sent at most MRP_MAX_TRANSMISSIONS (5) times, then dropped.
+# Waits follow 300 ms x 1.6^max(0, sendCount - 1) x (1 + jitter 0..25%).
+def test_mrp_transmissions()
+  class TestUDPSocket
+    var sent
+    def init() self.sent = [] end
+    def send(addr, port, raw) self.sent.push(tasmota.millis()) return true end
+  end
+  class TestUDPMsg
+    var raw, remote_ip, remote_port, x_flag_r, message_counter, exchange_id, local_session_id
+  end
+  class TestUDPAck
+    var ack_message_counter, exchange_id
+  end
+  def new_msg(counter)
+    var m = TestUDPMsg()
+    m.raw = bytes("0102") m.remote_ip = "192.0.2.1" m.remote_port = 5540
+    m.x_flag_r = true m.message_counter = counter m.exchange_id = 7 m.local_session_id = 1
+    return m
+  end
+  tasmota.now = 0
+  var server = matter.UDPServer(nil)
+  var sock = TestUDPSocket()
+  server.udp_socket = sock
+  # Unacknowledged: 5 transmissions in total, then removed
+  server.send_UDP(new_msg(100))
+  while tasmota.now < 20000
+    tasmota.now += 1
+    server._resend_packets()
+  end
+  assert(size(sock.sent) == 5, "MRP must send 5 times, sent " + str(size(sock.sent)))
+  assert(size(server.packets_sent) == 0, "unacked packet must be dropped")
+  var factors = [1.0, 1.0, 1.6, 2.56]
+  for i : 0..3
+    var wait = sock.sent[i + 1] - sock.sent[i]
+    var low = int(300 * factors[i])
+    assert(wait >= low && wait <= int(low * 1.25) + 1, format("MRP wait %i = %i ms", i, wait))
+  end
+  # Acknowledged after the second transmission: no further sends
+  sock.sent.clear()
+  tasmota.now = 0
+  server.send_UDP(new_msg(101))
+  while size(sock.sent) < 2
+    tasmota.now += 1
+    server._resend_packets()
+  end
+  var ack = TestUDPAck()
+  ack.ack_message_counter = 101 ack.exchange_id = 7
+  server.received_ack(ack)
+  while tasmota.now < 20000
+    tasmota.now += 1
+    server._resend_packets()
+  end
+  assert(size(sock.sent) == 2 && size(server.packets_sent) == 0)
+  tasmota.now = 0
+  print("  MRP retransmissions (5 transmissions, backoff): OK")
+end
+test_mrp_transmissions()
+
+# Boolean State StateChange event (0x0045/0x00): mandatory for Rain Sensor and
+# Water Leak Detector (CHGEVENT feature), optional and enabled for Contact Sensor.
+# Occupancy shares the base class but not Boolean State: no event.
+def test_boolean_state_events()
+  class TestBoolEvents
+    var published
+    def init() self.published = [] end
+    def publish_event(endpoint, cluster, event_id, urgent, priority, data0, data1, data2)
+      self.published.push({
+        "endpoint": endpoint, "cluster": cluster, "event": event_id,
+        "urgent": urgent, "priority": priority,
+        "data0": data0 ? data0.val : nil, "type0": data0 ? data0.typ : nil,
+        "data1": data1, "data2": data2
+      })
+    end
+  end
+  class TestBoolDevice : matter.Device
+    var updates
+    def init()
+      self.plugins = []
+      self.events = TestBoolEvents()
+      self.updates = []
+    end
+    def attribute_updated(endpoint, cluster, attribute, fabric_specific)
+      self.updates.push([endpoint, cluster, attribute])
+    end
+  end
+  class TestBoolTasmota : TestTasmota
+    var switch_state
+    def cmd(command, mute)
+      if command == "Status 10"
+        return {"StatusSNS": {"Switch1": self.switch_state}}
+      end
+      return nil
+    end
+  end
+
+  var bool_tasmota = TestBoolTasmota()
+  bool_tasmota.switch_state = "OFF"
+  tasmota = bool_tasmota
+  var dev = TestBoolDevice()
+  var ev = dev.events.published
+
+  def read(plugin, cluster, attribute)
+    return plugin.read_attribute(nil, matter.Path(plugin.endpoint, cluster, attribute), TLV.Matter_TLV_item())
+  end
+  def check_event(e, endpoint, value)
+    assert(e["endpoint"] == endpoint && e["cluster"] == 0x0045 && e["event"] == 0x00)
+    assert(e["urgent"] == true && e["priority"] == 1)
+    assert(e["type0"] == 0x08 && e["data0"] == value)
+    assert(e["data1"] == nil && e["data2"] == nil)
+  end
+
+  for cls : [matter.Plugin_Sensor_Rain, matter.Plugin_Sensor_Waterleak, matter.Plugin_Sensor_Contact]
+    ev.clear()
+    dev.updates.clear()
+    bool_tasmota.switch_state = "OFF"
+    var p = cls(dev, 3, {"switch": 1})
+    # Physical sensor: no change, no event; each transition one event with the new value
+    p.update_shadow()
+    assert(size(ev) == 0 && size(dev.updates) == 0)
+    bool_tasmota.switch_state = "ON"
+    p.update_shadow()
+    assert(size(ev) == 1)
+    check_event(ev[0], 3, true)
+    assert(size(dev.updates) == 1 && dev.updates[0] == [3, 0x0045, 0x0000])
+    p.update_shadow()
+    assert(size(ev) == 1)
+    bool_tasmota.switch_state = "OFF"
+    p.update_shadow()
+    assert(size(ev) == 2)
+    check_event(ev[1], 3, false)
+    # Bridge path (Status 10 payload): same rule
+    p.parse_status({"Switch1": "ON"}, 10)
+    p.parse_status({"Switch1": "ON"}, 10)
+    assert(size(ev) == 3)
+    check_event(ev[2], 3, true)
+    # Metadata: CHGEVENT feature, StateChange in EventList, cluster rev 3, device rev 2
+    assert(read(p, 0x0045, 0xFFFC).val == 0x01)
+    assert(tlv_values(read(p, 0x0045, 0xFFFA)) == [0x00])
+    assert(read(p, 0x0045, 0xFFFD).val == 3)
+    assert(read(p, 0x0045, 0x0000).val == true)
+    var dev_type = (cls == matter.Plugin_Sensor_Rain) ? 0x0044 : (cls == matter.Plugin_Sensor_Waterleak) ? 0x0043 : 0x0015
+    assert(size(p.TYPES) == 1 && p.TYPES[dev_type] == 2)
+  end
+
+  # Virtual sensors: event only when the value changes
+  for cls : [matter.Plugin_Virt_Sensor_Rain, matter.Plugin_Virt_Sensor_Waterleak, matter.Plugin_Virt_Sensor_Contact]
+    ev.clear()
+    dev.updates.clear()
+    var p = cls(dev, 4, {})
+    var payload = {}
+    payload[p.JSON_NAME] = false
+    p.update_virtual(payload)
+    assert(size(ev) == 0 && size(dev.updates) == 0)
+    payload[p.JSON_NAME] = true
+    p.update_virtual(payload)
+    p.update_virtual(payload)
+    p.update_virtual({})
+    assert(size(ev) == 1 && size(dev.updates) == 1)
+    check_event(ev[0], 4, true)
+  end
+
+  # Occupancy: reports 0x0406 only, never a Boolean State event
+  ev.clear()
+  dev.updates.clear()
+  bool_tasmota.switch_state = "OFF"
+  var occupancy = matter.Plugin_Sensor_Occupancy(dev, 5, {"switch": 1})
+  bool_tasmota.switch_state = "ON"
+  occupancy.update_shadow()
+  assert(size(ev) == 0)
+  assert(size(dev.updates) == 1 && dev.updates[0] == [5, 0x0406, 0x0000])
+  assert(read(occupancy, 0x0406, 0x0000).val == true)
+  assert(read(occupancy, 0x0406, 0xFFFC).val == 0)
+  assert(size(tlv_values(read(occupancy, 0x0406, 0xFFFA))) == 0)
+
+  tasmota = test_tasmota
+  print("  Boolean State StateChange events (Rain, Waterleak, Contact, Occupancy): OK")
+end
+test_boolean_state_events()
+
+# Fan Control (0x0202): the Auto feature is not supported, so FeatureMap does not
+# declare AUT, FanModeSequence has no Auto value and a write of FanMode Auto is rejected.
+# Deprecated On and Smart still set High.
+def test_fan_no_auto()
+  class TestFanDevice : matter.Device
+    var updates
+    def init() self.plugins = [] self.updates = [] end
+    def attribute_updated(endpoint, cluster, attribute, fabric_specific)
+      self.updates.push([endpoint, cluster, attribute])
+    end
+  end
+  class TestFanTasmota : TestTasmota
+    # Tasmota changeUIntScale()
+    def scale_uint(num, from_min, from_max, to_min, to_max)
+      if num > from_max  num = from_max  end
+      if num < from_min  num = from_min  end
+      if num == from_min  return to_min  end
+      if num == from_max  return to_max  end
+      var result
+      if to_max - to_min > from_max - from_min
+        result = (((num - from_min) * (to_max - to_min) * 2) / (from_max - from_min) + 1) / 2 + to_min
+      else
+        result = (((num - from_min) * 2 + 1) * (to_max - to_min + 1)) / ((from_max - from_min + 1) * 2) + to_min
+      end
+      return result > to_max ? to_max : result
+    end
+  end
+  tasmota = TestFanTasmota()
+  var published = []
+  var saved_publish = matter.publish_command
+  matter.publish_command = def (prefix, endpoint, name, payload) published.push(payload) end
+  var dev = TestFanDevice()
+  def read(plugin, attribute)
+    return plugin.read_attribute(nil, matter.Path(plugin.endpoint, 0x0202, attribute), TLV.Matter_TLV_item()).val
+  end
+  def write(plugin, value)
+    var ctx = matter.Path(plugin.endpoint, 0x0202, 0x0000)
+    var res = plugin.write_attribute(nil, ctx, value)
+    return [res, ctx.status]
+  end
+  for cls : [matter.Plugin_Fan, matter.Plugin_Virt_Fan]
+    var fan = cls(dev, 6, {})
+    published.clear()
+    assert(read(fan, 0xFFFC) == 0, "Fan Control FeatureMap must not declare AUT")
+    assert(read(fan, 0x0001) == 0, "FanModeSequence must be Off/Low/Med/High")
+    # Supported modes
+    assert(write(fan, 1)[0] == true && read(fan, 0x0000) == 1 && read(fan, 0x0002) == 33)
+    assert(write(fan, 2)[0] == true && read(fan, 0x0000) == 2 && read(fan, 0x0002) == 67)
+    assert(write(fan, 0)[0] == true && read(fan, 0x0000) == 0 && read(fan, 0x0002) == 0)
+    # Deprecated On (4) and Smart (6) set High
+    assert(write(fan, 4)[0] == true && read(fan, 0x0000) == 3 && read(fan, 0x0002) == 100)
+    assert(write(fan, 1)[0] == true)
+    assert(write(fan, 6)[0] == true && read(fan, 0x0000) == 3 && read(fan, 0x0002) == 100)
+    # Auto (5) and out-of-range values: CONSTRAINT_ERROR, state unchanged, nothing published
+    assert(write(fan, 1)[0] == true)
+    var n = size(published)
+    for bad : [5, 7, 255, -1, "1"]
+      var r = write(fan, bad)
+      assert(r[0] == false && r[1] == 0x87, "FanMode " + str(bad) + " must be rejected")
+    end
+    assert(read(fan, 0x0000) == 1 && read(fan, 0x0002) == 33)
+    assert(size(published) == n)
+  end
+  matter.publish_command = saved_publish
+  tasmota = test_tasmota
+  print("  Fan Control without Auto (FeatureMap, FanModeSequence, FanMode writes): OK")
+end
+test_fan_no_auto()
 
 # ConfigurationVersion changes with endpoint composition and is persisted.
 var config_device = TestConfigurationDevice()
