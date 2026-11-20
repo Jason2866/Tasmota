@@ -120,6 +120,19 @@ Monochrome e-paper descriptors use `bpp=1`. The legacy-only `:T,full,partial,aft
 :E,673
 :B,0,8
 :I
+AA,06,49,55,20,08,09,18
+01,01,3F
+00,02,5F,69
+05,04,40,1F,1F,2C
+08,04,6F,1F,1F,22
+06,04,6F,1F,17,17
+03,04,00,54,00,44
+60,02,02,00
+30,01,08
+50,01,3F
+61,04,03,20,01,E0
+E3,01,2F
+82,01,01
 ```
 
 ### Inky Impression E673 runtime commands (`:X`)

@@ -45,7 +45,6 @@ var comic_cover_attempts = 5
 var metron_body_limit_error = -13
 var metron_async_display
 var metron_async_api_request
-var metron_async_api_poll
 var metron_async_fetch_series
 var metron_async_choose_series
 var metron_async_fetch_issues
@@ -147,6 +146,93 @@ def metron_status_message(status, server_header, content_type, location_header)
   return "Metron API returned HTTP " + str(status) +
          " (server=" + server_header + ", content-type=" + content_type +
          ", location=" + location_header + ")"
+end
+
+def metron_async_api_result(url, username, password, on_complete, attempt, wc, status)
+  var data = nil
+  var response = nil
+  var error_kind = nil
+  var message = nil
+  var retryable = metron_should_retry(status)
+  try
+    if status >= 200 && status < 300
+      response = wc.get_string()
+      if response == nil || size(response) == 0
+        error_kind = "network_error"
+        message = "Metron API returned an empty response"
+        retryable = true
+      elif wc.last_rx != size(response)
+        error_kind = "network_error"
+        message = "Metron API response was truncated (expected " + str(wc.last_rx) +
+                  " bytes, received " + str(size(response)) + ")"
+        retryable = true
+      else
+        data = json.load(response)
+        if data == nil || !isinstance(data, map)
+          error_kind = "value_error"
+          message = "Metron API response is not a JSON object"
+        end
+      end
+    else
+      var server_header = wc.get_header("Server")
+      var content_type = wc.get_header("Content-Type")
+      var location_header = wc.get_header("Location")
+      if server_header == nil server_header = "" end
+      if content_type == nil content_type = "" end
+      if location_header == nil location_header = "" end
+      error_kind = status == metron_body_limit_error ? "body_too_large" :
+                   retryable ? "network_error" : "http_error"
+      message = metron_status_message(status, server_header, content_type, location_header)
+    end
+  except .. as err, msg
+    error_kind = err
+    message = msg
+  end
+
+  response = nil
+  metron_close_client(wc)
+  if error_kind != nil
+    if retryable && attempt < metron_retries
+      print("Metron API request failed with " + str(status) + ", retrying (" +
+            str(attempt) + "/" + str(metron_retries) + ")")
+      tasmota.set_timer(500, def ()
+        metron_async_api_request(url, username, password, on_complete, attempt + 1)
+      end)
+      return
+    end
+    on_complete(nil, error_kind, message)
+    return
+  end
+
+  gc.collect()
+  on_complete(data, nil, nil)
+end
+
+metron_async_api_request = def (url, username, password, on_complete, attempt)
+  var wc = nil
+  var start_status = nil
+  var error_kind = nil
+  var message = nil
+  try
+    wc = metron_new_client(username, password, true, comic_max_api_bytes)
+    wc.collect_headers("Server", "Content-Type", "Location")
+    wc.begin(url)
+    start_status = metron_http_get(wc, def (status)
+      metron_async_api_result(url, username, password, on_complete, attempt, wc, status)
+    end)
+  except .. as err, msg
+    error_kind = err
+    message = msg
+  end
+
+  if error_kind != nil
+    metron_close_client(wc)
+    on_complete(nil, error_kind, message)
+    return
+  end
+  if start_status != nil
+    metron_async_api_result(url, username, password, on_complete, attempt, wc, start_status)
+  end
 end
 
 def metron_async_diagnose_next(targets, names, index)

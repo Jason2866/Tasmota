@@ -47,7 +47,7 @@ uint16_t bg_color = 0;
 uint8_t color_type = COLOR_BW;
 uint8_t auto_draw = 1;
 uint8_t display_batch_depth = 0;
-bool display_batch_refresh_pending = false;
+uint32_t display_batch_refresh_pending = 0;
 int16_t disp_xpos = 0;
 int16_t disp_ypos = 0;
 
@@ -686,7 +686,9 @@ bool DisplayText(void)
                 var = atoiv(cp, &rot);
                 cp += var;
               }
-              if (renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+              if ((renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) ||
+                  (displays[temp].used && displays[temp].display &&
+                   displays[temp].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING)) {
                 AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot switch displays while an asynchronous refresh is active"));
                 return false;
               }
@@ -1300,7 +1302,11 @@ extern FS *ffsp;
     // draw buffer
     if (auto_draw&1) {
       if (display_batch_depth) {
-        display_batch_refresh_pending = true;
+#ifdef USE_MULTI_DISPLAY
+        display_batch_refresh_pending |= 1UL << cur_display;
+#else
+        display_batch_refresh_pending = 1;
+#endif
       } else {
         if (renderer) renderer->Updateframe();
         //else DisplayDrawFrame();
@@ -1355,8 +1361,16 @@ bool Display_Text_From_File(const char *file) {
     XdrvMailbox.data = savptr;
     fp.close();
     display_batch_depth--;
-    if (!display_batch_depth && processed && display_batch_refresh_pending && renderer) {
-      renderer->Updateframe();
+    if (!display_batch_depth && processed && display_batch_refresh_pending) {
+#ifdef USE_MULTI_DISPLAY
+      for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+        if ((display_batch_refresh_pending & (1UL << index)) && displays[index].used && displays[index].display) {
+          displays[index].display->Updateframe();
+        }
+      }
+#else
+      if (renderer) renderer->Updateframe();
+#endif
     }
     if (!display_batch_depth) display_batch_refresh_pending = false;
   }
@@ -3212,9 +3226,17 @@ bool Xdrv13(uint32_t function) {
         break;
       case FUNC_LOOP:
 #ifdef USE_UNIVERSAL_DISPLAY
+#ifdef USE_MULTI_DISPLAY
+        for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+          if (displays[index].used && displays[index].display) {
+            displays[index].display->ServiceUpdateFrameAsync();
+          }
+        }
+#else
         if (renderer) {
           renderer->ServiceUpdateFrameAsync();
         }
+#endif
 #endif  // USE_UNIVERSAL_DISPLAY
         break;
       case FUNC_EVERY_50_MSECOND:
