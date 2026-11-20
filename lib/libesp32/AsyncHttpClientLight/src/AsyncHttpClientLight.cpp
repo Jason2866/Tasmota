@@ -334,6 +334,8 @@ void AsyncHttpClientLight::end() {
   _transport.reset();
   _headers = ""; _base64Authorization = ""; _size = -1; _returnCode = 0; _location = "";
   _bodyPending = false; // BODY_PENDING reset
+  // free the async body (up to 1 MB) now, not when the client is destroyed:
+  // assigning an empty String would keep the buffer, see StringFree()
   StringFree(_asyncBody);
   _asyncOp = AOP_NONE;
   _asyncState = ASYNC_IDLE;
