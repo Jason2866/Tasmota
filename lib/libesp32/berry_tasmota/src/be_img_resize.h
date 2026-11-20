@@ -21,16 +21,16 @@ static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t b
     reserve += output_reserve;
     size_t max_allowed = free_psram > reserve ? free_psram - (size_t)reserve : (has_target ? 0 : 500000);
     if (max_allowed > largest_block) max_allowed = largest_block;
-    // max_allowed is the budget for additional decode allocation; the reusable
-    // buffer is already allocated. Out-of-place output and the reserve must
-    // still fit in free PSRAM independently of that buffer.
+    // A moving realloc can need a full new decode buffer while the reusable
+    // buffer is still allocated. Keep the output reserve available at the same time.
     uint64_t decode_size = (uint64_t)scaled_width * scaled_height * bpp;
     uint64_t additional_decode = decode_size > reusable_size ? decode_size - reusable_size : 0;
+    uint64_t moving_decode = additional_decode ? decode_size : 0;
     bool output_fits = !output_reserve ||
-        (free_psram > reserve && largest_block >= additional_decode + output_reserve);
+        (free_psram > reserve && largest_block >= moving_decode + output_reserve);
     bool decode_fits = (divisor != 4 || quarter_scale_compatible) &&
         (decode_size <= reusable_size || decode_size <= largest_block);
-    if (output_fits && decode_fits && additional_decode <= max_allowed) {
+    if (output_fits && decode_fits && (!additional_decode || decode_size <= max_allowed)) {
       return divisor == 1 ? 0 : (int)divisor;
     }
   }

@@ -659,7 +659,12 @@ String AsyncHttpClientLight::getString(int* errorOut) {
 #endif
   // FAST-PATH: a complete async body is available regardless of HTTP status.
   if (_asyncBodyComplete && !_asyncAbortReq && _asyncState != ASYNC_ABORTED) {
-    return String(_asyncBody);
+    String out(_asyncBody);
+    if (_asyncBody.length() && !out.length()) {
+      if (errorOut) *errorOut = HTTPC_ERROR_TOO_LESS_RAM;
+      return String();
+    }
+    return out;
   }
 #ifdef ESP32
   if (state != ASYNC_IDLE) {

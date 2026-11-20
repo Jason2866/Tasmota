@@ -46,6 +46,8 @@ uint16_t fg_color = 1;
 uint16_t bg_color = 0;
 uint8_t color_type = COLOR_BW;
 uint8_t auto_draw = 1;
+uint8_t display_batch_depth = 0;
+bool display_batch_refresh_pending = false;
 int16_t disp_xpos = 0;
 int16_t disp_ypos = 0;
 
@@ -1297,8 +1299,12 @@ extern FS *ffsp;
     }
     // draw buffer
     if (auto_draw&1) {
-      if (renderer) renderer->Updateframe();
-      //else DisplayDrawFrame();
+      if (display_batch_depth) {
+        display_batch_refresh_pending = true;
+      } else {
+        if (renderer) renderer->Updateframe();
+        //else DisplayDrawFrame();
+      }
     }
   return true;
 }
@@ -1311,6 +1317,9 @@ bool Display_Text_From_File(const char *file) {
   if (fp > 0) {
     char *savptr = XdrvMailbox.data;
     char linebuff[128];
+    bool processed = false;
+    if (!display_batch_depth) display_batch_refresh_pending = false;
+    display_batch_depth++;
     while (fp.available()) {
       uint16_t index = 0;
       while (fp.available()) {
@@ -1332,9 +1341,12 @@ bool Display_Text_From_File(const char *file) {
       if (*cp == ';') continue;
       //AddLog(LOG_LEVEL_INFO, PSTR("displaytext %s"), cp);
       // execute display text here
+      processed = true;
       XdrvMailbox.data = cp;
       XdrvMailbox.data_len = 0;
       if (!DisplayText()) {
+        display_batch_depth--;
+        if (!display_batch_depth) display_batch_refresh_pending = false;
         XdrvMailbox.data = savptr;
         fp.close();
         return false;
@@ -1342,6 +1354,11 @@ bool Display_Text_From_File(const char *file) {
     }
     XdrvMailbox.data = savptr;
     fp.close();
+    display_batch_depth--;
+    if (!display_batch_depth && processed && display_batch_refresh_pending && renderer) {
+      renderer->Updateframe();
+    }
+    if (!display_batch_depth) display_batch_refresh_pending = false;
   }
   return true;
 }

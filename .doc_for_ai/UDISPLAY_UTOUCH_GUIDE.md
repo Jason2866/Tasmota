@@ -99,10 +99,9 @@ Touch transform is the fourth field of `:0`–`:3`, applied after `:M`. Values: 
 
 ## 4. E-paper only (`SPI`)
 
-Monochrome e-paper descriptors use `bpp=1`. The Inky Impression E673 uses `bpp=4` with the explicit `:E,673` controller marker:
+Monochrome e-paper descriptors use `bpp=1`. The legacy-only `:T,full,partial,after` setting controls fallback waits for monochrome descriptors in units of 10 ms (defaults `350,35,10`). It does not configure the Inky Impression E673. E673 uses `bpp=4` with the explicit `:E,673` controller marker and requires both reset and BUSY pins:
 
-- Use SPI `miso` for BUSY and add `:B,lines,08` when BUSY is active low.
-- `:T,full,partial,after` provides fallback waits in units of 10 ms. Defaults are `350,35,10`.
+- Use SPI `miso` for BUSY and add `:B,lines,08` when BUSY is active low. E673 has its own reset timing, idle wait, and refresh timeout; changing `:T` does not address E673 timeouts.
 - `:f` and `:p` begin full/partial update command streams using the same `CMD,CNT,ARG...` format as `:I`.
 - Select either 2-LUT (`:L,size,cmd` and `:l,size,cmd` followed by hex data), or command-only (`:f`/`:p` only). The 5-LUT syntax is `:L1`–`:L5,size,cmd` plus data and `:a,cmd1,cmd2,cmd3`, but the current parser routes `:a` into SPI address fields; treat 5-LUT as unverified and avoid it unless hardware-tested.
 
@@ -222,5 +221,5 @@ RT
 - SPI init counts use five bits (0–31), not four; RGB `:IS` uses seven bits.
 - `SPI,3` and `SPI,4` are fast and slow software SPI; `dc=-1` is 9-bit SPI; MISO is e-paper BUSY.
 - `:0`–`:3` offsets are hex; `:B`, `:S`, `:M`, `:T`, and `:V` are decimal. Do not omit a `:B` flag field (`:B,64` becomes `255` flags).
-- `:T` and pseudo-opcode `63` time values are ×10 ms. I2C `:I` uses only the first two bytes of each line.
+- Monochrome `:T` and pseudo-opcode `63` time values are ×10 ms. I2C `:I` uses only the first two bytes of each line.
 - DSI, packed monochrome (`:F`), 5-LUT `:a`, backlight flag `02`, address mode `8`, and PSRAM flag `32` are implemented but absent or incomplete in the public document.
