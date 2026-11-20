@@ -1093,6 +1093,9 @@ extern "C" {
     StreamBeBytesWriter memory_writer(vm);
     int32_t written = cl->writeToStream(&memory_writer);
     if (written < 0) be_raise(vm, "value_error", "response body read failed");
+    be_pushint(vm, written);
+    be_setmember(vm, -2, ".len");
+    be_pop(vm, 1);
     be_return(vm);
 #else
     uint8_t * buf = (uint8_t*) be_pushbytes(vm, nullptr, sz);
@@ -1100,6 +1103,9 @@ extern "C" {
     int32_t written = cl->writeToStream(&memory_writer);
     cl->end();  // free allocated memory ~16KB
     if (written < 0) be_raise(vm, "value_error", "response body read failed");
+    be_pushint(vm, written);
+    be_setmember(vm, -2, ".len");
+    be_pop(vm, 1);
     be_return(vm);  /* return code */
 #endif
     

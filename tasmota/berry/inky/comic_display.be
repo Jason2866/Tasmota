@@ -326,8 +326,8 @@ end
 def metron_async_lookup_failed(ctx, error_kind, message)
   if error_kind == "selection_error" || error_kind == "body_too_large" ||
      error_kind == "network_error" || error_kind == "cover_unavailable"
-    metron_async_retry(ctx.username, ctx.password, ctx.series_name, ctx.dither_fn,
-                       ctx.attempt, message)
+    metron_async_retry(ctx["username"], ctx["password"], ctx["series_name"], ctx["dither_fn"],
+                       ctx["attempt"], message)
   else
     print("Could not fetch a Metron cover: " + str(error_kind) + " - " + str(message))
   end
@@ -335,11 +335,11 @@ end
 
 def metron_async_fetch_series(ctx)
   var url = metron_series_api + "?page_size=20"
-  if !ctx.random_series
-    print("Searching Metron series: " + ctx.series_name)
-    url = metron_series_api + "?q=" + webclient.url_encode(ctx.series_name) + "&page_size=1"
+  if !ctx["random_series"]
+    print("Searching Metron series: " + ctx["series_name"])
+    url = metron_series_api + "?q=" + webclient.url_encode(ctx["series_name"]) + "&page_size=1"
   end
-  metron_async_api_request(url, ctx.username, ctx.password,
+  metron_async_api_request(url, ctx["username"], ctx["password"],
     def (data, error_kind, message)
       if error_kind != nil
         metron_async_lookup_failed(ctx, error_kind, message)
@@ -350,21 +350,21 @@ def metron_async_fetch_series(ctx)
         metron_async_lookup_failed(ctx, "value_error", "No Metron series found")
         return
       end
-      ctx.series_offset = 0
-      if ctx.random_series
+      ctx["series_offset"] = 0
+      if ctx["random_series"]
         var series_count = data.find("count", 0)
         var page_size = size(results)
         if series_count == nil || series_count < 1 || page_size < 1
           metron_async_lookup_failed(ctx, "value_error", "No Metron series found")
           return
         end
-        var series_index = ctx.seed % series_count
+        var series_index = ctx["seed"] % series_count
         var series_page = int(series_index / page_size) + 1
-        ctx.series_offset = series_index % page_size
+        ctx["series_offset"] = series_index % page_size
         print("Searching a random Metron series (page " + str(series_page) + ")")
         if series_page > 1
           var page_url = metron_series_api + "?page=" + str(series_page) + "&page_size=" + str(page_size)
-          metron_async_api_request(page_url, ctx.username, ctx.password,
+          metron_async_api_request(page_url, ctx["username"], ctx["password"],
             def (page_data, page_error, page_message)
               if page_error != nil
                 metron_async_lookup_failed(ctx, page_error, page_message)
@@ -375,7 +375,7 @@ def metron_async_fetch_series(ctx)
           return
         end
       else
-        ctx.series_offset = ctx.seed % size(results)
+        ctx["series_offset"] = ctx["seed"] % size(results)
       end
       metron_async_choose_series(ctx, data)
     end, 1)
@@ -383,27 +383,27 @@ end
 
 def metron_async_choose_series(ctx, data)
   var results = data.find("results")
-  if results == nil || size(results) == 0 || ctx.series_offset >= size(results)
+  if results == nil || size(results) == 0 || ctx["series_offset"] >= size(results)
     metron_async_lookup_failed(ctx, "selection_error", "Metron series page changed during selection")
     return
   end
-  var series = results[ctx.series_offset]
+  var series = results[ctx["series_offset"]]
   var series_id = series.find("id")
   if series_id == nil
     metron_async_lookup_failed(ctx, "value_error", "Metron series result has no ID")
     return
   end
-  ctx.series_id = series_id
-  ctx.series_title = series.find("series", series.find("name", str(series_id)))
-  print("Searching issues in " + str(ctx.series_title) + " (series " + str(series_id) + ")")
+  ctx["series_id"] = series_id
+  ctx["series_title"] = series.find("series", series.find("name", str(series_id)))
+  print("Searching issues in " + str(ctx["series_title"]) + " (series " + str(series_id) + ")")
   data = nil
   gc.collect()
   metron_async_fetch_issues(ctx)
 end
 
 def metron_async_fetch_issues(ctx)
-  var url = metron_api + "?series_id=" + str(ctx.series_id) + "&page_size=20"
-  metron_async_api_request(url, ctx.username, ctx.password,
+  var url = metron_api + "?series_id=" + str(ctx["series_id"]) + "&page_size=20"
+  metron_async_api_request(url, ctx["username"], ctx["password"],
     def (data, error_kind, message)
       if error_kind != nil
         metron_async_lookup_failed(ctx, error_kind, message)
@@ -413,16 +413,16 @@ def metron_async_fetch_issues(ctx)
       var results = data.find("results", [])
       var page_size = size(results)
       if count == nil || count < 1 || page_size < 1
-        metron_async_lookup_failed(ctx, "value_error", "No Metron issues found in series: " + str(ctx.series_title))
+        metron_async_lookup_failed(ctx, "value_error", "No Metron issues found in series: " + str(ctx["series_title"]))
         return
       end
       var issue_index = math.rand() % count
       var issue_page = int(issue_index / page_size) + 1
-      ctx.issue_offset = issue_index % page_size
+      ctx["issue_offset"] = issue_index % page_size
       if issue_page > 1
-        var page_url = metron_api + "?series_id=" + str(ctx.series_id) +
+        var page_url = metron_api + "?series_id=" + str(ctx["series_id"]) +
                        "&page=" + str(issue_page) + "&page_size=" + str(page_size)
-        metron_async_api_request(page_url, ctx.username, ctx.password,
+        metron_async_api_request(page_url, ctx["username"], ctx["password"],
           def (page_data, page_error, page_message)
             if page_error != nil
               metron_async_lookup_failed(ctx, page_error, page_message)
@@ -438,11 +438,11 @@ end
 
 def metron_async_choose_issue(ctx, data)
   var results = data.find("results")
-  if results == nil || size(results) == 0 || ctx.issue_offset >= size(results)
+  if results == nil || size(results) == 0 || ctx["issue_offset"] >= size(results)
     metron_async_lookup_failed(ctx, "selection_error", "Metron issue page changed during selection")
     return
   end
-  var issue = results[ctx.issue_offset]
+  var issue = results[ctx["issue_offset"]]
   if issue == nil || issue.find("id") == nil
     metron_async_lookup_failed(ctx, "value_error", "Metron issue response is invalid")
     return
@@ -460,7 +460,7 @@ def metron_async_choose_issue(ctx, data)
     metron_async_start_cover(ctx, cover_url)
     return
   end
-  metron_async_api_request(metron_api + str(issue_id) + "/", ctx.username, ctx.password,
+  metron_async_api_request(metron_api + str(issue_id) + "/", ctx["username"], ctx["password"],
     def (detail_data, error_kind, message)
       if error_kind != nil
         metron_async_lookup_failed(ctx, error_kind, message)
@@ -486,13 +486,13 @@ def metron_async_start_cover(ctx, cover_url)
   var image_client = metron_new_client(nil, nil, false, comic_max_source_bytes)
   image_client.begin(cover_url)
   var status = metron_http_get(image_client, def (completed_status)
-    metron_async_cover_complete(ctx.username, ctx.password, ctx.series_name, ctx.dither_fn,
-                                ctx.attempt, image_client, completed_status)
+    metron_async_cover_complete(ctx["username"], ctx["password"], ctx["series_name"], ctx["dither_fn"],
+                                ctx["attempt"], image_client, completed_status)
   end)
   if status != nil
     metron_close_client(image_client)
-    metron_async_retry(ctx.username, ctx.password, ctx.series_name, ctx.dither_fn,
-                       ctx.attempt, "Metron cover request failed with HTTP " + str(status))
+    metron_async_retry(ctx["username"], ctx["password"], ctx["series_name"], ctx["dither_fn"],
+                       ctx["attempt"], "Metron cover request failed with HTTP " + str(status))
   end
 end
 

@@ -341,7 +341,16 @@ Renderer *Init_uDisplay(const char *desc) {
 
     // init renderer
     if (renderer) {
+#ifdef USE_MULTI_DISPLAY
+      for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+        if (displays[index].display == renderer) {
+          displays[index].display = nullptr;
+          displays[index].used = 0;
+        }
+      }
+#endif
       delete renderer;
+      renderer = nullptr;
       AddLog(LOG_LEVEL_DEBUG, PSTR("DSP: reinit"));
     }
 
@@ -507,6 +516,9 @@ Renderer *Init_uDisplay(const char *desc) {
     udisp_init_done = true;
     AddLog(LOG_LEVEL_INFO, PSTR("DSP: %s initialized"), renderer->devname());
 
+#ifdef USE_MULTI_DISPLAY
+    Set_display(cur_display);
+#endif
     return renderer;
   }
   return 0;

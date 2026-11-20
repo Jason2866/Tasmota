@@ -731,8 +731,9 @@ bool DisplayText(void)
                         if (rot >= 0) {
                           Settings->display_rotate = srot;
                         }
-                        Set_display(temp);
-                        AddLog(LOG_LEVEL_INFO, PSTR("DSP: File descriptor loaded"));
+                        if (renderer) {
+                          AddLog(LOG_LEVEL_INFO, PSTR("DSP: File descriptor loaded"));
+                        }
                         free(fdesc);
                         Settings->display_model = model;
                       }
