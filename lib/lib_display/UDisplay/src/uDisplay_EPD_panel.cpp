@@ -768,8 +768,6 @@ bool EPDPanel::waitInkyRefresh(uint32_t timeout_ms) {
 }
 
 bool EPDPanel::updateInky() {
-    if (!busy_pin_configured || !reset_pin_configured) return false;
-
     // The Inky Pimoroni driver resets and replays the E673 register setup before
     // every frame update, so repeated refreshes follow the same lifecycle.
     // Reset first even if BUSY is stale; resetDisplay waits for BUSY to clear
