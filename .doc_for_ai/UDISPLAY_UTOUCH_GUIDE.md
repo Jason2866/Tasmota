@@ -137,7 +137,9 @@ E3,01,2F
 
 ### Inky Impression E673 runtime commands (`:X`)
 
-Keep the E673 register setup under `:I`. Put the runtime command groups in `:X` records; the phase number is decimal and command/data bytes are hexadecimal:
+Put `:E,673` and the complete E673 initialization block under `:I` before any `:X` records. The parser ignores `:X` records that appear before `:E,673`. The `:I` and `:X` data share the `dsp_cmds` buffer: `:X` data is placed after the bytes already parsed from `:I`, so any later `:I` records overwrite the `:X` data. The parser silently drops bytes that exceed the buffer capacity. Keep all initialization before the runtime commands and leave room for both in the buffer.
+
+Put the runtime command groups in `:X` records; the phase number is decimal and command/data bytes are hexadecimal:
 
 | Record | Purpose | Data format |
 |---|---|---|

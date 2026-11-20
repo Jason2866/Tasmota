@@ -1317,6 +1317,19 @@ extern FS *ffsp;
 }
 
 #ifdef USE_UFILESYS
+static void Display_Batch_Refresh_Pending(void) {
+#ifdef USE_MULTI_DISPLAY
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    if ((display_batch_refresh_pending & (1UL << index)) && displays[index].used && displays[index].display) {
+      displays[index].display->Updateframe();
+    }
+  }
+#else
+  if (renderer) renderer->Updateframe();
+#endif
+  display_batch_refresh_pending = 0;
+}
+
 bool Display_Text_From_File(const char *file) {
   File fp;
   if (!ufsp) return true;
@@ -1353,7 +1366,7 @@ bool Display_Text_From_File(const char *file) {
       XdrvMailbox.data_len = 0;
       if (!DisplayText()) {
         display_batch_depth--;
-        if (!display_batch_depth) display_batch_refresh_pending = false;
+        if (!display_batch_depth) Display_Batch_Refresh_Pending();
         XdrvMailbox.data = savptr;
         fp.close();
         return false;
@@ -1363,15 +1376,7 @@ bool Display_Text_From_File(const char *file) {
     fp.close();
     display_batch_depth--;
     if (!display_batch_depth && processed && display_batch_refresh_pending) {
-#ifdef USE_MULTI_DISPLAY
-      for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
-        if ((display_batch_refresh_pending & (1UL << index)) && displays[index].used && displays[index].display) {
-          displays[index].display->Updateframe();
-        }
-      }
-#else
-      if (renderer) renderer->Updateframe();
-#endif
+      Display_Batch_Refresh_Pending();
     }
     if (!display_batch_depth) display_batch_refresh_pending = false;
   }

@@ -413,7 +413,7 @@ def metron_async_fetch_issues(ctx)
       var results = data.find("results", [])
       var page_size = size(results)
       if count == nil || count < 1 || page_size < 1
-        metron_async_lookup_failed(ctx, "value_error", "No Metron issues found in series: " + str(ctx["series_title"]))
+        metron_async_lookup_failed(ctx, "selection_error", "No Metron issues found in series: " + str(ctx["series_title"]))
         return
       end
       var issue_index = math.rand() % count
