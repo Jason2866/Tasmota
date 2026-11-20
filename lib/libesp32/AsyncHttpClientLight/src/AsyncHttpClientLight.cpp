@@ -42,6 +42,8 @@
 #include <cstdlib>
 #include <new>
 
+extern void StringFree(String &s);    // tasmota/tasmota_support/support.ino
+
 
 // --------- Templates / Helpers  ------------------------------------
 
@@ -332,7 +334,7 @@ void AsyncHttpClientLight::end() {
   _transport.reset();
   _headers = ""; _base64Authorization = ""; _size = -1; _returnCode = 0; _location = "";
   _bodyPending = false; // BODY_PENDING reset
-  _asyncBody = StreamString();
+  StringFree(_asyncBody);
   _asyncOp = AOP_NONE;
   _asyncState = ASYNC_IDLE;
   _asyncAbortReq = false;
