@@ -271,6 +271,9 @@ be_extern_native_class(AudioFileSourceFS);
 be_extern_native_class(AudioOpusDecoder);
 be_extern_native_class(AudioInputI2S);
 be_extern_native_class(md5);
+#ifdef USE_BERRY_IMAGE
+be_extern_native_class(inky_dither);
+#endif // USE_BERRY_IMAGE
 be_extern_native_class(udp);
 be_extern_native_class(webclient);
 be_extern_native_class(tcpclient);
@@ -328,6 +331,9 @@ BERRY_LOCAL bclass_array be_class_table = {
     &be_native_class(AXP2102),
 #endif // USE_I2C
     &be_native_class(md5),
+#ifdef USE_BERRY_IMAGE
+    &be_native_class(inky_dither),
+#endif // USE_BERRY_IMAGE
     &be_native_class(udp),
     &be_native_class(webclient),
     &be_native_class(tcpclient),

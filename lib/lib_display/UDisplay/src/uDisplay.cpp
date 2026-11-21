@@ -65,6 +65,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   pwr_cbp = 0;
   dim_cbp = 0;
   framebuffer = 0;
+  frame_buffer = nullptr;
   col_mode = 16;
   sa_mode = 16;
   saw_3 = 0xff;
@@ -75,6 +76,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   // busy_pin = -1;  // MOVED to EPDPanelConfig.busy_pin
   spec_init = -1;
   ep_mode = 0;
+  epd_e673 = false;
   fg_col = 1;
   bg_col = 0;
   splash_font = -1;
@@ -84,6 +86,9 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   startline = 0xA1;
   uint8_t section = 0;
   dsp_ncmds = 0;
+  uint16_t inky_sequence_bytes = 0;
+  uint8_t inky_sequence_phase = 0xFF;
+  bool inky_sequence_header = false;
   lut_num = 0;
   lvgl_param.data = 0;
   lvgl_param.flushlines = 40;
@@ -92,14 +97,15 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
   rot_t[2] = 2;
   rot_t[3] = 3;
   interface = 0;
-  
+
   // Allocate panel_config once at the beginning
   panel_config = (PanelConfigUnion*)calloc(1, sizeof(PanelConfigUnion));
+  panel_config->epd.inky_write_ram_command = 0xFF;
   // Set EPD timing defaults (will be used if EPD mode is detected)
   panel_config->epd.lut_full_time = 350;
   panel_config->epd.lut_partial_time = 35;
   panel_config->epd.update_time = 10;
-  
+
   char linebuff[UDSP_LBSIZE];
   while (*lp) {
 
@@ -119,17 +125,22 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
         // id line
         lp1++;
         section = *lp1++;
+        if (section == 'X' && epd_e673) {
+          if (*lp1 == ',') lp1++;
+          inky_sequence_phase = next_val(&lp1);
+          inky_sequence_header = true;
+        }
         if (section == 'I') {
-          
+
           if (*lp1 == 'C') {
             allcmd_mode = 1;
             lp1++;
           }
-          
+
           if (*lp1 == 'S') {
             // special case RGB with software SPI init clk,mosi,cs,reset
             lp1++;
-            if (interface == _UDSP_RGB) { 
+            if (interface == _UDSP_RGB) {
                 lp1++;
                 SPIControllerConfig spi_cfg = {
                     .bus_nr = 4,
@@ -164,7 +175,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
           } else if (*lp1 == 'I') {
             // pecial case RGB with i2c init, bus nr, i2c addr
             lp1++;
-            if (interface == _UDSP_RGB) { 
+            if (interface == _UDSP_RGB) {
               // collect line and send directly
               lp1++;
               wire_n = next_val(&lp1);
@@ -183,14 +194,14 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               }
               spec_init = _UDSP_I2C;
             }
-          }         
+          }
         } else if (section == 'L') {
           if (*lp1 >= '1' && *lp1 <= '5') {
             lut_num = (*lp1 & 0x07);
             lp1 += 2;
             uint8_t lut_size = next_val(&lp1);
             uint8_t lut_cmd_val = next_hex(&lp1);
-            
+
             // Store directly in EPD config
             panel_config->epd.lut_siz[lut_num - 1] = lut_size;
             panel_config->epd.lut_array_data[lut_num - 1] = (uint8_t*)malloc(lut_size);
@@ -200,7 +211,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             lp1++;
             uint16_t lut_size = next_val(&lp1);
             uint8_t lut_cmd_val = next_hex(&lp1);
-            
+
             // Store directly in EPD config
             panel_config->epd.lut_full_data = (uint8_t*)malloc(lut_size);
             panel_config->epd.lutfsize = 0;  // Will be filled during :L data parsing
@@ -210,14 +221,14 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
           lp1++;
           uint16_t lut_size = next_val(&lp1);
           uint8_t lut_cmd_val = next_hex(&lp1);
-          
+
           // Store directly in EPD config
           panel_config->epd.lut_partial_data = (uint8_t*)malloc(lut_size);
           panel_config->epd.lutpsize = 0;  // Will be filled during :l data parsing
           panel_config->epd.lut_cmd[0] = lut_cmd_val;
         }
         if (*lp1 == ',') lp1++;
-        
+
       }
       if (*lp1 && *lp1 != ':' && *lp1 != '\n' && *lp1 != ' ') {   // Add space char
         switch (section) {
@@ -294,7 +305,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 interface = _UDSP_PAR16;
               }
               reset = next_val(&lp1);
-              
+
               // Parse control pins directly into I80 config
               panel_config->i80.cs_pin = next_val(&lp1);
               panel_config->i80.dc_pin = next_val(&lp1);
@@ -359,12 +370,12 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               panel_config->dsi.lane_speed_mbps = next_val(&lp1);
               panel_config->dsi.rgb_order = next_val(&lp1);
               panel_config->dsi.data_endian = next_val(&lp1);
-              
+
               // Set display dimensions
               panel_config->dsi.width = gxs;
               panel_config->dsi.height = gys;
               panel_config->dsi.bpp = bpp;
-              
+
               section = 0;
 #ifdef UDSP_DEBUG
               AddLog(LOG_LEVEL_DEBUG, "UDisplay: DSI interface - Lanes:%d TE:%d BL:%d LDO:%d@%dmV Clock:%dHz Speed:%dMbps RGB_Order:%d Endian:%d",
@@ -456,6 +467,47 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
               }
             }
             break;
+          case 'X':
+            // E673 descriptor phases: 0=frame RAM opcode, 1=power-on,
+            // 2=refresh, 3=power-off, 4=power-save. Command phases use
+            // the standard SPI tuples consumed by send_spi_cmds().
+            if (epd_e673 && inky_sequence_header) {
+              inky_sequence_header = false;
+              if (inky_sequence_phase == 0) {
+                panel_config->epd.inky_write_ram_command = next_hex(&lp1);
+              } else {
+                uint16_t *sequence_offset = nullptr;
+                uint16_t *sequence_count = nullptr;
+                switch (inky_sequence_phase) {
+                  case 1:
+                    sequence_offset = &panel_config->epd.inky_power_on_offset;
+                    sequence_count = &panel_config->epd.inky_power_on_count;
+                    break;
+                  case 2:
+                    sequence_offset = &panel_config->epd.inky_refresh_offset;
+                    sequence_count = &panel_config->epd.inky_refresh_count;
+                    break;
+                  case 3:
+                    sequence_offset = &panel_config->epd.inky_power_off_offset;
+                    sequence_count = &panel_config->epd.inky_power_off_count;
+                    break;
+                  case 4:
+                    sequence_offset = &panel_config->epd.inky_power_save_offset;
+                    sequence_count = &panel_config->epd.inky_power_save_count;
+                    break;
+                }
+                if (sequence_offset && sequence_count) {
+                  *sequence_offset = dsp_ncmds + inky_sequence_bytes;
+                  *sequence_count = 0;
+                  while (dsp_ncmds + inky_sequence_bytes < sizeof(dsp_cmds)) {
+                    if (str2c(&lp1, ibuff, sizeof(ibuff))) break;
+                    dsp_cmds[dsp_ncmds + inky_sequence_bytes++] = strtol(ibuff, 0, 16);
+                    (*sequence_count)++;
+                  }
+                }
+              }
+            }
+            break;
           case 'f':
             // epaper full update cmds
             if (!panel_config->epd.epcoffs_full) {
@@ -533,7 +585,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             if (interface == _UDSP_SPI || interface == _UDSP_QSPI) {
               panel_config->spi.cmd_memory_access = next_hex(&lp1);
               panel_config->spi.cmd_startline = next_hex(&lp1);
-            } 
+            }
 #ifdef UDISPLAY_I80
             else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
               panel_config->i80.cmd_madctl = next_hex(&lp1);
@@ -552,7 +604,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[0] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[0] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[0] = next_hex(&lp1);
-              } 
+              }
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
                 // Parse directly into I80 config
@@ -575,7 +627,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[1] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[1] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[1] = next_hex(&lp1);
-              } 
+              }
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
                 // Parse directly into I80 config
@@ -598,7 +650,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[2] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[2] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[2] = next_hex(&lp1);
-              } 
+              }
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
                 // Parse directly into I80 config
@@ -621,7 +673,7 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
                 panel_config->spi.rot_cmd[3] = next_hex(&lp1);
                 panel_config->spi.x_addr_offset[3] = next_hex(&lp1);
                 panel_config->spi.y_addr_offset[3] = next_hex(&lp1);
-              } 
+              }
 #ifdef UDISPLAY_I80
               else if (interface == _UDSP_PAR8 || interface == _UDSP_PAR16) {
                 // Parse directly into I80 config
@@ -805,6 +857,9 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
             lvgl_param.use_dma = false; // temporary fix to disable DMA due to a problem in esp-idf 5.3
 #endif
             break;
+          case 'E':
+            epd_e673 = (next_val(&lp1) == 673);
+            break;
           case 'M':
             rotmap_xmin = next_val(&lp1);
             rotmap_xmax = next_val(&lp1);
@@ -898,9 +953,9 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
       ep_mode = 1;
     }
 
-    if (panel_config && panel_config->epd.lut_cnt_data[0] > 0 && 
-        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[2] && 
-        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[3] && 
+    if (panel_config && panel_config->epd.lut_cnt_data[0] > 0 &&
+        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[2] &&
+        panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[3] &&
         panel_config->epd.lut_cnt_data[1] == panel_config->epd.lut_cnt_data[4]) {
       // 5 table mode
       ep_mode = 2;
@@ -911,6 +966,21 @@ uDisplay::uDisplay(char *lp) : Renderer(800, 600) {
       // no lutfsize or lutpsize, but epcoffs_full or epcoffs_part
       ep_mode = 3;
     }
+
+#ifndef ESP8266
+    // The descriptor marker explicitly selects the Inky E673 controller.
+    if (epd_e673 && interface == _UDSP_SPI && bpp == 4) {
+      ep_mode = 4;
+      // Refresh takes ~32 s; leave margin so a slow refresh is not reported as failed.
+      panel_config->epd.busy_timeout = 45000;
+    }
+#endif
+  }
+
+  // Resolve 4-bpp colors after EPD mode detection.
+  if (bpp == 4) {
+    fg_col = GetColorFromIndex(fg_col);
+    bg_col = GetColorFromIndex(bg_col);
   }
 
 
@@ -1055,6 +1125,12 @@ uint16_t index = 0;
 #endif
   while (1) {
     uint8_t iob;
+    const bool inky_command = ep_mode == 4;
+    if (inky_command) {
+      // The Inky driver sent each command in its own SPI transaction.
+      // Keep that framing while taking the command bytes from display.ini.
+      spiController->beginTransaction();
+    }
     spiController->csLow();
     iob = dsp_cmds[cmd_offset++];
     index++;
@@ -1062,7 +1138,7 @@ uint16_t index = 0;
       // epaper pseudo opcodes
       if (!universal_panel) return;
       EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
-      
+
       uint8_t args = dsp_cmds[cmd_offset++];
       index++;
 #ifdef UDSP_DEBUG
@@ -1166,6 +1242,9 @@ uint16_t index = 0;
         }
       }
       spiController->csHigh();
+      if (inky_command) {
+        spiController->endTransaction();
+      }
       if (args & 0x80) {  // delay after the command
         delay_arg(args);
       }
@@ -1187,6 +1266,28 @@ Renderer *uDisplay::Init(void) {
     #endif
     return NULL;
   }
+
+#ifndef ESP8266
+  if (epd_e673 && (interface != _UDSP_SPI || bpp != 4)) {
+    AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires SPI and bpp=4");
+    return NULL;
+  }
+  if (ep_mode == 4) {
+    if (reset < 0) {
+      AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires a reset pin");
+      return NULL;
+    }
+    if (!spiController || spiController->spi_config.miso < 0) {
+      AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 requires a BUSY pin on SPI MISO");
+      return NULL;
+    }
+  }
+#else
+  if (epd_e673) {
+    AddLog(LOG_LEVEL_ERROR, "UDisplay: Inky E673 is not supported on ESP8266");
+    return NULL;
+  }
+#endif
 
   #ifdef UDSP_DEBUG
     AddLog(LOG_LEVEL_DEBUG, "UDisplay: Dsp Init 1 start");
@@ -1213,7 +1314,22 @@ Renderer *uDisplay::Init(void) {
     } else {
       framebuffer = (uint8_t*)calloc(framebuffer_size, 1);
     }
+#ifndef ESP8266
+    if (!framebuffer && ep_mode == 4) {
+      framebuffer = (uint8_t*)calloc(framebuffer_size, 1);
+    }
+#endif
 #endif // ESP8266
+#ifndef ESP8266
+    if (framebuffer && ep_mode == 4) {
+      // Inky pixel value 1 is white; initialize the image buffer to white.
+      memset(framebuffer, 0x11, framebuffer_size);
+    }
+    if (!framebuffer && ep_mode == 4) {
+      AddLog(LOG_LEVEL_ERROR, "UDisplay: unable to allocate Inky framebuffer (%u bytes)", framebuffer_size);
+      return NULL;
+    }
+#endif
   }
   frame_buffer = framebuffer;
 
@@ -1250,7 +1366,7 @@ Renderer *uDisplay::Init(void) {
       panel_config->i2c.cmd_display_off = dsp_off;
       panel_config->i2c.init_commands = dsp_cmds;
       panel_config->i2c.init_commands_count = dsp_ncmds;
-      
+
       universal_panel = new i2c_panel(panel_config->i2c, frame_buffer);
     }
   }
@@ -1259,9 +1375,20 @@ if (interface == _UDSP_SPI) {
 
     HandeBP(-1);
 
+#ifndef ESP8266
+    if (ep_mode == 4) {
+      // The Inky E673 Python driver uses SPI mode 0.
+      spiController->setMode(SPI_MODE0);
+    }
+#endif
+
     spiController->beginTransaction();
- 
+
+#ifdef ESP8266
     if (reset >= 0) {
+#else
+    if (reset >= 0 && ep_mode != 4) {
+#endif
       pinMode(reset, OUTPUT);
       digitalWrite(reset, HIGH);
       delay(50);
@@ -1270,46 +1397,55 @@ if (interface == _UDSP_SPI) {
       AddLog(LOG_LEVEL_DEBUG, "UDisplay: SPI resetting device on pin %d", reset);
 #endif
     }
-    
+
     if (ep_mode) {
         // Populate remaining EPD config fields (LUT data already parsed into union)
         panel_config->epd.width = gxs;
         panel_config->epd.height = gys;
         panel_config->epd.bpp = bpp;
         panel_config->epd.ep_mode = ep_mode;
+        panel_config->epd.init_cmd_count = dsp_ncmds;
         // Timing values already set in panel_config->epd (either defaults or from :T section)
         panel_config->epd.reset_pin = reset;
         panel_config->epd.busy_pin = spiController->spi_config.miso;
         panel_config->epd.invert_colors = true; // IF_INVERT_COLOR was hardcoded to 1
         panel_config->epd.invert_framebuffer = true; // TODO: maybe use lvgl_param.invert_bw for per-display config?
         panel_config->epd.busy_invert = (bool)lvgl_param.busy_invert;
-        
+
         // Set callback for sending command sequences
         panel_config->epd.send_cmds_callback = [this](uint16_t offset, uint16_t count) {
             this->send_spi_cmds(offset, count);
         };
-        
+
         // Create EPD panel BEFORE sending init commands (send_spi_cmds needs universal_panel)
         universal_panel = new EPDPanel(panel_config->epd, spiController, frame_buffer);
-        send_spi_cmds(0, dsp_ncmds);
-        
-        // After descriptor init commands, do initial EPD setup
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
-        epd->resetDisplay();
-        if (epd->cfg.lut_full && epd->cfg.lut_full_len > 0) {
-            epd->setLut(epd->cfg.lut_full, epd->cfg.lut_full_len);
+#ifndef ESP8266
+        // Inky reset and register setup run immediately before each frame,
+        // matching the Pimoroni E673 update lifecycle.
+        if (ep_mode != 4) {
+#else
+        {
+#endif
+          send_spi_cmds(0, dsp_ncmds);
+
+          // After descriptor init commands, do initial EPD setup
+          epd->resetDisplay();
+          if (epd->cfg.lut_full && epd->cfg.lut_full_len > 0) {
+              epd->setLut(epd->cfg.lut_full, epd->cfg.lut_full_len);
+          }
+          epd->clearFrameMemory(0xFF);
+          epd->displayFrame();
+
+          // Send full update command sequence if available
+          if (epd->cfg.epc_full_cnt) {
+              send_spi_cmds(epd->cfg.epcoffs_full, epd->cfg.epc_full_cnt);
+          }
+
+          // Set update mode to partial for subsequent updates
+          epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
         }
-        epd->clearFrameMemory(0xFF);
-        epd->displayFrame();
-        
-        // Send full update command sequence if available
-        if (epd->cfg.epc_full_cnt) {
-            send_spi_cmds(epd->cfg.epcoffs_full, epd->cfg.epc_full_cnt);
-        }
-        
-        // Set update mode to partial for subsequent updates
-        epd->setUpdateMode(DISPLAY_INIT_PARTIAL);
-    } else {   
+    } else {
         AddLog(2,"DSP: SPI Panel");
         // Populate remaining SPI config fields (most already parsed directly into union)
         panel_config->spi.width = gxs;
@@ -1320,9 +1456,9 @@ if (interface == _UDSP_SPI) {
         panel_config->spi.reset_pin = reset;
         panel_config->spi.bpanel = bpanel;
         panel_config->spi.all_commands_mode = allcmd_mode;
-        
+
         send_spi_cmds(0, dsp_ncmds);  // Send init commands for regular SPI
-      
+
         universal_panel = new SPIPanel(panel_config->spi, spiController, frame_buffer);
 #ifdef ESP32
         spiController->initDMA(panel_config->spi.width, lvgl_param.flushlines, lvgl_param.data);
@@ -1330,7 +1466,7 @@ if (interface == _UDSP_SPI) {
     }
 
     spiController->endTransaction();
-    
+
     // EPD LUT initialization is now handled inside EPDPanel constructor
     // so we don't need to call Init_EPD here anymore
 }
@@ -1418,14 +1554,14 @@ if (interface == _UDSP_SPI) {
         // Pass init commands to DSI panel config
         panel_config->dsi.init_commands = dsp_cmds;
         panel_config->dsi.init_commands_count = dsp_ncmds;
-               
+
         // Pass display on/off commands from descriptor
         panel_config->dsi.cmd_display_on = dsp_on;
         panel_config->dsi.cmd_display_off = dsp_off;
-        
+
         universal_panel = new DSIPanel(panel_config->dsi);
         rgb_fb = universal_panel->framebuffer;
-                
+
         HandeBP(-1);
      }
 #endif
@@ -1442,7 +1578,7 @@ if (interface == _UDSP_SPI) {
           AddLog(LOG_LEVEL_DEBUG, "UDisplay: PAR resetting device on pin %d", reset);
 #endif
       }
-      
+
       // Populate remaining I80 config fields (most already parsed directly into union)
       // Control and data pins already parsed directly into config during INI parsing
       panel_config->i80.width = gxs;
@@ -1458,14 +1594,14 @@ if (interface == _UDSP_SPI) {
       }
       panel_config->i80.init_commands = dsp_cmds;
       panel_config->i80.init_commands_count = dsp_ncmds;
-      
+
       universal_panel = new I80Panel(panel_config->i80);
 
       HandeBP(-1);
 
   #endif
   }
-  
+
   if(!universal_panel){
     return NULL;
   }
@@ -1478,6 +1614,12 @@ if (interface == _UDSP_SPI) {
 
 void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
   if (p != DISPLAY_INIT_MODE && ep_mode) {
+#ifndef ESP8266
+    if (ep_mode == 4) {
+      Updateframe();
+      return;
+    }
+#endif
     if (p == DISPLAY_INIT_PARTIAL) {
       if (universal_panel) {
         EPDPanel* epd = static_cast<EPDPanel*>(universal_panel);
