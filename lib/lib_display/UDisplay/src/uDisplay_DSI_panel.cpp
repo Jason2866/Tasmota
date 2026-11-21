@@ -134,6 +134,14 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
         return;
     }
     AddLog(3, "DSI: DPI panel initialized");
+    esp_lcd_dpi_panel_event_callbacks_t callbacks = {};
+    callbacks.on_color_trans_done = colorTransDoneCallback;
+    ret = esp_lcd_dpi_panel_register_event_callbacks(panel_handle, &callbacks, this);
+    if (ret == ESP_OK) {
+        transfer_callback_registered = true;
+    } else {
+        AddLog(3, "DSI: Failed to register transfer callback: %d", ret);
+    }
 
     // Step 8: Get framebuffer
     void* fb_ptr = nullptr;
@@ -180,6 +188,7 @@ DSIPanel::DSIPanel(const DSIPanelConfig& config)
 }
 
 DSIPanel::~DSIPanel() {
+    waitForTransfer();
     if (panel_handle) {
         esp_lcd_panel_del(panel_handle);
     }
@@ -229,6 +238,7 @@ bool DSIPanel::drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) {
 }
 
 bool DSIPanel::pushColors(uint16_t *data, uint32_t len, bool not_swapped) {
+    if (!transfer_callback_registered) return false;
     esp_err_t ret;
     uint16_t retries = 0;
     // esp_lcd_panel_draw_bitmap's DMA2D path takes the draw semaphore with a 0 timeout and
@@ -239,7 +249,11 @@ bool DSIPanel::pushColors(uint16_t *data, uint32_t len, bool not_swapped) {
     // the completion ISR isn't blocked by this busy-wait, so it doesn't delay noticing success.
     const uint16_t max_retries = 300;
     do {
+        transfer_submitted++;
         ret = esp_lcd_panel_draw_bitmap(panel_handle, window_x0, window_y0, window_x1, window_y1, data);
+        if (ret != ESP_OK) {
+            transfer_submitted--;
+        }
         if (ret == ESP_ERR_INVALID_STATE) {
             esp_rom_delay_us(50);
             retries++;
@@ -249,6 +263,19 @@ bool DSIPanel::pushColors(uint16_t *data, uint32_t len, bool not_swapped) {
         AddLog(3, "DSI: draw_bitmap failed after %d retries: %d", retries, ret);
     }
     return (ret == ESP_OK);
+}
+
+void DSIPanel::waitForTransfer() {
+    while (transfer_callback_registered && transfer_completed != transfer_submitted) {
+        vTaskDelay(1);
+    }
+}
+
+bool IRAM_ATTR DSIPanel::colorTransDoneCallback(esp_lcd_panel_handle_t panel, esp_lcd_dpi_panel_event_data_t *edata, void *user_ctx) {
+    (void)panel;
+    (void)edata;
+    static_cast<DSIPanel *>(user_ctx)->transfer_completed++;
+    return false;
 }
 
 bool DSIPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
