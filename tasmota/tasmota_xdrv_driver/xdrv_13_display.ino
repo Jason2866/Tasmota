@@ -2661,28 +2661,32 @@ struct DisplayTextContinuation {
 };
 
 static DisplayTextContinuation display_text_continuation;
+
+static void DisplayTextClearContinuation(void) {
+  free(display_text_continuation.request);
+  free(display_text_continuation.text);
+  display_text_continuation = DisplayTextContinuation{};
+}
 #endif
 
 void CmndDisplayText(void) {
   if (disp_device && XdrvMailbox.data_len > 0) {
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+    DisplayTextContinuation &continuation = display_text_continuation;
+    if (continuation.request && strcmp(continuation.request, XdrvMailbox.data)) {
+      DisplayTextClearContinuation();
+    }
+#endif
     if(Settings->display_model == 15 || Settings->display_model == 20) {
       XdspCall(FUNC_DISPLAY_SEVENSEG_TEXT);
     } else {
 #if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
-      DisplayTextContinuation &continuation = display_text_continuation;
-      if (continuation.request && strcmp(continuation.request, XdrvMailbox.data)) {
-        ResponseCmndChar_P(PSTR("Partial"));
-        return;
-      }
       if (!continuation.request) {
         continuation.request = strdup(XdrvMailbox.data);
         continuation.text = strdup(XdrvMailbox.data);
         continuation.state = DisplayTextState();
         if (!continuation.request || !continuation.text) {
-          free(continuation.request);
-          free(continuation.text);
-          continuation.request = nullptr;
-          continuation.text = nullptr;
+          DisplayTextClearContinuation();
           ResponseCmndChar_P(PSTR("Out of memory"));
           return;
         }
@@ -2695,10 +2699,7 @@ void CmndDisplayText(void) {
         ResponseCmndChar_P(PSTR("Partial"));
         return;
       }
-      free(continuation.request);
-      free(continuation.text);
-      continuation.request = nullptr;
-      continuation.text = nullptr;
+      DisplayTextClearContinuation();
       if (!result) {
         ResponseCmndChar_P(PSTR("Busy"));
         return;
@@ -2714,10 +2715,7 @@ void CmndDisplayText(void) {
   }
 #if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
   else if (!XdrvMailbox.data_len && display_text_continuation.request) {
-    free(display_text_continuation.request);
-    free(display_text_continuation.text);
-    display_text_continuation.request = nullptr;
-    display_text_continuation.text = nullptr;
+    DisplayTextClearContinuation();
     ResponseCmndDone();
   }
 #endif

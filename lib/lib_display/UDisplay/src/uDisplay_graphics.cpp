@@ -70,7 +70,7 @@ void uDisplay::pushColors(uint16_t *data, uint32_t len, boolean not_swapped) {  
     if (lvgl_param.swap_color) {
         not_swapped = !not_swapped;
     }
-    if (!universal_panel->pushColors(data, len, not_swapped)) {
+    if (!universal_panel->pushColors(data, len, not_swapped) && !ep_mode && bpp < 16 && frame_buffer) {
         pushColorsMono(data, len, not_swapped);
     }
 }

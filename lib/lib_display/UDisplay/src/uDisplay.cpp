@@ -1664,7 +1664,9 @@ void uDisplay::DisplayInit(int8_t p, int8_t size, int8_t rot, int8_t font) {
     setCursor(0,0);
     if (splash_font >= 0) {
       fillScreen(bg_col);
-      Updateframe();
+      if (ep_mode != 4) {
+        Updateframe();
+      }
     }
 
 #ifdef UDSP_DEBUG
