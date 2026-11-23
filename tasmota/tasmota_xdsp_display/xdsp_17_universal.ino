@@ -25,6 +25,7 @@
 #include <uDisplay.h>
 
 bool udisp_init_done = false;
+bool udisp_init_busy = false;
 uint8_t ctouch_counter;
 
 #ifdef USE_UFILESYS
@@ -69,7 +70,25 @@ const char DSP_SAMPLE_DESC[] PROGMEM = DSP_ROM_DESC;
 #endif // DSP_ROM_DESC
 /*********************************************************************************************/
 Renderer *Init_uDisplay(const char *desc) {
+  udisp_init_busy = false;
+#ifdef USE_MULTI_DISPLAY
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    if (displays[index].used && displays[index].display &&
+        displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+      udisp_init_busy = true;
+      return nullptr;
+    }
+  }
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    if ((index == cur_display || (renderer && displays[index].display == renderer)) &&
+        !Display_Batch_Flush_Slot(index)) {
+      udisp_init_busy = true;
+      return nullptr;
+    }
+  }
+#endif
   if (renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+    udisp_init_busy = true;
     AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot reinitialize while an asynchronous display refresh is active"));
     return nullptr;
   }

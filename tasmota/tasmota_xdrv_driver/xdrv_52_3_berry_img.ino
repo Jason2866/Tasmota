@@ -200,15 +200,17 @@ struct be_img_util {
       }
     }
 
-    uint8_t *new_buf = (uint8_t *)heap_caps_malloc(len + 4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!new_buf) {
-      return false;
-    }
-    memcpy(new_buf, buffer, len);
-    if (img->buf != nullptr) {
+    if (img->buf && len <= heap_caps_get_allocated_size(img->buf)) {
+      memmove(img->buf, buffer, len);
+    } else {
+      uint8_t *new_buf = (uint8_t *)heap_caps_malloc(len + 4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+      if (!new_buf) {
+        return false;
+      }
+      memcpy(new_buf, buffer, len);
       free(img->buf);
+      img->buf = new_buf;
     }
-    img->buf = new_buf;
     img->len = len;
     setFormat(img, f);
     img->width = w;
@@ -645,10 +647,12 @@ extern "C" {
       int scale_opt = 0;
       int scale = 0;
       bool scale_provided = argc >= 4 && be_isint(vm, 4);
+      bool auto_scale = scale_provided && be_toint(vm, 4) <= 0;
+      bool quarter_compatible = true;
       if (scale_provided) {
         scale = be_toint(vm, 4);
       }
-      if (scale_provided && scale <= 0) {
+      if (auto_scale) {
         size_t free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
         size_t largest_psram_block = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
         uint16_t target_width = 0, target_height = 0;
@@ -661,14 +665,22 @@ extern "C" {
             target_height = requested_height;
           }
         }
-        size_t reusable_size = img->buf ? img->len : 0;
+        size_t reusable_size = img->buf ? heap_caps_get_allocated_size(img->buf) : 0;
         scale = be_img_decode_scale(w, h, img->bpp, free_psram, largest_psram_block,
                                     target_width, target_height,
                                     reusable_size);
         if (scale == 4 && format == PIXFORMAT_RGB888 &&
             !be_img_util::jpeg_quarter_scale_compatible(src_buf, src_buf_len, RGB8888)) {
+          quarter_compatible = false;
           scale = be_img_decode_scale(w, h, img->bpp, free_psram, largest_psram_block,
                                       target_width, target_height, reusable_size, false);
+        }
+        if (scale < 0 && target_width && target_height) {
+          if (format == PIXFORMAT_RGB888 && quarter_compatible) {
+            quarter_compatible = be_img_util::jpeg_quarter_scale_compatible(src_buf, src_buf_len, RGB8888);
+          }
+          scale = be_img_decode_scale(w, h, img->bpp, free_psram, largest_psram_block,
+                                      target_width, target_height, reusable_size, quarter_compatible, false);
         }
         size_t compact_size = scale != 0 ? be_img_compact_decode_size(
             w, h, target_width, target_height, free_psram, largest_psram_block) : 0;
@@ -708,35 +720,52 @@ extern "C" {
                w, h, scale > 0 ? scale : 1, (unsigned)free_psram, (unsigned)largest_psram_block);
       }
 
-      if (scale == 2) {
-        scale_opt = JPEG_SCALE_HALF;
-        w = (w + 1) / 2;
-        h = (h + 1) / 2;
-      } else if (scale == 4) {
-        scale_opt = JPEG_SCALE_QUARTER;
-        w = (w + 3) / 4;
-        h = (h + 3) / 4;
-      } else if (scale == 8) {
-        scale_opt = JPEG_SCALE_EIGHTH;
-        w = (w + 7) / 8;
-        h = (h + 7) / 8;
-      }
+      const uint16_t source_width = w, source_height = h;
+      size_t newSize;
+      for (;;) {
+        w = source_width;
+        h = source_height;
+        scale_opt = 0;
+        if (scale == 2) {
+          scale_opt = JPEG_SCALE_HALF;
+          w = (w + 1) / 2;
+          h = (h + 1) / 2;
+        } else if (scale == 4) {
+          scale_opt = JPEG_SCALE_QUARTER;
+          w = (w + 3) / 4;
+          h = (h + 3) / 4;
+        } else if (scale == 8) {
+          scale_opt = JPEG_SCALE_EIGHTH;
+          w = (w + 7) / 8;
+          h = (h + 7) / 8;
+        }
 
-      if ((size_t)w * h > SIZE_MAX / img->bpp) {
-        be_img_util::clear(img);
-        be_raise(vm, "img_error", "image too large");
-        be_return_nil(vm);
-      }
-
-      const size_t newSize = (size_t)w * h * img->bpp;
-
-      if(newSize != img->len){
-        img->buf = (uint8_t*)heap_caps_realloc((void*)img->buf, newSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if(!img->buf){
+        if ((size_t)w * h > SIZE_MAX / img->bpp) {
           be_img_util::clear(img);
-          be_raise(vm, "img_error", "reallocation failed");
+          be_raise(vm, "img_error", "image too large");
           be_return_nil(vm);
         }
+
+        newSize = (size_t)w * h * img->bpp;
+
+        if (!img->buf || newSize > heap_caps_get_allocated_size(img->buf)) {
+          uint8_t *new_buf = (uint8_t*)heap_caps_realloc((void*)img->buf, newSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+          if (!new_buf) {
+            if (auto_scale && scale != 8) {
+              scale = scale == 0 ? 2 : scale * 2;
+              if (scale == 4 && format == PIXFORMAT_RGB888 && quarter_compatible) {
+                quarter_compatible = be_img_util::jpeg_quarter_scale_compatible(src_buf, src_buf_len, RGB8888);
+              }
+              if (scale == 4 && !quarter_compatible) scale = 8;
+              continue;
+            }
+            be_img_util::clear(img);
+            be_raise(vm, "img_error", "reallocation failed");
+            be_return_nil(vm);
+          }
+          img->buf = new_buf;
+        }
+        break;
       }
 
       img->width = w;

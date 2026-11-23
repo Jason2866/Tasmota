@@ -71,7 +71,19 @@ struct MULTI_DISP {
 uint8_t cur_display;
 Renderer *Init_uDisplay(const char *desc);
 
-void Set_display(uint8_t index) {
+bool Display_Batch_Flush_Slot(uint8_t index) {
+  uint32_t mask = 1UL << index;
+  if ((display_batch_refresh_pending & mask) && displays[index].used && displays[index].display) {
+    Renderer *pending = displays[index].display;
+    display_batch_refresh_pending &= ~mask;
+    pending->Updateframe();
+    if (pending->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) return false;
+  }
+  return true;
+}
+
+bool Set_display(uint8_t index) {
+  if (displays[index].display != renderer && !Display_Batch_Flush_Slot(index)) return false;
   displays[index].display = renderer;
   displays[index].fg_color = fg_color;
   displays[index].bg_color = bg_color;
@@ -82,6 +94,7 @@ void Set_display(uint8_t index) {
   displays[index].model = Settings->display_model;
   displays[index].used = 1;
   cur_display = index;
+  return true;
 }
 
 void Get_display(uint8_t index) {
@@ -667,7 +680,7 @@ bool DisplayText(void)
                   ep += var;
                 }
                }
-               Draw_RGB_Bitmap(cp, disp_xpos, disp_ypos, scale, false, xs, ys, true);
+               Draw_RGB_Bitmap(cp, disp_xpos, disp_ypos, scale, false, xs, ys, true, false);
                cp = ep;
              }
             }
@@ -695,7 +708,7 @@ bool DisplayText(void)
               if (*cp == ':') {
                 cp++;
                 if (displays[temp].used) {
-                  Set_display(cur_display);
+                  if (!Set_display(cur_display)) return false;
                   Get_display(temp);
                 }
               } else {
@@ -716,7 +729,11 @@ bool DisplayText(void)
                         fp.close();
                         if (renderer) {
                           // save ptr
-                          Set_display(temp);
+                          if (!Set_display(temp)) {
+                            free(fdesc);
+                            Settings->display_model = model;
+                            return false;
+                          }
                           renderer = nullptr;
                         } else {
                           Renderer *svptr = renderer;
@@ -2445,7 +2462,27 @@ void CmndDisplayScrollText(void) {
 }
 
 void DisplayReInitDriver(void) {
+#ifdef USE_MULTI_DISPLAY
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    if (displays[index].used && displays[index].display &&
+        displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+      ResponseCmndChar_P(PSTR("Busy"));
+      return;
+    }
+  }
+  if (!Display_Batch_Flush_Slot(0)) {
+    ResponseCmndChar_P(PSTR("Busy"));
+    return;
+  }
+#endif
   XdspCall(FUNC_DISPLAY_INIT_DRIVER);
+#ifdef USE_UNIVERSAL_DISPLAY
+  extern bool udisp_init_busy;
+  if (udisp_init_busy) {
+    ResponseCmndChar_P(PSTR("Busy"));
+    return;
+  }
+#endif
 #ifdef USE_MULTI_DISPLAY
   Set_display(0);
 #endif // USE_MULTI_DISPLAY
@@ -2483,7 +2520,7 @@ char ppath[16];
   } else {
     strlcat(ppath, ".jpg", sizeof(ppath));
   }
-  Draw_RGB_Bitmap(ppath, xp, yp, 0, inverted, 0, 0, true);
+  Draw_RGB_Bitmap(ppath, xp, yp, 0, inverted, 0, 0, true, false);
 }
 #endif  // USE_TOUCH_BUTTONS
 
@@ -2514,7 +2551,7 @@ char get_jpeg_size(unsigned char* data, unsigned int data_size, unsigned short *
 #ifdef USE_UFILESYS
 extern FS *ufsp;
 #define XBUFF_LEN 128
-bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys, bool allow_url ) {
+bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys, bool allow_url, bool jpeg_only ) {
   if (!renderer || !ufsp) return false;
   File fp;
   if (!file || !file[0]) return false;
@@ -2532,6 +2569,7 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
   for (size_t cnt = 0; cnt < ending_len; cnt++) {
     estr[cnt] = tolower((unsigned char)ending[cnt]);
   }
+  if (jpeg_only && strcmp(estr, "jpg") && strcmp(estr, "jpeg")) return false;
 
   uint16_t xsize = 0;
   uint16_t ysize = 0;
@@ -2643,11 +2681,10 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
               };
               esp_jpeg_image_output_t outimg;
               if (esp_jpeg_decode(&jpeg_cfg, &outimg) == ESP_OK) {
-                renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
-                renderer->pushColors(out_buf, outsize / 2, true);
+                drawn = renderer->setAddrWindowChecked(xp, yp, xp + xsize, yp + ysize) &&
+                        renderer->pushColorsChecked(out_buf, outsize / 2, true);
                 renderer->WaitForDMATransfer();
                 renderer->setAddrWindow(0, 0, 0, 0);
-                drawn = true;
               }
               free(out_buf);
             }
@@ -2659,6 +2696,7 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
                 uint8_t *ob = out_buf;
                 if (jpg2rgb888(mem, size, out_buf, (jpg_scale_t)JPG_SCALE_NONE)) {
                   //renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
+                  drawn = true;
                   for (int32_t j = 0; j < ysize; j++) {
                     renderer->WaitForDMATransfer();
                     if (inverted == false) {
@@ -2667,13 +2705,15 @@ bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
                       rgb888_to_565i(ob, pixb, xsize);
                     }
                     ob += xsize * 3;
-                    renderer->setAddrWindow(xp, yp + j, xp + xsize, yp + j + 1);
-                    renderer->pushColors(pixb, xsize, true);
+                    if (!renderer->setAddrWindowChecked(xp, yp + j, xp + xsize, yp + j + 1) ||
+                        !renderer->pushColorsChecked(pixb, xsize, true)) {
+                      drawn = false;
+                      break;
+                    }
                     OsWatchLoop();
                   }
                   renderer->WaitForDMATransfer();
                   renderer->setAddrWindow(0, 0, 0, 0);
-                  drawn = true;
                 }
                 free(out_buf);
                 free(pixb);
@@ -2730,10 +2770,9 @@ bool Draw_jpeg(uint8_t *mem, uint32_t jpgsize, uint16_t xp, uint16_t yp, uint8_t
               };
       esp_jpeg_image_output_t outimg;
       if (esp_jpeg_decode(&jpeg_cfg, &outimg) == ESP_OK) {
-        renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
-        renderer->pushColors(rgbmem, osize / 2, true);
+        drawn = renderer->setAddrWindowChecked(xp, yp, xp + xsize, yp + ysize) &&
+                renderer->pushColorsChecked(rgbmem, osize / 2, true);
         renderer->WaitForDMATransfer();
-        drawn = true;
       }
       free(rgbmem);
     }
@@ -2743,13 +2782,16 @@ bool Draw_jpeg(uint8_t *mem, uint32_t jpgsize, uint16_t xp, uint16_t yp, uint8_t
     if (rgbmem) {
       if (jpg2rgb565(mem, jpgsize, rgbmem, (jpg_scale_t)scale)) {
         uint16_t *ob = (uint16_t*)rgbmem;
+        drawn = true;
         for (int32_t j = 0; j < ysize; j++) {
-          renderer->setAddrWindow(xp, yp + j, xp + xsize, yp + j + 1);
-          renderer->pushColors((uint16_t*)ob, xsize, true);
+          if (!renderer->setAddrWindowChecked(xp, yp + j, xp + xsize, yp + j + 1) ||
+              !renderer->pushColorsChecked(ob, xsize, true)) {
+            drawn = false;
+            break;
+          }
           ob += xsize;
         }
         renderer->WaitForDMATransfer();
-        drawn = true;
       }
       free(rgbmem);
     }

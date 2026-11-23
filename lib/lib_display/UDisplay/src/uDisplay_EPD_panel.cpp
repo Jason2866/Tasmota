@@ -348,14 +348,14 @@ bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
             if (!first) {
                 color = (color << 8) | (color >> 8);
             }
-            drawPixel(push_x, push_y, color);
+            if (!drawPixel(push_x, push_y, color)) return false;
             if (++push_x >= window_x2) {
                 push_x = window_x1;
                 push_y++;
             }
             len--;
         }
-        return true;
+        return len == 0;
     }
 #endif
 
@@ -370,10 +370,11 @@ bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
     // so we must use drawPixel (not drawAbsolutePixel) to apply rotation!
     while (push_y < window_y2 && len > 0) {
         uint16_t color = *data++;
+        if (!first) color = (color << 8) | (color >> 8);
         // Convert to mono: white if any component > 50%
         bool pixel = (color & RGB16_TO_MONO) ? true : false;
         if (cfg.invert_colors) pixel = !pixel;
-        drawPixel(push_x, push_y, pixel ? 1 : 0);
+        if (!drawPixel(push_x, push_y, pixel ? 1 : 0)) return false;
         if (++push_x >= window_x2) {
             push_x = window_x1;
             push_y++;
@@ -381,7 +382,7 @@ bool EPDPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
         len--;
     }
 
-    return true; // Handled by EPD panel
+    return len == 0;
 }
 
 bool EPDPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {

@@ -8,7 +8,8 @@ static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t b
                                       size_t free_psram, size_t largest_block,
                                       uint16_t target_width, uint16_t target_height,
                                       size_t reusable_size = 0,
-                                      bool quarter_scale_compatible = true) {
+                                      bool quarter_scale_compatible = true,
+                                      bool require_reserve = true) {
   const uint32_t divisors[] = {1, 2, 4, 8};
   for (size_t index = 0; index < sizeof(divisors) / sizeof(divisors[0]); ++index) {
     uint32_t divisor = divisors[index];
@@ -17,20 +18,20 @@ static inline int be_img_decode_scale(uint16_t width, uint16_t height, uint8_t b
     bool has_target = target_width && target_height;
     bool in_place = has_target && scaled_width >= target_width && scaled_height >= target_height;
     uint64_t output_reserve = has_target && !in_place ? (uint64_t)target_width * target_height * bpp : 0;
-    uint64_t reserve = has_target ? 300000 : (free_psram < 3000000 ? 1300000 : 0);
-    reserve += output_reserve;
-    size_t max_allowed = free_psram > reserve ? free_psram - (size_t)reserve : (has_target ? 0 : 500000);
-    if (max_allowed > largest_block) max_allowed = largest_block;
-    // A moving realloc can need a full new decode buffer while the reusable
-    // buffer is still allocated. Keep the output reserve available at the same time.
+    uint64_t reserve = require_reserve ? (has_target ? 300000 : (free_psram < 3000000 ? 1300000 : 0)) : 0;
+    if (!has_target && reserve >= free_psram) {
+      reserve = free_psram > 500000 ? free_psram - 500000 : 0;
+    }
+    if (!require_reserve) output_reserve = 0;
     uint64_t decode_size = (uint64_t)scaled_width * scaled_height * bpp;
     uint64_t additional_decode = decode_size > reusable_size ? decode_size - reusable_size : 0;
     uint64_t moving_decode = additional_decode ? decode_size : 0;
-    bool output_fits = !output_reserve ||
-        (free_psram > reserve && largest_block >= moving_decode + output_reserve);
+    bool output_fits = largest_block >= output_reserve &&
+        ((!moving_decode && !output_reserve) ||
+         (uint64_t)free_psram >= reserve + moving_decode + output_reserve);
     bool decode_fits = (divisor != 4 || quarter_scale_compatible) &&
         (decode_size <= reusable_size || decode_size <= largest_block);
-    if (output_fits && decode_fits && (!additional_decode || decode_size <= max_allowed)) {
+    if (output_fits && decode_fits) {
       return divisor == 1 ? 0 : (int)divisor;
     }
   }

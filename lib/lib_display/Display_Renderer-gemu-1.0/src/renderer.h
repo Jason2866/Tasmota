@@ -90,6 +90,8 @@ public:
   virtual void dim10(uint8_t contrast, uint16_t contrast_gamma);  // input has range 0..255, second arg has gamma correction for PWM with 10 bits resolution
   virtual void pushColors(uint16_t *data, uint32_t len, boolean first);
   virtual void setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
+  virtual bool pushColorsChecked(uint16_t *data, uint32_t len, boolean first);
+  virtual bool setAddrWindowChecked(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
   virtual void invertDisplay(boolean i);
   virtual void reverseDisplay(boolean i);
   virtual void setScrollMargins(uint16_t top, uint16_t bottom);

@@ -29,7 +29,7 @@ extern Renderer *renderer;
 #endif //  USE_UNIVERSAL_DISPLAY
 
 #if defined(USE_UNIVERSAL_DISPLAY) && defined(USE_UFILESYS) && defined(JPEG_PICTS)
-extern bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys, bool allow_url);
+extern bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys, bool allow_url, bool jpeg_only);
 #endif
 #if defined(USE_UNIVERSAL_DISPLAY)
 extern "C" void BrTimeoutYield(void);
@@ -107,7 +107,7 @@ extern "C" {
     }
 
     char *file = const_cast<char *>(be_tostring(vm, 1));
-    if (!Draw_RGB_Bitmap(file, 0, 0, 0, false, 0, 0, false)) {
+    if (!Draw_RGB_Bitmap(file, 0, 0, 0, false, 0, 0, false, true)) {
       be_raise(vm, "display_error", "could not decode the dithered JPEG");
     }
 
@@ -164,6 +164,7 @@ extern "C" {
       be_raise(vm, "memory_error", "could not allocate RGB565 display row");
     }
 
+    bool transferred = true;
     for (int32_t y = 0; y < height; y++) {
       renderer->WaitForDMATransfer();
       const uint8_t *source = pixels + (size_t)y * width * 3;
@@ -174,14 +175,18 @@ extern "C" {
         row[x] = ((uint16_t)(red & 0xF8) << 8) |
                  ((uint16_t)(green & 0xFC) << 3) | (blue >> 3);
       }
-      renderer->setAddrWindow(0, y, width, y + 1);
-      renderer->pushColors(row, width, true);
+      if (!renderer->setAddrWindowChecked(0, y, width, y + 1) ||
+          !renderer->pushColorsChecked(row, width, true)) {
+        transferred = false;
+        break;
+      }
       OsWatchLoop();
       BrTimeoutYield();
     }
     renderer->WaitForDMATransfer();
     renderer->setAddrWindow(0, 0, 0, 0);
     free(row);
+    if (!transferred) be_raise(vm, "display_error", "RGB888 pixel transfer failed");
   }
 #endif
 

@@ -75,6 +75,32 @@ void uDisplay::pushColors(uint16_t *data, uint32_t len, boolean not_swapped) {  
     }
 }
 
+bool uDisplay::pushColorsChecked(uint16_t *data, uint32_t len, boolean not_swapped) {
+    if (!universal_panel || !data || !len) return false;
+#ifdef UDISPLAY_QSPI
+    if (interface == _UDSP_QSPI && !static_cast<QSPIPanel*>(universal_panel)->isReady()) return false;
+#endif
+    if (lvgl_param.swap_color) not_swapped = !not_swapped;
+    if (universal_panel->pushColors(data, len, not_swapped)) return true;
+    if (ep_mode || bpp >= 16 || !frame_buffer) return false;
+    pushColorsMono(data, len, not_swapped);
+    return true;
+}
+
+bool uDisplay::setAddrWindowChecked(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+    if (!universal_panel || x0 >= x1 || y0 >= y1) return false;
+#ifdef UDISPLAY_QSPI
+    if (interface == _UDSP_QSPI && !static_cast<QSPIPanel*>(universal_panel)->isReady()) return false;
+#endif
+    if (universal_panel->setAddrWindow(x0, y0, x1, y1)) return true;
+    if (ep_mode || bpp >= 16 || !frame_buffer) return false;
+    seta_xp1 = x0;
+    seta_yp1 = y0;
+    seta_xp2 = x1;
+    seta_yp2 = y1;
+    return true;
+}
+
 // convert to mono, these are framebuffer based
 void uDisplay::pushColorsMono(uint16_t *data, uint32_t len, bool rgb16_swap) {
   // pixel is white if at least one of the 3 components is above 50%

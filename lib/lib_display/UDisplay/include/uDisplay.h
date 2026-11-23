@@ -133,6 +133,8 @@ class uDisplay : public Renderer {
   void fillScreen(uint16_t color);
   void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
   void pushColors(uint16_t *data, uint32_t len, boolean first);
+  bool pushColorsChecked(uint16_t *data, uint32_t len, boolean first) override;
+  bool setAddrWindowChecked(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) override;
   void TS_RotConvert(int16_t *x, int16_t *y);
   void invertDisplay(boolean i);
   void SetPwrCB(pwr_cb cb) { pwr_cbp = cb; };

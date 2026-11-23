@@ -39,7 +39,7 @@ Configure the Tasmota GPIO functions to match the signals you wired (Example con
 
 Assign each Tasmota function to the ESP GPIO physically wired to that Inky signal, using **Configure Module** (or the equivalent GPIO configuration for your device). The middle column documents the Raspberry Pi 40-pin header locations; these are not ESP32 GPIO numbers. Choose suitable GPIOs for your ESP32 wiring and assign the Tasmota functions accordingly. In particular, ensure that `SPI MISO` is assigned even though the panel has no MISO data output.
 
-Upload [inky_dither.be](./inky_dither.be) and the source JPEG to the Tasmota filesystem. The examples below assume both files are in the filesystem root.
+Assign `Option A3` to an unused GPIO to enable uDisplay. Upload [Inky_Impression_7_3_display.ini](../../displaydesc/Inky_Impression_7_3_display.ini) to flash as `/display.ini`, then restart the device to initialize the display. Upload [inky_dither.be](./inky_dither.be) and the source JPEG to the Tasmota filesystem. The examples below assume both files are in the filesystem root.
 
 ## Run from the Berry console
 
@@ -51,7 +51,7 @@ var result = inky_dither("/image.jpg", "/image-dithered.jpg")
 print(result)
 ```
 
-The script draws the quantized RGB888 buffer directly to the display before JPEG encoding, so compression cannot change the image shown on the panel. It starts the panel refresh asynchronously, then streams a JPEG copy to a temporary file in the Tasmota filesystem instead of allocating a second large PSRAM buffer. The filesystem must have enough space for the source, the new preview, and any previous preview. JPEG quality only affects the saved copy. Panel BUSY waits are serviced by Tasmota's main loop, so MQTT, rules, and web requests can run during the roughly 32-second physical refresh. The 192,000-byte framebuffer transfer still runs in one synchronous SPI operation.
+The script streams a JPEG copy to a temporary file, replaces the preview, and then draws the original quantized RGB888 buffer directly to the display and starts the panel refresh asynchronously. JPEG encoding restores the original channel order, so compression cannot change the image shown on the panel. The filesystem must have enough space for the source, the new preview, and any previous preview. JPEG quality only affects the saved copy. Panel BUSY waits are serviced by Tasmota's main loop, so MQTT, rules, and web requests can run during the roughly 32-second physical refresh. The 192,000-byte framebuffer transfer still runs in one synchronous SPI operation.
 
 The returned `refresh_status` is usually `running` when the script finishes. Check it later with `display.refresh_status()`; it changes to `complete` or `failed`. If a refresh is already active, the script saves the JPEG and returns `not_started` instead of raising an exception. The returned `displayed` field is true only when the refresh has completed by the time the result is assembled. The driver also writes completion or failure to the log. While a refresh is running, drawing can still change the framebuffer. An update requested before the frame transfer may be included in the active refresh; a request after that transfer is queued for another refresh. `DisplayRotate` can also change the rotation used by later drawing. `Init_uDisplay()` and multi-display switching with `[S...]` are rejected during an active refresh. LVGL defers redrawing its current screen until the panel is available.
 
