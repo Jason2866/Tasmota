@@ -501,8 +501,190 @@ uint16_t GetColorFromIndex(uint32_t index) {
   }
 }
 
-bool DisplayText(void)
+struct DisplayTextState {
+  bool active = false;
+  bool changed = false;
+  size_t offset = 0;
+  size_t length = 0;
+  int16_t lin = 0;
+  int16_t col = 0;
+  int16_t fill = 0;
+  char linebuf[DISPLAY_BUFFER_COLS];
+};
+
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+static bool DisplayTextPreflight(const char *text, bool escaped) {
+  bool any_busy = renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING;
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    any_busy |= displays[index].used && displays[index].display &&
+                displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING;
+  }
+  if (!any_busy) return true;
+  if (strlen(text) >= 255) return false;
+
+  Renderer *current = renderer;
+  uint8_t current_color_type = color_type;
+  const char *cp = text;
+  auto number = [&cp](bool floating) {
+    while ((*cp >= '0' && *cp <= '9') || *cp == '-' || (floating && *cp == '.')) cp++;
+  };
+  auto fields = [&cp, &number](unsigned count, unsigned float_from) {
+    while (count--) {
+      number(count < float_from);
+      if (count) {
+        if (!*cp) return false;
+        cp++;
+      }
+    }
+    return true;
+  };
+  auto string = [&cp](size_t limit) {
+    size_t length = 0;
+    while (*cp && *cp != ':' && length < limit) { cp++; length++; }
+    if (!*cp) return false;
+    cp++;
+    return true;
+  };
+  while (*cp) {
+    if (!escaped) {
+      if (*cp++ == '[') escaped = true;
+      continue;
+    }
+    char command = *cp++;
+    if (command == ']') { escaped = false; continue; }
+    if (command == 'S') {
+      int16_t index = atoi(cp);
+      while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+      if (index < 1 || index > MAX_MULTI_DISPLAYS) index = 1;
+      index--;
+      if (*cp == 'r') {
+        cp++;
+        while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+      }
+      if ((current && current->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) ||
+          (displays[index].used && displays[index].display &&
+           displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING)) return false;
+      if (*cp == ':') {
+        cp++;
+        if (displays[index].used) {
+          current = displays[index].display;
+          current_color_type = displays[index].color_type;
+        }
+      } else {
+        return false;
+      }
+      continue;
+    }
+    if (command == 'P' || command == 'F') {
+#ifndef USE_RAMFONT
+      if (command == 'F') return true;
+#endif
+      cp = strchr(cp, ':');
+      if (!cp) return false;
+      cp++;
+      if (command == 'P' && *cp >= '0' && *cp <= '9') {
+        while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+        if (*cp == ':') {
+          cp++;
+          while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+          if (!*cp) return false;
+          cp++;
+          while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+        }
+      }
+      continue;
+    }
+    if (strchr("ziIoO", command)) continue;
+    if (command == 't') { if (*cp == 'S') cp++; continue; }
+    if (command == 'T') { if (*cp == 'U') cp++; continue; }
+    if (strchr("Dfa", command)) { if (!*cp) return false; cp++; continue; }
+    if (strchr("xylcphvkKmsCB", command)) {
+      if ((command == 'C' || command == 'B') && *cp == 'i') cp++;
+      while ((*cp >= '0' && *cp <= '9') || *cp == '-' ||
+             ((command == 'C' || command == 'B') && *cp == '.')) cp++;
+      continue;
+    }
+#ifdef USE_AWATCH
+    if (command == 'w') { number(false); continue; }
+#endif
+    if (command == 'd') {
+      if (*cp == 'c') {
+        cp++;
+        if (!fields(2, 1)) return false;
+      }
+#ifdef USE_DT_VARS
+      else if (*cp == 'v') {
+        cp++;
+        if (!fields(10, 0) || !*cp) return false;
+        cp++;
+        if (!string(32) || !string(4)) return false;
+      }
+#endif
+      continue;
+    }
+#ifdef USE_GRAPH
+    if (command == 'g') {
+      if (!fields(2, 1)) return false;
+      continue;
+    }
+    if (command == 'G') {
+      if (*cp == 'd') {
+        cp++;
+        if (!fields(2, 0)) return false;
+      } else if (*cp == 's' || *cp == 'r') {
+        cp++;
+        number(false);
+        if (!*cp) return false;
+        cp++;
+        if (!string(128)) return false;
+      } else {
+        unsigned count = current_color_type == COLOR_COLOR ? 9 : 8;
+        for (unsigned index = 0; index < count; index++) {
+          number(index == 6 || index == 7);
+          if (index + 1 < count) { if (!*cp) return false; cp++; }
+        }
+      }
+      continue;
+    }
+#endif
+#ifdef USE_TOUCH_BUTTONS
+    if (command == 'b') {
+      if (*cp == 'e' || *cp == 'd' || *cp == 'D') {
+        cp++;
+        number(false);
+        continue;
+      }
+      if (*cp == '-') cp++;
+      bool slider = *cp == 's';
+      if (slider) cp++;
+      number(false);
+      if (*cp == 's') { cp++; continue; }
+      if (!*cp) return false;
+      cp++;
+      if (!fields(8, 0) || !*cp) return false;
+      cp++;
+      if (!slider && !string(32)) return false;
+      continue;
+    }
+#endif
+    if (strchr("LrRuU", command)) {
+      unsigned fields = (command == 'u' || command == 'U') ? 3 : 2;
+      if (command == 'u' && *cp == 'p') { cp++; fields = 5; }
+      while (fields--) {
+        while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+        if (fields) { if (!*cp) return false; cp++; }
+      }
+      continue;
+    }
+    return true;
+  }
+  return true;
+}
+#endif
+
+bool DisplayText_Run(void *context)
 {
+  DisplayTextState *state = static_cast<DisplayTextState *>(context);
   uint8_t lpos;
   uint8_t escape = 0;
   uint8_t var;
@@ -516,10 +698,24 @@ bool DisplayText(void)
   char linebuf[DISPLAY_BUFFER_COLS];
   char *dp = linebuf;
   char *cp = XdrvMailbox.data;
+  char *command_start = cp;
 
-  memset(linebuf, ' ', sizeof(linebuf));
-  linebuf[sizeof(linebuf)-1] = 0;
-  *dp = 0;
+  if (state->active) {
+    memcpy(linebuf, state->linebuf, sizeof(linebuf));
+    dp += state->length;
+    cp += state->offset;
+    escape = 1;
+    lin = state->lin;
+    col = state->col;
+    fill = state->fill;
+  } else {
+    memset(linebuf, ' ', sizeof(linebuf));
+    linebuf[sizeof(linebuf)-1] = 0;
+    *dp = 0;
+  }
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+  if (!DisplayTextPreflight(cp, escape)) return false;
+#endif
 
   while (*cp) {
     if (!escape) {
@@ -549,6 +745,7 @@ bool DisplayText(void)
             // use disp_xpos, disp_ypos
             DisplayDrawStringAt(disp_xpos, disp_ypos, linebuf, fg_color, 0);
           }
+          state->changed = true;
           memset(linebuf, ' ', sizeof(linebuf));
           linebuf[sizeof(linebuf)-1] = 0;
           dp = linebuf;
@@ -571,6 +768,7 @@ bool DisplayText(void)
         cp++;
       } else {
         // analyze escapes
+        command_start = cp;
         switch (*cp++) {
           case 'z':
             // clear display
@@ -687,7 +885,7 @@ bool DisplayText(void)
             break;
 #ifdef USE_MULTI_DISPLAY
           case 'S':
-            { int16_t rot = -1, srot, model;
+            { int16_t rot = -1, srot = Settings->display_rotate, model;
               var = atoiv(cp, &temp);
               cp += var;
               if (temp < 1 || temp > MAX_MULTI_DISPLAYS) {
@@ -703,12 +901,12 @@ bool DisplayText(void)
                   (displays[temp].used && displays[temp].display &&
                    displays[temp].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING)) {
                 AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot switch displays while an asynchronous refresh is active"));
-                return false;
+                goto display_text_busy;
               }
               if (*cp == ':') {
                 cp++;
                 if (displays[temp].used) {
-                  if (!Set_display(cur_display)) return false;
+                  if (!Set_display(cur_display)) goto display_text_busy;
                   Get_display(temp);
                 }
               } else {
@@ -727,23 +925,41 @@ bool DisplayText(void)
                         model = Settings->display_model;
                         fp.read((uint8_t*)fdesc, size);
                         fp.close();
+                        for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+                          if (displays[index].used && displays[index].display &&
+                              displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+                            free(fdesc);
+                            ep[-1] = ':';
+                            goto display_text_busy;
+                          }
+                        }
+                        for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+                          if (((index == temp && displays[index].display != renderer) ||
+                               (renderer && displays[index].display == renderer)) &&
+                              !Display_Batch_Flush_Slot(index)) {
+                            free(fdesc);
+                            ep[-1] = ':';
+                            goto display_text_busy;
+                          }
+                        }
+                        MULTI_DISP previous_display = displays[temp];
+                        uint8_t previous_index = cur_display;
+                        Renderer *previous_renderer = renderer;
                         if (renderer) {
                           // save ptr
                           if (!Set_display(temp)) {
                             free(fdesc);
                             Settings->display_model = model;
-                            return false;
+                            ep[-1] = ':';
+                            goto display_text_busy;
                           }
                           renderer = nullptr;
                         } else {
                           Renderer *svptr = renderer;
                           Get_display(temp);
                           renderer = svptr;
-                          if (rot >= 0) {
-                            srot = Settings->display_rotate;
-                            Settings->display_rotate = rot;
-                          }
                         }
+                        if (rot >= 0) Settings->display_rotate = rot;
                         renderer = Init_uDisplay(fdesc); 
                         if (rot >= 0) {
                           Settings->display_rotate = srot;
@@ -753,6 +969,16 @@ bool DisplayText(void)
                         }
                         free(fdesc);
                         Settings->display_model = model;
+#ifdef USE_UNIVERSAL_DISPLAY
+                        extern bool udisp_init_busy;
+                        if (udisp_init_busy) {
+                          displays[temp] = previous_display;
+                          cur_display = previous_index;
+                          renderer = previous_renderer;
+                          ep[-1] = ':';
+                          goto display_text_busy;
+                        }
+#endif
                       }
                     }
                   }
@@ -1288,6 +1514,7 @@ extern FS *ffsp;
             goto exit;
             break;
         }
+        state->changed = true;
       }
     }
   }
@@ -1330,7 +1557,25 @@ extern FS *ffsp;
         //else DisplayDrawFrame();
       }
     }
+  state->active = false;
   return true;
+
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+  display_text_busy:
+  state->active = true;
+  state->offset = command_start - XdrvMailbox.data;
+  state->length = dp - linebuf;
+  state->lin = lin;
+  state->col = col;
+  state->fill = fill;
+  memcpy(state->linebuf, linebuf, sizeof(linebuf));
+  return false;
+#endif
+}
+
+bool DisplayText(void) {
+  DisplayTextState state;
+  return DisplayText_Run(&state);
 }
 
 #ifdef USE_UFILESYS
@@ -1347,57 +1592,105 @@ static void Display_Batch_Refresh_Pending(void) {
   display_batch_refresh_pending = 0;
 }
 
-bool Display_Text_From_File(const char *file) {
+enum DisplayBatchResult { DISPLAY_BATCH_OK, DISPLAY_BATCH_BUSY, DISPLAY_BATCH_PARTIAL, DISPLAY_BATCH_ERROR };
+
+struct DisplayBatchContinuation {
+  bool active = false;
+  bool partial = false;
+  uint32_t file_offset = 0;
+  String path;
+  char line[128];
+  DisplayTextState text;
+};
+
+static DisplayBatchContinuation display_batch_continuation;
+
+uint8_t Display_Text_From_File(const char *file) {
   File fp;
-  if (!ufsp) return true;
+  if (!ufsp) return DISPLAY_BATCH_OK;
+  DisplayBatchContinuation &continuation = display_batch_continuation;
+  bool resuming = continuation.active;
+  if (resuming && continuation.path != file) return DISPLAY_BATCH_PARTIAL;
+  if (!resuming) {
+    continuation.path = file;
+    if (continuation.path != file) return DISPLAY_BATCH_ERROR;
+  }
   fp = ufsp->open(file, FS_FILE_READ);
   if (fp > 0) {
     char *savptr = XdrvMailbox.data;
+    uint32_t saved_len = XdrvMailbox.data_len;
     char linebuff[128];
-    bool processed = false;
+    bool processed = resuming && continuation.partial;
+    if (resuming && !fp.seek(continuation.file_offset)) {
+      fp.close();
+      return DISPLAY_BATCH_PARTIAL;
+    }
     if (!display_batch_depth) display_batch_refresh_pending = false;
     display_batch_depth++;
-    while (fp.available()) {
-      uint16_t index = 0;
-      while (fp.available()) {
-        uint8_t buf[1];
-        fp.read(buf,1);
-        if (buf[0]=='\n' || buf[0]=='\r') {
-          break;
-        } else {
-          linebuff[index] = buf[0];
-          index++;
-          if (index >= sizeof(linebuff) - 1) {
+    while (resuming || fp.available()) {
+      DisplayTextState text;
+      if (resuming) {
+        memcpy(linebuff, continuation.line, sizeof(linebuff));
+        text = continuation.text;
+        resuming = false;
+      } else {
+        memset(linebuff, 0, sizeof(linebuff));
+        uint16_t index = 0;
+        while (fp.available()) {
+          uint8_t buf[1];
+          fp.read(buf,1);
+          if (buf[0]=='\n' || buf[0]=='\r') {
             break;
+          } else {
+            linebuff[index] = buf[0];
+            index++;
+            if (index >= sizeof(linebuff) - 1) {
+              break;
+            }
           }
         }
+        linebuff[index] = 0;
       }
-      linebuff[index] = 0;
       char *cp = linebuff;
       while (*cp==' ') cp++;
       if (*cp == ';') continue;
       //AddLog(LOG_LEVEL_INFO, PSTR("displaytext %s"), cp);
       // execute display text here
-      processed = true;
       XdrvMailbox.data = cp;
       XdrvMailbox.data_len = 0;
-      if (!DisplayText()) {
+      if (!DisplayText_Run(&text)) {
+        continuation.file_offset = fp.position();
+        memset(continuation.line, 0, sizeof(continuation.line));
+        memcpy(continuation.line, cp, sizeof(linebuff) - (cp - linebuff));
+        continuation.text = text;
+        continuation.partial = processed || text.changed;
+        continuation.active = continuation.partial;
+        if (!continuation.active) continuation.path = "";
         display_batch_depth--;
-        if (!display_batch_depth) Display_Batch_Refresh_Pending();
+        if (!display_batch_depth && display_batch_refresh_pending) Display_Batch_Refresh_Pending();
         XdrvMailbox.data = savptr;
+        XdrvMailbox.data_len = saved_len;
         fp.close();
-        return false;
+        return continuation.partial ? DISPLAY_BATCH_PARTIAL : DISPLAY_BATCH_BUSY;
       }
+      processed = true;
     }
     XdrvMailbox.data = savptr;
+    XdrvMailbox.data_len = saved_len;
     fp.close();
     display_batch_depth--;
     if (!display_batch_depth && processed && display_batch_refresh_pending) {
       Display_Batch_Refresh_Pending();
     }
     if (!display_batch_depth) display_batch_refresh_pending = false;
+    continuation.active = false;
+    continuation.path = "";
+  } else if (resuming) {
+    return DISPLAY_BATCH_PARTIAL;
+  } else {
+    continuation.path = "";
   }
-  return true;
+  return DISPLAY_BATCH_OK;
 }
 #endif // USE_UFILESYS
 
@@ -2339,17 +2632,35 @@ void CmndDisplayBlinkrate(void) {
 #ifdef USE_UFILESYS
 void CmndDisplayBatch(void) {
   if (XdrvMailbox.data_len > 0) {
-    bool result = true;
+    uint8_t result = DISPLAY_BATCH_OK;
     if (!Settings->display_mode) {
       result = Display_Text_From_File(XdrvMailbox.data);
     }
-    if (result) {
+    if (result == DISPLAY_BATCH_OK) {
       ResponseCmndChar(XdrvMailbox.data);
+    } else if (result == DISPLAY_BATCH_PARTIAL) {
+      ResponseCmndChar_P(PSTR("Partial"));
+    } else if (result == DISPLAY_BATCH_ERROR) {
+      ResponseCmndChar_P(PSTR("Out of memory"));
     } else {
       ResponseCmndChar_P(PSTR("Busy"));
     }
+  } else if (display_batch_continuation.active) {
+    display_batch_continuation.active = false;
+    display_batch_continuation.path = "";
+    ResponseCmndDone();
   }
 }
+#endif
+
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+struct DisplayTextContinuation {
+  char *request = nullptr;
+  char *text = nullptr;
+  DisplayTextState state;
+};
+
+static DisplayTextContinuation display_text_continuation;
 #endif
 
 void CmndDisplayText(void) {
@@ -2357,13 +2668,59 @@ void CmndDisplayText(void) {
     if(Settings->display_model == 15 || Settings->display_model == 20) {
       XdspCall(FUNC_DISPLAY_SEVENSEG_TEXT);
     } else {
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+      DisplayTextContinuation &continuation = display_text_continuation;
+      if (continuation.request && strcmp(continuation.request, XdrvMailbox.data)) {
+        ResponseCmndChar_P(PSTR("Partial"));
+        return;
+      }
+      if (!continuation.request) {
+        continuation.request = strdup(XdrvMailbox.data);
+        continuation.text = strdup(XdrvMailbox.data);
+        continuation.state = DisplayTextState();
+        if (!continuation.request || !continuation.text) {
+          free(continuation.request);
+          free(continuation.text);
+          continuation.request = nullptr;
+          continuation.text = nullptr;
+          ResponseCmndChar_P(PSTR("Out of memory"));
+          return;
+        }
+      }
+      char *saved_data = XdrvMailbox.data;
+      XdrvMailbox.data = continuation.text;
+      bool result = DisplayText_Run(&continuation.state);
+      XdrvMailbox.data = saved_data;
+      if (!result && continuation.state.changed) {
+        ResponseCmndChar_P(PSTR("Partial"));
+        return;
+      }
+      free(continuation.request);
+      free(continuation.text);
+      continuation.request = nullptr;
+      continuation.text = nullptr;
+      if (!result) {
+        ResponseCmndChar_P(PSTR("Busy"));
+        return;
+      }
+#else
       if (!DisplayText()) {
         ResponseCmndChar_P(PSTR("Busy"));
         return;
       }
+#endif
     }
     ResponseCmndChar(XdrvMailbox.data);
   }
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+  else if (!XdrvMailbox.data_len && display_text_continuation.request) {
+    free(display_text_continuation.request);
+    free(display_text_continuation.text);
+    display_text_continuation.request = nullptr;
+    display_text_continuation.text = nullptr;
+    ResponseCmndDone();
+  }
+#endif
 }
 
 /*********************************************************************************************\
