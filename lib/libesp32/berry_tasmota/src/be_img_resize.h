@@ -136,9 +136,9 @@ static inline bool be_img_resize_rgb565_inplace(uint8_t *pixels, uint16_t source
     --index;
     uint16_t color = ((uint16_t)pixels[index * 2] << 8) | pixels[index * 2 + 1];
     uint8_t red = (color >> 11) & 31, green = (color >> 5) & 63, blue = color & 31;
-    pixels[index * 3] = (red << 3) | (red >> 2);
+    pixels[index * 3] = (blue << 3) | (blue >> 2);
     pixels[index * 3 + 1] = (green << 2) | (green >> 4);
-    pixels[index * 3 + 2] = (blue << 3) | (blue >> 2);
+    pixels[index * 3 + 2] = (red << 3) | (red >> 2);
     if (service && (index & 0x3fff) == 0) service();
   }
   return true;

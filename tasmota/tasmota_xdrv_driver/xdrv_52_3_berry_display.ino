@@ -135,9 +135,17 @@ extern "C" {
 
 #if defined(USE_UNIVERSAL_DISPLAY)
   static void be_ntv_display_validate_rgb888(struct bvm *vm, int32_t argc,
-                                              const uint8_t **pixels, int32_t *width, int32_t *height) {
-    if (argc != 3 || !be_isbytes(vm, 1) || !be_isint(vm, 2) || !be_isint(vm, 3)) {
+                                              const uint8_t **pixels, int32_t *width, int32_t *height, bool *bgr) {
+    if ((argc != 3 && argc != 4) || !be_isbytes(vm, 1) || !be_isint(vm, 2) || !be_isint(vm, 3)) {
       be_raise(vm, kTypeError, nullptr);
+    }
+    *bgr = false;
+    if (argc == 4) {
+      if (be_isbool(vm, 4)) {
+        *bgr = be_tobool(vm, 4);
+      } else if (!be_isnil(vm, 4)) {
+        be_raise(vm, kTypeError, nullptr);
+      }
     }
     if (!renderer) {
       be_raise(vm, "display_error", "universal display is not initialized");
@@ -158,7 +166,7 @@ extern "C" {
     }
   }
 
-  static void be_ntv_display_push_rgb888(struct bvm *vm, const uint8_t *pixels, int32_t width, int32_t height) {
+  static void be_ntv_display_push_rgb888(struct bvm *vm, const uint8_t *pixels, int32_t width, int32_t height, bool bgr) {
     uint16_t *row = (uint16_t *)special_malloc((uint32_t)width * sizeof(uint16_t));
     if (!row) {
       be_raise(vm, "memory_error", "could not allocate RGB565 display row");
@@ -168,9 +176,9 @@ extern "C" {
       renderer->WaitForDMATransfer();
       const uint8_t *source = pixels + (size_t)y * width * 3;
       for (int32_t x = 0; x < width; x++) {
-        const uint8_t red = source[x * 3];
+        const uint8_t red = source[x * 3 + (bgr ? 2 : 0)];
         const uint8_t green = source[x * 3 + 1];
-        const uint8_t blue = source[x * 3 + 2];
+        const uint8_t blue = source[x * 3 + (bgr ? 0 : 2)];
         row[x] = ((uint16_t)(red & 0xF8) << 8) |
                  ((uint16_t)(green & 0xFC) << 3) | (blue >> 3);
       }
@@ -185,14 +193,15 @@ extern "C" {
   }
 #endif
 
-  // `display.draw_rgb888(pixels:bytes, width:int, height:int) -> bool`
-  // draws a full logical RGB888 frame. Async-capable displays refresh cooperatively.
+  // `display.draw_rgb888(pixels:bytes, width:int, height:int[, bgr:bool]) -> bool`
+  // draws a full logical RGB888/BGR888 frame. Async-capable displays refresh cooperatively.
   int be_ntv_display_draw_rgb888(struct bvm *vm) {
 #if defined(USE_UNIVERSAL_DISPLAY)
     int32_t argc = be_top(vm);
     const uint8_t *pixels;
     int32_t width, height;
-    be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height);
+    bool bgr;
+    be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height, &bgr);
 
     const bool supports_async = renderer->GetUpdateFrameAsyncStatus() != RENDERER_UPDATE_UNSUPPORTED;
     if (supports_async && !renderer->CanStartUpdateFrameAsync()) {
@@ -200,7 +209,7 @@ extern "C" {
       be_pushbool(vm, false);
       be_return(vm);
     }
-    be_ntv_display_push_rgb888(vm, pixels, width, height);
+    be_ntv_display_push_rgb888(vm, pixels, width, height, bgr);
     const bool refreshed = supports_async ? renderer->StartUpdateFrameAsync() : renderer->UpdateframeChecked();
     if (!refreshed) {
       be_raise(vm, "display_error", "display refresh failed");
@@ -214,21 +223,22 @@ extern "C" {
 #endif
   }
 
-  // `display.draw_rgb888_async(pixels:bytes, width:int, height:int) -> bool`
-  // draws a full logical RGB888 frame and starts a cooperative display refresh.
+  // `display.draw_rgb888_async(pixels:bytes, width:int, height:int[, bgr:bool]) -> bool`
+  // draws a full logical RGB888/BGR888 frame and starts a cooperative display refresh.
   int be_ntv_display_draw_rgb888_async(struct bvm *vm) {
 #if defined(USE_UNIVERSAL_DISPLAY)
     int32_t argc = be_top(vm);
     const uint8_t *pixels;
     int32_t width, height;
-    be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height);
+    bool bgr;
+    be_ntv_display_validate_rgb888(vm, argc, &pixels, &width, &height, &bgr);
     if (!renderer->CanStartUpdateFrameAsync()) {
       be_pop(vm, argc);
       be_pushbool(vm, false);
       be_return(vm);
     }
 
-    be_ntv_display_push_rgb888(vm, pixels, width, height);
+    be_ntv_display_push_rgb888(vm, pixels, width, height, bgr);
     const bool started = renderer->StartUpdateFrameAsync();
     if (!started) {
       be_pop(vm, argc);

@@ -41,15 +41,16 @@ static int find_closest_color(const int32_t *color, const int32_t *palette) {
     return best;
 }
 
-// InkyDither.dither(pixels:bytes(), width:int, height:int, saturation:float, strength:float) -> nil
+// InkyDither.dither(pixels:bytes(), width:int, height:int, saturation:float, strength:float, bgr:bool) -> nil
 //
 // Perform Serpentine Jarvis-Judice-Ninke error diffusion dithering on the RGB888
-// pixel buffer in-place.
-// pixels: bytes object containing RGB888 data (3 bytes per pixel)
+// or BGR888 pixel buffer in-place.
+// pixels: bytes object containing 24-bit pixel data (3 bytes per pixel)
 // width: image width in pixels
 // height: image height in pixels
 // saturation: saturation value between 0.0 and 1.0 (default 0.5)
 // strength: error diffusion strength between 0.0 and 1.0 (default 1.0)
+// bgr: whether pixel channels are in BGR order instead of RGB (default false)
 int m_inky_dither_dither(bvm *vm);
 int m_inky_dither_dither(bvm *vm) {
     int32_t argc = be_top(vm);
@@ -84,6 +85,15 @@ int m_inky_dither_dither(bvm *vm) {
         }
     }
     int32_t strength_fixed = (int32_t)(strength * 256.0f + 0.5f);
+
+    bbool bgr = bfalse;
+    if (argc >= 6) {
+        if (be_isbool(vm, 6)) {
+            bgr = be_tobool(vm, 6);
+        } else if (!be_isnil(vm, 6)) {
+            be_raise(vm, "value_error", "bgr must be a boolean or nil");
+        }
+    }
 
     // Get width and height
     int32_t width = be_toint(vm, 2);
@@ -127,8 +137,13 @@ int m_inky_dither_dither(bvm *vm) {
 
     float inv_sat = 1.0f - saturation;
     int32_t palette[18];
-    for (int i = 0; i < 18; i++) {
-        palette[i] = (int32_t)(saturated[i] * saturation + desaturated[i] * inv_sat);
+    int32_t output_palette[18];
+    for (int i = 0; i < 6; i++) {
+        for (int c = 0; c < 3; c++) {
+            int src = i * 3 + (bgr ? (2 - c) : c);
+            palette[i * 3 + c] = (int32_t)(saturated[src] * saturation + desaturated[src] * inv_sat);
+            output_palette[i * 3 + c] = desaturated[src];
+        }
     }
 
     size_t stride = (size_t)width * 3;
@@ -156,7 +171,7 @@ int m_inky_dither_dither(bvm *vm) {
             int best = find_closest_color(color, palette);
             for (int channel = 0; channel < 3; channel++) {
                 int32_t error = color[channel] - palette[best * 3 + channel] * 16;
-                pixels[index + channel] = (uint8_t)desaturated[best * 3 + channel];
+                pixels[index + channel] = (uint8_t)output_palette[best * 3 + channel];
                 if (strength_fixed != 256) {
                     error = error * strength_fixed / 256;
                 }
