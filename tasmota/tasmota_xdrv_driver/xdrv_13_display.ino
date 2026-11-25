@@ -46,6 +46,8 @@ uint16_t fg_color = 1;
 uint16_t bg_color = 0;
 uint8_t color_type = COLOR_BW;
 uint8_t auto_draw = 1;
+uint8_t display_batch_depth = 0;
+uint32_t display_batch_refresh_pending = 0;
 int16_t disp_xpos = 0;
 int16_t disp_ypos = 0;
 
@@ -69,7 +71,19 @@ struct MULTI_DISP {
 uint8_t cur_display;
 Renderer *Init_uDisplay(const char *desc);
 
-void Set_display(uint8_t index) {
+bool Display_Batch_Flush_Slot(uint8_t index) {
+  uint32_t mask = 1UL << index;
+  if ((display_batch_refresh_pending & mask) && displays[index].used && displays[index].display) {
+    Renderer *pending = displays[index].display;
+    display_batch_refresh_pending &= ~mask;
+    pending->Updateframe();
+    if (pending->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) return false;
+  }
+  return true;
+}
+
+bool Set_display(uint8_t index) {
+  if (displays[index].display != renderer && !Display_Batch_Flush_Slot(index)) return false;
   displays[index].display = renderer;
   displays[index].fg_color = fg_color;
   displays[index].bg_color = bg_color;
@@ -80,6 +94,7 @@ void Set_display(uint8_t index) {
   displays[index].model = Settings->display_model;
   displays[index].used = 1;
   cur_display = index;
+  return true;
 }
 
 void Get_display(uint8_t index) {
@@ -486,8 +501,190 @@ uint16_t GetColorFromIndex(uint32_t index) {
   }
 }
 
-void DisplayText(void)
+struct DisplayTextState {
+  bool active = false;
+  bool changed = false;
+  size_t offset = 0;
+  size_t length = 0;
+  int16_t lin = 0;
+  int16_t col = 0;
+  int16_t fill = 0;
+  char linebuf[DISPLAY_BUFFER_COLS];
+};
+
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+static bool DisplayTextPreflight(const char *text, bool escaped) {
+  bool any_busy = renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING;
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    any_busy |= displays[index].used && displays[index].display &&
+                displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING;
+  }
+  if (!any_busy) return true;
+  if (strlen(text) >= 255) return false;
+
+  Renderer *current = renderer;
+  uint8_t current_color_type = color_type;
+  const char *cp = text;
+  auto number = [&cp](bool floating) {
+    while ((*cp >= '0' && *cp <= '9') || *cp == '-' || (floating && *cp == '.')) cp++;
+  };
+  auto fields = [&cp, &number](unsigned count, unsigned float_from) {
+    while (count--) {
+      number(count < float_from);
+      if (count) {
+        if (!*cp) return false;
+        cp++;
+      }
+    }
+    return true;
+  };
+  auto string = [&cp](size_t limit) {
+    size_t length = 0;
+    while (*cp && *cp != ':' && length < limit) { cp++; length++; }
+    if (!*cp) return false;
+    cp++;
+    return true;
+  };
+  while (*cp) {
+    if (!escaped) {
+      if (*cp++ == '[') escaped = true;
+      continue;
+    }
+    char command = *cp++;
+    if (command == ']') { escaped = false; continue; }
+    if (command == 'S') {
+      int16_t index = atoi(cp);
+      while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+      if (index < 1 || index > MAX_MULTI_DISPLAYS) index = 1;
+      index--;
+      if (*cp == 'r') {
+        cp++;
+        while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+      }
+      if ((current && current->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) ||
+          (displays[index].used && displays[index].display &&
+           displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING)) return false;
+      if (*cp == ':') {
+        cp++;
+        if (displays[index].used) {
+          current = displays[index].display;
+          current_color_type = displays[index].color_type;
+        }
+      } else {
+        return false;
+      }
+      continue;
+    }
+    if (command == 'P' || command == 'F') {
+#ifndef USE_RAMFONT
+      if (command == 'F') return true;
+#endif
+      cp = strchr(cp, ':');
+      if (!cp) return false;
+      cp++;
+      if (command == 'P' && *cp >= '0' && *cp <= '9') {
+        while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+        if (*cp == ':') {
+          cp++;
+          while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+          if (!*cp) return false;
+          cp++;
+          while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+        }
+      }
+      continue;
+    }
+    if (strchr("ziIoO", command)) continue;
+    if (command == 't') { if (*cp == 'S') cp++; continue; }
+    if (command == 'T') { if (*cp == 'U') cp++; continue; }
+    if (strchr("Dfa", command)) { if (!*cp) return false; cp++; continue; }
+    if (strchr("xylcphvkKmsCB", command)) {
+      if ((command == 'C' || command == 'B') && *cp == 'i') cp++;
+      while ((*cp >= '0' && *cp <= '9') || *cp == '-' ||
+             ((command == 'C' || command == 'B') && *cp == '.')) cp++;
+      continue;
+    }
+#ifdef USE_AWATCH
+    if (command == 'w') { number(false); continue; }
+#endif
+    if (command == 'd') {
+      if (*cp == 'c') {
+        cp++;
+        if (!fields(2, 1)) return false;
+      }
+#ifdef USE_DT_VARS
+      else if (*cp == 'v') {
+        cp++;
+        if (!fields(10, 0) || !*cp) return false;
+        cp++;
+        if (!string(32) || !string(4)) return false;
+      }
+#endif
+      continue;
+    }
+#ifdef USE_GRAPH
+    if (command == 'g') {
+      if (!fields(2, 1)) return false;
+      continue;
+    }
+    if (command == 'G') {
+      if (*cp == 'd') {
+        cp++;
+        if (!fields(2, 0)) return false;
+      } else if (*cp == 's' || *cp == 'r') {
+        cp++;
+        number(false);
+        if (!*cp) return false;
+        cp++;
+        if (!string(128)) return false;
+      } else {
+        unsigned count = current_color_type == COLOR_COLOR ? 9 : 8;
+        for (unsigned index = 0; index < count; index++) {
+          number(index == 6 || index == 7);
+          if (index + 1 < count) { if (!*cp) return false; cp++; }
+        }
+      }
+      continue;
+    }
+#endif
+#ifdef USE_TOUCH_BUTTONS
+    if (command == 'b') {
+      if (*cp == 'e' || *cp == 'd' || *cp == 'D') {
+        cp++;
+        number(false);
+        continue;
+      }
+      if (*cp == '-') cp++;
+      bool slider = *cp == 's';
+      if (slider) cp++;
+      number(false);
+      if (*cp == 's') { cp++; continue; }
+      if (!*cp) return false;
+      cp++;
+      if (!fields(8, 0) || !*cp) return false;
+      cp++;
+      if (!slider && !string(32)) return false;
+      continue;
+    }
+#endif
+    if (strchr("LrRuU", command)) {
+      unsigned fields = (command == 'u' || command == 'U') ? 3 : 2;
+      if (command == 'u' && *cp == 'p') { cp++; fields = 5; }
+      while (fields--) {
+        while ((*cp >= '0' && *cp <= '9') || *cp == '-') cp++;
+        if (fields) { if (!*cp) return false; cp++; }
+      }
+      continue;
+    }
+    return true;
+  }
+  return true;
+}
+#endif
+
+bool DisplayText_Run(void *context)
 {
+  DisplayTextState *state = static_cast<DisplayTextState *>(context);
   uint8_t lpos;
   uint8_t escape = 0;
   uint8_t var;
@@ -501,10 +698,24 @@ void DisplayText(void)
   char linebuf[DISPLAY_BUFFER_COLS];
   char *dp = linebuf;
   char *cp = XdrvMailbox.data;
+  char *command_start = cp;
 
-  memset(linebuf, ' ', sizeof(linebuf));
-  linebuf[sizeof(linebuf)-1] = 0;
-  *dp = 0;
+  if (state->active) {
+    memcpy(linebuf, state->linebuf, sizeof(linebuf));
+    dp += state->length;
+    cp += state->offset;
+    escape = 1;
+    lin = state->lin;
+    col = state->col;
+    fill = state->fill;
+  } else {
+    memset(linebuf, ' ', sizeof(linebuf));
+    linebuf[sizeof(linebuf)-1] = 0;
+    *dp = 0;
+  }
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+  if (!DisplayTextPreflight(cp, escape)) return false;
+#endif
 
   while (*cp) {
     if (!escape) {
@@ -534,6 +745,7 @@ void DisplayText(void)
             // use disp_xpos, disp_ypos
             DisplayDrawStringAt(disp_xpos, disp_ypos, linebuf, fg_color, 0);
           }
+          state->changed = true;
           memset(linebuf, ' ', sizeof(linebuf));
           linebuf[sizeof(linebuf)-1] = 0;
           dp = linebuf;
@@ -556,6 +768,7 @@ void DisplayText(void)
         cp++;
       } else {
         // analyze escapes
+        command_start = cp;
         switch (*cp++) {
           case 'z':
             // clear display
@@ -665,14 +878,14 @@ void DisplayText(void)
                   ep += var;
                 }
                }
-               Draw_RGB_Bitmap(cp, disp_xpos, disp_ypos, scale, false, xs, ys);
+               Draw_RGB_Bitmap(cp, disp_xpos, disp_ypos, scale, false, xs, ys, true, false);
                cp = ep;
              }
             }
             break;
 #ifdef USE_MULTI_DISPLAY
           case 'S':
-            { int16_t rot = -1, srot, model;
+            { int16_t rot = -1, srot = Settings->display_rotate, model;
               var = atoiv(cp, &temp);
               cp += var;
               if (temp < 1 || temp > MAX_MULTI_DISPLAYS) {
@@ -684,10 +897,16 @@ void DisplayText(void)
                 var = atoiv(cp, &rot);
                 cp += var;
               }
+              if ((renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) ||
+                  (displays[temp].used && displays[temp].display &&
+                   displays[temp].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING)) {
+                AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot switch displays while an asynchronous refresh is active"));
+                goto display_text_busy;
+              }
               if (*cp == ':') {
                 cp++;
                 if (displays[temp].used) {
-                  Set_display(cur_display);
+                  if (!Set_display(cur_display)) goto display_text_busy;
                   Get_display(temp);
                 }
               } else {
@@ -706,27 +925,60 @@ void DisplayText(void)
                         model = Settings->display_model;
                         fp.read((uint8_t*)fdesc, size);
                         fp.close();
+                        for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+                          if (displays[index].used && displays[index].display &&
+                              displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+                            free(fdesc);
+                            ep[-1] = ':';
+                            goto display_text_busy;
+                          }
+                        }
+                        for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+                          if (((index == temp && displays[index].display != renderer) ||
+                               (renderer && displays[index].display == renderer)) &&
+                              !Display_Batch_Flush_Slot(index)) {
+                            free(fdesc);
+                            ep[-1] = ':';
+                            goto display_text_busy;
+                          }
+                        }
+                        MULTI_DISP previous_display = displays[temp];
+                        uint8_t previous_index = cur_display;
+                        Renderer *previous_renderer = renderer;
                         if (renderer) {
                           // save ptr
-                          Set_display(temp);
+                          if (!Set_display(temp)) {
+                            free(fdesc);
+                            Settings->display_model = model;
+                            ep[-1] = ':';
+                            goto display_text_busy;
+                          }
                           renderer = nullptr;
                         } else {
                           Renderer *svptr = renderer;
                           Get_display(temp);
                           renderer = svptr;
-                          if (rot >= 0) {
-                            srot = Settings->display_rotate;
-                            Settings->display_rotate = rot;
-                          }
                         }
+                        if (rot >= 0) Settings->display_rotate = rot;
                         renderer = Init_uDisplay(fdesc); 
                         if (rot >= 0) {
                           Settings->display_rotate = srot;
                         }
-                        Set_display(temp);
-                        AddLog(LOG_LEVEL_INFO, PSTR("DSP: File descriptor loaded"));
+                        if (renderer) {
+                          AddLog(LOG_LEVEL_INFO, PSTR("DSP: File descriptor loaded"));
+                        }
                         free(fdesc);
                         Settings->display_model = model;
+#ifdef USE_UNIVERSAL_DISPLAY
+                        extern bool udisp_init_busy;
+                        if (udisp_init_busy) {
+                          displays[temp] = previous_display;
+                          cur_display = previous_index;
+                          renderer = previous_renderer;
+                          ep[-1] = ':';
+                          goto display_text_busy;
+                        }
+#endif
                       }
                     }
                   }
@@ -1262,6 +1514,7 @@ extern FS *ffsp;
             goto exit;
             break;
         }
+        state->changed = true;
       }
     }
   }
@@ -1293,35 +1546,111 @@ extern FS *ffsp;
     }
     // draw buffer
     if (auto_draw&1) {
-      if (renderer) renderer->Updateframe();
-      //else DisplayDrawFrame();
+      if (display_batch_depth) {
+#ifdef USE_MULTI_DISPLAY
+        display_batch_refresh_pending |= 1UL << cur_display;
+#else
+        display_batch_refresh_pending = 1;
+#endif
+      } else {
+        if (renderer) renderer->Updateframe();
+        //else DisplayDrawFrame();
+      }
     }
+  state->active = false;
+  return true;
+
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+  display_text_busy:
+  state->active = true;
+  state->offset = command_start - XdrvMailbox.data;
+  state->length = dp - linebuf;
+  state->lin = lin;
+  state->col = col;
+  state->fill = fill;
+  memcpy(state->linebuf, linebuf, sizeof(linebuf));
+  return false;
+#endif
+}
+
+bool DisplayText(void) {
+  DisplayTextState state;
+  return DisplayText_Run(&state);
 }
 
 #ifdef USE_UFILESYS
-void Display_Text_From_File(const char *file) {
+static void Display_Batch_Refresh_Pending(void) {
+#ifdef USE_MULTI_DISPLAY
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    if ((display_batch_refresh_pending & (1UL << index)) && displays[index].used && displays[index].display) {
+      displays[index].display->Updateframe();
+    }
+  }
+#else
+  if (renderer) renderer->Updateframe();
+#endif
+  display_batch_refresh_pending = 0;
+}
+
+enum DisplayBatchResult { DISPLAY_BATCH_OK, DISPLAY_BATCH_BUSY, DISPLAY_BATCH_PARTIAL, DISPLAY_BATCH_ERROR };
+
+struct DisplayBatchContinuation {
+  bool active = false;
+  bool partial = false;
+  uint32_t file_offset = 0;
+  String path;
+  char line[128];
+  DisplayTextState text;
+};
+
+static DisplayBatchContinuation display_batch_continuation;
+
+uint8_t Display_Text_From_File(const char *file) {
   File fp;
-  if (!ufsp) return;
+  if (!ufsp) return DISPLAY_BATCH_OK;
+  DisplayBatchContinuation &continuation = display_batch_continuation;
+  bool resuming = continuation.active;
+  if (resuming && continuation.path != file) return DISPLAY_BATCH_PARTIAL;
+  if (!resuming) {
+    continuation.path = file;
+    if (continuation.path != file) return DISPLAY_BATCH_ERROR;
+  }
   fp = ufsp->open(file, FS_FILE_READ);
   if (fp > 0) {
     char *savptr = XdrvMailbox.data;
+    uint32_t saved_len = XdrvMailbox.data_len;
     char linebuff[128];
-    while (fp.available()) {
-      uint16_t index = 0;
-      while (fp.available()) {
-        uint8_t buf[1];
-        fp.read(buf,1);
-        if (buf[0]=='\n' || buf[0]=='\r') {
-          break;
-        } else {
-          linebuff[index] = buf[0];
-          index++;
-          if (index >= sizeof(linebuff) - 1) {
+    bool processed = resuming && continuation.partial;
+    if (resuming && !fp.seek(continuation.file_offset)) {
+      fp.close();
+      return DISPLAY_BATCH_PARTIAL;
+    }
+    if (!display_batch_depth) display_batch_refresh_pending = false;
+    display_batch_depth++;
+    while (resuming || fp.available()) {
+      DisplayTextState text;
+      if (resuming) {
+        memcpy(linebuff, continuation.line, sizeof(linebuff));
+        text = continuation.text;
+        resuming = false;
+      } else {
+        memset(linebuff, 0, sizeof(linebuff));
+        uint16_t index = 0;
+        while (fp.available()) {
+          uint8_t buf[1];
+          fp.read(buf,1);
+          if (buf[0]=='\n' || buf[0]=='\r') {
             break;
+          } else {
+            linebuff[index] = buf[0];
+            index++;
+            if (index >= sizeof(linebuff) - 1) {
+              break;
+            }
           }
         }
+        linebuff[index] = 0;
       }
-      linebuff[index] = 0;
       char *cp = linebuff;
       while (*cp==' ') cp++;
       if (*cp == ';') continue;
@@ -1329,11 +1658,39 @@ void Display_Text_From_File(const char *file) {
       // execute display text here
       XdrvMailbox.data = cp;
       XdrvMailbox.data_len = 0;
-      DisplayText();
+      if (!DisplayText_Run(&text)) {
+        continuation.file_offset = fp.position();
+        memset(continuation.line, 0, sizeof(continuation.line));
+        memcpy(continuation.line, cp, sizeof(linebuff) - (cp - linebuff));
+        continuation.text = text;
+        continuation.partial = processed || text.changed;
+        continuation.active = continuation.partial;
+        if (!continuation.active) continuation.path = "";
+        display_batch_depth--;
+        if (!display_batch_depth && display_batch_refresh_pending) Display_Batch_Refresh_Pending();
+        XdrvMailbox.data = savptr;
+        XdrvMailbox.data_len = saved_len;
+        fp.close();
+        return continuation.partial ? DISPLAY_BATCH_PARTIAL : DISPLAY_BATCH_BUSY;
+      }
+      processed = true;
     }
     XdrvMailbox.data = savptr;
+    XdrvMailbox.data_len = saved_len;
     fp.close();
+    display_batch_depth--;
+    if (!display_batch_depth && processed && display_batch_refresh_pending) {
+      Display_Batch_Refresh_Pending();
+    }
+    if (!display_batch_depth) display_batch_refresh_pending = false;
+    continuation.active = false;
+    continuation.path = "";
+  } else if (resuming) {
+    return DISPLAY_BATCH_PARTIAL;
+  } else {
+    continuation.path = "";
   }
+  return DISPLAY_BATCH_OK;
 }
 #endif // USE_UFILESYS
 
@@ -1623,8 +1980,15 @@ void DisplayReAllocLogBuffer(void) {
 
 void DisplayLogBufferAdd(char* txt) {
   if (disp_log_buffer_cols) {
-    strlcpy(disp_log_buffer[disp_log_buffer_idx++], txt, disp_log_buffer_cols);  // This preserves the % sign where printf won't
-    if (DISPLAY_LOG_ROWS == disp_log_buffer_idx) { disp_log_buffer_idx = 0; }
+    uint8_t next_idx = disp_log_buffer_idx + 1;
+    if (DISPLAY_LOG_ROWS == next_idx) { next_idx = 0; }
+    if ((next_idx == disp_log_buffer_ptr) && renderer &&
+        (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING)) {
+      // Async display updates can leave this ring unconsumed long enough to wrap.
+      if (DISPLAY_LOG_ROWS == ++disp_log_buffer_ptr) { disp_log_buffer_ptr = 0; }
+    }
+    strlcpy(disp_log_buffer[disp_log_buffer_idx], txt, disp_log_buffer_cols);  // This preserves the % sign where printf won't
+    disp_log_buffer_idx = next_idx;
   }
 }
 
@@ -1645,10 +2009,17 @@ char* DisplayLogBuffer(char temp_code) {
   return result;
 }
 
+#ifdef USE_UNIVERSAL_DISPLAY
+void UDISP_StagedLogReset(void);
+#endif  // USE_UNIVERSAL_DISPLAY
+
 void DisplayLogBufferInit(void) {
   if (Settings->display_mode) {
     disp_log_buffer_idx = 0;
     disp_log_buffer_ptr = 0;
+#ifdef USE_UNIVERSAL_DISPLAY
+    UDISP_StagedLogReset();
+#endif  // USE_UNIVERSAL_DISPLAY
     disp_refresh = Settings->display_refresh;
 
     snprintf_P(disp_temp, sizeof(disp_temp), PSTR("%c"), TempUnit());
@@ -2261,23 +2632,93 @@ void CmndDisplayBlinkrate(void) {
 #ifdef USE_UFILESYS
 void CmndDisplayBatch(void) {
   if (XdrvMailbox.data_len > 0) {
+    uint8_t result = DISPLAY_BATCH_OK;
     if (!Settings->display_mode) {
-      Display_Text_From_File(XdrvMailbox.data);
+      result = Display_Text_From_File(XdrvMailbox.data);
     }
-    ResponseCmndChar(XdrvMailbox.data);
+    if (result == DISPLAY_BATCH_OK) {
+      ResponseCmndChar(XdrvMailbox.data);
+    } else if (result == DISPLAY_BATCH_PARTIAL) {
+      ResponseCmndChar_P(PSTR("Partial"));
+    } else if (result == DISPLAY_BATCH_ERROR) {
+      ResponseCmndChar_P(PSTR("Out of memory"));
+    } else {
+      ResponseCmndChar_P(PSTR("Busy"));
+    }
+  } else if (display_batch_continuation.active) {
+    display_batch_continuation.active = false;
+    display_batch_continuation.path = "";
+    ResponseCmndDone();
   }
+}
+#endif
+
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+struct DisplayTextContinuation {
+  char *request = nullptr;
+  char *text = nullptr;
+  DisplayTextState state;
+};
+
+static DisplayTextContinuation display_text_continuation;
+
+static void DisplayTextClearContinuation(void) {
+  free(display_text_continuation.request);
+  free(display_text_continuation.text);
+  display_text_continuation = DisplayTextContinuation{};
 }
 #endif
 
 void CmndDisplayText(void) {
   if (disp_device && XdrvMailbox.data_len > 0) {
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+    DisplayTextContinuation &continuation = display_text_continuation;
+    if (continuation.request && strcmp(continuation.request, XdrvMailbox.data)) {
+      DisplayTextClearContinuation();
+    }
+#endif
     if(Settings->display_model == 15 || Settings->display_model == 20) {
       XdspCall(FUNC_DISPLAY_SEVENSEG_TEXT);
     } else {
-      DisplayText();
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+      if (!continuation.request) {
+        continuation.request = strdup(XdrvMailbox.data);
+        continuation.text = strdup(XdrvMailbox.data);
+        continuation.state = DisplayTextState();
+        if (!continuation.request || !continuation.text) {
+          DisplayTextClearContinuation();
+          ResponseCmndChar_P(PSTR("Out of memory"));
+          return;
+        }
+      }
+      char *saved_data = XdrvMailbox.data;
+      XdrvMailbox.data = continuation.text;
+      bool result = DisplayText_Run(&continuation.state);
+      XdrvMailbox.data = saved_data;
+      if (!result && continuation.state.changed) {
+        ResponseCmndChar_P(PSTR("Partial"));
+        return;
+      }
+      DisplayTextClearContinuation();
+      if (!result) {
+        ResponseCmndChar_P(PSTR("Busy"));
+        return;
+      }
+#else
+      if (!DisplayText()) {
+        ResponseCmndChar_P(PSTR("Busy"));
+        return;
+      }
+#endif
     }
     ResponseCmndChar(XdrvMailbox.data);
   }
+#if defined(USE_MULTI_DISPLAY) && defined(USE_UFILESYS)
+  else if (!XdrvMailbox.data_len && display_text_continuation.request) {
+    DisplayTextClearContinuation();
+    ResponseCmndDone();
+  }
+#endif
 }
 
 /*********************************************************************************************\
@@ -2376,7 +2817,27 @@ void CmndDisplayScrollText(void) {
 }
 
 void DisplayReInitDriver(void) {
+#ifdef USE_MULTI_DISPLAY
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    if (displays[index].used && displays[index].display &&
+        displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+      ResponseCmndChar_P(PSTR("Busy"));
+      return;
+    }
+  }
+  if (!Display_Batch_Flush_Slot(0)) {
+    ResponseCmndChar_P(PSTR("Busy"));
+    return;
+  }
+#endif
   XdspCall(FUNC_DISPLAY_INIT_DRIVER);
+#ifdef USE_UNIVERSAL_DISPLAY
+  extern bool udisp_init_busy;
+  if (udisp_init_busy) {
+    ResponseCmndChar_P(PSTR("Busy"));
+    return;
+  }
+#endif
 #ifdef USE_MULTI_DISPLAY
   Set_display(0);
 #endif // USE_MULTI_DISPLAY
@@ -2414,10 +2875,13 @@ char ppath[16];
   } else {
     strlcat(ppath, ".jpg", sizeof(ppath));
   }
-  Draw_RGB_Bitmap(ppath, xp, yp, 0, inverted, 0, 0);
+  Draw_RGB_Bitmap(ppath, xp, yp, 0, inverted, 0, 0, true, false);
 }
 #endif  // USE_TOUCH_BUTTONS
 
+#if defined(ESP32) && defined(JPEG_PICTS)
+bool Draw_JPG_from_URL(char *url, uint16_t xp, uint16_t yp, uint8_t scale);
+#endif
 
 #ifdef ESP32
 #ifdef JPEG_PICTS
@@ -2442,33 +2906,40 @@ char get_jpeg_size(unsigned char* data, unsigned int data_size, unsigned short *
 #ifdef USE_UFILESYS
 extern FS *ufsp;
 #define XBUFF_LEN 128
-void Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys ) {
-  if (!renderer) return;
+bool Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool inverted, uint16_t xs, uint16_t ys, bool allow_url, bool jpeg_only ) {
+  if (!renderer || !ufsp) return false;
   File fp;
-  char *ending = 0;
-  for (uint32_t cnt = strlen(file) - 1; cnt >= 0; cnt--) {
-    if (file[cnt] == '.') {
-      ending = &file[cnt + 1];
-      break;
-    }
-  }
-  if (!ending) return;
+  if (!file || !file[0]) return false;
+  const char *dot = strrchr(file, '.');
+  const char *slash = strrchr(file, '/');
+  const char *backslash = strrchr(file, '\\');
+  const char *separator = slash;
+  if (backslash && (!separator || backslash > separator)) separator = backslash;
+  if (!dot || (separator && dot < separator) || !dot[1]) return false;
+  const char *ending = dot + 1;
   char estr[8];
   memset(estr, 0, sizeof(estr));
-  for (uint32_t cnt = 0; cnt < strlen(ending); cnt++) {
-    estr[cnt] = tolower(ending[cnt]);
+  size_t ending_len = strlen(ending);
+  if (ending_len >= sizeof(estr)) return false;
+  for (size_t cnt = 0; cnt < ending_len; cnt++) {
+    estr[cnt] = tolower((unsigned char)ending[cnt]);
   }
+  if (jpeg_only && strcmp(estr, "jpg") && strcmp(estr, "jpeg")) return false;
 
-  uint16_t xsize;
-  uint16_t ysize;
+  uint16_t xsize = 0;
+  uint16_t ysize = 0;
 
   if (!strcmp(estr,"rgb")) {
     // special rgb format
     fp = ufsp->open(file, FS_FILE_READ);
-    if (!fp) return;
-    
-    fp.read((uint8_t*)&xsize, 2);
-    fp.read((uint8_t*)&ysize, 2);
+    if (!fp) return false;
+
+    if (fp.read((uint8_t*)&xsize, sizeof(xsize)) != sizeof(xsize) ||
+        fp.read((uint8_t*)&ysize, sizeof(ysize)) != sizeof(ysize) ||
+        !xsize || !ysize) {
+      fp.close();
+      return false;
+    }
     uint16_t xoffs;
     uint16_t yoffs;
     if (xs > 0) {
@@ -2482,49 +2953,61 @@ void Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
 #ifndef SLOW_RGB16
     //renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
     uint16_t *rgb = (uint16_t *)special_malloc(xsize * 2);
+    bool drawn = rgb != nullptr;
     if (rgb) {
       //uint16_t rgb[xsize];
-      for (int16_t j = 0; j < ysize; j++) {
-        fp.read((uint8_t*)rgb, xsize * 2);
+      for (uint16_t j = 0; j < ysize; j++) {
+        renderer->WaitForDMATransfer();
+        if (fp.read((uint8_t*)rgb, xsize * 2) != xsize * 2) {
+          drawn = false;
+          break;
+        }
         renderer->setAddrWindow(xp, yp + j, xp + xsize, yp + j + 1);
         renderer->pushColors(rgb, xsize, true);
         OsWatchLoop();
       }
+      renderer->WaitForDMATransfer();
       free(rgb);
     }
     renderer->setAddrWindow(0, 0, 0, 0);
 #else
-    for (int16_t j = 0; j < ysize; j++) {
-      for (int16_t i = 0; i < xsize; i++ ) {
+    bool drawn = true;
+    for (uint16_t j = 0; j < ysize; j++) {
+      for (uint16_t i = 0; i < xsize; i++ ) {
         uint16_t rgb;
         uint8_t res = fp.read((uint8_t*)&rgb, 2);
-        if (!res) break;
+        if (res != 2) {
+          drawn = false;
+          break;
+        }
         renderer->writePixel(xp + i, yp, rgb);
       }
+      if (!drawn) break;
       delay(0);
       OsWatchLoop();
       yp++;
     }
 #endif
-    if (scale) {
+    if (drawn && scale) {
       if (renderer) renderer->drawRect(xp, yp, xsize, ysize, GetColorFromIndex(scale));
     }
     fp.close();
+    return drawn;
   } else if (!strcmp(estr,"jpg") || !strcmp(estr,"jpeg")) {
     // jpeg files on ESP32 with more memory
 #ifdef ESP32
 #ifdef JPEG_PICTS
     fp = ufsp->open(file, FS_FILE_READ);
     if (!fp) {
-      // try url
-      Draw_JPG_from_URL(file, xp, yp, scale);
-      return;
+      // URL fallback is disabled for callers that require a local file.
+      return allow_url ? Draw_JPG_from_URL(file, xp, yp, scale) : false;
     }
     uint32_t size = fp.size();
-    uint8_t *mem = (uint8_t *)special_malloc(size + 4);
+    uint8_t *mem = size >= 4 ? (uint8_t *)special_malloc(size + 4) : nullptr;
+    bool drawn = false;
     if (mem) {
-      uint8_t res = fp.read(mem, size);
-      if (res) {
+      size_t res = fp.read(mem, size);
+      if (res == size) {
         uint16_t xoffs;
         uint16_t yoffs;
         if (mem[0] == 0xff && mem[1] == 0xd8) {
@@ -2552,10 +3035,12 @@ void Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
                 .flags = {  .swap_color_bytes = inverted,}
               };
               esp_jpeg_image_output_t outimg;
-              esp_jpeg_decode(&jpeg_cfg, &outimg);
-              renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
-              renderer->pushColors(out_buf, outsize / 2, true);
-              renderer->setAddrWindow(0, 0, 0, 0);
+              if (esp_jpeg_decode(&jpeg_cfg, &outimg) == ESP_OK) {
+                drawn = renderer->setAddrWindowChecked(xp, yp, xp + xsize, yp + ysize) &&
+                        renderer->pushColorsChecked(out_buf, outsize / 2, true);
+                renderer->WaitForDMATransfer();
+                renderer->setAddrWindow(0, 0, 0, 0);
+              }
               free(out_buf);
             }
 #else
@@ -2564,19 +3049,25 @@ void Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
               uint16_t *pixb = (uint16_t *)special_malloc((xsize * 2) + 4);
               if (pixb) {
                 uint8_t *ob = out_buf;
-                if (jpg2rgb888(mem, size, out_buf, (jpg_scale_t)JPG_SCALE_NONE)) {                  
+                if (jpg2rgb888(mem, size, out_buf, (jpg_scale_t)JPG_SCALE_NONE)) {
                   //renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
+                  drawn = true;
                   for (int32_t j = 0; j < ysize; j++) {
+                    renderer->WaitForDMATransfer();
                     if (inverted == false) {
                       rgb888_to_565(ob, pixb, xsize);
                     } else {
                       rgb888_to_565i(ob, pixb, xsize);
                     }
                     ob += xsize * 3;
-                    renderer->setAddrWindow(xp, yp + j, xp + xsize, yp + j + 1);
-                    renderer->pushColors(pixb, xsize, true);
+                    if (!renderer->setAddrWindowChecked(xp, yp + j, xp + xsize, yp + j + 1) ||
+                        !renderer->pushColorsChecked(pixb, xsize, true)) {
+                      drawn = false;
+                      break;
+                    }
                     OsWatchLoop();
                   }
+                  renderer->WaitForDMATransfer();
                   renderer->setAddrWindow(0, 0, 0, 0);
                 }
                 free(out_buf);
@@ -2588,31 +3079,36 @@ void Draw_RGB_Bitmap(char *file, uint16_t xp, uint16_t yp, uint8_t scale, bool i
 #endif
           }
         }
-        free(mem);
       }
       if (scale) {
         if (renderer) renderer->drawRect(xp, yp, xsize, ysize, GetColorFromIndex(scale));
       }
-      fp.close();
+      free(mem);
     }
+    fp.close();
+    return drawn;
 #endif // JPEG_PICTS
 #endif // ESP32
   }
+  return false;
 }
 
 #ifdef ESP32
 #ifdef JPEG_PICTS
 #define JPG_DEFSIZE 150000
-void Draw_jpeg(uint8_t *mem, uint16_t jpgsize, uint16_t xp, uint16_t yp, uint8_t scale) {
-  if (mem[0] == 0xff && mem[1] == 0xd8) {
-    uint16_t xsize;
-    uint16_t ysize;
-    get_jpeg_size(mem, jpgsize, &xsize, &ysize);
+bool Draw_jpeg(uint8_t *mem, uint32_t jpgsize, uint16_t xp, uint16_t yp, uint8_t scale) {
+  if (!renderer || !mem || jpgsize < 4 || mem[0] != 0xff || mem[1] != 0xd8) return false;
+  uint16_t xsize = 0;
+  uint16_t ysize = 0;
+  get_jpeg_size(mem, jpgsize, &xsize, &ysize);
+  if (!xsize || !ysize) return false;
     //AddLog(LOG_LEVEL_INFO, PSTR("Pict size %d - %d - %d"), xsize, ysize, jpgsize);
     scale &= 3;
     uint8_t fac = 1 << scale;
     xsize /= fac;
     ysize /= fac;
+    if (!xsize || !ysize) return false;
+    bool drawn = false;
 
 #ifdef USE_NEW_JPG
     uint32_t osize = xsize * ysize * 2;
@@ -2628,30 +3124,38 @@ void Draw_jpeg(uint8_t *mem, uint16_t jpgsize, uint16_t xp, uint16_t yp, uint8_t
                 .flags = {  .swap_color_bytes = 0,}
               };
       esp_jpeg_image_output_t outimg;
-      esp_jpeg_decode(&jpeg_cfg, &outimg);
-      renderer->setAddrWindow(xp, yp, xp + xsize, yp + ysize);
-      renderer->pushColors(rgbmem, osize / 2, true);
+      if (esp_jpeg_decode(&jpeg_cfg, &outimg) == ESP_OK) {
+        drawn = renderer->setAddrWindowChecked(xp, yp, xp + xsize, yp + ysize) &&
+                renderer->pushColorsChecked(rgbmem, osize / 2, true);
+        renderer->WaitForDMATransfer();
+      }
       free(rgbmem);
     }
 #else
-    
+
     uint8_t *rgbmem = (uint8_t *)special_malloc(xsize * ysize * 2);
-    if (rgbmem) {     
-      jpg2rgb565(mem, jpgsize, rgbmem, (jpg_scale_t)scale);
-      uint16_t *ob = (uint16_t*)rgbmem;
-      for (int32_t j = 0; j < ysize; j++) {
-        renderer->setAddrWindow(xp, yp + j, xp + xsize, yp + j + 1);
-        renderer->pushColors((uint16_t*)ob, xsize, true);
-        ob += xsize;
+    if (rgbmem) {
+      if (jpg2rgb565(mem, jpgsize, rgbmem, (jpg_scale_t)scale)) {
+        uint16_t *ob = (uint16_t*)rgbmem;
+        drawn = true;
+        for (int32_t j = 0; j < ysize; j++) {
+          if (!renderer->setAddrWindowChecked(xp, yp + j, xp + xsize, yp + j + 1) ||
+              !renderer->pushColorsChecked(ob, xsize, true)) {
+            drawn = false;
+            break;
+          }
+          ob += xsize;
+        }
+        renderer->WaitForDMATransfer();
       }
       free(rgbmem);
     }
 #endif
     renderer->setAddrWindow(0, 0, 0, 0);
-  }
+    return drawn;
 }
 
-void Draw_JPG_from_URL(char *url, uint16_t xp, uint16_t yp, uint8_t scale) {
+bool Draw_JPG_from_URL(char *url, uint16_t xp, uint16_t yp, uint8_t scale) {
   uint8_t *mem = 0;
   WiFiClient http_client;
   HTTPClient http;
@@ -2663,24 +3167,39 @@ void Draw_JPG_from_URL(char *url, uint16_t xp, uint16_t yp, uint8_t scale) {
   uint32_t jpgsize = 0;
   if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
     mem = (uint8_t *)special_malloc(JPG_DEFSIZE);
-    if (!mem) return;
-    uint8_t *jpgp = mem;
-    WiFiClient *stream = http.getStreamPtr();
-    int32_t len = http.getSize();
-    if (len < 0) len = 99999999;
-    while (http.connected() && (len > 0)) {
-      size_t size = stream->available();
-      if (size) {
-        if (size > JPG_DEFSIZE) {
-          size = JPG_DEFSIZE;
+    if (mem) {
+      uint8_t *jpgp = mem;
+      WiFiClient *stream = http.getStreamPtr();
+      int32_t len = http.getSize();
+      if (len < 0) len = 99999999;
+      uint32_t last_data_time = millis();
+      bool timed_out = false;
+      while (http.connected() && (len > 0) && (jpgsize < JPG_DEFSIZE)) {
+        size_t size = stream->available();
+        if (size) {
+          size_t remaining = JPG_DEFSIZE - jpgsize;
+          if (size > remaining) {
+            size = remaining;
+          }
+          uint32_t read = stream->readBytes(jpgp, size);
+          if (read == 0) break;
+          len -= read;
+          jpgp  += read;
+          jpgsize += read;
+          last_data_time = millis();
+          //AddLog(LOG_LEVEL_INFO,PSTR("HTTP read %d - %d"), read, jpgsize);
+        } else if (millis() - last_data_time >= 10000) {
+          timed_out = true;
+          break;
         }
-        uint32_t read = stream->readBytes(jpgp, size);
-        len -= read;
-        jpgp  += read;
-        jpgsize += read;
-        //AddLog(LOG_LEVEL_INFO,PSTR("HTTP read %d - %d"), read, jpgsize);
+        delayMicroseconds(1);
       }
-      delayMicroseconds(1);
+      if (timed_out) {
+        http.end();
+        http_client.stop();
+        free(mem);
+        return false;
+      }
     }
   } else {
     AddLog(LOG_LEVEL_INFO, PSTR("HTTP ERROR %s"), http.getString().c_str());
@@ -2688,10 +3207,9 @@ void Draw_JPG_from_URL(char *url, uint16_t xp, uint16_t yp, uint8_t scale) {
   http.end();
   http_client.stop();
 
-  if (jpgsize) {
-    Draw_jpeg(mem, jpgsize, xp, yp, scale);
-  }
+  bool drawn = mem && jpgsize && Draw_jpeg(mem, jpgsize, xp, yp, scale);
   if (mem) free(mem);
+  return drawn;
 }
 #endif // JPEG_PICTS
 #endif // ESP32
@@ -3110,6 +3628,21 @@ bool Xdrv13(uint32_t function) {
         if (disp_apply_display_dimmer_request) {
           ApplyDisplayDimmer(GetDisplayDimmer());  // Allowed here.
         }
+        break;
+      case FUNC_LOOP:
+#ifdef USE_UNIVERSAL_DISPLAY
+#ifdef USE_MULTI_DISPLAY
+        for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+          if (displays[index].used && displays[index].display) {
+            displays[index].display->ServiceUpdateFrameAsync();
+          }
+        }
+#else
+        if (renderer) {
+          renderer->ServiceUpdateFrameAsync();
+        }
+#endif
+#endif  // USE_UNIVERSAL_DISPLAY
         break;
       case FUNC_EVERY_50_MSECOND:
         if (Settings->display_model) { 

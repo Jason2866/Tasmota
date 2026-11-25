@@ -51,6 +51,7 @@
 #ifdef USE_BERRY
 
 #include <berry.h>
+#include "be_vm.h"
 // ASYNC EXT
 #ifdef USE_BERRY_WEBCLIENT_ASYNC
 #include "AsyncHttpClientLight.h"
@@ -70,13 +71,13 @@ String wc_UrlEncode(const String& text) {
 	int len = text.length();
 	int i = 0;
 	while (i < len)	{
-		char decodedChar = text.charAt(i++);
+		unsigned char decodedChar = (unsigned char)text.charAt(i++);
 
     if (('a' <= decodedChar && decodedChar <= 'z') ||
         ('A' <= decodedChar && decodedChar <= 'Z') ||
         ('0' <= decodedChar && decodedChar <= '9') ||
         ('=' == decodedChar)) {
-      encoded += decodedChar;
+      encoded += (char)decodedChar;
 		} else {
       encoded += '%';
 			encoded += hex[decodedChar >> 4];
@@ -832,7 +833,13 @@ extern "C" {
 #else
     HTTPClientLight * cl = wc_getclient(vm);
 #endif
+#ifdef USE_BERRY_WEBCLIENT_ASYNC
     int32_t sz = cl->getSize();
+#else
+    const int responseCode = cl->getResponseCode();
+    const bool bodyless = responseCode == 204 || responseCode == 304;
+    int32_t sz = bodyless ? 0 : cl->getSize();
+#endif
 #ifdef USE_BERRY_WEBCLIENT_ASYNC
     if (sz > 1048576) {
       be_raise(vm, "value_error", "response size too big (>1MB)");
@@ -843,9 +850,22 @@ extern "C" {
       be_raise(vm, "value_error", "response size too big (>32KB)");
     }
 #endif
-    String payload = cl->getString();
-    be_pushstring(vm, payload.c_str());
+    String payload;
+#ifdef USE_BERRY_WEBCLIENT_ASYNC
+    int body_error = 0;
+    payload = cl->getString(&body_error);
+    if (body_error == HTTPC_ERROR_ASYNC_BUSY) {
+      be_raise(vm, "value_error", "async request is in progress");
+    }
     cl->end();  // free allocated memory ~16KB
+    if (body_error < 0) be_raise(vm, "value_error", "response body read failed");
+#else
+    if (!bodyless) {
+      payload = cl->getString();
+    }
+    cl->end();  // free allocated memory ~16KB
+#endif
+    be_pushstring(vm, payload.c_str());
     be_return(vm);  /* return code */
   }
 
@@ -912,8 +932,7 @@ public:
     return size;
   }
   size_t write(uint8_t data) override {
-    write(&data, 1);
-    return 1;
+    return write(&data, 1);
   }
 
   int available() override { return 0; }
@@ -945,6 +964,14 @@ extern "C" {
         be_raisef(vm, "value_error", "invalid flash address, must be at %iKB boundary 0x%04X", SPI_FLASH_SEC_SIZE/1024, addr);
       }
       int32_t size = cl->getSize();
+#ifdef USE_BERRY_WEBCLIENT_ASYNC
+      int rx_bytes = -1;
+      AsyncHttpClientLight::AsyncState_t state = cl->asyncState(nullptr, &rx_bytes);
+      if (state != AsyncHttpClientLight::ASYNC_IDLE &&
+          (state != AsyncHttpClientLight::ASYNC_DONE || size <= 0 || rx_bytes != size)) {
+        be_raisef(vm, "internal_error", "async response is incomplete or body size does not match");
+      }
+#endif
       if (size <= 0 || addr+size >= 0x400000) {
         be_raisef(vm, "value_error", "invalid flash size 0x%04X", size);
       }
@@ -992,7 +1019,7 @@ public:
     be_pop(vm, 1);  /* bytes() instance is at top */
 
     // if it won't fit, make the bytes object bigger
-    if (offset + size > signed_size){
+    if (signed_size < 0 || offset > (size_t)signed_size || size > (size_t)signed_size - offset){
       int newsize = offset + size + incr;
       AddLog(LOG_LEVEL_INFO, "BE: realloc bytes in StreamBeBytesWriter newsize=%i", newsize);
       be_getmember(vm, -1, "resize");
@@ -1005,14 +1032,10 @@ public:
       be_getmember(vm, -1, ".size");
       signed_size = be_toint(vm, -1);
       be_pop(vm, 1);  /* bytes() instance is at top */
-      if (offset + size > signed_size){
-        // what should we raise here???
-        be_raise(vm, "alloc_error", "did not get enough extra bytes");
-      }
     }
 
     // AddLog(LOG_LEVEL_INFO, "FLASH: addr=%p  hex=%*_H  size=%i", addr_start + offset, 32, buffer, size);
-    if (offset + size > signed_size){
+    if (signed_size < 0 || offset > (size_t)signed_size || size > (size_t)signed_size - offset){
       AddLog(LOG_LEVEL_ERROR, "BERRYWC: buffer overrun");
       return 0;
     }
@@ -1057,10 +1080,18 @@ extern "C" {
 #else
     HTTPClientLight * cl = wc_getclient(vm);
 #endif
-    int32_t sz = cl->getSize();
 #ifdef USE_BERRY_WEBCLIENT_ASYNC
-    if (sz > 1048576) {
-      be_raise(vm, "value_error", "response size too big (>1MB)");
+    int32_t sz = cl->getSize();
+#else
+    const int responseCode = cl->getResponseCode();
+    const bool bodyless = responseCode == 204 || responseCode == 304;
+    int32_t sz = bodyless ? 0 : cl->getSize();
+#endif
+    // default to 1K starter if contetn-length not present
+    if (sz < 0) sz = 1024;
+#ifdef USE_BERRY_WEBCLIENT_ASYNC
+    if ((size_t)sz > vm->bytesmaxsize) {
+      be_raise(vm, "value_error", "response size exceeds Berry bytes capacity");
     }
 #else
     // abort if we exceed 32KB size, things will not go well otherwise
@@ -1068,21 +1099,27 @@ extern "C" {
       be_raise(vm, "value_error", "response size too big (>32KB)");
     }
 #endif
-    // default to 1K starter if contetn-length not present
-    if (sz < 0) sz = 1024;
     // create a bytes object at top of stack.
     // the streamwriter knows how to get it. 
 
 #ifdef USE_BERRY_WEBCLIENT_ASYNC // No sense closing cl wheen using stream!
     (void) be_pushbytes(vm, nullptr, sz);
     StreamBeBytesWriter memory_writer(vm);
-    (void) cl->writeToStream(&memory_writer);
+    int32_t written = cl->writeToStream(&memory_writer);
+    if (written < 0) be_raise(vm, "value_error", "response body read failed");
+    be_pushint(vm, written);
+    be_setmember(vm, -2, ".len");
+    be_pop(vm, 1);
     be_return(vm);
 #else
     uint8_t * buf = (uint8_t*) be_pushbytes(vm, nullptr, sz);
     StreamBeBytesWriter memory_writer(vm);
-    int32_t written = cl->writeToStream(&memory_writer);
+    int32_t written = bodyless ? 0 : cl->writeToStream(&memory_writer);
     cl->end();  // free allocated memory ~16KB
+    if (written < 0) be_raise(vm, "value_error", "response body read failed");
+    be_pushint(vm, written);
+    be_setmember(vm, -2, ".len");
+    be_pop(vm, 1);
     be_return(vm);  /* return code */
 #endif
     

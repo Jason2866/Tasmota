@@ -74,6 +74,16 @@ void Renderer::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 
 }
 
+bool Renderer::pushColorsChecked(uint16_t *data, uint32_t len, boolean first) {
+  pushColors(data, len, first);
+  return true;
+}
+
+bool Renderer::setAddrWindowChecked(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+  setAddrWindow(x0, y0, x1, y1);
+  return true;
+}
+
 void Renderer::DisplayOnff(int8_t on) {
 
 }
@@ -92,6 +102,26 @@ void Renderer::Sleep(void) {
 
 void Renderer::Updateframe() {
 
+}
+
+bool Renderer::UpdateframeChecked() {
+  Updateframe();
+  return true;
+}
+
+bool Renderer::CanStartUpdateFrameAsync() {
+  return false;
+}
+
+bool Renderer::StartUpdateFrameAsync() {
+  return false;
+}
+
+void Renderer::ServiceUpdateFrameAsync() {
+}
+
+uint8_t Renderer::GetUpdateFrameAsyncStatus() {
+  return RENDERER_UPDATE_UNSUPPORTED;
 }
 
 void Renderer::TS_RotConvert(int16_t *x, int16_t *y) {

@@ -211,6 +211,7 @@ public:
 
 
     int getSize(void);
+    int getResponseCode(void) const { return _returnCode; }
     const String &getLocation(void);
 
     WiFiClient& getStream(void);

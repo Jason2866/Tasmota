@@ -25,6 +25,7 @@
 #include <uDisplay.h>
 
 bool udisp_init_done = false;
+bool udisp_init_busy = false;
 uint8_t ctouch_counter;
 
 #ifdef USE_UFILESYS
@@ -69,6 +70,28 @@ const char DSP_SAMPLE_DESC[] PROGMEM = DSP_ROM_DESC;
 #endif // DSP_ROM_DESC
 /*********************************************************************************************/
 Renderer *Init_uDisplay(const char *desc) {
+  udisp_init_busy = false;
+#ifdef USE_MULTI_DISPLAY
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    if (displays[index].used && displays[index].display &&
+        displays[index].display->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+      udisp_init_busy = true;
+      return nullptr;
+    }
+  }
+  for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+    if ((index == cur_display || (renderer && displays[index].display == renderer)) &&
+        !Display_Batch_Flush_Slot(index)) {
+      udisp_init_busy = true;
+      return nullptr;
+    }
+  }
+#endif
+  if (renderer && renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+    udisp_init_busy = true;
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: cannot reinitialize while an asynchronous display refresh is active"));
+    return nullptr;
+  }
   if (TasmotaGlobal.gpio_optiona.udisplay_driver || desc) {
 
     Settings->display_model = XDSP_17;
@@ -337,7 +360,16 @@ Renderer *Init_uDisplay(const char *desc) {
 
     // init renderer
     if (renderer) {
+#ifdef USE_MULTI_DISPLAY
+      for (uint8_t index = 0; index < MAX_MULTI_DISPLAYS; index++) {
+        if (displays[index].display == renderer) {
+          displays[index].display = nullptr;
+          displays[index].used = 0;
+        }
+      }
+#endif
       delete renderer;
+      renderer = nullptr;
       AddLog(LOG_LEVEL_DEBUG, PSTR("DSP: reinit"));
     }
 
@@ -503,6 +535,9 @@ Renderer *Init_uDisplay(const char *desc) {
     udisp_init_done = true;
     AddLog(LOG_LEVEL_INFO, PSTR("DSP: %s initialized"), renderer->devname());
 
+#ifdef USE_MULTI_DISPLAY
+    Set_display(cur_display);
+#endif
     return renderer;
   }
   return 0;
@@ -537,6 +572,46 @@ int8_t replacepin(char **cp, int16_t pin) {
 
 #ifdef USE_DISPLAY_MODES1TO5
 
+static char *udisp_pending_log_buffer = nullptr;
+static uint8_t udisp_pending_log_cols = 0;
+static uint8_t udisp_pending_log_idx = 0;
+static uint8_t udisp_pending_log_ptr = 0;
+
+// Called by DisplayLogBufferInit() when the log buffer is rebuilt, so staged
+// rows from a previous sensor mode are not printed afterwards.
+void UDISP_StagedLogReset(void) {
+  udisp_pending_log_idx = 0;
+  udisp_pending_log_ptr = 0;
+}
+
+static void UDISP_StageLogLines(void) {
+  uint8_t cols = Settings->display_cols[0] + 1;
+  if (udisp_pending_log_buffer && (udisp_pending_log_idx == udisp_pending_log_ptr) &&
+      (udisp_pending_log_cols != cols)) {
+    free(udisp_pending_log_buffer);
+    udisp_pending_log_buffer = nullptr;
+    udisp_pending_log_cols = 0;
+    udisp_pending_log_idx = 0;
+    udisp_pending_log_ptr = 0;
+  }
+  if (!udisp_pending_log_buffer) {
+    udisp_pending_log_buffer = (char*)calloc(DISPLAY_LOG_ROWS, cols);
+    if (!udisp_pending_log_buffer) return;
+    udisp_pending_log_cols = cols;
+  }
+
+  while (true) {
+    uint8_t next_idx = udisp_pending_log_idx + 1;
+    if (DISPLAY_LOG_ROWS == next_idx) { next_idx = 0; }
+    if (next_idx == udisp_pending_log_ptr) return;  // Leave one slot empty to distinguish full from empty
+
+    char *txt = DisplayLogBuffer('\370');
+    if (!txt) return;
+    strlcpy(udisp_pending_log_buffer + (udisp_pending_log_idx * udisp_pending_log_cols), txt, udisp_pending_log_cols);
+    udisp_pending_log_idx = next_idx;
+  }
+}
+
 void UDISP_PrintLog(void) {
   // This can take over 3 seconds depending on renderer->Updateframe() speed
   //   due to not connected busy pin (configure as MISO)
@@ -550,7 +625,13 @@ void UDISP_PrintLog(void) {
   disp_refresh = Settings->display_refresh;
   if (!disp_screen_buffer_cols) { DisplayAllocScreenBuffer(); }
 
-  char* txt = DisplayLogBuffer('\370');
+  char* txt = nullptr;
+  if (udisp_pending_log_idx != udisp_pending_log_ptr) {
+    txt = udisp_pending_log_buffer + (udisp_pending_log_ptr * udisp_pending_log_cols);
+    if (DISPLAY_LOG_ROWS == ++udisp_pending_log_ptr) { udisp_pending_log_ptr = 0; }
+  } else {
+    txt = DisplayLogBuffer('\370');
+  }
   if (txt != nullptr) {
     uint8_t last_row = Settings->display_rows -1;
 
@@ -587,6 +668,12 @@ void UDISP_Time(void) {
 
 void UDISP_Refresh(void) {  // Every second
   if (!renderer) return;
+  if (renderer->GetUpdateFrameAsyncStatus() == RENDERER_UPDATE_RUNNING) {
+    if (Settings->display_mode > DM_TIME) {
+      UDISP_StageLogLines();
+    }
+    return;
+  }
   if (DM_TIME == Settings->display_mode) {
     UDISP_Time();
   }

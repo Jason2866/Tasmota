@@ -864,9 +864,9 @@ bool RGBPanel::setAddrWindow(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
 
 bool RGBPanel::pushColors(uint16_t *data, uint32_t len, bool first) {
     rgbg_fb_begin();    // copy into the PSRAM frame buffer: delay non-urgent DMA restarts
-    esp_lcd_panel_draw_bitmap(panel_handle, window_x1, window_y1, window_x2, window_y2, data);
+    esp_err_t result = esp_lcd_panel_draw_bitmap(panel_handle, window_x1, window_y1, window_x2, window_y2, data);
     rgbg_fb_end();
-    return true; // Handled by RGB panel
+    return result == ESP_OK;
 }
 
 bool RGBPanel::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {

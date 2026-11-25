@@ -113,6 +113,12 @@ class uDisplay : public Renderer {
   Renderer *Init(void);
   void DisplayInit(int8_t p,int8_t size,int8_t rot,int8_t font);
   void Updateframe();
+  bool UpdateframeChecked() override;
+  bool CanStartUpdateFrameAsync() override;
+  bool StartUpdateFrameAsync() override;
+  void ServiceUpdateFrameAsync() override;
+  uint8_t GetUpdateFrameAsyncStatus() override;
+  void WaitForDMATransfer() override;
   void DisplayOnff(int8_t on);
   void HandeBP(int8_t on);
   void Splash(void);
@@ -127,6 +133,8 @@ class uDisplay : public Renderer {
   void fillScreen(uint16_t color);
   void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
   void pushColors(uint16_t *data, uint32_t len, boolean first);
+  bool pushColorsChecked(uint16_t *data, uint32_t len, boolean first) override;
+  bool setAddrWindowChecked(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) override;
   void TS_RotConvert(int16_t *x, int16_t *y);
   void invertDisplay(boolean i);
   void SetPwrCB(pwr_cb cb) { pwr_cbp = cb; };
@@ -210,6 +218,7 @@ private:
     uint8_t inv_off;
     uint8_t sa_mode;
     uint8_t dim_op;
+    bool epd_e673;
     // uint8_t lutfsize;  // MOVED to EPDPanelConfig.lutfsize
     // uint8_t lutpsize;  // MOVED to EPDPanelConfig.lutpsize
     // uint8_t lut_siz_full;  // Local variable only
