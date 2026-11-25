@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## [16.0.0.7]
 ### Added
+- Matter `MtrUpdate` accepts values with units for Temperature, Humidity, Pressure, Illuminance and HVAC
 
 
 ### Breaking Changed
@@ -15,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Removed migration steps from v9.1.0 to v9.5.0.9 as regression from v16.0.0.3 (#25286)
+- Matter bridge remote Relay + Power always reporting OFF
 
 ### Removed
 
