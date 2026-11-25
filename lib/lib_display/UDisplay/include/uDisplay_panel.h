@@ -13,6 +13,14 @@
 
 #include <Arduino.h>
 
+enum UniversalUpdateStatus : uint8_t {
+    UNIVERSAL_UPDATE_UNSUPPORTED = 0,
+    UNIVERSAL_UPDATE_IDLE,
+    UNIVERSAL_UPDATE_RUNNING,
+    UNIVERSAL_UPDATE_COMPLETE,
+    UNIVERSAL_UPDATE_FAILED
+};
+
 class UniversalPanel {
 public:
     virtual ~UniversalPanel() {}
@@ -32,6 +40,10 @@ public:
     
     // Frame update method for displays that need explicit updates
     virtual bool updateFrame() = 0;
+    virtual bool canStartAsyncUpdate() { return false; }
+    virtual bool startAsyncUpdate() { return false; }
+    virtual void serviceAsyncUpdate() {}
+    virtual uint8_t asyncUpdateStatus() { return UNIVERSAL_UPDATE_UNSUPPORTED; }
     // Framebuffer - own or external
     uint16_t* framebuffer = nullptr;
 };

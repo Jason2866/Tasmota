@@ -24,7 +24,7 @@ Use this as the authoring prompt for a new file in `tasmota/displaydesc/`. It de
 | `RGB` | `de,vsync,hsync,pclk,bl,B0..B4,G0..G5,R0..R4,mhz` | ESP32-S3; use explicit pins. Also write `:V`; use `:B,...,02` for this pin order. |
 | `DSI` | `lanes,te,bl,rst,ldo_ch,ldo_mv,pclk_hz,lane_mbps,rgb_order,endian` | ESP32-P4 only. `pclk_hz` is Hz; `te`, `rgb_order`, and `endian` are presently unused. Also write `:V`. |
 
-`name` is at most 15 characters. `width`/`height` are unrotated pixels. Use `bpp=1` for monochrome and `16` for color.
+`name` is at most 15 characters. `width`/`height` are unrotated pixels. Use `bpp=1` for monochrome and `16` for standard color panels. The Inky E673 uses `bpp=4` and requires the explicit `:E,673` marker; `bpp=4` alone does not select an E-paper controller.
 
 ```ini
 :H,SSD1306,128,64,1,I2C,3C,*,*,*
@@ -89,6 +89,7 @@ Write only options that apply to the chosen bus/controller. For a color SPI/PAR 
 | `:D` | `opcode` (H) | Dimmer command plus brightness byte; SPI/QSPI/I2C only. |
 | `:b` | `flags` (H) | Backlight: bit `01` active low; bit `02` digital on/off only. |
 | `:B` | `lines,flags` (D) | LVGL buffer lines (default 40). Flags: `02` swap color bytes, `08` e-paper BUSY active low, `16` invert monochrome B/W, `32` use PSRAM buffers. Bit `01` DMA has no current effect. |
+| `:E` | `controller` (D) | SPI e-paper controller selector. `673` selects the Inky E673 path and requires `bpp=4`. |
 | `:V` RGB | `hpol,hfp,hpw,hbp,vpol,vfp,vpw,vbp,pclk_neg` (D) | `0` polarity means idle low. |
 | `:V` DSI | `hfp,vfp,hbp,hsw,vsw,vbp` (D) | DSI order differs from RGB. |
 | `:r` | `0..3` (D) | Initial rotation, overriding `DisplayRotate`. |
@@ -96,10 +97,11 @@ Write only options that apply to the chosen bus/controller. For a color SPI/PAR 
 
 Touch transform is the fourth field of `:0`–`:3`, applied after `:M`. Values: `0` normal, `1` y/H−x, `2` W−x/H−y, `3` W−y/x, `4` W−x/y, `5` x/H−y; add `80` to swap x/y first.
 
-## 4. E-paper only (`SPI`, `bpp=1`)
+## 4. E-paper only (`SPI`)
 
-- Use SPI `miso` for BUSY and add `:B,lines,08` when BUSY is active low.
-- `:T,full,partial,after` provides fallback waits in units of 10 ms. Defaults are `350,35,10`.
+Monochrome e-paper descriptors use `bpp=1`. The legacy-only `:T,full,partial,after` setting controls fallback waits for monochrome descriptors in units of 10 ms (defaults `350,35,10`). It does not configure the Inky Impression E673. E673 uses `bpp=4` with the explicit `:E,673` controller marker and requires both reset and BUSY pins:
+
+- Use SPI `miso` for BUSY and add `:B,lines,08` when BUSY is active low. E673 has its own reset timing, idle wait, and refresh timeout; changing `:T` does not address E673 timeouts.
 - `:f` and `:p` begin full/partial update command streams using the same `CMD,CNT,ARG...` format as `:I`.
 - Select either 2-LUT (`:L,size,cmd` and `:l,size,cmd` followed by hex data), or command-only (`:f`/`:p` only). The 5-LUT syntax is `:L1`–`:L5,size,cmd` plus data and `:a,cmd1,cmd2,cmd3`, but the current parser routes `:a` into SPI address fields; treat 5-LUT as unverified and avoid it unless hardware-tested.
 
@@ -112,6 +114,52 @@ Touch transform is the fourth field of `:0`–`:3`, applied after `:M`. Values: 
 | `66,00` / `67,00` | Send framebuffer / clear RAM to `FF`. |
 | `68,00` | Complete send-frame sequence. |
 | `69,01,X` / `6A,01,X` | Stop when reset reason equals / differs from `X`. |
+
+```ini
+:H,INKYE673,800,480,4,SPI,1,*,*,*,*,*,*,*,10
+:E,673
+:B,0,8
+:I
+AA,06,49,55,20,08,09,18
+01,01,3F
+00,02,5F,69
+05,04,40,1F,1F,2C
+08,04,6F,1F,1F,22
+06,04,6F,1F,17,17
+03,04,00,54,00,44
+60,02,02,00
+30,01,08
+50,01,3F
+61,04,03,20,01,E0
+E3,01,2F
+82,01,01
+```
+
+### Inky Impression E673 runtime commands (`:X`)
+
+Put `:E,673` and the complete E673 initialization block under `:I` before any `:X` records. The parser ignores `:X` records that appear before `:E,673`. The `:I` and `:X` data share the `dsp_cmds` buffer: `:X` data is placed after the bytes already parsed from `:I`, so any later `:I` records overwrite the `:X` data. The parser silently drops bytes that exceed the buffer capacity. Keep all initialization before the runtime commands and leave room for both in the buffer.
+
+Put the runtime command groups in `:X` records; the phase number is decimal and command/data bytes are hexadecimal:
+
+| Record | Purpose | Data format |
+|---|---|---|
+| `:X,0,10` | Frame RAM write opcode | One command byte only; this example selects `0x10`. |
+| `:X,1,...` | Power on | One or more standard SPI command tuples. |
+| `:X,2,...` | Booster setup and refresh activation | One or more standard SPI command tuples. |
+| `:X,3,...` | Power off | One or more standard SPI command tuples. |
+| `:X,4,...` | Power save | One or more standard SPI command tuples. |
+
+Phases 1–4 use the same `CMD,CNT[,ARG...]` tuples as `:I`; `CNT` is the five-bit argument count plus delay bits. Define phase 0 and all four command phases: the E673 update path rejects a descriptor if the RAM opcode is missing (`FF`) or any command phase is empty.
+
+```ini
+:X,0,10
+:X,1,04,00
+:X,2,06,04,6F,1F,17,49,12,01,00
+:X,3,02,01,00
+:X,4,00,02,4F,6E
+```
+
+For each frame update, the driver resets the panel, replays `:I`, writes the framebuffer using the phase-0 opcode, then runs phases 1 through 4 in order with BUSY/idle waits between them. Each SPI tuple in `:I` and phases 1–4 gets its own SPI transaction and CS pulse; a delay in `CNT` happens after that transaction. The framebuffer RAM write remains one transaction.
 
 In 2-LUT and command-only modes, opcodes `60`–`6A` are reserved pseudo-opcodes: do not send real controller commands in that range.
 
@@ -188,5 +236,5 @@ RT
 - SPI init counts use five bits (0–31), not four; RGB `:IS` uses seven bits.
 - `SPI,3` and `SPI,4` are fast and slow software SPI; `dc=-1` is 9-bit SPI; MISO is e-paper BUSY.
 - `:0`–`:3` offsets are hex; `:B`, `:S`, `:M`, `:T`, and `:V` are decimal. Do not omit a `:B` flag field (`:B,64` becomes `255` flags).
-- `:T` and pseudo-opcode `63` time values are ×10 ms. I2C `:I` uses only the first two bytes of each line.
+- Monochrome `:T` and pseudo-opcode `63` time values are ×10 ms. I2C `:I` uses only the first two bytes of each line.
 - DSI, packed monochrome (`:F`), 5-LUT `:a`, backlight flag `02`, address mode `8`, and PSRAM flag `32` are implemented but absent or incomplete in the public document.
